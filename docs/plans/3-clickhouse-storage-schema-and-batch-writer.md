@@ -53,42 +53,43 @@ Use a checklist to summarize granular steps. Every stopping point must be docume
 even if it requires splitting a partially completed task into two ("done" vs. "remaining").
 This section must always reflect the actual current state of the work.
 
-- [ ] Confirm EP-1 artifacts exist (`kansoku.cabal`, `cabal.project`, `Kansoku.Config`, the
+- [x] Confirm EP-1 artifacts exist (`kansoku.cabal`, `cabal.project`, `Kansoku.Config`, the
   `justfile`, the effectful runtime). If EP-1 is not yet merged, stop and coordinate — this
   plan hard-depends on it (see Interfaces and Dependencies).
-- [ ] Narrow the repository `.gitignore`: replace the `db/` line with `db/*` followed by
+- [x] Narrow the repository `.gitignore`: replace the `db/` line with `db/*` followed by
   `!db/clickhouse/` so migration files under `db/clickhouse/` are committable while the
   Postgres state directory stays ignored. Verify:
   `git check-ignore -v db/clickhouse/migrations/0001_events_raw.sql` must report the file as
   NOT ignored (prints nothing, exits nonzero). See Milestone 1 and the Decision Log.
-- [ ] Add the pinned `source-repository-package` stanza for `ClickHaskell` (tag `v1.1.0`,
-  subdir `ClickHaskell/library`) to `cabal.project` — this is the primary mechanism, because
+- [x] Add the pinned `source-repository-package` stanza for `ClickHaskell` (commit
+  `56efc1840d79c89c2a6ade3794932588b65febab`, subdir `library`) to `cabal.project` — this is
+  the primary mechanism, because
   Hackage's latest release is 1.0.0 and 1.1.0 exists only as a Hackage candidate — then add
   `ClickHaskell` to the `build-depends` of the library stanza in `kansoku.cabal` (see
   Concrete Steps).
-- [ ] Create the DDL file `db/clickhouse/migrations/0001_events_raw.sql` containing
+- [x] Create the DDL file `db/clickhouse/migrations/0001_events_raw.sql` containing
   `CREATE DATABASE IF NOT EXISTS analytics` and `CREATE TABLE IF NOT EXISTS
   analytics.events_raw (...)` with the engine, ordering, and partitioning specified below.
-- [ ] Add a `ch-migrate` recipe to the repository `justfile` that applies every
+- [x] Add a `ch-migrate` recipe to the repository `justfile` that applies every
   `db/clickhouse/migrations/*.sql` file in filename order with `clickhouse-client --multiquery`.
-- [ ] Milestone 1: start ClickHouse, apply the schema, verify the table exists with
+- [x] Milestone 1: start ClickHouse, apply the schema, verify the table exists with
   `clickhouse-client` (`DESCRIBE` and a `SELECT count()` returning `0`).
-- [ ] Create `src/Kansoku/ClickHouse/EventRow.hs`: the type-level `EventColumns` schema, the
+- [x] Create `src/Kansoku/ClickHouse/EventRow.hs`: the type-level `EventColumns` schema, the
   `EventRow` record deriving the ClickHaskell column mapping, and `eventRowFromEvent`.
-- [ ] Create `src/Kansoku/ClickHouse.hs`: connection configuration wired from
-  `Kansoku.Config`, `openClickHouse`, `ensureSchema`, `insertEvents`, `selectAllEvents`,
-  and `countEvents`.
-- [ ] Extend `Kansoku.Config` with `clickHouseHost`, `clickHouseTcpPort`, and
+- [x] Create `src/Kansoku/ClickHouse.hs`: connection configuration wired from
+  `Kansoku.Config`, `openClickHouse`, `ensureSchema`, `insertEvents`,
+  `selectEventProjections`, and `countEvents`.
+- [x] Extend `Kansoku.Config` with `clickHouseHost`, `clickHouseTcpPort`, and
   `clickHouseDatabase` read from the environment (`CLICKHOUSE_TCP_PORT`), following EP-1's
   config pattern.
-- [ ] Add the two new modules to `exposed-modules` in `kansoku.cabal`.
-- [ ] Milestone 2: add a guarded test `test/Kansoku/ClickHouseSpec.hs` that ensures the
+- [x] Add the two new modules to `exposed-modules` in `kansoku.cabal`.
+- [x] Milestone 2: add a guarded test `test/Kansoku/ClickHouseSpec.hs` that ensures the
   schema, inserts a batch of sample events, selects them back, and asserts count and content.
   `cabal test` passes (or skips cleanly when ClickHouse is not reachable).
-- [ ] Milestone 3: add a deduplication test/demonstration — insert the same `event_id` twice,
+- [x] Milestone 3: add a deduplication test/demonstration — insert the same `event_id` twice,
   force a merge with `OPTIMIZE TABLE ... FINAL` (or read with `SELECT ... FINAL`), and observe
   exactly one row. Document the semantics for downstream plans.
-- [ ] Update the parent MasterPlan Progress checkboxes for EP-3 and this plan's living
+- [x] Update the parent MasterPlan Progress checkboxes for EP-3 and this plan's living
   sections; write an Outcomes & Retrospective entry.
 
 
@@ -97,7 +98,31 @@ This section must always reflect the actual current state of the work.
 Document unexpected behaviors, bugs, optimizations, or insights discovered during
 implementation. Provide concise evidence.
 
-(None yet.)
+- The upstream ClickHaskell repository does not publish a `v1.1.0` tag. The latest GitHub
+  tags visible on 2026-07-01 are `v0.1.0`, `v0.2.0`, and `v1.0.0`; the current remote
+  `master` commit `56efc1840d79c89c2a6ade3794932588b65febab` contains package
+  `ClickHaskell`, version `1.1.0`, with the cabal file at `library/ClickHaskell.cabal`.
+- The local corpus checkout used during planning has a different layout from the current
+  remote repository: it places the cabal file at `ClickHaskell/library/ClickHaskell.cabal`,
+  while the remote commit used by Cabal places it at `library/ClickHaskell.cabal`.
+- ClickHaskell 1.1.0 cannot safely deserialize multi-column, multi-row results through its
+  generic `ClickHaskell` instance: `deserializeProduct` accumulates row products in reverse,
+  which can pair fields from different rows. The implementation avoids that path for
+  projection reads by selecting one server-composed tab-separated `String` column and parsing
+  it locally. Single-column `count()` reads are unaffected.
+- ClickHaskell's `LowCardinality` support is incomplete for native-protocol row mapping:
+  the source marks LowCardinality deserialization unsupported and the serialization path is
+  not usable as the Haskell row schema. The table still uses `LowCardinality(String)` for
+  `event_name` and `source`, but the Haskell insert wire schema sends those values as plain
+  `String`; ClickHouse converts them into the table column type.
+- ClickHouse 26.5.1.882 accepts config property overrides after `clickhouse-server --`, so
+  the old process-compose style `clickhouse-server --path=...` fails when run manually with
+  `Unknown option specified: path=...`. The live validation used
+  `clickhouse-server -- --path=$CLICKHOUSE_HOME/ ...`.
+- `nix build` succeeded after staging the newly added source files. It resolved
+  `ClickHaskell-1.0.0` from nixpkgs rather than honoring the Cabal source-repository pin,
+  so the Nix path is green today but does not exercise the same dependency version as
+  `cabal build` / `cabal test`.
 
 
 ## Decision Log
@@ -194,15 +219,40 @@ Record every decision made while working on the plan.
   Date: 2026-07-01
 
 - Decision: Supply `ClickHaskell` 1.1.0 via a `cabal.project` `source-repository-package`
-  git pin (tag `v1.1.0`, subdir `ClickHaskell/library`) as the *primary* mechanism, not a
-  fallback.
+  git pin (commit `56efc1840d79c89c2a6ade3794932588b65febab`, subdir `library`) as the
+  *primary* mechanism, not a fallback.
   Rationale: Hackage's latest *release* of `ClickHaskell` is 1.0.0; version 1.1.0 exists
   only as a Hackage *candidate* (uploaded but unpublished), and cabal's dependency solver
   never considers candidates — so a plain `ClickHaskell ^>=1.1` bound will not resolve from
-  Hackage today. The pin is therefore not a contingency but the required path. The `subdir`
-  was verified against the local corpus checkout of the upstream monorepo: the library's
-  cabal file sits at `ClickHaskell/library/ClickHaskell.cabal` (package `ClickHaskell`,
-  version `1.1.0`).
+  Hackage today. The original plan named a `v1.1.0` tag and `ClickHaskell/library` subdir,
+  but the tag does not exist upstream and the current GitHub layout uses `library/`. Pinning
+  a commit hash keeps the source immutable while still selecting package version `1.1.0`.
+  Date: 2026-07-01
+
+- Decision: Keep `event_name` and `source` as `LowCardinality(String)` in ClickHouse DDL, but
+  use plain `ChString` in the Haskell `EventColumns` wire schema.
+  Rationale: ClickHaskell 1.1.0's `LowCardinality` native-protocol support is incomplete for
+  the row-mapping path used here. The implementation preserves the physical storage contract
+  and lets ClickHouse convert incoming native `String` values into the table's
+  `LowCardinality(String)` columns. This keeps inserts working without weakening the stored
+  schema.
+  Date: 2026-07-01
+
+- Decision: Expose `selectEventProjections`, not `selectAllEvents`, and implement it through
+  a one-column SQL projection parsed locally.
+  Rationale: `AnalyticsEvent` contains JSON object fields and table-only encodings (empty
+  string for absent sorting-key ids), so a full inverse mapping is not required for EP-3's
+  storage proof. More importantly, ClickHaskell 1.1.0's generic multi-column deserializer can
+  mis-pair fields across rows. A one-column projection avoids that bug while still proving
+  the inserted event ids, names, source, account id, and user id are queryable.
+  Date: 2026-07-01
+
+- Decision: Preserve `Kansoku.Config.clickHouseTcpPort :: Int` from EP-1 and convert it to
+  `String` only inside `clickHouseConfigFromConfig`.
+  Rationale: The plan's draft wording asked for a `String` ClickHouse TCP port, but EP-1 had
+  already established parsed integer ports and tests. Keeping the public config field typed
+  as `Int` preserves EP-1 behavior while satisfying ClickHaskell's `setPort` API at the
+  connection boundary.
   Date: 2026-07-01
 
 
@@ -211,7 +261,29 @@ Record every decision made while working on the plan.
 Summarize outcomes, gaps, and lessons learned at major milestones or at completion.
 Compare the result against the original purpose.
 
-(To be filled during and after implementation.)
+Completed on 2026-07-01. The repository now has an idempotent
+`db/clickhouse/migrations/0001_events_raw.sql`, a `just ch-migrate` recipe, ClickHouse
+connection/config helpers, an `EventRow` mapping from the canonical `AnalyticsEvent`, a
+batched `insertEvents`, a projection read helper, and a guarded live integration spec.
+
+Validation performed:
+
+- `git check-ignore -v db/clickhouse/migrations/0001_events_raw.sql` prints nothing and exits
+  nonzero, proving the migration file is trackable.
+- `just ch-migrate` applied the migration to a local ClickHouse server.
+- `clickhouse-client --port $CLICKHOUSE_TCP_PORT --query 'DESCRIBE TABLE analytics.events_raw'`
+  showed the expected 24-column schema, including `LowCardinality(String)` and
+  `DateTime64(3, 'UTC')` columns.
+- `clickhouse-client --port $CLICKHOUSE_TCP_PORT --query 'SELECT count() FROM analytics.events_raw'`
+  returned `0` immediately after migration.
+- `cabal build all` passed.
+- `cabal test` passed with a live ClickHouse server: 13 examples, 0 failures.
+- `nix build` passed after staging the new files; note that Nix used nixpkgs'
+  `ClickHaskell-1.0.0`, not the Cabal-pinned 1.1.0 source package.
+
+The main residual risk is ClickHaskell's read-side generic deserializer. EP-4 should use
+`insertEvents` for writes and avoid introducing multi-column ClickHaskell selects until the
+driver bug is fixed or a local wrapper is added.
 
 
 ## Context and Orientation
@@ -329,7 +401,7 @@ type AnalyticsEvent = {
 ```
 
 EP-2 (the "Canonical event model and schema registry" plan) owns the Haskell version of this
-type: a record named `AnalyticsEvent` in `src/Kansoku/Event.hs` (module `Kansoku.Event`),
+type: a record named `AnalyticsEvent` in `api/Kansoku/Event.hs` (module `Kansoku.Event`),
 with `FromJSON`/`ToJSON` instances that define the on-the-wire JSON. EP-3 *soft*-depends on
 EP-2: this plan's `EventRow` mirrors those fields and `eventRowFromEvent` maps
 `Kansoku.Event.AnalyticsEvent` to an `EventRow`.
@@ -395,8 +467,9 @@ everything required is embedded here.
   `DateTime64 p tz` ↔ `UTCTime` (POSIX time scaled by `10^p`); `Nullable(T)` ↔ `Maybe`;
   `LowCardinality(T)` transparently wraps the inner type (so its Haskell field type is the
   same as the inner type's, e.g. `LowCardinality ChString` ↔ `ByteString`); `UInt64` is a
-  type alias for `Word64`. `LowCardinality` may only wrap `ChString`, `DateTime`, or a
-  `Nullable` of those — which is why `event_name`/`source` use `LowCardinality ChString`.
+  type alias for `Word64`. The implemented table uses `LowCardinality(String)`, but the
+  Haskell wire schema uses plain `ChString` for `event_name`/`source` because ClickHaskell's
+  LowCardinality row mapping is incomplete.
 - Batch INSERT — the whole point of this plan — is:
 
   ```haskell
@@ -580,8 +653,8 @@ plain `ClickHaskell ^>=1.1` bound will not resolve from Hackage today. The git p
 therefore the primary mechanism, not a fallback. Add the `source-repository-package` stanza
 to `cabal.project` first (Concrete Steps shows the exact stanza; upstream is the monorepo
 `https://github.com/KovalevDima/ClickHaskell` and the library's cabal file lives in the
-`ClickHaskell/library` subdirectory — verified against the local corpus checkout of
-v1.1.0), then add `ClickHaskell` to the `build-depends` of the library stanza in
+`library` subdirectory at commit `56efc1840d79c89c2a6ade3794932588b65febab`), then add
+`ClickHaskell` to the `build-depends` of the library stanza in
 `kansoku.cabal`, then `cabal build`. While editing `build-depends`, confirm `bytestring` is
 already listed in the library stanza (EP-1 normally includes it; the modules below import
 `Data.ByteString`) and add it if not — `Data.Word` comes from `base` and needs no entry.
@@ -762,7 +835,7 @@ module Kansoku.ClickHouse
   , openBootstrapConnection
   , ensureSchema
   , insertEvents
-  , selectAllEvents
+  , selectEventProjections
   , countEvents
   ) where
 
@@ -870,16 +943,14 @@ insertEvents :: Connection -> [PlaceholderEvent] -> IO ()
 insertEvents conn evs =
   insert (intoTable @"events_raw" @EventColumns @EventRow) conn (map eventRowFromEvent evs)
 
--- | Read every row back (verification helper). Flattens the per-block results.
-selectAllEvents :: Connection -> IO [EventRow]
-selectAllEvents conn =
-  concat <$> select (fromTable @"events_raw" @EventColumns @EventRow) conn pure
+-- | Read a small verification projection. The implementation uses a one-column
+-- server-composed projection to avoid ClickHaskell's generic multi-column
+-- deserialization bug.
+selectEventProjections :: Connection -> IO [EventProjection]
+selectEventProjections = ...
 
--- | Count rows by reading them back and taking the length. (A dedicated
--- SELECT count() would need an unsafe select builder; for verification the
--- length of selectAllEvents is sufficient and avoids extra machinery.)
-countEvents :: Connection -> IO Int
-countEvents = fmap length . selectAllEvents
+countEvents :: Connection -> IO UInt64
+countEvents = ...
 ```
 
 Extend `Kansoku.Config` (in `src/Kansoku/Config.hs`) following EP-1's documented pattern:
@@ -916,8 +987,8 @@ It is **guarded**: it first tries to open a bootstrap connection and `ping`; if 
 (no server running), it prints a skip notice and passes trivially, so `cabal test` never
 fails merely because ClickHouse is not up. When the server is reachable, it: calls
 `ensureSchema`; truncates the table for a clean slate (`command conn "TRUNCATE TABLE
-analytics.events_raw"`); builds a small list of `PlaceholderEvent`s (at least two distinct
-events); calls `insertEvents`; then `selectAllEvents`/`countEvents` and asserts the count
+analytics.events_raw"`); builds a small list of `AnalyticsEvent`s (at least two distinct
+events); calls `insertEvents`; then `selectEventProjections`/`countEvents` and asserts the count
 equals the number of distinct events inserted and that a known field (e.g. `event_name`)
 round-tripped. The test-suite framework is whatever EP-1 chose; if EP-1 used `tasty`/`hspec`
 follow it, otherwise a plain `main :: IO ()` with `error` on failure is acceptable. The
@@ -942,7 +1013,7 @@ Add a second test case (or a `clickhouse-client` transcript in Concrete Steps, o
 truncate; insert a batch of one event; insert the *same* event again (same `event_id` and
 identical sorting-key fields); observe `count()` returns `2` before the merge; run
 `OPTIMIZE TABLE analytics.events_raw FINAL`; observe `count()` returns `1`. Because
-`selectAllEvents`/`fromTable` do not emit `FINAL`, the Haskell count-after-optimize path is
+`countEvents` does not emit `FINAL`, the Haskell count-after-optimize path is
 the reliable one; the `FINAL`-at-query-time demonstration is done via `clickhouse-client`
 (shown in Concrete Steps).
 
@@ -1056,17 +1127,17 @@ ReplacingMergeTree	account_id, user_id, event_name, occurred_at, event_id	toYYYY
 Add the pinned source to `cabal.project` first — this is the primary mechanism, because
 Hackage's newest *release* of `ClickHaskell` is 1.0.0 and 1.1.0 exists only as a Hackage
 candidate, which cabal's solver never considers. The upstream is a monorepo; the library's
-cabal file lives in the `ClickHaskell/library` subdirectory (verified against the local
-corpus checkout of v1.1.0, where `ClickHaskell/library/ClickHaskell.cabal` declares
-`Name: ClickHaskell`, `Version: 1.1.0`). If the `v1.1.0` tag is absent upstream, pin a
-known-good commit hash instead:
+cabal file lives in the `library` subdirectory at commit
+`56efc1840d79c89c2a6ade3794932588b65febab`, where `library/ClickHaskell.cabal` declares
+`Name: ClickHaskell`, `Version: 1.1.0`. The `v1.1.0` tag named during planning is absent
+upstream, so the implementation pins that known-good commit hash:
 
 ```text
 source-repository-package
     type: git
     location: https://github.com/KovalevDima/ClickHaskell.git
-    tag: v1.1.0
-    subdir: ClickHaskell/library
+    tag: 56efc1840d79c89c2a6ade3794932588b65febab
+    subdir: library
 ```
 
 Then add `ClickHaskell` to the library `build-depends` in `kansoku.cabal` (confirming
@@ -1168,7 +1239,7 @@ intention). Do not create a branch; commit to the current branch. Example:
 feat(clickhouse): add analytics.events_raw schema and batched insertEvents
 
 Create the ReplacingMergeTree events_raw table (dedup on event_id via the
-sorting key), the ClickHaskell EventRow mapping, and insertEvents/selectAllEvents
+sorting key), the ClickHaskell EventRow mapping, and insertEvents/selectEventProjections
 with a guarded round-trip test.
 
 MasterPlan: docs/masterplans/1-kansoku-analytics-service-mvp.md
@@ -1258,13 +1329,11 @@ library stanza (EP-1 normally lists it — the sketches import `Data.ByteString`
 is there and add it if not. `Data.Word` is part of `base` and needs no entry. This plan also
 depends on EP-1's `justfile` existing, since it appends the `ch-migrate` recipe to it.
 
-**Soft dependency: EP-2.** `eventRowFromEvent` must ultimately consume
-`Kansoku.Event.AnalyticsEvent` (the record in `src/Kansoku/Event.hs`, field names/optionality
-matching `docs/initial-spec.md`). Until EP-2 lands, this plan uses the local
-`PlaceholderEvent` in `Kansoku.ClickHouse.EventRow`; the completion step is to delete
-`PlaceholderEvent`, import `Kansoku.Event.AnalyticsEvent`, and adjust conversions (EP-2's
-type will use `Text` — convert with `Data.Text.Encoding.encodeUtf8` — and `Data.Aeson.Value`
-for `properties`/`context` — convert with `Data.Aeson.encode` to JSON bytes).
+**Soft dependency: EP-2.** EP-2 completed before this implementation, so
+`eventRowFromEvent` consumes `Kansoku.Event.AnalyticsEvent` directly (the record exported by
+`api/Kansoku/Event.hs`, field names/optionality matching `docs/initial-spec.md`). Text ids
+are converted with `Data.Text.Encoding.encodeUtf8`, and `properties`/`context` are encoded
+as JSON bytes with `Data.Aeson.encode`.
 
 **Modules and signatures that must exist at the end of this plan** (full paths):
 
@@ -1273,22 +1342,19 @@ for `properties`/`context` — convert with `Data.Aeson.encode` to JSON bytes).
     mirroring `db/clickhouse/migrations/0001_events_raw.sql` exactly.
   - `data EventRow` with strict `!` fields named identically to the columns,
     `deriving stock (Generic, Eq, Show)` and `deriving anyclass (ClickHaskell EventColumns)`.
-  - `eventRowFromEvent :: PlaceholderEvent -> EventRow` (final:
-    `Kansoku.Event.AnalyticsEvent -> EventRow`), a total function.
+  - `eventRowFromEvent :: Kansoku.Event.AnalyticsEvent -> EventRow`, a total function.
 - `src/Kansoku/ClickHouse.hs`, module `Kansoku.ClickHouse`, exporting:
-  - `data ClickHouseConfig` (host, tcp port as `String`, user, database).
+  - `data ClickHouseConfig` (host, tcp port as `String`, database).
   - `openClickHouse :: ClickHouseConfig -> IO Connection` (connects to the `analytics` db).
   - `openBootstrapConnection :: ClickHouseConfig -> IO Connection` (connects to `default`,
     for schema creation).
   - `ensureSchema :: Connection -> IO ()` (idempotent `CREATE DATABASE`/`CREATE TABLE`).
-  - `insertEvents :: Connection -> [PlaceholderEvent] -> IO ()` (final: `[AnalyticsEvent]`),
-    the batched single-INSERT writer.
-  - `selectAllEvents :: Connection -> IO [EventRow]` and `countEvents :: Connection -> IO Int`
-    (verification helpers).
-- `src/Kansoku/Config.hs` (extended): `Config` gains `clickHouseHost :: String`,
-  `clickHouseTcpPort :: String`, `clickHouseDatabase :: String`, read from the environment
-  (`CLICKHOUSE_TCP_PORT`, defaulting to `"9000"`) per EP-1's pattern, plus a
-  `clickHouseConfigFromConfig :: Config -> ClickHouseConfig` projection.
+  - `insertEvents :: Connection -> [AnalyticsEvent] -> IO ()`, the batched single-INSERT writer.
+  - `selectEventProjections :: Connection -> IO [EventProjection]` and
+    `countEvents :: Connection -> IO UInt64` (verification helpers).
+- `src/Kansoku/Config.hs` (extended): `Config` gains `clickHouseHost :: String` and
+  `clickHouseDatabase :: String`; EP-1's existing `clickHouseTcpPort :: Int` is preserved
+  and converted to `String` by `clickHouseConfigFromConfig`.
 - `db/clickhouse/migrations/0001_events_raw.sql` — the canonical DDL (source of truth for the schema).
 - `justfile` recipe `ch-migrate` (the canonical migration recipe shared with EP-5; applies
   every `db/clickhouse/migrations/*.sql` in filename order).
@@ -1296,8 +1362,9 @@ for `properties`/`context` — convert with `Data.Aeson.encode` to JSON bytes).
 - `kansoku.cabal` — `ClickHaskell` added to library `build-depends` (and `bytestring` if it
   was not already listed); `Kansoku.ClickHouse` and `Kansoku.ClickHouse.EventRow` added to
   `exposed-modules`.
-- `cabal.project` — the `source-repository-package` pin for `ClickHaskell` v1.1.0 (subdir
-  `ClickHaskell/library`), the primary way the dependency is supplied.
+- `cabal.project` — the `source-repository-package` pin for `ClickHaskell` 1.1.0 (commit
+  `56efc1840d79c89c2a6ade3794932588b65febab`, subdir `library`), the primary way the
+  dependency is supplied for Cabal builds.
 - `.gitignore` — the `db/` line narrowed to `db/*` plus `!db/clickhouse/` so the migrations
   are tracked while Postgres state stays ignored.
 

@@ -49,6 +49,8 @@ library
   hs-source-dirs:  src
   exposed-modules:
     Kansoku
+    Kansoku.ClickHouse
+    Kansoku.ClickHouse.EventRow
     Kansoku.Config
     Kansoku.Logging
     Kansoku.Runtime
@@ -58,6 +60,7 @@ library
     , aeson
     , base                 >=4.21 && <5
     , bytestring
+    , ClickHaskell
     , containers
     , effectful
     , effectful-core
@@ -84,6 +87,7 @@ test-suite kansoku-test
   hs-source-dirs: test
   main-is:        Spec.hs
   other-modules:
+    Kansoku.ClickHouseSpec
     Kansoku.ConfigSpec
     Kansoku.EventSpec
 
@@ -91,7 +95,9 @@ test-suite kansoku-test
     , aeson
     , base
     , bytestring
+    , ClickHaskell
     , generic-lens
     , hspec
     , kansoku
     , kansoku:kansoku-api
+    , text

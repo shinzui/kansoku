@@ -21,8 +21,10 @@ defaultServerPort = 8080
 -- record with ClickHouse, pgmq, queue, and metrics-query settings.
 data Config = Config
   { pgConnectionString :: !Text,
+    clickHouseHost :: !String,
     clickHouseTcpPort :: !Int,
     clickHouseHttpPort :: !Int,
+    clickHouseDatabase :: !String,
     serverPort :: !Int
   }
   deriving stock (Generic, Eq, Show)
@@ -46,8 +48,10 @@ loadConfig = do
     Right
       Config
         { pgConnectionString = pg,
+          clickHouseHost = "127.0.0.1",
           clickHouseTcpPort = tcp,
           clickHouseHttpPort = http,
+          clickHouseDatabase = "analytics",
           serverPort = port
         }
   where

@@ -17,6 +17,10 @@ build:
 test:
     cabal test
 
+# Apply ClickHouse migrations in filename order.
+ch-migrate:
+    for f in db/clickhouse/migrations/*.sql; do echo "applying $f"; clickhouse-client --port $CLICKHOUSE_TCP_PORT --multiquery < "$f"; done
+
 # Run the HTTP server.
 run:
     cabal run kansoku-server

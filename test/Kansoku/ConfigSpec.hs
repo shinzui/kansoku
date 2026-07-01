@@ -25,8 +25,10 @@ spec = describe "Kansoku.Config.loadConfig" $ do
     case result of
       Left err -> fail ("expected defaults, got error: " <> show err)
       Right cfg -> do
+        (cfg ^. #clickHouseHost) `shouldBe` "127.0.0.1"
         (cfg ^. #clickHouseTcpPort) `shouldBe` 9000
         (cfg ^. #clickHouseHttpPort) `shouldBe` 8123
+        (cfg ^. #clickHouseDatabase) `shouldBe` "analytics"
         (cfg ^. #serverPort) `shouldBe` 8080
 
   it "parses values from the environment" $ do

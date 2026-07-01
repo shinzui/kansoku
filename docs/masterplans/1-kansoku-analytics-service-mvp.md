@@ -221,7 +221,7 @@ decision (Haskell-only repo).
 |---|-------|------|-----------|-----------|--------|
 | 1 | Project skeleton and application runtime | docs/plans/1-project-skeleton-and-application-runtime.md | None | None | Complete |
 | 2 | Canonical event model and schema registry | docs/plans/2-canonical-event-model-and-schema-registry.md | EP-1 | None | Complete |
-| 3 | ClickHouse storage schema and batch writer | docs/plans/3-clickhouse-storage-schema-and-batch-writer.md | EP-1 | EP-2 | Not Started |
+| 3 | ClickHouse storage schema and batch writer | docs/plans/3-clickhouse-storage-schema-and-batch-writer.md | EP-1 | EP-2 | Complete |
 | 4 | Ingestion API with pgmq queue and batched ClickHouse writer | docs/plans/4-ingestion-api-with-pgmq-queue-and-batched-clickhouse-writer.md | EP-2, EP-3 | None | Not Started |
 | 5 | Identity stitching and materialized view rollups | docs/plans/5-identity-stitching-and-materialized-view-rollups.md | EP-3 | EP-4 | Not Started |
 | 6 | Semantic metrics layer and typed query API | docs/plans/6-semantic-metrics-layer-and-typed-query-api.md | EP-3, EP-5 | EP-4 | Not Started |
@@ -439,9 +439,9 @@ the milestone. This section provides an at-a-glance view of the entire initiativ
 - [x] EP-1: `kansoku-server` runs and serves a health endpoint returning 200 OK
 - [x] EP-2: `AnalyticsEvent` type + `FromJSON`/`ToJSON` round-trip matching the spec JSON
 - [x] EP-2: event validation + in-process schema registry with unit tests green
-- [ ] EP-3: `analytics.events_raw` migration (ReplacingMergeTree, ORDER BY, PARTITION BY) applied
-- [ ] EP-3: `EventRow` ClickHaskell mapping + batched `insertEvents`, round-trip insert/select test
-- [ ] EP-3: deduplication strategy documented and demonstrated (replayed batch collapses)
+- [x] EP-3: `analytics.events_raw` migration (ReplacingMergeTree, ORDER BY, PARTITION BY) applied
+- [x] EP-3: `EventRow` ClickHaskell mapping + batched `insertEvents`, round-trip insert/select test
+- [x] EP-3: deduplication strategy documented and demonstrated (replayed batch collapses)
 - [ ] EP-4: pgmq queue bootstrap + HTTP `POST /v1/events` and `/v1/batch` enqueue events
 - [ ] EP-4: shibuya batch writer inserts one ClickHouse batch per flush (size-or-timeout)
 - [ ] EP-4: end-to-end — POST an event, observe it queryable in `events_raw`
@@ -548,7 +548,7 @@ interactions between child plans. Provide concise evidence.
     instead.
   - **ClickHaskell version pin** (EP-3): Hackage's latest release is 1.0.0; 1.1.0 is only a
     Hackage candidate, so a `^>=1.1` bound will not resolve — use the source-repository-package
-    pin (tag v1.1.0) or the local corpus checkout. Separately, `nix build` via `callCabal2nix`
+    pin (commit `56efc1840d79c89c2a6ade3794932588b65febab`, subdir `library`) or the local corpus checkout. Separately, `nix build` via `callCabal2nix`
     resolves deps from the nixpkgs Haskell set; ClickHaskell's presence there is unverified and
     EP-3 should say how to check/handle the nix side.
   - **pgmq ecosystem caveat** (EP-4): pgmq-core/hasql/effectful/migration 0.3.0.0 are all on

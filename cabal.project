@@ -8,3 +8,9 @@
 --
 -- or local `packages:` entries for shibuya, shibuya-pgmq-adapter, and pgmq-hs.
 packages: .
+
+source-repository-package
+    type: git
+    location: https://github.com/KovalevDima/ClickHaskell.git
+    tag: 56efc1840d79c89c2a6ade3794932588b65febab
+    subdir: library

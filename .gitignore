@@ -8,8 +8,9 @@ dist-*
 cabal-dev
 .direnv
 cabal.project.local
-db/
+db/*
+!db/clickhouse/
 result
 result-*
 .pre-commit-config.yaml
-clickhouse/
+/clickhouse/
