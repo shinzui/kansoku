@@ -62,49 +62,49 @@ This section must always reflect the actual current state of the work.
 
 Milestone 1 — canonical type and JSON codec:
 
-- [ ] Add `aeson`, `containers`, `text`, `time` to the `build-depends` of the
+- [x] 2026-07-01 — Add `aeson`, `containers`, `text`, `time` to the `build-depends` of the
   `kansoku:kansoku-api` sub-library stanza in `kansoku.cabal` (created by EP-1), if not already
   present; the stanza already `import: common` and depends on `Kansoku.Prelude`.
-- [ ] Add `Kansoku.Event.Types` and `Kansoku.Event` to the `kansoku:kansoku-api` sub-library
+- [x] 2026-07-01 — Add `Kansoku.Event.Types` and `Kansoku.Event` to the `kansoku:kansoku-api` sub-library
   `exposed-modules` in `kansoku.cabal`.
-- [ ] Create `src/Kansoku/Event/Types.hs` (importing `Kansoku.Prelude`) with the `EventSource`
+- [x] 2026-07-01 — Create `api/Kansoku/Event/Types.hs` (importing `Kansoku.Prelude`) with the `EventSource`
   closed sum type. Both JSON instances are hand-written: `ToJSON` as a one-liner over
   `eventSourceToText`, and `FromJSON` so an out-of-range source fails with the "unknown event
   source" message the acceptance test requires. Both wire mappings are the exact lowercase
   strings.
-- [ ] Add the identifier newtypes (`EventId`, `EventName`, `AnonymousId`, `UserId`,
+- [x] 2026-07-01 — Add the identifier newtypes (`EventId`, `EventName`, `AnonymousId`, `UserId`,
   `OrganizationId`, `AccountId`, `SessionId`, `CorrelationId`, `CausationId`, `SourceEventId`)
   to `Kansoku.Event.Types` with `deriving stock (Generic, Show)` +
   `deriving newtype (Eq, Ord, FromJSON, ToJSON)` over `Text` per the record-patterns standard.
-- [ ] Add the `AnalyticsEvent` record to `Kansoku.Event.Types` with every field from the
+- [x] 2026-07-01 — Add the `AnalyticsEvent` record to `Kansoku.Event.Types` with every field from the
   specification (strict `!` fields, entity id first, no field prefixes),
   `deriving stock (Generic, Eq, Show)`, with explicit `FromJSON`/`ToJSON` instances derived
   through the shared `analyticsEventOptions` (defined in the same module).
-- [ ] Create `src/Kansoku/Event.hs` (importing and re-exporting `Kansoku.Event.Types`) with the
+- [x] 2026-07-01 — Create `api/Kansoku/Event.hs` (importing and re-exporting `Kansoku.Event.Types`) with the
   identity-event smart constructors (`identifyEvent`, `aliasEvent`, `groupEvent`), and document
   the identity-event naming convention in the module haddock.
-- [ ] Create the test module `test/Kansoku/EventSpec.hs` (wired into EP-1's test-suite) with
+- [x] 2026-07-01 — Create the test module `test/Kansoku/EventSpec.hs` (wired into EP-1's test-suite) with
   the JSON round-trip test and the bad-`source` rejection test.
-- [ ] Run `cabal build` and `cabal test`; confirm the Milestone 1 specs pass.
+- [x] 2026-07-01 — Run `cabal build` and `cabal test`; confirm the Milestone 1 specs pass.
 
 Milestone 2 — validation and schema registry:
 
-- [ ] Add `Kansoku.Event.Registry` and `Kansoku.Event.Validation` to the
+- [x] 2026-07-01 — Add `Kansoku.Event.Registry` and `Kansoku.Event.Validation` to the
   `kansoku:kansoku-api` sub-library `exposed-modules`.
-- [ ] Create `src/Kansoku/Event/Registry.hs` (importing `Kansoku.Prelude` and
+- [x] 2026-07-01 — Create `api/Kansoku/Event/Registry.hs` (importing `Kansoku.Prelude` and
   `Kansoku.Event.Types`) with `PropertyType`, `PropertySpec`,
   `EventSchema`, `EventRegistry`, `emptyRegistry`, `registerSchema`, `lookupSchema`, and
   `defaultRegistry` seeded with the spec event names.
-- [ ] Create `src/Kansoku/Event/Validation.hs` (importing `Kansoku.Prelude`,
+- [x] 2026-07-01 — Create `api/Kansoku/Event/Validation.hs` (importing `Kansoku.Prelude`,
   `Kansoku.Event.Types`, and `Kansoku.Event.Registry`) with `ValidationError`,
   `validateEventWith`, and `validateEvent`.
-- [ ] Extend `Kansoku.Event`'s export list to re-export `Kansoku.Event.Registry` and
+- [x] 2026-07-01 — Extend `Kansoku.Event`'s export list to re-export `Kansoku.Event.Registry` and
   `Kansoku.Event.Validation` alongside `Kansoku.Event.Types`.
-- [ ] Extend `test/Kansoku/EventSpec.hs` with registry-lookup, validation-success, and
+- [x] 2026-07-01 — Extend `test/Kansoku/EventSpec.hs` with registry-lookup, validation-success, and
   validation-failure specs.
-- [ ] Run `cabal test`; confirm all Event specs pass and record the transcript in Concrete
+- [x] 2026-07-01 — Run `cabal test`; confirm all Event specs pass and record the transcript in Concrete
   Steps.
-- [ ] Run `fourmolu` on the new modules and commit with the required trailers.
+- [x] 2026-07-01 — Run `fourmolu` on the new modules and commit with the required trailers.
 
 
 ## Surprises & Discoveries
@@ -112,7 +112,18 @@ Milestone 2 — validation and schema registry:
 Document unexpected behaviors, bugs, optimizations, or insights discovered during
 implementation. Provide concise evidence.
 
-(None yet.)
+- Discovery (2026-07-01, implementation): EP-2's older prose named
+  `src/Kansoku/Event*.hs`, but EP-1's actual shared `kansoku:kansoku-api` sub-library has
+  `hs-source-dirs: api`. The event modules therefore live under `api/Kansoku/Event*.hs`.
+  Placing them under `src/` would put the canonical event model in the main server library
+  instead of the dependency-light shared sub-library required by EP-7 and EP-8.
+- Discovery (2026-07-01, implementation): test modules that import `Data.Aeson`,
+  `Data.Aeson.KeyMap`, and `Data.ByteString.Lazy.Char8` directly need direct test-suite
+  dependencies on `aeson` and `bytestring`. Depending on `kansoku:kansoku-api` is not enough
+  for GHC to expose those packages to the test component.
+- Discovery (2026-07-01, implementation): the custom prelude already re-exports `isJust`, so a
+  local `isJust` helper in `Kansoku.EventSpec` creates an ambiguous occurrence. The final test
+  uses the prelude's `isJust`.
 
 
 ## Decision Log
@@ -242,13 +253,34 @@ Record every decision made while working on the plan.
   remains the single public entry point and the normative contract.
   Date: 2026-07-01
 
+- Decision: Place the event modules under `api/Kansoku/` rather than `src/Kansoku/`.
+  Rationale: EP-1 created the shared internal sub-library `kansoku:kansoku-api` with
+  `hs-source-dirs: api`, while `src/` is the main server library. The event model must be in
+  `kansoku-api` so the future Haskell SDK and OpenAPI generator can import it without pulling
+  in server dependencies. This corrects stale path prose in this plan; the public module names
+  remain `Kansoku.Event`, `Kansoku.Event.Types`, `Kansoku.Event.Registry`, and
+  `Kansoku.Event.Validation`.
+  Date: 2026-07-01
+
 
 ## Outcomes & Retrospective
 
 Summarize outcomes, gaps, and lessons learned at major milestones or at completion.
 Compare the result against the original purpose.
 
-(To be filled during and after implementation.)
+EP-2 is complete as of 2026-07-01. The shared `kansoku:kansoku-api` sub-library now exposes
+`Kansoku.Event`, `Kansoku.Event.Types`, `Kansoku.Event.Registry`, and
+`Kansoku.Event.Validation` from `api/Kansoku/`. The implementation defines the canonical
+`AnalyticsEvent` record, identifier newtypes, the closed `EventSource` enum with the required
+`unknown event source` decode failure, identity-event smart constructors, an in-memory schema
+registry, and pure validation returning `Either [ValidationError] AnalyticsEvent`.
+
+Validation evidence from 2026-07-01: `cabal build all` succeeded; `cabal test` passed with
+`11 examples, 0 failures`; the Event specs proved JSON round-trip equivalence as parsed Aeson
+`Value`s, unknown-source rejection, seeded-registry lookup, unknown-registry miss,
+successful validation, empty-id rejection, received-before-occurred rejection, and missing
+required-property rejection; `nix build` also succeeded after staging the new event modules so
+the flake source included them.
 
 
 ## Context and Orientation
@@ -274,9 +306,9 @@ before you begin. Concretely, EP-1 creates:
 - `cabal.project` — the file that tells the `cabal` build tool which packages are in the build.
 - The `Kansoku.*` module namespace, living under `src/Kansoku/`. For example EP-1 creates
   `src/Kansoku/Config.hs` exposing module `Kansoku.Config`. New modules in this plan follow the
-  same pattern: module `Kansoku.Event` lives at `src/Kansoku/Event.hs`, module
-  `Kansoku.Event.Types` at `src/Kansoku/Event/Types.hs`, module `Kansoku.Event.Registry` at
-  `src/Kansoku/Event/Registry.hs`, and so on.
+  same pattern: module `Kansoku.Event` lives at `api/Kansoku/Event.hs`, module
+  `Kansoku.Event.Types` at `api/Kansoku/Event/Types.hs`, module `Kansoku.Event.Registry` at
+  `api/Kansoku/Event/Registry.hs`, and so on.
 - A test-suite. Its exact test framework (for example `hspec` or `tasty`) is chosen by EP-1.
   This plan's example test code is written in `hspec` style (the most common choice for this
   kind of unit test). When you implement, open EP-1's test files first and match whatever
@@ -366,7 +398,7 @@ plans need. Milestone 2 adds validation and the schema registry on top.
 
 Scope: define the event type and make it encode/decode to exactly the JSON in the spec, proven
 by a round-trip test and a bad-`source` rejection test. At the end of this milestone,
-`src/Kansoku/Event/Types.hs` and `src/Kansoku/Event.hs` exist and `cabal test` shows the
+`api/Kansoku/Event/Types.hs` and `api/Kansoku/Event.hs` exist and `cabal test` shows the
 Milestone 1 specs passing.
 
 First, edit `kansoku.cabal`. In the `kansoku:kansoku-api` sub-library stanza (the shared
@@ -380,7 +412,7 @@ the GHC2024 edition and the shared extensions (`DeriveAnyClass`, `DuplicateRecor
 `containers` is needed in Milestone 2 for the registry's `Data.Map.Strict`; adding it now is
 harmless.
 
-Then create `src/Kansoku/Event/Types.hs`. Begin with the module header and
+Then create `api/Kansoku/Event/Types.hs`. Begin with the module header and
 `import Kansoku.Prelude` (no per-file language pragmas — the `common` stanza supplies them).
 This module holds the `EventSource` sum type, the ten identifier newtypes, the
 `AnalyticsEvent` record, `analyticsEventOptions`, and all of their JSON instances, and it
@@ -394,7 +426,7 @@ graph in `Kansoku.Event.Types` breaks the cycle: Registry and Validation import 
 `Kansoku.Event` imports all three and re-exports everything, so `import Kansoku.Event` remains
 the single public entry point and consumers never see the split.
 
-`Kansoku.Event` itself (file `src/Kansoku/Event.hs`) is created at the end of this milestone:
+`Kansoku.Event` itself (file `api/Kansoku/Event.hs`) is created at the end of this milestone:
 it imports `Kansoku.Event.Types`, defines the identity-event smart constructors, and re-exports
 all of `Kansoku.Event.Types`; the `Kansoku.Event.Registry` and `Kansoku.Event.Validation`
 re-exports are added in Milestone 2 when those modules exist.
@@ -539,7 +571,7 @@ needs the same omit-nothing camelCase options for another API record, promote it
 `Kansoku.Prelude` alongside the standards' `eventAesonOptions` example rather than duplicating
 it.
 
-Finally create `src/Kansoku/Event.hs`, which re-exports everything from `Kansoku.Event.Types`
+Finally create `api/Kansoku/Event.hs`, which re-exports everything from `Kansoku.Event.Types`
 and adds the identity-event smart constructors, documenting the convention. An identity
 event is an ordinary `AnalyticsEvent` whose `eventName` is `"identify"`, `"alias"`, or
 `"group"`; EP-5 recognizes events by these names. Provide constructors that take the fields an
@@ -576,13 +608,13 @@ Then create the test module (see Concrete Steps for the exact sample) and run `c
 ### Milestone 2 — validation and the schema registry
 
 Scope: add a schema registry and a validator that consults it, with unit tests. At the end,
-`src/Kansoku/Event/Registry.hs` and `src/Kansoku/Event/Validation.hs` exist, are re-exported
+`api/Kansoku/Event/Registry.hs` and `api/Kansoku/Event/Validation.hs` exist, are re-exported
 from `Kansoku.Event`, and the full Event spec group passes.
 
 Add `Kansoku.Event.Registry` and `Kansoku.Event.Validation` to the `kansoku:kansoku-api`
 sub-library `exposed-modules` in `kansoku.cabal`.
 
-Create `src/Kansoku/Event/Registry.hs`, importing `Kansoku.Prelude`, `Kansoku.Event.Types`
+Create `api/Kansoku/Event/Registry.hs`, importing `Kansoku.Prelude`, `Kansoku.Event.Types`
 (for `EventName`) and, postpositively, `import Data.Map.Strict qualified as Map` (containers).
 Importing `Kansoku.Event.Types` — not `Kansoku.Event` — is what keeps the module graph
 acyclic, as explained in Milestone 1. A schema describes, per event name,
@@ -654,7 +686,7 @@ defaultRegistry =
     ]
 ```
 
-Create `src/Kansoku/Event/Validation.hs`, importing `Kansoku.Prelude`, `Kansoku.Event.Types`
+Create `api/Kansoku/Event/Validation.hs`, importing `Kansoku.Prelude`, `Kansoku.Event.Types`
 (for `AnalyticsEvent` and `EventName`), `Kansoku.Event.Registry` (for the registry types and
 `defaultRegistry`) and, postpositively, `import Data.Aeson.KeyMap qualified as KeyMap` for the
 `properties`-object presence checks.
@@ -876,8 +908,8 @@ Format and commit:
 
 ```bash
 fourmolu -i src test
-git add kansoku.cabal src/Kansoku/Event.hs src/Kansoku/Event/Types.hs \
-        src/Kansoku/Event/Registry.hs src/Kansoku/Event/Validation.hs \
+git add kansoku.cabal api/Kansoku/Event.hs api/Kansoku/Event/Types.hs \
+        api/Kansoku/Event/Registry.hs api/Kansoku/Event/Validation.hs \
         test/Kansoku/EventSpec.hs
 git commit
 ```
@@ -963,8 +995,8 @@ These are the exact names, module paths, and signatures other plans (EP-3, EP-4,
 EP-7) import. They are the normative contract; do not rename them without updating this plan
 first and cascading the change.
 
-Module `Kansoku.Event` (file `src/Kansoku/Event.hs`) exports everything below. The types and
-their JSON instances are *defined* in `Kansoku.Event.Types` (file `src/Kansoku/Event/Types.hs`)
+Module `Kansoku.Event` (file `api/Kansoku/Event.hs`) exports everything below. The types and
+their JSON instances are *defined* in `Kansoku.Event.Types` (file `api/Kansoku/Event/Types.hs`)
 and re-exported — an internal split that exists only to keep the module graph acyclic (see the
 Decision Log); consumers import `Kansoku.Event` and never need to name `Kansoku.Event.Types`:
 
@@ -1014,7 +1046,7 @@ groupEvent    :: EventId -> EventSource -> UTCTime -> UTCTime
 -- Kansoku.Event.Validation.
 ```
 
-Module `Kansoku.Event.Registry` (file `src/Kansoku/Event/Registry.hs`) exports:
+Module `Kansoku.Event.Registry` (file `api/Kansoku/Event/Registry.hs`) exports:
 
 ```haskell
 data PropertyType = PTString | PTNumber | PTBool | PTObject | PTArray | PTAny
@@ -1029,7 +1061,7 @@ defaultRegistry :: EventRegistry   -- seeded: page_view, session_start, identify
                                    -- user_registered, subscription_started
 ```
 
-Module `Kansoku.Event.Validation` (file `src/Kansoku/Event/Validation.hs`) exports:
+Module `Kansoku.Event.Validation` (file `api/Kansoku/Event/Validation.hs`) exports:
 
 ```haskell
 data ValidationError
@@ -1078,6 +1110,15 @@ constructs and encodes `AnalyticsEvent`. All of them import the exact names abov
 
 
 ## Revision Note
+
+2026-07-01 — Implemented EP-2 and corrected source-root paths. The event modules were created
+under `api/Kansoku/` because that is the actual `hs-source-dirs` of the shared
+`kansoku:kansoku-api` sub-library established by EP-1; all stale `src/Kansoku/Event*` path
+references in this plan were rewritten to `api/Kansoku/Event*`. The Progress checklist,
+Surprises & Discoveries, Decision Log, and Outcomes & Retrospective now reflect the completed
+implementation and validation evidence (`cabal build all`, `cabal test`, and `nix build`).
+Why: EP-2 is complete, and the living plan must describe the current implementation accurately
+for downstream plans that import the canonical event model from the shared API sub-library.
 
 2026-07-01 — Adopted the shared haskell-jitsurei/core Haskell standards
 (`/Users/shinzui/Keikaku/bokuno/haskell-jitsurei/core/`: `standards.md`, `custom-prelude.md`,
@@ -1129,7 +1170,7 @@ fixed in this revision; the JSON wire contract and the public API are unchanged.
   `AnalyticsEvent`/`EventName`, so those modules would import `Kansoku.Event` while it imported
   them back: an import cycle GHC rejects. The shared types (the `AnalyticsEvent` record, the
   ten identifier newtypes, `EventSource`, `analyticsEventOptions`, and their JSON instances)
-  now live in a new leaf module `Kansoku.Event.Types` (`src/Kansoku/Event/Types.hs`, in the
+  now live in a new leaf module `Kansoku.Event.Types` (`api/Kansoku/Event/Types.hs`, in the
   same `kansoku:kansoku-api` sub-library); Registry and Validation import Types; and
   `Kansoku.Event` imports all three, defines the identity-event smart constructors, and
   re-exports everything — so `import Kansoku.Event` remains the single public entry point.

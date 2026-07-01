@@ -26,7 +26,13 @@ common common
 library kansoku-api
   import:          common
   hs-source-dirs:  api
-  exposed-modules: Kansoku.Prelude
+  exposed-modules:
+    Kansoku.Event
+    Kansoku.Event.Registry
+    Kansoku.Event.Types
+    Kansoku.Event.Validation
+    Kansoku.Prelude
+
   build-depends:
     , aeson
     , base          >=4.21 && <5
@@ -77,9 +83,14 @@ test-suite kansoku-test
   type:           exitcode-stdio-1.0
   hs-source-dirs: test
   main-is:        Spec.hs
-  other-modules:  Kansoku.ConfigSpec
+  other-modules:
+    Kansoku.ConfigSpec
+    Kansoku.EventSpec
+
   build-depends:
+    , aeson
     , base
+    , bytestring
     , generic-lens
     , hspec
     , kansoku

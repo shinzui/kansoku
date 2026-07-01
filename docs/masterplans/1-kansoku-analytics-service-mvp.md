@@ -220,7 +220,7 @@ decision (Haskell-only repo).
 | # | Title | Path | Hard Deps | Soft Deps | Status |
 |---|-------|------|-----------|-----------|--------|
 | 1 | Project skeleton and application runtime | docs/plans/1-project-skeleton-and-application-runtime.md | None | None | Complete |
-| 2 | Canonical event model and schema registry | docs/plans/2-canonical-event-model-and-schema-registry.md | EP-1 | None | Not Started |
+| 2 | Canonical event model and schema registry | docs/plans/2-canonical-event-model-and-schema-registry.md | EP-1 | None | Complete |
 | 3 | ClickHouse storage schema and batch writer | docs/plans/3-clickhouse-storage-schema-and-batch-writer.md | EP-1 | EP-2 | Not Started |
 | 4 | Ingestion API with pgmq queue and batched ClickHouse writer | docs/plans/4-ingestion-api-with-pgmq-queue-and-batched-clickhouse-writer.md | EP-2, EP-3 | None | Not Started |
 | 5 | Identity stitching and materialized view rollups | docs/plans/5-identity-stitching-and-materialized-view-rollups.md | EP-3 | EP-4 | Not Started |
@@ -299,7 +299,7 @@ both API types).
 
 **The `AnalyticsEvent` type and its JSON contract.** Involved: EP-2 (defines), EP-3, EP-4,
 EP-5, EP-6, EP-7 (consume). The shared artifact is the `AnalyticsEvent` record in
-`src/Kansoku/Event.hs` (package `kansoku`), its field names and optionality exactly matching
+`api/Kansoku/Event.hs` (sub-library `kansoku:kansoku-api`), its field names and optionality exactly matching
 the `AnalyticsEvent` TypeScript type in `docs/initial-spec.md` (`eventId`, `eventName`,
 `source`, `sourceService?`, `occurredAt`, `receivedAt`, the identity ids, the web/UTM fields,
 the correlation fields, `properties`, `context`), and its `FromJSON`/`ToJSON` instances which
@@ -437,8 +437,8 @@ the milestone. This section provides an at-a-glance view of the entire initiativ
 - [x] EP-1: `kansoku.cabal` + `cabal.project` build green under `cabal build` and `nix build`
 - [x] EP-1: effectful runtime + `Kansoku.Config` from env + structured logging
 - [x] EP-1: `kansoku-server` runs and serves a health endpoint returning 200 OK
-- [ ] EP-2: `AnalyticsEvent` type + `FromJSON`/`ToJSON` round-trip matching the spec JSON
-- [ ] EP-2: event validation + in-process schema registry with unit tests green
+- [x] EP-2: `AnalyticsEvent` type + `FromJSON`/`ToJSON` round-trip matching the spec JSON
+- [x] EP-2: event validation + in-process schema registry with unit tests green
 - [ ] EP-3: `analytics.events_raw` migration (ReplacingMergeTree, ORDER BY, PARTITION BY) applied
 - [ ] EP-3: `EventRow` ClickHaskell mapping + batched `insertEvents`, round-trip insert/select test
 - [ ] EP-3: deduplication strategy documented and demonstrated (replayed batch collapses)
@@ -487,6 +487,11 @@ interactions between child plans. Provide concise evidence.
   `curl` returned `000` and stderr repeated `GHC.Internal.Event.Thread.getSystemTimerManager:
   the TimerManager requires linking against the threaded runtime`. EP-1 added the flag to the
   executable; EP-4 must preserve it when servant/Warp ingestion replaces the minimal WAI app.
+- Discovery (2026-07-01, EP-2 implementation): the canonical event modules live under
+  `api/Kansoku/Event*.hs`, not `src/Kansoku/Event*.hs`, because EP-1's shared
+  `kansoku:kansoku-api` sub-library uses `hs-source-dirs: api`. The public module names are
+  unchanged (`Kansoku.Event*`), but downstream plans should add shared API modules under `api/`
+  unless they intentionally belong to the main server library.
 - Dependency satisfied (2026-07-01): shibuya first-class batch processing shipped in
   `shibuya-core` 0.7.1.0 (shibuya EP-16..EP-21 all Complete). The shipped `Shibuya.Batch` API
   differs slightly from the frozen signatures EP-4 was first drafted against, and EP-4 was
@@ -744,6 +749,13 @@ the result against the original vision.
 
 
 ## Revision Notes
+
+- 2026-07-01: EP-2 implementation completed. Marked "Canonical event model and schema
+  registry" Complete in the Exec-Plan Registry, checked the two EP-2 aggregate Progress rows,
+  corrected shared event-module file paths to `api/Kansoku/Event*.hs`, and recorded the
+  source-root discovery for downstream plans. Evidence is recorded in
+  `docs/plans/2-canonical-event-model-and-schema-registry.md`: `cabal build all`,
+  `cabal test` (11 examples, 0 failures), and `nix build` all passed.
 
 - 2026-07-01: EP-1 implementation completed. Marked "Project skeleton and application runtime"
   Complete in the Exec-Plan Registry, checked the three EP-1 aggregate Progress rows, and added
