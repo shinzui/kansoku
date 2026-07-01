@@ -1,0 +1,62 @@
+-- | Runtime configuration for Kansoku, parsed from environment variables that
+-- the dev shell (see nix/haskell.nix shellHook) already exports.
+module Kansoku.Config
+  ( Config (..),
+    ConfigError (..),
+    defaultServerPort,
+    loadConfig,
+  )
+where
+
+import Data.Text qualified as Text
+import Kansoku.Prelude
+import System.Environment (lookupEnv)
+import Text.Read (readMaybe)
+
+-- | The port the HTTP server listens on when KANSOKU_SERVER_PORT is unset.
+defaultServerPort :: Int
+defaultServerPort = 8080
+
+-- | All configuration the service needs at startup. Later plans extend this
+-- record with ClickHouse, pgmq, queue, and metrics-query settings.
+data Config = Config
+  { pgConnectionString :: !Text,
+    clickHouseTcpPort :: !Int,
+    clickHouseHttpPort :: !Int,
+    serverPort :: !Int
+  }
+  deriving stock (Generic, Eq, Show)
+
+-- | A configuration failure with a human-readable message.
+newtype ConfigError = ConfigError Text
+  deriving stock (Generic, Eq, Show)
+
+-- | Read configuration from the environment. Missing values fall back to
+-- sensible defaults; a non-numeric port yields a Left with a clear message.
+loadConfig :: IO (Either ConfigError Config)
+loadConfig = do
+  pg <- maybe defaultPg Text.pack <$> lookupEnv "PG_CONNECTION_STRING"
+  chTcp <- lookupEnv "CLICKHOUSE_TCP_PORT"
+  chHttp <- lookupEnv "CLICKHOUSE_HTTP_PORT"
+  srv <- lookupEnv "KANSOKU_SERVER_PORT"
+  pure $ do
+    tcp <- parsePort "CLICKHOUSE_TCP_PORT" 9000 chTcp
+    http <- parsePort "CLICKHOUSE_HTTP_PORT" 8123 chHttp
+    port <- parsePort "KANSOKU_SERVER_PORT" defaultServerPort srv
+    Right
+      Config
+        { pgConnectionString = pg,
+          clickHouseTcpPort = tcp,
+          clickHouseHttpPort = http,
+          serverPort = port
+        }
+  where
+    defaultPg = "postgresql:///kansoku"
+
+parsePort :: Text -> Int -> Maybe String -> Either ConfigError Int
+parsePort _ def Nothing = Right def
+parsePort name _ (Just raw) =
+  case readMaybe raw of
+    Just n -> Right n
+    Nothing ->
+      Left (ConfigError (name <> ": not a valid integer: " <> Text.pack raw))

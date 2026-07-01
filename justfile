@@ -1,0 +1,26 @@
+# Kansoku developer commands. Run inside `nix develop`.
+
+# Create the `kansoku` PostgreSQL database if it does not already exist.
+# process-compose.yaml's `create_schema` process runs this after postgres is healthy.
+create-database:
+    @if psql -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname = 'kansoku'" | grep -q 1; then \
+        echo "database 'kansoku' already exists"; \
+    else \
+        createdb kansoku && echo "created database 'kansoku'"; \
+    fi
+
+# Build everything (library, server, tests).
+build:
+    cabal build all
+
+# Run the unit tests.
+test:
+    cabal test
+
+# Run the HTTP server.
+run:
+    cabal run kansoku-server
+
+# Start the local services (postgres, clickhouse, create_schema) via process-compose.
+up:
+    process-compose up

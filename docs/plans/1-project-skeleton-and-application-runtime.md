@@ -71,37 +71,45 @@ Use a checklist to summarize granular steps. Every stopping point must be docume
 even if it requires splitting a partially completed task into two ("done" vs. "remaining").
 This section must always reflect the actual current state of the work.
 
-- [ ] Milestone 1 — Create `kansoku.cabal` with a `common common` stanza (`default-language:
+- [x] Milestone 1 — Create `kansoku.cabal` with a `common common` stanza (`default-language:
       GHC2024` plus the shared `default-extensions`), the shared `kansoku:kansoku-api`
       internal sub-library, the main library, the `kansoku-server` executable, and the test
       suite — every stanza doing `import: common` — plus `cabal.project` (`packages: .`) at the
-      repository root.
-- [ ] Milestone 1 — Create `api/Kansoku/Prelude.hs`, the project prelude every Kansoku module
+      repository root. Completed 2026-07-01.
+- [x] Milestone 1 — Create `api/Kansoku/Prelude.hs`, the project prelude every Kansoku module
       imports (re-exports Text/Generic/aeson/lens; home for shared aeson `Options`), exposed
-      from the `kansoku-api` sub-library.
-- [ ] Milestone 1 — Create a trivial `src/Kansoku.hs` umbrella module so the main library has
-      something to compile.
-- [ ] Milestone 1 — Create `app/Main.hs` and `test/Spec.hs` placeholders so all stanzas build.
-- [ ] Milestone 1 — Create a `justfile` at the repository root with a `create-database`
+      from the `kansoku-api` sub-library. Completed 2026-07-01.
+- [x] Milestone 1 — Create a trivial `src/Kansoku.hs` umbrella module so the main library has
+      something to compile. Completed 2026-07-01.
+- [x] Milestone 1 — Create `app/Main.hs` and `test/Spec.hs` placeholders so all stanzas build.
+      Completed 2026-07-01.
+- [x] Milestone 1 — Create a `justfile` at the repository root with a `create-database`
       recipe (so `process-compose.yaml`'s `create_schema` step works) plus `build`, `test`,
-      `run`, and `up` recipes.
-- [ ] Milestone 1 — Verify `cabal build` succeeds inside `nix develop` (this compiles the
+      `run`, and `up` recipes. Completed 2026-07-01.
+- [x] Milestone 1 — Verify `cabal build` succeeds inside `nix develop` (this compiles the
       `common` GHC2024 stanza, the `kansoku-api` sub-library, and `Kansoku.Prelude`).
-- [ ] Milestone 1 — Verify `nix build` succeeds and produces `./result/bin/kansoku-server`.
-- [ ] Milestone 2 — Add `src/Kansoku/Config.hs` defining the `Config` record and `loadConfig`
-      reading environment variables with sensible defaults.
-- [ ] Milestone 2 — Add `src/Kansoku/Logging.hs` defining the custom `Log` effect and its
-      stderr JSON interpreter.
-- [ ] Milestone 2 — Add `src/Kansoku/Runtime.hs` defining the `AppEffects` stack and `runApp`.
-- [ ] Milestone 2 — Add `test/Kansoku/ConfigSpec.hs` with hspec unit tests for `loadConfig`,
-      wire it into `test/Spec.hs`, and verify `cabal test` passes.
-- [ ] Milestone 3 — Add `src/Kansoku/Server.hs` with a WAI health application and
-      `startServer`.
-- [ ] Milestone 3 — Wire `app/Main.hs` to `loadConfig`, `runApp`, and `startServer`.
-- [ ] Milestone 3 — Run `cabal run kansoku-server` and capture a `curl` transcript showing
-      `/health` returns `200`.
-- [ ] Final — Update Surprises & Discoveries and Outcomes & Retrospective, update the parent
+      Completed 2026-07-01 with `cabal build all`.
+- [x] Milestone 1 — Verify `nix build` succeeds and produces `./result/bin/kansoku-server`.
+      Completed 2026-07-01; `ls -l ./result/bin/kansoku-server` showed an executable.
+- [x] Milestone 2 — Add `src/Kansoku/Config.hs` defining the `Config` record and `loadConfig`
+      reading environment variables with sensible defaults. Completed 2026-07-01.
+- [x] Milestone 2 — Add `src/Kansoku/Logging.hs` defining the custom `Log` effect and its
+      stderr JSON interpreter. Completed 2026-07-01.
+- [x] Milestone 2 — Add `src/Kansoku/Runtime.hs` defining the `AppEffects` stack and `runApp`.
+      Completed 2026-07-01.
+- [x] Milestone 2 — Add `test/Kansoku/ConfigSpec.hs` with hspec unit tests for `loadConfig`,
+      wire it into `test/Spec.hs`, and verify `cabal test` passes. Completed 2026-07-01 with
+      `3 examples, 0 failures`.
+- [x] Milestone 3 — Add `src/Kansoku/Server.hs` with a WAI health application and
+      `startServer`. Completed 2026-07-01.
+- [x] Milestone 3 — Wire `app/Main.hs` to `loadConfig`, `runApp`, and `startServer`.
+      Completed 2026-07-01.
+- [x] Milestone 3 — Run `cabal run kansoku-server` and capture a `curl` transcript showing
+      `/health` returns `200`. Completed 2026-07-01; `/health` returned status `200` and body
+      `OK`, while `/nope` returned status `404`.
+- [x] Final — Update Surprises & Discoveries and Outcomes & Retrospective, update the parent
       MasterPlan's Progress checkboxes for EP-1, and commit with the required git trailers.
+      Completed 2026-07-01.
 
 
 ## Surprises & Discoveries
@@ -109,7 +117,21 @@ This section must always reflect the actual current state of the work.
 Document unexpected behaviors, bugs, optimizations, or insights discovered during
 implementation. Provide concise evidence.
 
-(None yet.)
+- Discovery (2026-07-01, implementation): `asks (^. #serverPort)` is ambiguous because the
+  generic-lens label does not tell GHC which `Reader` environment is being read. The final
+  `Kansoku.Server` implementation uses `asks @Config (^. #serverPort)` and a local
+  `TypeApplications` pragma. Evidence: the first `cabal build all` failed with "Could not
+  deduce `Reader t0 :> es`" and "Overlapping instances for HasField' `serverPort`".
+- Discovery (2026-07-01, implementation): Warp requires the server executable to be linked
+  against the threaded RTS. The first server run logged startup but `curl` returned status
+  `000` and stderr repeated `GHC.Internal.Event.Thread.getSystemTimerManager: the TimerManager
+  requires linking against the threaded runtime`. Adding `ghc-options: -threaded` to the
+  `kansoku-server` executable and forcing a clean Cabal rebuild fixed it; `+RTS -N` was then
+  accepted and `/health` returned `200`.
+- Discovery (2026-07-01, implementation): the profile `treefmt` binary is not the flake
+  wrapper and failed with `failed to find treefmt config file`. Formatting still succeeded by
+  running the concrete formatters directly: `fourmolu --mode inplace ...` and
+  `cabal-fmt --inplace kansoku.cabal`.
 
 
 ## Decision Log
@@ -223,13 +245,40 @@ Record every decision made while working on the plan.
   plan's own constraint.
   Date: 2026-07-01
 
+- Decision: Link `kansoku-server` with the threaded RTS by adding executable-local
+  `ghc-options: -threaded`.
+  Rationale: Warp's timer manager requires the threaded runtime. Without it, the server logged
+  startup but did not answer HTTP requests; `curl` returned `000` and the runtime emitted
+  `GHC.Internal.Event.Thread.getSystemTimerManager: the TimerManager requires linking against
+  the threaded runtime`. Keeping the flag on the executable, not the whole package, is the
+  narrowest change that makes the HTTP server usable and establishes the invariant EP-4 must
+  preserve when it replaces the minimal WAI app with servant/Warp routing.
+  Date: 2026-07-01
+
 
 ## Outcomes & Retrospective
 
 Summarize outcomes, gaps, and lessons learned at major milestones or at completion.
 Compare the result against the original purpose.
 
-(To be filled during and after implementation.)
+EP-1 is complete as of 2026-07-01. The repository now has a buildable Haskell package with the
+shared `kansoku:kansoku-api` sub-library, `Kansoku.Prelude`, the main `kansoku` library,
+`kansoku-server`, an hspec test suite, and a `justfile` matching `process-compose.yaml`'s
+`create_schema` hook. The implementation created `Kansoku.Config`, `Kansoku.Logging`,
+`Kansoku.Runtime`, and `Kansoku.Server`, and `app/Main.hs` now loads configuration, runs the
+effectful stack, and starts the health server.
+
+Validation evidence from 2026-07-01: `cabal build all` succeeded after a clean rebuild;
+`cabal test` passed with `3 examples, 0 failures`; `cabal run kansoku-server` logged
+`{"level":"info","message":"kansoku-server listening on port 8080 (GET /health)"}`;
+`curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/health` printed `200`;
+`curl -s http://localhost:8080/health` printed `OK`; `curl -s -o /dev/null -w
+"%{http_code}\n" http://localhost:8080/nope` printed `404`; and `nix build` succeeded with
+`./result/bin/kansoku-server` present and executable.
+
+The important lesson for later plans is that server-bearing executables must preserve
+`-threaded`, because Warp fails the useful health-check behavior without it even though startup
+logging can appear successful.
 
 
 ## Context and Orientation
@@ -1453,6 +1502,13 @@ them.
 
 
 ## Revision Notes
+
+- 2026-07-01 — **Implemented EP-1 and recorded validation evidence.** Created the Cabal
+  project/package, `kansoku-api` prelude sub-library, main library modules, executable, tests,
+  and `justfile`; added the threaded RTS flag required by Warp; checked every Progress item;
+  filled Surprises & Discoveries and Outcomes & Retrospective with the build/test/server/Nix
+  evidence. Why: EP-1 is now complete and the living plan must be restartable from the current
+  state rather than from the pre-implementation checklist.
 
 - 2026-07-01 — **Adopted the shared Kansoku Haskell coding standards.** The initial draft of
   this plan compiled and ran but did not follow the authoritative standards under

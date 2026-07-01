@@ -219,7 +219,7 @@ decision (Haskell-only repo).
 
 | # | Title | Path | Hard Deps | Soft Deps | Status |
 |---|-------|------|-----------|-----------|--------|
-| 1 | Project skeleton and application runtime | docs/plans/1-project-skeleton-and-application-runtime.md | None | None | Not Started |
+| 1 | Project skeleton and application runtime | docs/plans/1-project-skeleton-and-application-runtime.md | None | None | Complete |
 | 2 | Canonical event model and schema registry | docs/plans/2-canonical-event-model-and-schema-registry.md | EP-1 | None | Not Started |
 | 3 | ClickHouse storage schema and batch writer | docs/plans/3-clickhouse-storage-schema-and-batch-writer.md | EP-1 | EP-2 | Not Started |
 | 4 | Ingestion API with pgmq queue and batched ClickHouse writer | docs/plans/4-ingestion-api-with-pgmq-queue-and-batched-clickhouse-writer.md | EP-2, EP-3 | None | Not Started |
@@ -434,9 +434,9 @@ restate the standards in full; they follow EP-1's setup and cite this integratio
 Track milestone-level progress across all child plans. Each entry names the child plan and
 the milestone. This section provides an at-a-glance view of the entire initiative.
 
-- [ ] EP-1: `kansoku.cabal` + `cabal.project` build green under `cabal build` and `nix build`
-- [ ] EP-1: effectful runtime + `Kansoku.Config` from env + structured logging
-- [ ] EP-1: `kansoku-server` runs and serves a health endpoint returning 200 OK
+- [x] EP-1: `kansoku.cabal` + `cabal.project` build green under `cabal build` and `nix build`
+- [x] EP-1: effectful runtime + `Kansoku.Config` from env + structured logging
+- [x] EP-1: `kansoku-server` runs and serves a health endpoint returning 200 OK
 - [ ] EP-2: `AnalyticsEvent` type + `FromJSON`/`ToJSON` round-trip matching the spec JSON
 - [ ] EP-2: event validation + in-process schema registry with unit tests green
 - [ ] EP-3: `analytics.events_raw` migration (ReplacingMergeTree, ORDER BY, PARTITION BY) applied
@@ -482,6 +482,11 @@ interactions between child plans. Provide concise evidence.
 - Discovery (2026-07-01, during research): `pgmq-hs` installs the pgmq schema via pure SQL
   (`pgmq-migration`), so the plain nixpkgs `postgresql` in this repo needs no binary extension.
   EP-4 relies on this.
+- Discovery (2026-07-01, EP-1 implementation): any Warp-based server executable must be linked
+  with the threaded RTS. Without `ghc-options: -threaded`, `kansoku-server` logged startup but
+  `curl` returned `000` and stderr repeated `GHC.Internal.Event.Thread.getSystemTimerManager:
+  the TimerManager requires linking against the threaded runtime`. EP-1 added the flag to the
+  executable; EP-4 must preserve it when servant/Warp ingestion replaces the minimal WAI app.
 - Dependency satisfied (2026-07-01): shibuya first-class batch processing shipped in
   `shibuya-core` 0.7.1.0 (shibuya EP-16..EP-21 all Complete). The shipped `Shibuya.Batch` API
   differs slightly from the frozen signatures EP-4 was first drafted against, and EP-4 was
@@ -739,6 +744,12 @@ the result against the original vision.
 
 
 ## Revision Notes
+
+- 2026-07-01: EP-1 implementation completed. Marked "Project skeleton and application runtime"
+  Complete in the Exec-Plan Registry, checked the three EP-1 aggregate Progress rows, and added
+  the Warp/threaded RTS discovery that affects EP-4's future servant/Warp server work. Evidence
+  is recorded in `docs/plans/1-project-skeleton-and-application-runtime.md`: `cabal build all`,
+  `cabal test`, `nix build`, and HTTP `/health` all passed.
 
 - 2026-07-01: Initial MasterPlan authored and all seven child ExecPlans (EP-1..EP-7) drafted
   and reconciled. After the parallel drafting pass, a cross-plan consistency reconciliation
