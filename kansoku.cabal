@@ -64,6 +64,7 @@ library
     Kansoku.Metrics.Definition
     Kansoku.Metrics.Handler
     Kansoku.Metrics.Registry
+    Kansoku.OpenApi
     Kansoku.Postgres
     Kansoku.Query
     Kansoku.Runtime
@@ -87,11 +88,13 @@ library
     , hs-opentelemetry-api
     , http-types
     , kansoku:kansoku-api
+    , openapi-hs
     , pgmq-core
     , pgmq-effectful
     , pgmq-hasql
     , pgmq-migration
     , servant
+    , servant-openapi-hs
     , servant-server
     , shibuya-core
     , shibuya-pgmq-adapter
@@ -124,6 +127,7 @@ test-suite kansoku-test
     Kansoku.ConfigSpec
     Kansoku.EventSpec
     Kansoku.Ingest.QueueSpec
+    Kansoku.OpenApiSpec
     Kansoku.QuerySpec
     Kansoku.Writer.BatchSpec
 
@@ -137,6 +141,7 @@ test-suite kansoku-test
     , hspec
     , kansoku
     , kansoku:kansoku-api
+    , openapi-hs
     , pgmq-core
     , shibuya-core
     , text

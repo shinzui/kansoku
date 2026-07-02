@@ -226,7 +226,7 @@ decision (Haskell-only repo).
 | 5 | Identity stitching and materialized view rollups | docs/plans/5-identity-stitching-and-materialized-view-rollups.md | EP-3 | EP-4 | Complete |
 | 6 | Semantic metrics layer and typed query API | docs/plans/6-semantic-metrics-layer-and-typed-query-api.md | EP-3, EP-5 | EP-4 | Complete |
 | 7 | Haskell server SDK | docs/plans/7-haskell-server-sdk.md | EP-2, EP-4 | None | Complete |
-| 8 | OpenAPI schema generation and API documentation | docs/plans/8-openapi-schema-generation-and-api-documentation.md | EP-4, EP-6 | None | Not Started |
+| 8 | OpenAPI schema generation and API documentation | docs/plans/8-openapi-schema-generation-and-api-documentation.md | EP-4, EP-6 | None | Complete |
 
 Status values: Not Started, In Progress, Complete, Cancelled.
 Hard Deps and Soft Deps reference other rows by their # prefix (e.g., EP-1, EP-3).
@@ -456,8 +456,8 @@ the milestone. This section provides an at-a-glance view of the entire initiativ
       stubbed at 501
 - [x] EP-7: `kansoku-client` typed event constructors + batching + retry, delivery via `servant-client` over the shared `IngestAPI`
 - [x] EP-7: SDK integration test emits events that appear in `events_raw`
-- [ ] EP-8: `openApiDoc` built from `KansokuAPI` via `servant-openapi-hs`, schema instances for `AnalyticsEvent`
-- [ ] EP-8: `GET /openapi.json` served and verified (paths + schemas present); optional docs UI
+- [x] EP-8: `openApiDoc` built from `KansokuAPI` via `servant-openapi-hs`, schema instances for `AnalyticsEvent`
+- [x] EP-8: `GET /openapi.json` served and verified (paths + schemas present); optional docs UI deferred
 
 
 ## Surprises & Discoveries
@@ -787,7 +787,13 @@ EP-7 is complete. Haskell backend services can now depend on `kansoku-client`, c
 service-source analytics events with first-class identity fields, enqueue them through a
 bounded in-memory batcher, retry transient failures with stable event ids, and flush them to
 the shared `IngestAPI` via `servant-client`. The live integration test emitted through the SDK
-and verified the row in `analytics.events_raw`. The remaining MVP work is EP-8 OpenAPI.
+and verified the row in `analytics.events_raw`.
+
+EP-8 is complete. The service now generates an OpenAPI 3.1 JSON document from the shared
+servant `KansokuAPI`, serves it at `GET /openapi.json`, and verifies that the ingestion paths,
+metrics paths, and `AnalyticsEvent` schema are present. The optional bundled documentation UI
+is deferred; the machine-readable contract required for the MVP is available. All eight MVP
+ExecPlans are complete.
 
 
 ## Revision Notes
@@ -932,3 +938,11 @@ and verified the row in `analytics.events_raw`. The remaining MVP work is EP-8 O
   `just ch-migrate`, and `kansoku-server` on port 18081,
   `KANSOKU_SERVER_URL=http://127.0.0.1:18081 cabal test kansoku-client` passed all seven
   examples and verified the SDK-emitted event in `analytics.events_raw`.
+
+- 2026-07-02: EP-8 implementation completed. Marked "OpenAPI schema generation and API
+  documentation" Complete in the Exec-Plan Registry, checked the two EP-8 aggregate Progress
+  rows, and recorded the Nix/OpenAPI wiring discoveries. Evidence is recorded in
+  `docs/plans/8-openapi-schema-generation-and-api-documentation.md`: `openApiDoc` is generated
+  from `KansokuAPI`; `/openapi.json` returns OpenAPI 3.1 with `/v1/events`, `/v1/batch`,
+  `/metrics*`, and `AnalyticsEvent`; `cabal build all`, `cabal test all`, `nix fmt`, and
+  `nix build .#default` passed.

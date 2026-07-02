@@ -54,27 +54,26 @@ Use a checklist to summarize granular steps. Every stopping point must be docume
 even if it requires splitting a partially completed task into two ("done" vs. "remaining").
 This section must always reflect the actual current state of the work.
 
-- [ ] Milestone 1 — Add `openapi-hs` and `servant-openapi-hs` as local packages in
+- [x] Milestone 1 — Add `openapi-hs` and `servant-openapi-hs` as local packages in
   `cabal.project`; add `build-depends` on both to the `kansoku` library stanza; confirm the
   project still resolves (`cabal build --dry-run` or a real build).
-- [ ] Milestone 1 — Ensure the combined servant API type `Kansoku.Api.KansokuAPI` exists in
-  `src/Kansoku/Api.hs` (assemble it from `IngestAPI` and `MetricsAPI`, defining a placeholder
+- [x] Milestone 1 — Ensure the combined servant API type `Kansoku.Api.KansokuAPI` exists in
+  `api/Kansoku/Api.hs` (assemble it from `IngestAPI` and `MetricsAPI`, defining a placeholder
   `MetricsAPI` if EP-6 has not landed yet).
-- [ ] Milestone 1 — Add `ToSchema` instances for `AnalyticsEvent`, `EventSource`, `IngestAck`,
+- [x] Milestone 1 — Add `ToSchema` instances for `AnalyticsEvent`, `EventSource`, `IngestAck`,
   `BatchAck`, the metric request/response types, and (if the placeholder is in play)
   `MetricsPlaceholderResponse` — all Generic-defaulted empty-body instances in
   `src/Kansoku/OpenApi.hs`.
-- [ ] Milestone 1 — Implement `Kansoku.OpenApi.openApiDoc :: OpenApi` and enrich it with
+- [x] Milestone 1 — Implement `Kansoku.OpenApi.openApiDoc :: OpenApi` and enrich it with
   title/version/description/tags metadata.
-- [ ] Milestone 1 — Write a unit test that encodes `openApiDoc` to JSON and asserts the key
-  paths and the `AnalyticsEvent` component are present, adding `lens-aeson` (and `openapi-hs`
-  if OpenApi types are named directly) to the `test-suite` stanza's `build-depends`;
-  `cabal test` passes.
-- [ ] Milestone 2 — Add the `GET /openapi.json` route to the server's servant API and wire a
-  handler that returns `openApiDoc`; the server starts and the route responds.
-- [ ] Milestone 2 — Verify with `curl` + `jq` that the served document is a valid OpenAPI 3.1
+- [x] Milestone 1 — Write a unit test that encodes `openApiDoc` to JSON and asserts the key
+  paths and the `AnalyticsEvent` component are present, adding `openapi-hs` to the
+  `test-suite` stanza's `build-depends`; `cabal test` passes.
+- [x] Milestone 2 — Add the `GET /openapi.json` route to the server and wire a handler that
+  returns `openApiDoc`; the server starts and the route responds.
+- [x] Milestone 2 — Verify with `curl` + `jq` that the served document is a valid OpenAPI 3.1
   doc containing the expected paths and schema.
-- [ ] Milestone 3 (optional) — Serve a static Swagger-UI/Redoc HTML page at `GET /docs`
+- [ ] Milestone 3 (optional, deferred) — Serve a static Swagger-UI/Redoc HTML page at `GET /docs`
   pointed at `/openapi.json`; open it in a browser and confirm the endpoints render.
 
 
@@ -83,7 +82,21 @@ This section must always reflect the actual current state of the work.
 Document unexpected behaviors, bugs, optimizations, or insights discovered during
 implementation. Provide concise evidence.
 
-(None yet.)
+- Discovery (2026-07-02, implementation): EP-6 had landed before EP-8 began, so no placeholder
+  metrics API was needed. `Kansoku.Api.KansokuAPI` already combines the real `IngestAPI` and
+  `MetricsAPI`, and `/openapi.json` includes the full declared `/metrics/*` surface.
+- Discovery (2026-07-02, implementation): the current server dispatch is a small WAI
+  `pathInfo` router rather than a unified servant `serve` tree. EP-8 still derives
+  `openApiDoc` from the shared servant `KansokuAPI`, but exposes it by adding a WAI branch for
+  `["openapi.json"]` in `Kansoku.Server.kansokuApp`.
+- Discovery (2026-07-02, implementation): `nix build .#default` needed explicit overrides for
+  `openapi-hs` and `servant-openapi-hs` in `nix/haskell.nix`. The local
+  `servant-openapi-hs` checkout is one commit ahead of `origin/master` only for a
+  `.seihou/manifest.json` change, so the Nix override pins the fetchable upstream commit with
+  identical Haskell source.
+- Discovery (2026-07-02, implementation): Nix's Git flake source did not include new untracked
+  files. Staging `src/Kansoku/OpenApi.hs` and `test/Kansoku/OpenApiSpec.hs` made the files
+  visible to `nix build .#default`.
 
 
 ## Decision Log
@@ -100,13 +113,14 @@ Record every decision made while working on the plan.
   `class HasOpenApi api where toOpenApi :: Proxy api -> OpenApi`).
   Date: 2026-07-01
 
-- Decision: Serve the OpenAPI document as a first-class servant route
-  `"openapi.json" :> Get '[JSON] OpenApi`, relying on the `ToJSON OpenApi` instance that
-  `openapi-hs` provides (`instance ToJSON OpenApi` in
-  `openapi-hs/src/Data/OpenApi/Internal.hs`), rather than serializing to a file and serving a
-  static asset.
-  Rationale: The document is generated in-process at zero cost and cannot go stale relative to
-  a checked-in file; servant's `JSON` content type renders any `ToJSON` value directly.
+- Decision: Serve the OpenAPI document from the existing WAI router at `GET /openapi.json`,
+  encoding `openApiDoc` with the `ToJSON OpenApi` instance that `openapi-hs` provides
+  (`instance ToJSON OpenApi` in `openapi-hs/src/Data/OpenApi/Internal.hs`), rather than
+  serializing to a file and serving a static asset.
+  Rationale: The current server already dispatches `health`, ingestion, and metrics through a
+  small WAI `pathInfo` router, so adding `["openapi.json"]` there is the narrowest change. The
+  document is still generated in-process from the shared servant `KansokuAPI` and cannot go
+  stale relative to the checked API type.
   Date: 2026-07-01
 
 - Decision: Provide the per-type schemas with `Generic`-derived `ToSchema` instances (the
@@ -145,7 +159,24 @@ Record every decision made while working on the plan.
 Summarize outcomes, gaps, and lessons learned at major milestones or at completion.
 Compare the result against the original purpose.
 
-(To be filled during and after implementation.)
+EP-8 is complete for the required machine-readable API contract. `Kansoku.OpenApi.openApiDoc`
+is generated from the shared `KansokuAPI` with `servant-openapi-hs`, the server exposes it at
+`GET /openapi.json`, and the unit test checks OpenAPI 3.1, ingestion and metrics paths, and
+the `AnalyticsEvent` component schema. The optional Swagger UI / Redoc page was intentionally
+deferred; the JSON contract is the MVP deliverable.
+
+Validation evidence from 2026-07-02:
+
+- `cabal build all` passed.
+- `cabal test all` passed; Kansoku's ClickHouse-dependent examples were pending only because
+  the local stack was not running during that test invocation.
+- `nix fmt` passed.
+- `nix build .#default` passed after adding Nix overrides for the OpenAPI packages and staging
+  the new source files.
+- Live smoke test with `kansoku-server` on port `18081` passed:
+  `curl -fsS http://127.0.0.1:18081/openapi.json | jq -e '.openapi | startswith("3.1")'`,
+  the paths check for `/v1/events`, `/v1/batch`, and `/metrics*`, and the
+  `components.schemas.AnalyticsEvent` check all returned `true`; `/health` returned `OK`.
 
 
 ## Context and Orientation

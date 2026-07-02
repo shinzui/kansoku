@@ -38,6 +38,18 @@
               rev = "4aaff6c0919d1fe8e1c248c3ce4ce05775c59c8c";
               sha256 = "13nsr8jzmvqr3ka5liic1sgm8brszzyfvxd0djm3ccc4smphbh68";
             };
+            openapiHsSrc = pkgs.fetchFromGitHub {
+              owner = "shinzui";
+              repo = "openapi-hs";
+              rev = "e570ad70cf9bc1a2b229d33af0455dff28650010";
+              sha256 = "1s638lalywshrsgb3d6k5czrgb9fwmg3w19qvhmjk8qz2lsh5bj8";
+            };
+            servantOpenapiHsSrc = pkgs.fetchFromGitHub {
+              owner = "shinzui";
+              repo = "servant-openapi-hs";
+              rev = "aa4df1f831e02c6370c9eb4129b158f8268f3ae0";
+              sha256 = "1jsjbn2b01azyhl88x0z15mvdz9gjjwmyplhpqmd1c9jr97d1n8a";
+            };
             pgmqHsSrc = pkgs.fetchFromGitHub {
               owner = "shinzui";
               repo = "pgmq-hs";
@@ -182,6 +194,25 @@
                   "hasql-migration"
                   hasqlMigrationSrc
                   { }
+              );
+
+            openapi-hs =
+              dontCheck (
+                doJailbreak (
+                  self.callCabal2nix
+                    "openapi-hs"
+                    openapiHsSrc
+                    { }
+                )
+              );
+            servant-openapi-hs =
+              dontCheck (
+                doJailbreak (
+                  self.callCabal2nix
+                    "servant-openapi-hs"
+                    servantOpenapiHsSrc
+                    { }
+                )
               );
 
             pgmq-core =

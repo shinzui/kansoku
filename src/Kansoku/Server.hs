@@ -9,6 +9,7 @@ module Kansoku.Server
 where
 
 import ClickHaskell (Connection)
+import Data.Aeson qualified as Aeson
 import Data.Generics.Labels ()
 import Data.Text qualified as Text
 import Effectful (Eff, IOE, type (:>))
@@ -18,6 +19,7 @@ import Kansoku.Config (Config)
 import Kansoku.Ingest.Handler (ingestApp)
 import Kansoku.Logging (Log, logInfo)
 import Kansoku.Metrics.Handler (metricsApp)
+import Kansoku.OpenApi (openApiDoc)
 import Kansoku.Prelude
 import Network.HTTP.Types (status200, status404)
 import Network.HTTP.Types.Header (hContentType)
@@ -39,6 +41,8 @@ kansokuApp pool queueName clickHouse req respond =
   case pathInfo req of
     ["health"] ->
       healthApp req respond
+    ["openapi.json"] ->
+      respond (responseLBS status200 [(hContentType, "application/json")] (Aeson.encode openApiDoc))
     "metrics" : _ ->
       metricsApp clickHouse req respond
     _ ->
@@ -48,5 +52,5 @@ kansokuApp pool queueName clickHouse req respond =
 startServer :: (IOE :> es, Reader Config :> es, Log :> es) => Application -> Eff es ()
 startServer app = do
   port <- asks @Config (^. #serverPort)
-  logInfo ("kansoku-server listening on port " <> Text.pack (show port) <> " (GET /health, POST /v1/events, POST /v1/batch, GET /metrics/*)")
+  logInfo ("kansoku-server listening on port " <> Text.pack (show port) <> " (GET /health, GET /openapi.json, POST /v1/events, POST /v1/batch, GET /metrics/*)")
   liftIO (Warp.run port app)
