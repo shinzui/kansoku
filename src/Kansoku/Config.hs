@@ -3,11 +3,13 @@
 module Kansoku.Config
   ( Config (..),
     ConfigError (..),
+    defaultEventsQueueName,
     defaultServerPort,
     loadConfig,
   )
 where
 
+import Data.Int (Int32)
 import Data.Text qualified as Text
 import Kansoku.Prelude
 import System.Environment (lookupEnv)
@@ -17,6 +19,9 @@ import Text.Read (readMaybe)
 defaultServerPort :: Int
 defaultServerPort = 8080
 
+defaultEventsQueueName :: Text
+defaultEventsQueueName = "kansoku_events"
+
 -- | All configuration the service needs at startup. Later plans extend this
 -- record with ClickHouse, pgmq, queue, and metrics-query settings.
 data Config = Config
@@ -25,6 +30,11 @@ data Config = Config
     clickHouseTcpPort :: !Int,
     clickHouseHttpPort :: !Int,
     clickHouseDatabase :: !String,
+    eventsQueueName :: !Text,
+    writerMaxBatchSize :: !Int,
+    writerMaxLatencyMs :: !Int,
+    writerVisibilityTimeoutSec :: !Int32,
+    writerAdapterBatchSize :: !Int32,
     serverPort :: !Int
   }
   deriving stock (Generic, Eq, Show)
@@ -40,10 +50,19 @@ loadConfig = do
   pg <- maybe defaultPg Text.pack <$> lookupEnv "PG_CONNECTION_STRING"
   chTcp <- lookupEnv "CLICKHOUSE_TCP_PORT"
   chHttp <- lookupEnv "CLICKHOUSE_HTTP_PORT"
+  queue <- maybe defaultEventsQueueName Text.pack <$> lookupEnv "KANSOKU_QUEUE_NAME"
+  writerBatch <- lookupEnv "KANSOKU_WRITER_MAX_BATCH"
+  writerLatency <- lookupEnv "KANSOKU_WRITER_MAX_LATENCY_MS"
+  writerVt <- lookupEnv "KANSOKU_WRITER_VT_SEC"
+  writerAdapterBatch <- lookupEnv "KANSOKU_WRITER_ADAPTER_BATCH"
   srv <- lookupEnv "KANSOKU_SERVER_PORT"
   pure $ do
     tcp <- parsePort "CLICKHOUSE_TCP_PORT" 9000 chTcp
     http <- parsePort "CLICKHOUSE_HTTP_PORT" 8123 chHttp
+    maxBatch <- parseInt "KANSOKU_WRITER_MAX_BATCH" 5000 writerBatch
+    maxLatency <- parseInt "KANSOKU_WRITER_MAX_LATENCY_MS" 5000 writerLatency
+    visibility <- parseInt32 "KANSOKU_WRITER_VT_SEC" 60 writerVt
+    adapterBatch <- parseInt32 "KANSOKU_WRITER_ADAPTER_BATCH" 1000 writerAdapterBatch
     port <- parsePort "KANSOKU_SERVER_PORT" defaultServerPort srv
     Right
       Config
@@ -52,14 +71,30 @@ loadConfig = do
           clickHouseTcpPort = tcp,
           clickHouseHttpPort = http,
           clickHouseDatabase = "analytics",
+          eventsQueueName = queue,
+          writerMaxBatchSize = maxBatch,
+          writerMaxLatencyMs = maxLatency,
+          writerVisibilityTimeoutSec = visibility,
+          writerAdapterBatchSize = adapterBatch,
           serverPort = port
         }
   where
     defaultPg = "postgresql:///kansoku"
 
 parsePort :: Text -> Int -> Maybe String -> Either ConfigError Int
-parsePort _ def Nothing = Right def
-parsePort name _ (Just raw) =
+parsePort = parseInt
+
+parseInt :: Text -> Int -> Maybe String -> Either ConfigError Int
+parseInt _ def Nothing = Right def
+parseInt name _ (Just raw) =
+  case readMaybe raw of
+    Just n -> Right n
+    Nothing ->
+      Left (ConfigError (name <> ": not a valid integer: " <> Text.pack raw))
+
+parseInt32 :: Text -> Int32 -> Maybe String -> Either ConfigError Int32
+parseInt32 _ def Nothing = Right def
+parseInt32 name _ (Just raw) =
   case readMaybe raw of
     Just n -> Right n
     Nothing ->

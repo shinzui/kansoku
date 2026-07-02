@@ -1,16 +1,19 @@
--- Kansoku Cabal project. EP-1 keeps this minimal: a single local package.
--- EXTENSION POINT: EP-4 will add the author's non-Hackage libraries here, e.g.
---
---   source-repository-package
---     type: git
---     location: https://github.com/shinzui/shibuya
---     ...
---
--- or local `packages:` entries for shibuya, shibuya-pgmq-adapter, and pgmq-hs.
-packages: .
+packages:
+    .
+    /Users/shinzui/Keikaku/bokuno/libraries/pgmq-hs-project/pgmq-hs/pgmq-core
+    /Users/shinzui/Keikaku/bokuno/libraries/pgmq-hs-project/pgmq-hs/pgmq-hasql
+    /Users/shinzui/Keikaku/bokuno/libraries/pgmq-hs-project/pgmq-hs/pgmq-effectful
+    /Users/shinzui/Keikaku/bokuno/libraries/pgmq-hs-project/pgmq-hs/pgmq-migration
+    /Users/shinzui/Keikaku/bokuno/shibuya-project/shibuya/shibuya-core
+    /Users/shinzui/Keikaku/bokuno/shibuya-project/shibuya-pgmq-adapter/shibuya-pgmq-adapter
 
 source-repository-package
     type: git
     location: https://github.com/KovalevDima/ClickHaskell.git
     tag: 56efc1840d79c89c2a6ade3794932588b65febab
     subdir: library
+
+source-repository-package
+    type: git
+    location: https://github.com/shinzui/hasql-migration.git
+    tag: 4aaff6c0919d1fe8e1c248c3ce4ce05775c59c8c

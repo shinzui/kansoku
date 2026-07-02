@@ -27,6 +27,7 @@ library kansoku-api
   import:          common
   hs-source-dirs:  api
   exposed-modules:
+    Kansoku.Api.Ingest
     Kansoku.Event
     Kansoku.Event.Registry
     Kansoku.Event.Types
@@ -37,7 +38,7 @@ library kansoku-api
     , aeson
     , base          >=4.21 && <5
     , containers
-    , generic-lens  ^>=2.2
+    , generic-lens  >=2.2  && <2.4
     , lens          ^>=5.3
     , servant
     , text
@@ -52,23 +53,43 @@ library
     Kansoku.ClickHouse
     Kansoku.ClickHouse.EventRow
     Kansoku.Config
+    Kansoku.Ingest.Handler
+    Kansoku.Ingest.Producer
+    Kansoku.Ingest.Queue
     Kansoku.Logging
+    Kansoku.Postgres
     Kansoku.Runtime
     Kansoku.Server
+    Kansoku.Telemetry
+    Kansoku.Writer.Batch
+    Kansoku.Writer.Run
 
   build-depends:
     , aeson
-    , base                 >=4.21 && <5
+    , async
+    , base                  >=4.21 && <5
     , bytestring
     , ClickHaskell
     , containers
     , effectful
     , effectful-core
-    , generic-lens         ^>=2.2
+    , generic-lens          >=2.2  && <2.4
+    , hasql
+    , hasql-pool
+    , hs-opentelemetry-api
     , http-types
     , kansoku:kansoku-api
+    , pgmq-core
+    , pgmq-effectful
+    , pgmq-hasql
+    , pgmq-migration
+    , servant
+    , servant-server
+    , shibuya-core
+    , shibuya-pgmq-adapter
     , text
     , time
+    , unordered-containers
     , wai
     , warp
 
@@ -78,8 +99,12 @@ executable kansoku-server
   hs-source-dirs: app
   main-is:        Main.hs
   build-depends:
+    , async
     , base
+    , generic-lens
+    , hasql-pool
     , kansoku
+    , kansoku:kansoku-api
 
 test-suite kansoku-test
   import:         common
@@ -90,14 +115,21 @@ test-suite kansoku-test
     Kansoku.ClickHouseSpec
     Kansoku.ConfigSpec
     Kansoku.EventSpec
+    Kansoku.Ingest.QueueSpec
+    Kansoku.Writer.BatchSpec
 
   build-depends:
     , aeson
     , base
     , bytestring
     , ClickHaskell
+    , effectful
     , generic-lens
     , hspec
     , kansoku
     , kansoku:kansoku-api
+    , pgmq-core
+    , shibuya-core
     , text
+    , time
+    , unordered-containers

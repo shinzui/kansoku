@@ -14,6 +14,11 @@ clearEnv =
     [ "PG_CONNECTION_STRING",
       "CLICKHOUSE_TCP_PORT",
       "CLICKHOUSE_HTTP_PORT",
+      "KANSOKU_QUEUE_NAME",
+      "KANSOKU_WRITER_MAX_BATCH",
+      "KANSOKU_WRITER_MAX_LATENCY_MS",
+      "KANSOKU_WRITER_VT_SEC",
+      "KANSOKU_WRITER_ADAPTER_BATCH",
       "KANSOKU_SERVER_PORT"
     ]
 
@@ -29,12 +34,22 @@ spec = describe "Kansoku.Config.loadConfig" $ do
         (cfg ^. #clickHouseTcpPort) `shouldBe` 9000
         (cfg ^. #clickHouseHttpPort) `shouldBe` 8123
         (cfg ^. #clickHouseDatabase) `shouldBe` "analytics"
+        (cfg ^. #eventsQueueName) `shouldBe` "kansoku_events"
+        (cfg ^. #writerMaxBatchSize) `shouldBe` 5000
+        (cfg ^. #writerMaxLatencyMs) `shouldBe` 5000
+        (cfg ^. #writerVisibilityTimeoutSec) `shouldBe` 60
+        (cfg ^. #writerAdapterBatchSize) `shouldBe` 1000
         (cfg ^. #serverPort) `shouldBe` 8080
 
   it "parses values from the environment" $ do
     clearEnv
     setEnv "PG_CONNECTION_STRING" "postgresql:///kansoku"
     setEnv "CLICKHOUSE_TCP_PORT" "9100"
+    setEnv "KANSOKU_QUEUE_NAME" "custom_events"
+    setEnv "KANSOKU_WRITER_MAX_BATCH" "2000"
+    setEnv "KANSOKU_WRITER_MAX_LATENCY_MS" "2500"
+    setEnv "KANSOKU_WRITER_VT_SEC" "90"
+    setEnv "KANSOKU_WRITER_ADAPTER_BATCH" "250"
     setEnv "KANSOKU_SERVER_PORT" "9999"
     result <- loadConfig
     clearEnv
@@ -43,6 +58,11 @@ spec = describe "Kansoku.Config.loadConfig" $ do
       Right cfg -> do
         (cfg ^. #pgConnectionString) `shouldBe` "postgresql:///kansoku"
         (cfg ^. #clickHouseTcpPort) `shouldBe` 9100
+        (cfg ^. #eventsQueueName) `shouldBe` "custom_events"
+        (cfg ^. #writerMaxBatchSize) `shouldBe` 2000
+        (cfg ^. #writerMaxLatencyMs) `shouldBe` 2500
+        (cfg ^. #writerVisibilityTimeoutSec) `shouldBe` 90
+        (cfg ^. #writerAdapterBatchSize) `shouldBe` 250
         (cfg ^. #serverPort) `shouldBe` 9999
 
   it "rejects a non-numeric port with a Left" $ do

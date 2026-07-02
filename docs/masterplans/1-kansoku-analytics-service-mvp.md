@@ -222,7 +222,7 @@ decision (Haskell-only repo).
 | 1 | Project skeleton and application runtime | docs/plans/1-project-skeleton-and-application-runtime.md | None | None | Complete |
 | 2 | Canonical event model and schema registry | docs/plans/2-canonical-event-model-and-schema-registry.md | EP-1 | None | Complete |
 | 3 | ClickHouse storage schema and batch writer | docs/plans/3-clickhouse-storage-schema-and-batch-writer.md | EP-1 | EP-2 | Complete |
-| 4 | Ingestion API with pgmq queue and batched ClickHouse writer | docs/plans/4-ingestion-api-with-pgmq-queue-and-batched-clickhouse-writer.md | EP-2, EP-3 | None | Not Started |
+| 4 | Ingestion API with pgmq queue and batched ClickHouse writer | docs/plans/4-ingestion-api-with-pgmq-queue-and-batched-clickhouse-writer.md | EP-2, EP-3 | None | Complete |
 | 5 | Identity stitching and materialized view rollups | docs/plans/5-identity-stitching-and-materialized-view-rollups.md | EP-3 | EP-4 | Not Started |
 | 6 | Semantic metrics layer and typed query API | docs/plans/6-semantic-metrics-layer-and-typed-query-api.md | EP-3, EP-5 | EP-4 | Not Started |
 | 7 | Haskell server SDK | docs/plans/7-haskell-server-sdk.md | EP-2, EP-4 | None | Not Started |
@@ -442,9 +442,9 @@ the milestone. This section provides an at-a-glance view of the entire initiativ
 - [x] EP-3: `analytics.events_raw` migration (ReplacingMergeTree, ORDER BY, PARTITION BY) applied
 - [x] EP-3: `EventRow` ClickHaskell mapping + batched `insertEvents`, round-trip insert/select test
 - [x] EP-3: deduplication strategy documented and demonstrated (replayed batch collapses)
-- [ ] EP-4: pgmq queue bootstrap + HTTP `POST /v1/events` and `/v1/batch` enqueue events
-- [ ] EP-4: shibuya batch writer inserts one ClickHouse batch per flush (size-or-timeout)
-- [ ] EP-4: end-to-end — POST an event, observe it queryable in `events_raw`
+- [x] EP-4: pgmq queue bootstrap + HTTP `POST /v1/events` and `/v1/batch` enqueue events
+- [x] EP-4: shibuya batch writer inserts one ClickHouse batch per flush (size-or-timeout)
+- [x] EP-4: end-to-end — POST an event, observe it queryable in `events_raw`
 - [ ] EP-5: identity events stored (identify/alias feed the identity map; group stored as
       ordinary events); query-time identity resolution via `events_resolved`
 - [ ] EP-5: materialized views for daily event counts, DAU/WAU, page views by route
@@ -502,6 +502,16 @@ interactions between child plans. Provide concise evidence.
   insert-failure-plus-dead-letter case (retry the good messages, dead-letter the undecodable
   ones). Also note the naming collision: `PgmqAdapterConfig.batchSize` (pgmq poll size) is a
   different knob from `BatchConfig.batchSize` (ClickHouse flush size).
+- Discovery (2026-07-02, EP-4 implementation): current ClickHouse requires config-property
+  overrides such as `--path=...` to be passed after the `--` separator. `process-compose.yaml`
+  now starts ClickHouse from `$CLICKHOUSE_HOME` and passes `-- --path=$CLICKHOUSE_HOME/` so
+  generated files remain under `clickhouse/` instead of the repository root.
+- Discovery (2026-07-02, EP-4 implementation): the Nix build for the queue/writer stack needed
+  explicit pins/overrides for the local pgmq/shibuya packages and transitive Haskell packages.
+  The important fixes were disabling Warp's `x509` flag to avoid the older `x509` versus
+  `crypton-x509` conflict, and recreating `pgmq-migration`'s package-local `vendor` symlink in
+  `postPatch` so embedded pgmq SQL files are available during the build. Evidence:
+  `nix build .#default` passes.
 - Validation pass (2026-07-01, pre-implementation): eleven parallel reviewers validated all
   eight child plans plus the external claims against the real shibuya/pgmq-hs/ClickHaskell/
   openapi-hs sources, the repository working tree, and `docs/initial-spec.md`. Verdict: all
@@ -745,7 +755,12 @@ Record every decomposition or coordination decision made while working on the ma
 Summarize outcomes, gaps, and lessons learned at major milestones or at completion. Compare
 the result against the original vision.
 
-(To be filled during and after implementation.)
+Phase 2 write-path foundation is now complete through EP-4. The service can accept canonical
+analytics events over HTTP, durably enqueue them through pgmq, consume them with shibuya's
+batch processor, insert them into ClickHouse in batches, and rely on EP-3's
+ReplacingMergeTree deduplication for at-least-once replay. The remaining MVP work is the read
+path and client/documentation surface: EP-5 identity/rollups, EP-6 metrics API, EP-7 Haskell
+SDK, and EP-8 OpenAPI.
 
 
 ## Revision Notes
@@ -851,3 +866,13 @@ the result against the original vision.
   embedded SQL/JSON). Why: these are the non-negotiable baseline standards for every Haskell
   project in this codebase, and the plans must encode them so a novice implementer produces
   compliant code.
+
+- 2026-07-02: EP-4 implementation completed. Marked "Ingestion API with pgmq queue and batched
+  ClickHouse writer" Complete in the Exec-Plan Registry, checked the three EP-4 aggregate
+  Progress rows, and recorded the ClickHouse process-compose and Nix overlay discoveries.
+  Evidence is recorded in
+  `docs/plans/4-ingestion-api-with-pgmq-queue-and-batched-clickhouse-writer.md`: the live
+  server returned 200 for `/health`, 400 for invalid ingestion, 202 for single and batch
+  ingestion, ClickHouse `events_raw FINAL` reached 3 rows after flush, replaying the same batch
+  kept the count at 3, and `cabal build all`, `cabal test`, `nix fmt`, `nix build .#default`,
+  and `git diff --check` passed.
