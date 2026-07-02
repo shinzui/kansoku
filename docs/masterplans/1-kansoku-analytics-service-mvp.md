@@ -225,7 +225,7 @@ decision (Haskell-only repo).
 | 4 | Ingestion API with pgmq queue and batched ClickHouse writer | docs/plans/4-ingestion-api-with-pgmq-queue-and-batched-clickhouse-writer.md | EP-2, EP-3 | None | Complete |
 | 5 | Identity stitching and materialized view rollups | docs/plans/5-identity-stitching-and-materialized-view-rollups.md | EP-3 | EP-4 | Complete |
 | 6 | Semantic metrics layer and typed query API | docs/plans/6-semantic-metrics-layer-and-typed-query-api.md | EP-3, EP-5 | EP-4 | Complete |
-| 7 | Haskell server SDK | docs/plans/7-haskell-server-sdk.md | EP-2, EP-4 | None | Not Started |
+| 7 | Haskell server SDK | docs/plans/7-haskell-server-sdk.md | EP-2, EP-4 | None | Complete |
 | 8 | OpenAPI schema generation and API documentation | docs/plans/8-openapi-schema-generation-and-api-documentation.md | EP-4, EP-6 | None | Not Started |
 
 Status values: Not Started, In Progress, Complete, Cancelled.
@@ -454,8 +454,8 @@ the milestone. This section provides an at-a-glance view of the entire initiativ
 - [x] EP-6: basic retention (query-time cohorts over `events_resolved`) and sessions
       (`uniqExact(session_id)` counts); acquisition/feature-adoption/organizations/custom
       stubbed at 501
-- [ ] EP-7: `kansoku-client` typed event constructors + batching + retry, delivery via `servant-client` over the shared `IngestAPI`
-- [ ] EP-7: SDK integration test emits events that appear in `events_raw`
+- [x] EP-7: `kansoku-client` typed event constructors + batching + retry, delivery via `servant-client` over the shared `IngestAPI`
+- [x] EP-7: SDK integration test emits events that appear in `events_raw`
 - [ ] EP-8: `openApiDoc` built from `KansokuAPI` via `servant-openapi-hs`, schema instances for `AnalyticsEvent`
 - [ ] EP-8: `GET /openapi.json` served and verified (paths + schemas present); optional docs UI
 
@@ -781,8 +781,13 @@ by route.
 EP-6 is complete. The service now serves typed `GET /metrics/*` routes backed by the semantic
 metric registry and ClickHouse query compiler. Live fixture validation confirmed the seven
 implemented endpoints — events, page-views, users, sessions, conversion, funnel, and retention
-— and the four deferred endpoints return documented HTTP 501 JSON. The remaining MVP work is
-EP-7 Haskell SDK and EP-8 OpenAPI.
+— and the four deferred endpoints return documented HTTP 501 JSON.
+
+EP-7 is complete. Haskell backend services can now depend on `kansoku-client`, construct
+service-source analytics events with first-class identity fields, enqueue them through a
+bounded in-memory batcher, retry transient failures with stable event ids, and flush them to
+the shared `IngestAPI` via `servant-client`. The live integration test emitted through the SDK
+and verified the row in `analytics.events_raw`. The remaining MVP work is EP-8 OpenAPI.
 
 
 ## Revision Notes
@@ -918,3 +923,12 @@ EP-7 Haskell SDK and EP-8 OpenAPI.
   `signup_started 2` and `signup_completed 1`, retention cohort/offset values
   `2026-06-01/0=2`, `2026-06-01/1=1`, `2026-06-02/0=1`, `2026-06-02/1=1`, missing funnel
   `steps` 400, and four documented 501 stubs.
+
+- 2026-07-02: EP-7 implementation completed. Marked "Haskell server SDK" Complete in the
+  Exec-Plan Registry, checked the two EP-7 aggregate Progress rows, and recorded the
+  sub-library visibility and SDK runtime discoveries. Evidence is recorded in
+  `docs/plans/7-haskell-server-sdk.md`: `cabal test kansoku-client` passed with the guarded
+  integration test pending when `KANSOKU_SERVER_URL` was unset; with `process-compose`,
+  `just ch-migrate`, and `kansoku-server` on port 18081,
+  `KANSOKU_SERVER_URL=http://127.0.0.1:18081 cabal test kansoku-client` passed all seven
+  examples and verified the SDK-emitted event in `analytics.events_raw`.

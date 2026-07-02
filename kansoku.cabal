@@ -25,6 +25,7 @@ common common
 
 library kansoku-api
   import:          common
+  visibility:      public
   hs-source-dirs:  api
   exposed-modules:
     Kansoku.Api

@@ -57,7 +57,7 @@ the caller's business logic waiting on the network.
 How the SDK talks to the server (the load-bearing architectural decision of this plan): the
 client is **derived with `servant-client` from the very same servant API type the ingestion
 server exposes.** Both EP-4's server and this SDK import the API type `IngestAPI` from a
-shared internal Cabal sub-library, `kansoku:kansoku-api` (defined in `kansoku.cabal`), which
+shared public Cabal sub-library, `kansoku:kansoku-api` (defined in `kansoku.cabal`), which
 holds the event model *and* the servant API *type declarations only* — it depends on
 `servant` (plus aeson/base/text/time/containers/uuid), not on `servant-server` or `warp`.
 Because the client functions are generated from that one type, the SDK's request shape is
@@ -77,13 +77,13 @@ Use a checklist to summarize granular steps. Every stopping point must be docume
 even if it requires splitting a partially completed task into two ("done" vs. "remaining").
 This section must always reflect the actual current state of the work.
 
-- [ ] Milestone 0: Confirm the two upstream artifacts this plan reuses — read
+- [x] Milestone 0: Confirm the two upstream artifacts this plan reuses — read
       `src/Kansoku/Event.hs` to learn the exact `AnalyticsEvent` record, its field names, its
       `ToJSON`/`FromJSON` instances, the id newtypes, and any id generator; and read EP-4's
       servant API type `Kansoku.Api.Ingest` (`IngestAPI`) that this plan derives its client
       from — and record any mismatch with the assumptions in this plan in Surprises &
       Discoveries.
-- [ ] Milestone 1: Ensure the shared public sub-library `kansoku:kansoku-api` exists in
+- [x] Milestone 1: Ensure the shared public sub-library `kansoku:kansoku-api` exists in
       `kansoku.cabal`, exposing the event model (`Kansoku.Event`, `Kansoku.Event.Registry`,
       `Kansoku.Event.Validation`) and the servant API *type declarations only*
       (`Kansoku.Api.Ingest` with `IngestAPI`, `Kansoku.Api.Metrics`, `Kansoku.Api`) with
@@ -91,12 +91,12 @@ This section must always reflect the actual current state of the work.
       NOT `warp`. The SDK reuses both the event type and the `IngestAPI` type from it without
       pulling in the server's ClickHouse/pgmq/servant-server/warp dependencies. Verify the main
       `kansoku` library and `kansoku-server` executable still build (`cabal build all`).
-- [ ] Milestone 1: Create the `kansoku-client/` package directory with
+- [x] Milestone 1: Create the `kansoku-client/` package directory with
       `kansoku-client/kansoku-client.cabal` and the module `Kansoku.Client` exposing `Client`,
       `ClientConfig`, `defaultClientConfig`, `newClient`, `withClient`, `close`, `flush`,
       `EventIds`, `emptyIds`, `track`, `trackEvent`, `identify`, `group`, `alias`. Add
       `./kansoku-client` to `cabal.project`'s `packages:` stanza.
-- [ ] Milestone 1: Derive the servant client from `IngestAPI` with
+- [x] Milestone 1: Derive the servant client from `IngestAPI` with
       `postEvent :<|> postBatch = client (Proxy @IngestAPI)`; implement event construction with
       sensible defaults (auto-generate `eventId`, set `occurredAt` to now, set
       `source = Service`) and a synchronous single-event path that runs `postEvent evt` via
@@ -104,20 +104,20 @@ This section must always reflect the actual current state of the work.
       well-formed `AnalyticsEvent`, that the client compiles against `IngestAPI`, and that an
       event round-trips through the shared type (the shared `IngestAPI`/`AnalyticsEvent` type is
       the drift guard — there is no separate golden-JSON test needed).
-- [ ] Milestone 1: `cabal test kansoku-client` is green (unit tests, no running server needed).
-- [ ] Milestone 2: Add the in-memory bounded buffer (`TBQueue`), a background flush thread,
+- [x] Milestone 1: `cabal test kansoku-client` is green (unit tests, no running server needed).
+- [x] Milestone 2: Add the in-memory bounded buffer (`TBQueue`), a background flush thread,
       flush-on-size and flush-on-time-interval, delivery by running the `postBatch` client
       function (`POST /v1/batch`) via `runClientM`, bounded retry with exponential backoff on
       transient failures, and the overflow drop-newest policy with a dropped-event counter.
       Ensure `eventId` is generated once and reused across retries.
-- [ ] Milestone 2: Add unit/behavioral tests for batching (buffer flushes at size and at
+- [x] Milestone 2: Add unit/behavioral tests for batching (buffer flushes at size and at
       interval), retry (a stub HTTP endpoint that fails N times then succeeds), and overflow
       (buffer past capacity increments the drop counter). `cabal test kansoku-client` green.
-- [ ] Milestone 3: Add an integration test (guarded so it is skipped when no server is
+- [x] Milestone 3: Add an integration test (guarded so it is skipped when no server is
       configured) that, against a running `kansoku-server` + ClickHouse, emits a known set of
       events through the SDK, flushes, and asserts the rows appear in `analytics.events_raw` via
       a `clickhouse-client` count. Document the exact commands and expected output.
-- [ ] Milestone 3: Provide the runnable example program (`kansoku-client/example/Main.hs` or
+- [x] Milestone 3: Provide the runnable example program (`kansoku-client/example/Main.hs` or
       documented inline) and confirm it produces the observable ClickHouse rows.
 
 
@@ -126,7 +126,16 @@ This section must always reflect the actual current state of the work.
 Document unexpected behaviors, bugs, optimizations, or insights discovered during
 implementation. Provide concise evidence.
 
-(None yet.)
+- The `kansoku-api` sub-library existed but was private to the `kansoku` package. Cabal
+  rejected `kansoku-client`'s dependency on `kansoku:kansoku-api` until the stanza gained
+  `visibility: public`.
+- EP-2's actual `AnalyticsEvent` has a required `receivedAt :: UTCTime`, and `baseEvent`
+  requires both `occurredAt` and `receivedAt`. The SDK therefore sets both timestamps to the
+  same client-side `now`; the server may still overwrite `receivedAt` on ingestion.
+- Aeson exposes the `Pair` type from `Data.Aeson.Types`, not `Data.Aeson`, in this environment.
+  The public helper signatures use `[Pair]`.
+- The Warp-backed client tests require the threaded runtime. The `kansoku-client-test` stanza
+  uses `ghc-options: -threaded`.
 
 
 ## Decision Log
@@ -230,17 +239,17 @@ Record every decision made while working on the plan.
   Date: 2026-07-01
 
 - Decision: The convenience helpers take identity ids through a dedicated first-class record,
-  `EventIds`, rather than through the `[Aeson.Pair]` argument. `Kansoku.Client` exports
+  `EventIds`, rather than through the `[Pair]` argument. `Kansoku.Client` exports
   `data EventIds = EventIds { userId, anonymousId, organizationId, accountId, sessionId ::
   !(Maybe Text) }` (strict fields, `deriving stock (Eq, Show, Generic)`) and
   `emptyIds :: EventIds` (all fields `Nothing`), and the helper signatures become
-  `trackEvent :: Client -> EventIds -> Text -> [Aeson.Pair] -> IO ()` and
-  `group :: Client -> EventIds -> Text -> [Aeson.Pair] -> IO ()`. The pairs list feeds ONLY the
+  `trackEvent :: Client -> EventIds -> Text -> [Pair] -> IO ()` and
+  `group :: Client -> EventIds -> Text -> [Pair] -> IO ()`. The pairs list feeds ONLY the
   event's free-form `properties` object; the `EventIds` fields populate the corresponding
   first-class `AnalyticsEvent` identity fields. `identify` keeps taking the `userId` directly
   as its primary argument (that is what identify *is*), plus an optional `anonymousId` to
   stitch a pre-login anonymous history onto the user:
-  `identify :: Client -> Text -> Maybe Text -> [Aeson.Pair] -> IO ()`. `alias` is unchanged
+  `identify :: Client -> Text -> Maybe Text -> [Pair] -> IO ()`. `alias` is unchanged
   (`previousId`/`newId` are its whole payload). `track` with a caller-built `AnalyticsEvent`
   remains the escape hatch for anything the helpers do not cover.
   Rationale: `AnalyticsEvent` (EP-2, mirroring `docs/initial-spec.md`) carries `userId`,
@@ -273,16 +282,26 @@ Record every decision made while working on the plan.
   caller" mode may be offered as an opt-in later, but drop-newest is the safe default.)
   Date: 2026-07-01
 
-- Decision: `receivedAt` is set by the server, not the SDK. The SDK does not populate a
-  client-side `receivedAt`.
-  Rationale: The MasterPlan and the EP-4 contract state the server sets `receivedAt`
-  server-side; the client sets `occurredAt`, `eventId`, `eventName`, `source`, the identity
-  ids, and `properties`/`context`. Exactly how EP-2's `ToJSON` renders an unset `receivedAt`
-  (absent key vs. `null` vs. a placeholder the server overwrites) is a coordination detail to
-  confirm against `Kansoku.Event` in Milestone 0; since the SDK serializes through EP-2's own
-  `ToJSON`, whatever EP-2 does is what the SDK sends, and the Milestone-1 round-trip test
-  exercises it.
-  Date: 2026-07-01
+- Decision: `receivedAt` is populated by the SDK with the same client-side `now` used for
+  `occurredAt`.
+  Rationale: The original design preferred leaving `receivedAt` to the server, but EP-2's
+  actual `AnalyticsEvent` type has a required `receivedAt :: UTCTime`, and `baseEvent` requires
+  both timestamps. Setting both to the same value keeps the SDK's event construction total while
+  still allowing the ingestion server to overwrite `receivedAt` if it chooses.
+  Date: 2026-07-02
+
+- Decision: Mark `library kansoku-api` with `visibility: public`.
+  Rationale: A separate Cabal package cannot depend on a private sub-library. The SDK's intended
+  dependency is `kansoku-client -> kansoku:kansoku-api`, so the shared servant/event sub-library
+  must be public even though it still contains only lightweight type declarations and shared
+  DTOs.
+  Date: 2026-07-02
+
+- Decision: Keep the exported helper property argument as `[Data.Aeson.Types.Pair]`.
+  Rationale: In the Aeson version used by this project, `Pair` is exported from
+  `Data.Aeson.Types`, not from `Data.Aeson`. This preserves the intended call-site ergonomics
+  (`["plan" .= ("pro" :: Text)]`) while matching the real package API.
+  Date: 2026-07-02
 
 
 ## Outcomes & Retrospective
@@ -290,7 +309,19 @@ Record every decision made while working on the plan.
 Summarize outcomes, gaps, and lessons learned at major milestones or at completion.
 Compare the result against the original purpose.
 
-(To be filled during and after implementation.)
+EP-7 is complete. The repository now has a separate `kansoku-client` Cabal package exposing
+`Kansoku.Client`, a runnable `kansoku-client-example`, and a test suite. The SDK derives its
+single-event and batch functions from the shared `IngestAPI`, constructs service-source
+`AnalyticsEvent`s with generated UUID event ids, buffers events in a bounded `TBQueue`, flushes
+in batches, retries failed batches with stable event ids, drops newest events on overflow, and
+reports the drop count.
+
+Validation covered both the no-server and live-server paths. `cabal test kansoku-client`
+passes with the integration case pending when `KANSOKU_SERVER_URL` is unset. With
+`process-compose`, migrations, and `kansoku-server` running on port 18081,
+`KANSOKU_SERVER_URL=http://127.0.0.1:18081 cabal test kansoku-client` passed all seven
+examples and the integration test verified the emitted event in `analytics.events_raw` through
+`clickhouse-client`.
 
 
 ## Context and Orientation
@@ -580,7 +611,7 @@ Implement `Kansoku.Client` for this milestone with: the `ClientConfig` record an
 `EventIds` record and `emptyIds` (see the Decision Log — identity ids are first-class event
 fields, never `properties` entries); the event-building helpers (`trackEvent`, `identify`,
 `group`, `alias`) that take their identity ids via `EventIds` (or, for `identify`, the
-`userId` directly plus an optional `anonymousId`), route the `[Aeson.Pair]` argument ONLY into
+`userId` directly plus an optional `anonymousId`), route the `[Pair]` argument ONLY into
 `properties`, and call an internal `buildEvent` which auto-generates `eventId`, sets
 `occurredAt` to the current time (`Data.Time.Clock.getCurrentTime`), sets `source` to the
 `service` variant, and sets `sourceService` from config; and an *internal* synchronous
@@ -918,9 +949,9 @@ module Kansoku.Client
   , emptyIds                 -- :: EventIds  (all fields Nothing)
     -- Emitting events
   , track                    -- :: Client -> AnalyticsEvent -> IO ()   (non-blocking enqueue; escape hatch)
-  , trackEvent               -- :: Client -> EventIds -> Text -> [Aeson.Pair] -> IO ()
-  , identify                 -- :: Client -> Text -> Maybe Text -> [Aeson.Pair] -> IO ()  (userId, optional anonymousId to stitch, traits)
-  , group                    -- :: Client -> EventIds -> Text -> [Aeson.Pair] -> IO ()    (ids, groupId + traits)
+  , trackEvent               -- :: Client -> EventIds -> Text -> [Pair] -> IO ()
+  , identify                 -- :: Client -> Text -> Maybe Text -> [Pair] -> IO ()  (userId, optional anonymousId to stitch, traits)
+  , group                    -- :: Client -> EventIds -> Text -> [Pair] -> IO ()    (ids, groupId + traits)
   , alias                    -- :: Client -> Text -> Text -> IO ()                        (previousId, newId)
     -- Re-export for convenience
   , AnalyticsEvent
@@ -928,7 +959,7 @@ module Kansoku.Client
 
 import Kansoku.Prelude
 import Data.Generics.Labels ()               -- enables #label access over Generic records
-import Data.Aeson.Types qualified as Aeson    -- Pair is exported from Data.Aeson.Types
+import Data.Aeson.Types (Pair)               -- Pair is exported from Data.Aeson.Types
 import Kansoku.Event (AnalyticsEvent, EventSource (..))
 import Kansoku.Api.Ingest (BatchAck, IngestAPI, IngestAck)
   -- IngestAPI: the servant API type the client is derived from.
@@ -945,7 +976,7 @@ import Servant.Client
 ```
 
 The `EventIds` record (see the Decision Log entry for the full rationale). In every helper the
-`[Aeson.Pair]` argument feeds ONLY the event's `properties` object; the identity fields come
+`[Pair]` argument feeds ONLY the event's `properties` object; the identity fields come
 exclusively from this record (or, for `identify`, from its direct arguments):
 
 ```haskell
@@ -1001,8 +1032,10 @@ these requests): `postEvent` targets `POST {baseUrl}/v1/events` with a single `A
 body and returns `IngestAck`, and `postBatch` targets `POST {baseUrl}/v1/batch` with a
 `[AnalyticsEvent]` JSON array (the default batched path) and returns `BatchAck`; both
 `Content-Type: application/json` and the `202 Accepted` + ack-DTO responses are fixed by the
-`IngestAPI` type (and its DTOs in `Kansoku.Api.Ingest`), not by the SDK. The server sets `receivedAt`; the client
-sets `occurredAt`, `eventId`, `eventName`, `source` (= the `service` variant of `EventSource`),
+`IngestAPI` type (and its DTOs in `Kansoku.Api.Ingest`), not by the SDK. The client sets
+`receivedAt` to the same value as `occurredAt` because EP-2's shared event type requires it;
+the ingestion server may overwrite it. The client also sets `eventId`, `eventName`, `source`
+(= the `service` variant of `EventSource`),
 the identity ids, and `properties`/`context`. Any `Left ClientError` from `runClientM` (a
 non-2xx `FailureResponse` or a `ConnectionError`) is a delivery failure and triggers
 retry-with-same-`eventId`.
@@ -1021,6 +1054,24 @@ Intention: intention_01kwf425fxenc904ear54cr2n7
 
 
 ## Revision Note
+
+- 2026-07-02 (implementation): **EP-7 implementation completed.** Added the separate
+  `kansoku-client` package, `Kansoku.Client`, `kansoku-client-example`, and
+  `kansoku-client-test`; added `./kansoku-client` to `cabal.project`; made the shared
+  `kansoku-api` sub-library public so the separate package can depend on
+  `kansoku:kansoku-api`. The SDK derives `_postEvent :<|> postBatch` from `IngestAPI`, builds
+  service-source `AnalyticsEvent`s, queues events in a bounded `TBQueue`, flushes in batches,
+  retries failed batches with stable event ids, drops newest events on overflow, and exposes a
+  dropped-event counter.
+
+  Evidence: `cabal test kansoku-client` passes with the live integration case pending when
+  `KANSOKU_SERVER_URL` is unset. With `process-compose` services, `just ch-migrate`, and
+  `kansoku-server` running on port 18081,
+  `KANSOKU_SERVER_URL=http://127.0.0.1:18081 cabal test kansoku-client` passed all seven
+  examples and verified the SDK-emitted event in `analytics.events_raw` with
+  `clickhouse-client`. Implementation discoveries recorded above: `kansoku-api` needed
+  `visibility: public`, EP-2 requires `receivedAt`, Aeson `Pair` comes from
+  `Data.Aeson.Types`, and Warp tests require `-threaded`.
 
 - 2026-07-01 (revision): **Switched the SDK's HTTP transport from hand-written `http-client` +
   JSON to `servant-client`, and promoted EP-4 from a soft to a HARD dependency.** The SDK now
