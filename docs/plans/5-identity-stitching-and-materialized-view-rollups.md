@@ -67,30 +67,38 @@ Use a checklist to summarize granular steps. Every stopping point must be docume
 even if it requires splitting a partially completed task into two ("done" vs. "remaining").
 This section must always reflect the actual current state of the work.
 
-- [ ] Milestone 0: confirm prerequisites — `clickhouse-client` on PATH reaches the dev server,
+- [x] Milestone 0: confirm prerequisites — `clickhouse-client` on PATH reaches the dev server,
   `analytics.events_raw` exists (create a compatible stand-in if EP-3 has not landed yet), and
   the repo `.gitignore` no longer ignores `db/clickhouse/` (EP-3 owns that narrowing; verify
-  with `git check-ignore`).
-- [ ] Milestone 1: create `db/clickhouse/migrations/0002_identity.sql` with
+  with `git check-ignore`). Verified 2026-07-02: `SELECT 1` returned `1`,
+  `db/clickhouse/migrations/0001_events_raw.sql` exists, and `git check-ignore` exited 1 for
+  the EP-5 migration/fixture paths.
+- [x] Milestone 1: create `db/clickhouse/migrations/0002_identity.sql` with
   `analytics.identity_map` (ReplacingMergeTree), the `analytics.mv_identity_map` materialized
   view, and the `analytics.events_resolved` view; apply it idempotently.
-- [ ] Milestone 1: worked example — insert anonymous events, then an identify event, then a
+- [x] Milestone 1: worked example — insert anonymous events, then an identify event, then a
   post-login event, plus a page view from a never-identified visitor; query
   `analytics.events_resolved` and observe **two** distinct actors (the stitched pair collapses
   to one; the never-identified visitor survives under their own anonymous id, not `''`).
-- [ ] Milestone 2: create `db/clickhouse/migrations/0003_rollups.sql` with the four target
+  Verified 2026-07-02: identity map showed `anon-1	user-1`, stitched count was `2`, `e5`
+  resolved to `anon-3`, and the unstitched count was `3`.
+- [x] Milestone 2: create `db/clickhouse/migrations/0003_rollups.sql` with the four target
   tables (`daily_event_counts`, `dau`, `wau`, `page_views_by_route`) and their four MVs.
-- [ ] Milestone 2: verify daily event counts and DAU/WAU against fixtures with exact expected
+- [x] Milestone 2: verify daily event counts and DAU/WAU against fixtures with exact expected
   numbers (including the never-identified visitor counting toward DAU/WAU), using
-  `uniqExactMerge` read-back.
-- [ ] Milestone 2: redelivery test — re-insert a batch with duplicate `event_id`s and assert
+  `uniqExactMerge` read-back. Verified 2026-07-02: event counts were `feature_used 2`,
+  `identify 1`, `page_view 5`; DAU and WAU were both `3`; `events_resolved` also returned `3`
+  actors for the fixture day.
+- [x] Milestone 2: redelivery test — re-insert a batch with duplicate `event_id`s and assert
   every rollup number is unchanged (proves duplicate-tolerant aggregation).
-- [ ] Milestone 3: verify `page_views_by_route` (created in Milestone 2's `0003_rollups.sql`)
+- [x] Milestone 3: verify `page_views_by_route` (created in Milestone 2's `0003_rollups.sql`)
   extracts the route from `url` and counts each route once per distinct page-view event,
-  duplicate-safe.
-- [ ] Wire the two SQL files into the migration mechanism (a `just` recipe and/or the bash
-  apply loop documented here) so they run on a fresh checkout.
-- [ ] Update Surprises & Discoveries, Decision Log, and Outcomes as work proceeds; commit with
+  duplicate-safe. Verified after replay: `/dashboard 1`, `/docs 1`, `/pricing 2`,
+  `/signup 1`.
+- [x] Wire the two SQL files into the migration mechanism (a `just` recipe and/or the bash
+  apply loop documented here) so they run on a fresh checkout. `just ch-migrate` now applies
+  `0001`, `0002`, and `0003`; `just ch-fixtures-ep5` loads the verification fixture.
+- [x] Update Surprises & Discoveries, Decision Log, and Outcomes as work proceeds; commit with
   the trailers documented in Concrete Steps.
 
 
@@ -99,7 +107,13 @@ This section must always reflect the actual current state of the work.
 Document unexpected behaviors, bugs, optimizations, or insights discovered during
 implementation. Provide concise evidence.
 
-(None yet.)
+- 2026-07-02: `just ch-migrate` was already present from EP-3 and correctly applied every SQL
+  file in `db/clickhouse/migrations/` in lexical order. EP-5 only needed to add the fixture
+  helper recipe `just ch-fixtures-ep5`.
+
+- 2026-07-02: The plan's `nullIf(m.user_id, '')` guard works against the local ClickHouse
+  default `join_use_nulls = 0`: the never-identified event `e5` resolved to `anon-3`, not an
+  empty string, and DAU/WAU counted the never-identified fixture visitor.
 
 
 ## Decision Log
@@ -215,7 +229,23 @@ Record every decision made while working on the plan.
 Summarize outcomes, gaps, and lessons learned at major milestones or at completion.
 Compare the result against the original purpose.
 
-(To be filled during and after implementation.)
+EP-5 is complete. It adds `0002_identity.sql` for `analytics.identity_map`,
+`analytics.mv_identity_map`, and `analytics.events_resolved`; `0003_rollups.sql` for
+`analytics.daily_event_counts`, `analytics.dau`, `analytics.wau`, and
+`analytics.page_views_by_route` plus their materialized views; and
+`db/clickhouse/fixtures/ep5_fixtures.sql` for deterministic rollup validation. The `justfile`
+now includes `ch-fixtures-ep5` beside the existing `ch-migrate` migration loop.
+
+Validation on 2026-07-02:
+
+- `just ch-migrate` applied `0001_events_raw.sql`, `0002_identity.sql`, and
+  `0003_rollups.sql`.
+- The identity worked example returned stitched people `2`, `e5` canonical user `anon-3`, and
+  unstitched people `3`.
+- The rollup fixture returned event counts `feature_used 2`, `identify 1`, `page_view 5`;
+  DAU `3`; WAU `3`; and query-time resolved people `3`.
+- Re-applying the same fixture left event counts and DAU unchanged.
+- Page-view routes after replay were `/dashboard 1`, `/docs 1`, `/pricing 2`, `/signup 1`.
 
 
 ## Context and Orientation
@@ -1239,3 +1269,7 @@ MultilineString literal). The ClickHouse features relied upon are all standard:
   vs `uniqCombinedState` (approximate, fixed-size) state-size trade as a deliberate MVP
   choice. No milestone was renumbered; all object names and read patterns consumed by EP-6
   are unchanged except the corrected `canonical_user` expression.
+
+- Revision (2026-07-02): EP-5 implementation completed. The progress checklist, Surprises &
+  Discoveries, and Outcomes & Retrospective now record the concrete ClickHouse validation
+  outputs for identity stitching, exact rollups, redelivery safety, and page-route extraction.

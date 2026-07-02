@@ -223,7 +223,7 @@ decision (Haskell-only repo).
 | 2 | Canonical event model and schema registry | docs/plans/2-canonical-event-model-and-schema-registry.md | EP-1 | None | Complete |
 | 3 | ClickHouse storage schema and batch writer | docs/plans/3-clickhouse-storage-schema-and-batch-writer.md | EP-1 | EP-2 | Complete |
 | 4 | Ingestion API with pgmq queue and batched ClickHouse writer | docs/plans/4-ingestion-api-with-pgmq-queue-and-batched-clickhouse-writer.md | EP-2, EP-3 | None | Complete |
-| 5 | Identity stitching and materialized view rollups | docs/plans/5-identity-stitching-and-materialized-view-rollups.md | EP-3 | EP-4 | Not Started |
+| 5 | Identity stitching and materialized view rollups | docs/plans/5-identity-stitching-and-materialized-view-rollups.md | EP-3 | EP-4 | Complete |
 | 6 | Semantic metrics layer and typed query API | docs/plans/6-semantic-metrics-layer-and-typed-query-api.md | EP-3, EP-5 | EP-4 | Not Started |
 | 7 | Haskell server SDK | docs/plans/7-haskell-server-sdk.md | EP-2, EP-4 | None | Not Started |
 | 8 | OpenAPI schema generation and API documentation | docs/plans/8-openapi-schema-generation-and-api-documentation.md | EP-4, EP-6 | None | Not Started |
@@ -445,9 +445,9 @@ the milestone. This section provides an at-a-glance view of the entire initiativ
 - [x] EP-4: pgmq queue bootstrap + HTTP `POST /v1/events` and `/v1/batch` enqueue events
 - [x] EP-4: shibuya batch writer inserts one ClickHouse batch per flush (size-or-timeout)
 - [x] EP-4: end-to-end — POST an event, observe it queryable in `events_raw`
-- [ ] EP-5: identity events stored (identify/alias feed the identity map; group stored as
+- [x] EP-5: identity events stored (identify/alias feed the identity map; group stored as
       ordinary events); query-time identity resolution via `events_resolved`
-- [ ] EP-5: materialized views for daily event counts, DAU/WAU, page views by route
+- [x] EP-5: materialized views for daily event counts, DAU/WAU, page views by route
 - [ ] EP-6: `MetricDefinition` semantic layer + registry
 - [ ] EP-6: events, page-views, users, conversion endpoints return correct aggregates over fixtures
 - [ ] EP-6: funnel endpoint (`windowFunnel` with documented fallback) returns correct step counts
@@ -512,6 +512,11 @@ interactions between child plans. Provide concise evidence.
   `crypton-x509` conflict, and recreating `pgmq-migration`'s package-local `vendor` symlink in
   `postPatch` so embedded pgmq SQL files are available during the build. Evidence:
   `nix build .#default` passes.
+- Discovery (2026-07-02, EP-5 implementation): the existing EP-3 `just ch-migrate` recipe
+  already applies every ClickHouse migration in lexical order, so EP-5 only needed to add a
+  fixture-loading helper. The `join_use_nulls = 0` guard in the identity SQL was validated
+  against local ClickHouse: never-identified visitors resolve to their own anonymous id and
+  count toward DAU/WAU.
 - Validation pass (2026-07-01, pre-implementation): eleven parallel reviewers validated all
   eight child plans plus the external claims against the real shibuya/pgmq-hs/ClickHaskell/
   openapi-hs sources, the repository working tree, and `docs/initial-spec.md`. Verdict: all
@@ -743,7 +748,8 @@ Record every decomposition or coordination decision made while working on the ma
   enumerated in Surprises & Discoveries ("Validation pass"). Each child plan's fixes must be
   applied to that plan (and this document where noted) before its status moves to In Progress.
   The four open scope questions (dashboard integration, funnel ownership, retention
-  contradiction, sessionization ownership) are user decisions and remain open.
+  contradiction, sessionization ownership) were resolved by the user and recorded in the
+  scope-resolution decision above.
   Rationale: several findings are compile-blocking or silently corrupt metrics (EP-5's
   join_use_nulls defect, EP-6's aggregate-state reads), and fixing plans is far cheaper than
   fixing implementations; the external-dependency claims were verified against real sources so
@@ -755,12 +761,15 @@ Record every decomposition or coordination decision made while working on the ma
 Summarize outcomes, gaps, and lessons learned at major milestones or at completion. Compare
 the result against the original vision.
 
-Phase 2 write-path foundation is now complete through EP-4. The service can accept canonical
+Phase 2 write-path foundation is complete through EP-4. The service can accept canonical
 analytics events over HTTP, durably enqueue them through pgmq, consume them with shibuya's
 batch processor, insert them into ClickHouse in batches, and rely on EP-3's
-ReplacingMergeTree deduplication for at-least-once replay. The remaining MVP work is the read
-path and client/documentation surface: EP-5 identity/rollups, EP-6 metrics API, EP-7 Haskell
-SDK, and EP-8 OpenAPI.
+ReplacingMergeTree deduplication for at-least-once replay.
+
+EP-5 is also complete, so the ClickHouse read-path substrate now exists: identity events fill
+`analytics.identity_map`, `analytics.events_resolved` exposes query-time canonical users, and
+duplicate-safe materialized-view rollups maintain daily event counts, DAU, WAU, and page views
+by route. The remaining MVP work is EP-6 metrics API, EP-7 Haskell SDK, and EP-8 OpenAPI.
 
 
 ## Revision Notes
@@ -876,3 +885,13 @@ SDK, and EP-8 OpenAPI.
   ingestion, ClickHouse `events_raw FINAL` reached 3 rows after flush, replaying the same batch
   kept the count at 3, and `cabal build all`, `cabal test`, `nix fmt`, `nix build .#default`,
   and `git diff --check` passed.
+
+- 2026-07-02: EP-5 implementation completed. Marked "Identity stitching and materialized view
+  rollups" Complete in the Exec-Plan Registry, checked the two EP-5 aggregate Progress rows,
+  and recorded the ClickHouse validation discovery. Evidence is recorded in
+  `docs/plans/5-identity-stitching-and-materialized-view-rollups.md`: `just ch-migrate`
+  applied `0001`, `0002`, and `0003`; identity stitching returned stitched people `2`, `e5`
+  canonical user `anon-3`, and unstitched people `3`; rollup fixtures returned event counts
+  `feature_used 2`, `identify 1`, `page_view 5`, DAU `3`, WAU `3`; replaying the same fixture
+  left counts unchanged; and page routes were `/dashboard 1`, `/docs 1`, `/pricing 2`,
+  `/signup 1`.
