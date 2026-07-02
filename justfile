@@ -25,6 +25,10 @@ ch-migrate:
 ch-fixtures-ep5:
     clickhouse-client --port $CLICKHOUSE_TCP_PORT --multiquery < db/clickhouse/fixtures/ep5_fixtures.sql
 
+# Load the EP-6 semantic metrics verification fixtures.
+ch-fixtures-ep6:
+    clickhouse-client --port $CLICKHOUSE_TCP_PORT --multiquery < db/clickhouse/fixtures/ep6_fixtures.sql
+
 # Run the HTTP server.
 run:
     cabal run kansoku-server

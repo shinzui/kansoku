@@ -4,6 +4,7 @@ import Kansoku.ClickHouseSpec qualified
 import Kansoku.ConfigSpec qualified
 import Kansoku.EventSpec qualified
 import Kansoku.Ingest.QueueSpec qualified
+import Kansoku.QuerySpec qualified
 import Kansoku.Writer.BatchSpec qualified
 import Test.Hspec (hspec)
 
@@ -13,4 +14,5 @@ main = hspec $ do
   Kansoku.ClickHouseSpec.spec
   Kansoku.EventSpec.spec
   Kansoku.Ingest.QueueSpec.spec
+  Kansoku.QuerySpec.spec
   Kansoku.Writer.BatchSpec.spec

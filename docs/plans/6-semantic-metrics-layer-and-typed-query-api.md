@@ -68,37 +68,37 @@ Use a checklist to summarize granular steps. Every stopping point must be docume
 even if it requires splitting a partially completed task into two ("done" vs. "remaining").
 This section must always reflect the actual current state of the work.
 
-- [ ] Read the prerequisite context: confirm `analytics.events_raw`, the `EventRow` type, and
+- [x] Read the prerequisite context: confirm `analytics.events_raw`, the `EventRow` type, and
   the rollup views exist (Milestone 0).
-- [ ] Create `Kansoku.Api.Metrics` in the shared `kansoku:kansoku-api` sub-library with the
+- [x] Create `Kansoku.Api.Metrics` in the shared `kansoku:kansoku-api` sub-library with the
   `TimeGrain` sum type (JSON + `FromHttpApiData` instances) and the `MetricPoint`/`MetricResult`
   response DTOs (Milestone 1).
-- [ ] Add `Kansoku.Metrics.Definition` (main library) with the `Aggregation` sum type and the
+- [x] Add `Kansoku.Metrics.Definition` (main library) with the `Aggregation` sum type and the
   `MetricDefinition` record — importing `TimeGrain` from `Kansoku.Api.Metrics` — plus their JSON
   instances (Milestone 1).
-- [ ] Add `Kansoku.Metrics.Registry` with the twelve built-in metrics (Events, Page Views,
+- [x] Add `Kansoku.Metrics.Registry` with the twelve built-in metrics (Events, Page Views,
   Active Users, New Users, Returning Users, Conversion Rate, Activation Rate, Retention,
   Feature Adoption, Revenue, Search Success Rate, Funnel Completion Rate) (Milestone 1).
-- [ ] Add `Kansoku.Query` with `QueryRequest`, the pure SQL builder `buildSQL`, and the executor
+- [x] Add `Kansoku.Query` with `QueryRequest`, the pure SQL builder `buildSQL`, and the executor
   `run` taking EP-3's `Connection` (Milestone 1).
-- [ ] Write unit tests over `buildSQL` that assert exact generated SQL for representative
+- [x] Write unit tests over `buildSQL` that assert exact generated SQL for representative
   metrics/requests — including the `uniqExactMerge`-based rollup reads; make them green
   (Milestone 1).
-- [ ] Extend `Kansoku.Config` and the effectful runtime so the metrics handlers have read
+- [x] Extend `Kansoku.Config` and the effectful runtime so the metrics handlers have read
   access to ClickHouse, following EP-1's config pattern (Milestone 2).
-- [ ] Declare the servant `MetricsAPI` type in `Kansoku.Api.Metrics`, then add
+- [x] Declare the servant `MetricsAPI` type in `Kansoku.Api.Metrics`, then add
   `Kansoku.Metrics.Handler` with `metricsServer`, hoisted from `Eff` into servant's `Handler`,
   and mount it in the existing web application (Milestone 2).
-- [ ] Fully implement `/metrics/events`, `/metrics/page-views`, `/metrics/users` and verify
+- [x] Fully implement `/metrics/events`, `/metrics/page-views`, `/metrics/users` and verify
   each against fixtures with `curl` (Milestone 2).
-- [ ] Fully implement `/metrics/funnel` and `/metrics/conversion` and verify against fixtures
+- [x] Fully implement `/metrics/funnel` and `/metrics/conversion` and verify against fixtures
   (Milestone 3).
-- [ ] Fully implement `/metrics/sessions` (unique `session_id` counts over `events_raw`) and
+- [x] Fully implement `/metrics/sessions` (unique `session_id` counts over `events_raw`) and
   `/metrics/retention` (query-time cohort computation over `events_resolved`), extend the
   QuerySpec tests, and verify both against fixtures with `curl` (Milestone 4).
-- [ ] Return HTTP 501 with a documented JSON body for `/metrics/acquisition`,
+- [x] Return HTTP 501 with a documented JSON body for `/metrics/acquisition`,
   `/metrics/feature-adoption`, `/metrics/organizations`, `/metrics/custom` (Milestone 4).
-- [ ] Update the MasterPlan Progress rows for EP-6 and write the Outcomes & Retrospective entry.
+- [x] Update the MasterPlan Progress rows for EP-6 and write the Outcomes & Retrospective entry.
 
 
 ## Surprises & Discoveries
@@ -106,7 +106,17 @@ This section must always reflect the actual current state of the work.
 Document unexpected behaviors, bugs, optimizations, or insights discovered during
 implementation. Provide concise evidence.
 
-(None yet.)
+- ClickHaskell's dynamic result decoding mis-associated multi-column aggregate rows in live
+  validation: buckets and values from the same ClickHouse row did not stay paired. The executor
+  now wraps generated metric SQL in a one-column `line` select, decodes that single
+  tab-delimited `String`, and sorts the parsed rows in Haskell.
+- The local ClickHouse server raised `std::bad_alloc` in LLVM/JIT paths while serving the small
+  funnel and retention API queries. Appending
+  `SETTINGS compile_expressions = 0, compile_sort_description = 0` to the read wrapper avoids
+  those compilation paths and made the live validation stable.
+- The EP-6 fixture SQL is now checked in as `db/clickhouse/fixtures/ep6_fixtures.sql` with a
+  `just ch-fixtures-ep6` recipe. Before this, the plan embedded the fixture inline, which made
+  repeatable HTTP validation too easy to drift.
 
 
 ## Decision Log
@@ -228,13 +238,49 @@ Record every decision made while working on the plan.
   machinery and gives dashboards a useful number now.
   Date: 2026-07-01
 
+- Decision: Decode query results through a single ClickHouse `String` column named `line`,
+  then parse it into `bucket`, `group_key`, and `value` in Haskell.
+  Rationale: Live validation showed ClickHaskell's dynamic multi-column `unsafeMkSelect` path
+  returning aggregate rows with values attached to the wrong buckets. A single-column wrapper
+  keeps ClickHaskell's decode shape static while preserving the pure SQL builders and typed API
+  response. The parsed rows are sorted in Haskell, so the wrapper does not rely on ClickHouse
+  sort compilation for response determinism.
+  Date: 2026-07-02
+
+- Decision: Add ClickHouse read settings `compile_expressions = 0` and
+  `compile_sort_description = 0` to the metric query wrapper.
+  Rationale: The local ClickHouse server failed with `std::bad_alloc` inside LLVM/JIT
+  expression and sort compilation for the MVP-size retention/funnel queries. These API reads are
+  small semantic queries over bounded time windows, and disabling query compilation made the
+  acceptance checks pass without changing metric semantics.
+  Date: 2026-07-02
+
+- Decision: Implement `/metrics/funnel` as a deterministic per-step unique-user fallback rather
+  than relying on ClickHouse `windowFunnel` for the MVP.
+  Rationale: The endpoint needs stable step counts for the typed API contract; the fallback
+  counts users at each requested step who have also performed all prior requested steps in the
+  same time window. It returns the documented fixture values and can be replaced by a stricter
+  ordered-window implementation later without changing the response DTO.
+  Date: 2026-07-02
+
 
 ## Outcomes & Retrospective
 
 Summarize outcomes, gaps, and lessons learned at major milestones or at completion.
 Compare the result against the original purpose.
 
-(To be filled during and after implementation.)
+EP-6 is complete. The shared API sub-library now exposes `Kansoku.Api.Metrics` and the combined
+`Kansoku.Api.KansokuAPI`; the main library defines the semantic metric data model, built-in
+registry, query compiler/executor, and servant handlers. The existing server mounts
+`GET /metrics/*` alongside ingestion and health.
+
+Fixture validation covered the seven implemented endpoints: events returned day counts
+`5,3,1`; page views grouped by route returned `/home 2`, `/pricing 1`, `/home 1`; users and
+sessions returned day counts `2,2,1`; conversion returned `0.5`; funnel returned
+`signup_started 2` and `signup_completed 1`; retention returned cohort/offset values
+`2026-06-01/0=2`, `2026-06-01/1=1`, `2026-06-02/0=1`, `2026-06-02/1=1`. The missing funnel
+`steps` request returned HTTP 400, and acquisition, feature-adoption, organizations, and custom
+returned HTTP 501 with the documented JSON body.
 
 
 ## Context and Orientation
@@ -1500,6 +1546,19 @@ Intention: intention_01kwf425fxenc904ear54cr2n7
 
 
 ## Revision Notes
+
+- 2026-07-02 — **EP-6 implementation completed.** Added `Kansoku.Api.Metrics`,
+  `Kansoku.Api`, `Kansoku.Metrics.Definition`, `Kansoku.Metrics.Registry`, `Kansoku.Query`, and
+  `Kansoku.Metrics.Handler`; wired the combined API into `kansoku-server`; added QuerySpec
+  coverage and a repeatable `db/clickhouse/fixtures/ep6_fixtures.sql` fixture with
+  `just ch-fixtures-ep6`. Live validation against ClickHouse confirmed events `5,3,1`;
+  page-views-by-route `/home 2`, `/pricing 1`, `/home 1`; users and sessions `2,2,1`;
+  conversion `0.5`; funnel `signup_started 2` and `signup_completed 1`; retention
+  `2026-06-01/0=2`, `2026-06-01/1=1`, `2026-06-02/0=1`, `2026-06-02/1=1`; missing funnel
+  `steps` returns 400; and the four deferred endpoints return documented 501 JSON. The
+  implementation also records two ClickHouse/ClickHaskell discoveries: single-column result
+  decoding avoids row association errors, and disabling ClickHouse expression/sort compilation
+  avoids local LLVM `std::bad_alloc` failures for these bounded API reads.
 
 - 2026-07-01 — **adopted the shared haskell-jitsurei/core coding standards in every Haskell code
   sketch.** The plan's design is unchanged — the same five implemented / six stubbed endpoint

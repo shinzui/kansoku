@@ -34,7 +34,7 @@ main = do
         bootstrapQueue pool queueName
         clickHouse <- openClickHouse (clickHouseConfigFromConfig cfg)
         tracer <- makeTracer
-        let app = kansokuApp pool queueName
+        let app = kansokuApp pool queueName clickHouse
             keepRunning = forever (threadDelay 1000000000)
         withAsync
           ( runWriter

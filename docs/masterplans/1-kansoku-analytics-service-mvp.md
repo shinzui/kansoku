@@ -224,7 +224,7 @@ decision (Haskell-only repo).
 | 3 | ClickHouse storage schema and batch writer | docs/plans/3-clickhouse-storage-schema-and-batch-writer.md | EP-1 | EP-2 | Complete |
 | 4 | Ingestion API with pgmq queue and batched ClickHouse writer | docs/plans/4-ingestion-api-with-pgmq-queue-and-batched-clickhouse-writer.md | EP-2, EP-3 | None | Complete |
 | 5 | Identity stitching and materialized view rollups | docs/plans/5-identity-stitching-and-materialized-view-rollups.md | EP-3 | EP-4 | Complete |
-| 6 | Semantic metrics layer and typed query API | docs/plans/6-semantic-metrics-layer-and-typed-query-api.md | EP-3, EP-5 | EP-4 | Not Started |
+| 6 | Semantic metrics layer and typed query API | docs/plans/6-semantic-metrics-layer-and-typed-query-api.md | EP-3, EP-5 | EP-4 | Complete |
 | 7 | Haskell server SDK | docs/plans/7-haskell-server-sdk.md | EP-2, EP-4 | None | Not Started |
 | 8 | OpenAPI schema generation and API documentation | docs/plans/8-openapi-schema-generation-and-api-documentation.md | EP-4, EP-6 | None | Not Started |
 
@@ -448,10 +448,10 @@ the milestone. This section provides an at-a-glance view of the entire initiativ
 - [x] EP-5: identity events stored (identify/alias feed the identity map; group stored as
       ordinary events); query-time identity resolution via `events_resolved`
 - [x] EP-5: materialized views for daily event counts, DAU/WAU, page views by route
-- [ ] EP-6: `MetricDefinition` semantic layer + registry
-- [ ] EP-6: events, page-views, users, conversion endpoints return correct aggregates over fixtures
-- [ ] EP-6: funnel endpoint (`windowFunnel` with documented fallback) returns correct step counts
-- [ ] EP-6: basic retention (query-time cohorts over `events_resolved`) and sessions
+- [x] EP-6: `MetricDefinition` semantic layer + registry
+- [x] EP-6: events, page-views, users, conversion endpoints return correct aggregates over fixtures
+- [x] EP-6: funnel endpoint (documented per-step fallback) returns correct step counts
+- [x] EP-6: basic retention (query-time cohorts over `events_resolved`) and sessions
       (`uniqExact(session_id)` counts); acquisition/feature-adoption/organizations/custom
       stubbed at 501
 - [ ] EP-7: `kansoku-client` typed event constructors + batching + retry, delivery via `servant-client` over the shared `IngestAPI`
@@ -590,6 +590,13 @@ interactions between child plans. Provide concise evidence.
   (it had referenced non-existent `identity_map` columns and an outdated `ORDER BY`); EP-1/EP-2
   gained forward-reference notes for EP-7's `kansoku-event` sub-library. Three residual items
   are tracked below in the Decision Log rather than force-edited.
+
+- EP-6 implementation (2026-07-02): ClickHaskell's dynamic multi-column `unsafeMkSelect`
+  result decode mis-associated aggregate buckets and values during live validation. The metrics
+  executor now wraps generated SQL in a one-column `line` select and parses the tab-delimited
+  result in Haskell. The same wrapper disables ClickHouse expression/sort compilation for these
+  bounded API reads because local validation hit LLVM `std::bad_alloc` failures on the
+  retention/funnel queries.
 
 
 ## Decision Log
@@ -769,7 +776,13 @@ ReplacingMergeTree deduplication for at-least-once replay.
 EP-5 is also complete, so the ClickHouse read-path substrate now exists: identity events fill
 `analytics.identity_map`, `analytics.events_resolved` exposes query-time canonical users, and
 duplicate-safe materialized-view rollups maintain daily event counts, DAU, WAU, and page views
-by route. The remaining MVP work is EP-6 metrics API, EP-7 Haskell SDK, and EP-8 OpenAPI.
+by route.
+
+EP-6 is complete. The service now serves typed `GET /metrics/*` routes backed by the semantic
+metric registry and ClickHouse query compiler. Live fixture validation confirmed the seven
+implemented endpoints — events, page-views, users, sessions, conversion, funnel, and retention
+— and the four deferred endpoints return documented HTTP 501 JSON. The remaining MVP work is
+EP-7 Haskell SDK and EP-8 OpenAPI.
 
 
 ## Revision Notes
@@ -895,3 +908,13 @@ by route. The remaining MVP work is EP-6 metrics API, EP-7 Haskell SDK, and EP-8
   `feature_used 2`, `identify 1`, `page_view 5`, DAU `3`, WAU `3`; replaying the same fixture
   left counts unchanged; and page routes were `/dashboard 1`, `/docs 1`, `/pricing 2`,
   `/signup 1`.
+
+- 2026-07-02: EP-6 implementation completed. Marked "Semantic metrics layer and typed query
+  API" Complete in the Exec-Plan Registry, checked the four EP-6 aggregate Progress rows, and
+  recorded the ClickHaskell/ClickHouse query-wrapper discoveries. Evidence is recorded in
+  `docs/plans/6-semantic-metrics-layer-and-typed-query-api.md`: `just ch-fixtures-ep6` loaded
+  repeatable fixtures; live HTTP checks returned events `5,3,1`, page views by route
+  `/home 2`, `/pricing 1`, `/home 1`, users and sessions `2,2,1`, conversion `0.5`, funnel
+  `signup_started 2` and `signup_completed 1`, retention cohort/offset values
+  `2026-06-01/0=2`, `2026-06-01/1=1`, `2026-06-02/0=1`, `2026-06-02/1=1`, missing funnel
+  `steps` 400, and four documented 501 stubs.

@@ -8,6 +8,7 @@ module Kansoku.Server
   )
 where
 
+import ClickHaskell (Connection)
 import Data.Generics.Labels ()
 import Data.Text qualified as Text
 import Effectful (Eff, IOE, type (:>))
@@ -16,6 +17,7 @@ import Hasql.Pool qualified as Pool
 import Kansoku.Config (Config)
 import Kansoku.Ingest.Handler (ingestApp)
 import Kansoku.Logging (Log, logInfo)
+import Kansoku.Metrics.Handler (metricsApp)
 import Kansoku.Prelude
 import Network.HTTP.Types (status200, status404)
 import Network.HTTP.Types.Header (hContentType)
@@ -32,11 +34,13 @@ healthApp req respond =
     _ ->
       respond (responseLBS status404 [(hContentType, "text/plain")] "Not Found")
 
-kansokuApp :: Pool.Pool -> QueueName -> Application
-kansokuApp pool queueName req respond =
+kansokuApp :: Pool.Pool -> QueueName -> Connection -> Application
+kansokuApp pool queueName clickHouse req respond =
   case pathInfo req of
     ["health"] ->
       healthApp req respond
+    "metrics" : _ ->
+      metricsApp clickHouse req respond
     _ ->
       ingestApp pool queueName req respond
 
@@ -44,5 +48,5 @@ kansokuApp pool queueName req respond =
 startServer :: (IOE :> es, Reader Config :> es, Log :> es) => Application -> Eff es ()
 startServer app = do
   port <- asks @Config (^. #serverPort)
-  logInfo ("kansoku-server listening on port " <> Text.pack (show port) <> " (GET /health, POST /v1/events, POST /v1/batch)")
+  logInfo ("kansoku-server listening on port " <> Text.pack (show port) <> " (GET /health, POST /v1/events, POST /v1/batch, GET /metrics/*)")
   liftIO (Warp.run port app)
