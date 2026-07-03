@@ -1,5 +1,7 @@
 packages:
-    .
+    ./kansoku-api
+    ./kansoku-core
+    ./kansoku-server
     ./kansoku-client
     /Users/shinzui/Keikaku/bokuno/openapi-hs-project/openapi-hs
     /Users/shinzui/Keikaku/bokuno/openapi-hs-project/servant-openapi-hs
@@ -9,6 +11,9 @@ packages:
     /Users/shinzui/Keikaku/bokuno/libraries/pgmq-hs-project/pgmq-hs/pgmq-migration
     /Users/shinzui/Keikaku/bokuno/shibuya-project/shibuya/shibuya-core
     /Users/shinzui/Keikaku/bokuno/shibuya-project/shibuya-pgmq-adapter/shibuya-pgmq-adapter
+
+allow-newer:
+    shibuya-pgmq-adapter:shibuya-core
 
 source-repository-package
     type: git

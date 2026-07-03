@@ -1,0 +1,35 @@
+cabal-version: 3.0
+name:          kansoku-server
+version:       0.1.0.0
+synopsis:      Kansoku HTTP server executable.
+description:
+  The servant/warp HTTP server executable for Kansoku analytics.
+
+license:       BSD-3-Clause
+author:        Nadeem Bitar
+maintainer:    nadeem@gmail.com
+category:      Web
+build-type:    Simple
+
+common common
+  ghc-options:        -Wall -Wcompat -Wredundant-constraints
+  default-language:   GHC2024
+  default-extensions:
+    DeriveAnyClass
+    DuplicateRecordFields
+    MultilineStrings
+    OverloadedLabels
+    OverloadedStrings
+
+executable kansoku-server
+  import:         common
+  ghc-options:    -threaded
+  hs-source-dirs: app
+  main-is:        Main.hs
+  build-depends:
+    , async
+    , base          >=4.21 && <5
+    , generic-lens
+    , hasql-pool
+    , kansoku-api
+    , kansoku-core

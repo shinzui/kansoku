@@ -315,7 +315,7 @@
       };
     in
     {
-      packages.default = haskellPackages.callCabal2nix "kansoku" inputs.self { };
+      packages.default = haskellPackages.callCabal2nix "kansoku-server" inputs.self { };
 
       devShells.default = mkProjectShell "ghc9124";
       devShells."ghc9124" = mkProjectShell "ghc9124";

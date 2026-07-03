@@ -9,6 +9,7 @@ description:
 license:       BSD-3-Clause
 author:        Nadeem Bitar
 maintainer:    nadeem@gmail.com
+category:      Web
 build-type:    Simple
 
 common common
@@ -28,14 +29,14 @@ library
   build-depends:
     , aeson
     , async
-    , base                 >=4.21 && <5
+    , base             >=4.21 && <5
     , bytestring
     , containers
-    , generic-lens         >=2.2  && <2.4
+    , generic-lens     >=2.2  && <2.4
     , http-client
     , http-client-tls
-    , kansoku:kansoku-api
-    , lens                 ^>=5.3
+    , kansoku-api
+    , lens             ^>=5.3
     , servant
     , servant-client
     , stm
@@ -49,10 +50,10 @@ executable kansoku-client-example
   main-is:        Main.hs
   build-depends:
     , aeson
-    , base
+    , base            >=4.21 && <5
     , generic-lens
+    , kansoku-api
     , kansoku-client
-    , kansoku:kansoku-api
     , text
 
 test-suite kansoku-client-test
@@ -63,14 +64,14 @@ test-suite kansoku-client-test
   main-is:        Spec.hs
   build-depends:
     , aeson
-    , base
+    , base            >=4.21 && <5
     , bytestring
     , containers
     , generic-lens
     , hspec
     , http-types
+    , kansoku-api
     , kansoku-client
-    , kansoku:kansoku-api
     , process
     , stm
     , text
