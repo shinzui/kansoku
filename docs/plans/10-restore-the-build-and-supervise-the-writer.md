@@ -4,6 +4,7 @@ slug: restore-the-build-and-supervise-the-writer
 title: "Restore the build and supervise the writer"
 kind: exec-plan
 created_at: 2026-07-15T21:30:34Z
+intention: intention_01kxr5jt2heyvt0n768ym9dwqd
 master_plan: "docs/masterplans/2-kansoku-production-hardening-review-fixes-and-portfolio-service-readiness.md"
 ---
 
@@ -14,22 +15,18 @@ Decision Log, and Outcomes & Retrospective must be kept up to date as work proce
 
 This is EP-10 of the MasterPlan at
 `docs/masterplans/2-kansoku-production-hardening-review-fixes-and-portfolio-service-readiness.md`
-(Phase 1 — Stabilize). It has no dependencies and every other child plan hard- or
-soft-depends on it, so it is deliberately small enough to land in one sitting.
+(Phase 1 — Stabilize). It hard-depends on EP-21,
+`docs/plans/21-migrate-kansoku-to-the-coherent-pg-migrate-pgmq-and-shibuya-cohort.md`,
+and every later child plan hard- or soft-depends on EP-10. EP-21 owns the cohort and
+migration cutover; this plan remains small enough to land in one sitting.
 
 
 ## Purpose / Big Picture
 
-Today the kansoku repository does not compile, for two independent reasons: shibuya (the
-batch-consumer framework that drains the pgmq queue) renamed its handler-facing message
-type, and `kansoku-core/src/Kansoku/Writer/Batch.hs` still uses the old one; and
-pgmq-migration (the library that installs the pgmq schema into Postgres) moved from a
-hasql-`Session`-based `migrate` to the pg-migrate component framework, and
-`kansoku-core/src/Kansoku/Ingest/Queue.hs` still calls the removed `Migration.migrate`.
-Both breaks are expected to be fixed by the operator-run `migrate-keiro-stack` seihou
-blueprint (see Milestone 1), which upgrades the whole dependency cohort; this plan verifies
-that outcome rather than duplicating it, and keeps hand-fix instructions only as a fallback.
-Even before the breaks,
+EP-21 must first leave Kansoku compiling against one portable pg-migrate/PGMQ/Shibuya cohort,
+with current runtime APIs and an explicit PGMQ-only migration executable. Milestone 1 verifies
+that checked-in result rather than owning or rerunning the migration. Even before the dependency
+breaks,
 the service had a silent-failure mode: the batch writer (the background thread that moves
 events from the pgmq queue in Postgres into ClickHouse) runs under `withAsync`, which does
 not propagate the writer's death to the main thread. If the writer dies, Warp keeps
@@ -55,12 +52,11 @@ current `nix develop` + `process-compose up` dev flow working unchanged.
 Use this checklist to track granular steps. Every stopping point must be documented here,
 even if it requires splitting a partially completed task into two ("done" vs. "remaining").
 
-- [ ] M1: migrate-keiro-stack blueprint run completed by the operator (primary path) OR manual fallback fixes applied (`Writer/Batch.hs` `Ingested`→`Message`; `Ingest/Queue.hs` → pg-migrate API; `pg-migrate` in `kansoku-core.cabal`)
+- [ ] M1: EP-21 is Complete in the MasterPlan; its coherent cohort, current runtime APIs, and explicit PGMQ migration path are present
 - [ ] M1: `cabal build all` succeeds inside `nix develop`
 - [ ] M1: `cabal test` succeeds inside `nix develop`
-- [ ] M1: server boots against a fresh dev Postgres (pgmq schema installed, queue created)
-- [ ] M1: blueprint outcome recorded in Surprises & Discoveries (cohort versions; `runApp`/`runWriter` signature drift for M2)
-- [ ] M1: commit (fallback path only) `fix(core): migrate to shibuya Message type and pg-migrate pgmq bootstrap`
+- [ ] M1: EP-21's ephemeral PostgreSQL test proves schema application and queue provisioning; ordinary server startup does not migrate
+- [ ] M1: migrated cohort and any `runWriter` signature constraints recorded in Surprises & Discoveries
 - [ ] M2: shutdown `MVar` + SIGTERM/SIGINT handlers in `kansoku-server/app/Main.hs`
 - [ ] M2: `runWriter`'s `waitForShutdown` is `readMVar shutdownVar`, not `forever threadDelay`
 - [ ] M2: writer and server linked via `withAsync` + `race_ (wait writerAsync) …`
@@ -123,7 +119,7 @@ implementation. Provide concise evidence.
   own fields to the same record later.
   Date: 2026-07-15
 
-- Decision: Fold the pgmq-migration cutover (`Pgmq.Migration.migrate` removed in favor of
+- Decision: SUPERSEDED by EP-21 — fold the pgmq-migration cutover (`Pgmq.Migration.migrate` removed in favor of
   pg-migrate's `pgmqMigrations` component) into Milestone 1 alongside the shibuya `Message`
   migration.
   Rationale: it is a second build break of the same class (a pinned local dependency moved
@@ -136,20 +132,16 @@ implementation. Provide concise evidence.
 - Note for Milestone 1's implementer: EP-16
   (`docs/plans/16-pipeline-observability-queue-depth-writer-lag-and-exported-telemetry.md`)
   later changes `writerBatchHandler`'s signature (threading metrics and a heartbeat cell).
-  No action needed here — just do not treat the handler's shape as frozen when fixing it.
+  No action needed here — just do not treat the handler's shape as frozen when extending it.
 
-- Decision: The build restoration is delegated to the operator-run `migrate-keiro-stack`
-  seihou blueprint (`/Users/shinzui/Keikaku/bokuno/agent-seihou/blueprints/migrate-keiro-stack`);
-  Milestone 1 verifies its outcome, and the hand-fix instructions are retained only as a
-  fallback pinned to the current local cohort.
-  Rationale: user direction (2026-07-15) — a prepared migration to the latest keiro-stack
-  cohort fixes all the breaking changes (shibuya `Message`, pgmq-migration→pg-migrate) as
-  part of a coherent, source-verified cohort upgrade with database-safety gates; duplicating
-  that by hand here would fix the breaks against an older cohort and have to be redone.
-  Consequence for Milestone 2: the target cohort's shibuya `runApp` takes an `AppConfig`
-  record (not the current positional `SupervisionStrategy`/limit arguments), so M2 must
-  adapt `Kansoku/Writer/Run.hs` to whatever the blueprint landed and record the delta here.
-  Date: 2026-07-15
+- Decision: SUPERSEDED — the unexecuted external `migrate-keiro-stack` blueprint is no longer
+  EP-10's prerequisite. Checked-in EP-21 owns the cohort, current runtime APIs, and explicit
+  PGMQ migration cutover; EP-10 starts only after EP-21 is Complete.
+  Rationale: user direction on 2026-07-17. The applicable migration is small and repository-local,
+  and the generic blueprint's absent Kiroku/Keiro/Kioku components must not be introduced.
+  Consequence for Milestone 2: `Kansoku.Writer.Run` already uses the migrated Shibuya `AppConfig`
+  API when EP-10 begins; this plan changes only lifetime supervision around it.
+  Date: 2026-07-17
 
 
 ## Outcomes & Retrospective
@@ -175,52 +167,19 @@ build` runs `cabal build all`, `just test` runs `cabal test`, and `just up` runs
 `process-compose up`, which starts local PostgreSQL and ClickHouse instances plus schema
 creation (see `process-compose.yaml`; the shell exports `PG*` and `CLICKHOUSE_*` variables).
 
-The batch consumer framework is shibuya, consumed as local packages via `cabal.project`
-from `/Users/shinzui/Keikaku/bokuno/shibuya-project/shibuya/`. Shibuya recently split its
-message type in `shibuya-core/src/Shibuya/Core/Ingested.hs`: the framework-side type
-`Ingested es msg` (fields `envelope :: Envelope msg`, `ack :: AckHandle es`,
-`lease :: Maybe (Lease es)`) is now constructed only by adapters, and application batch
-handlers receive the new read-only projection `Message es msg`, which has only
-`envelope :: Envelope msg` and `lease :: Maybe (Lease es)` — deliberately no `ack` field,
-because the framework owns acknowledgement finalization. `toMessage :: Ingested es msg ->
-Message es msg` projects one to the other. The handler type in
-`shibuya-core/src/Shibuya/Batch.hs` is now:
+The batch consumer framework is Shibuya. EP-21 replaces workstation-local dependency paths with
+a portable released cohort and migrates application handlers to the read-only
+`Message es msg` projection. The handler type in `Shibuya.Core.Batch` is:
 
 ```haskell
 type BatchHandler es msg = BatchInfo -> NonEmpty (Message es msg) -> Eff es BatchAck
 ```
 
-Kansoku's handler in `kansoku-core/src/Kansoku/Writer/Batch.hs` still imports
-`Shibuya.Core.Ingested (Ingested (..))` and pattern-matches `Ingested {envelope = …}` in its
-`decodeMessage` helper, and the test `kansoku-core/test/Kansoku/Writer/BatchSpec.hs`
-constructs an `Ingested` record with an `ack = AckHandle …` field. Both fail to compile
-against current shibuya. This is the first build break.
-
-The second build break is in `kansoku-core/src/Kansoku/Ingest/Queue.hs`. Its
-`bootstrapQueue` runs `Pool.use pool Migration.migrate`, but the pinned local
-`pgmq-migration` package (at
-`/Users/shinzui/Keikaku/bokuno/libraries/pgmq-hs-project/pgmq-hs/pgmq-migration`) has cut
-over to the pg-migrate framework: the module `Pgmq.Migration` now exports only
-`DefinitionError`, `MigrationComponent`, and `pgmqMigrations :: Either DefinitionError
-MigrationComponent` — there is no `migrate :: Session ()` anymore. The canonical
-consumption pattern, used by pgmq-hs's own test harnesses (see
-`pgmq-effectful/test/EphemeralDb.hs` in the same project), is: unwrap `pgmqMigrations`,
-build a plan with `migrationPlan (component :| [])`, and apply it with `runMigrationPlan
-defaultRunOptions connSettings plan` (all from `Database.PostgreSQL.Migrate` in the
-`pg-migrate` package, with `migrationPlan` and `runMigrationPlan` re-exported alongside —
-check the exact module exports when implementing):
-
-```haskell
-component <- either (error . ("Invalid PGMQ migration component: " <>) . show) pure Migration.pgmqMigrations
-plan <- either (error . ("Invalid PGMQ migration plan: " <>) . show) pure (migrationPlan (component :| []))
-installResult <- runMigrationPlan defaultRunOptions connSettings plan
-```
-
-Note that `runMigrationPlan` takes hasql connection settings directly rather than a
-`Hasql.Pool.Pool`, so `bootstrapQueue`'s signature (or `Main.hs`'s call site, which has the
-connection string from `Config`) must adapt; `kansoku-core.cabal` gains `pg-migrate` (and,
-if the re-exports require it, `pg-migrate-embed`) in build-depends — both already build as
-transitive dependencies of `pgmq-migration`, so no pins change.
+EP-21 also introduces `Kansoku.Migrations` as the PGMQ-only pg-migrate composition point and a
+dedicated `kansoku-migrate` executable. `Kansoku.Ingest.Queue` only provisions the configured
+queue after schema migration, and normal server startup no longer calls `runMigrationPlan`.
+EP-10 must preserve that boundary while adding supervision; future PostgreSQL components extend
+the checked-in plan rather than adding startup side effects.
 
 The writer is wired in `kansoku-core/src/Kansoku/Writer/Run.hs` (`runWriter`): it builds a
 shibuya pgmq adapter, a batch processor around `writerBatchHandler`, starts the shibuya app,
@@ -305,76 +264,23 @@ supervision rework (Milestone 2) introduces; hygiene (Milestone 4) is independen
 but is committed last so every intermediate commit is a compiling, tested state.
 
 
-### Milestone 1 — A green build (verify the migrate-keiro-stack blueprint outcome; manual fallback)
+### Milestone 1 — Verify the completed EP-21 migration baseline
 
-PRIMARY PATH (expected): the build restoration is NOT hand-implemented by this plan. The
-operator runs the seihou blueprint at
-`/Users/shinzui/Keikaku/bokuno/agent-seihou/blueprints/migrate-keiro-stack` (`seihou agent
-run migrate-keiro-stack`, an interactive agent-driven migration), which discovers the
-repo's pinned pg-migrate/PGMQ/Shibuya cohort drift, adapts the runtime APIs (including the
-shibuya `Ingested`→`Message` handler change and the `Pgmq.Migration.migrate`→
-`pgmqMigrations` pg-migrate cutover described below), aligns Cabal/Nix on a coherent
-cohort, and authors the ordered native migration plan with database-state-aware safety
-gates. This plan's Milestone 1 is then a VERIFICATION step: after the blueprint run, from
-the repo root confirm `nix develop -c cabal build all` and `nix develop -c cabal test` are
-green and the server boots against a fresh dev database, then record in this plan's
-Surprises & Discoveries what the blueprint actually changed (cohort versions, any
-`runWriter`/`runApp` signature drift — the target cohort's shibuya `runApp` takes an
-`AppConfig` record rather than the current positional arguments, which Milestone 2 must
-adapt to).
+Confirm EP-21 is marked Complete in the MasterPlan and read its Outcomes & Retrospective before
+editing runtime supervision. Verify that `cabal.project` has no workstation-absolute dependency
+paths, Cabal and Nix use the recorded pg-migrate/PGMQ/Shibuya cohort, the writer uses the current
+`Message`, adapter-environment, and `AppConfig` APIs, and `kansoku-migrate` owns the PGMQ-only
+schema plan. Ordinary `kansoku-server` startup must only provision its configured queue.
 
-FALLBACK PATH (only if the blueprint is not run first): the two breaks can be fixed by
-hand, scoped as (a) moving the writer's batch handler and its spec from shibuya's removed
-handler-facing `Ingested` type to the new `Message` type, and (b) moving `bootstrapQueue`
-from the removed `Pgmq.Migration.migrate` session to the pg-migrate component API
-(`pgmqMigrations` → `migrationPlan` → `runMigrationPlan`; see Context and Orientation for
-the canonical pattern and the source of truth in pgmq-hs's own test harnesses). Nothing
-behavioral changes: the handler decodes each message's JSON payload into an
-`AnalyticsEvent`, inserts the good ones into ClickHouse, dead-letters undecodable ones, and
-asks for a retry of the rest if the insert fails — exactly as before; and startup still
-installs the pgmq schema idempotently before creating the queue. Note the fallback pins to
-the CURRENT local cohort; the blueprint upgrade would still be due later. At the end of
-this milestone, either way, `cabal build all` and `cabal test` are green, which unblocks
-every other plan in the MasterPlan.
+Run `nix develop -c cabal build all` and `nix develop -c cabal test all`. Reuse EP-21's automated
+ephemeral PostgreSQL test as the fresh-database proof; do not drop or recreate the repository-local
+database. Record the landed cohort and any constraints on `runWriter` in Surprises & Discoveries.
+No source edit or migration commit belongs to this milestone: if these checks fail, EP-21 is not
+complete and must be corrected before EP-10 proceeds.
 
-For the pgmq-migration cutover in `kansoku-core/src/Kansoku/Ingest/Queue.hs`: replace the
-`Pool.use pool Migration.migrate` block in `bootstrapQueue` with the three-step
-component/plan/run pattern quoted in Context and Orientation. `runMigrationPlan` wants
-connection settings, not the pool, so pass the connection string through (either change
-`bootstrapQueue :: Pool.Pool -> QueueName -> IO ()` to also take the settings, or resolve
-them at the `Main.hs` call site where `Config`'s `pgConnectionString` is in scope — prefer
-the former so the function stays self-contained). Keep the existing `error`-with-context
-failure style used by the rest of `bootstrapQueue`. Add `pg-migrate` to
-`kansoku-core.cabal` build-depends. The `createQueue` call that follows is unchanged.
-
-In `kansoku-core/src/Kansoku/Writer/Batch.hs`: change the import
-`Shibuya.Core.Ingested (Ingested (..))` to `Shibuya.Core.Ingested (Message (..))`, and change
-`decodeMessage`'s signature and pattern from `Ingested es Value` / `Ingested {envelope =
-Envelope {messageId, payload}}` to `Message es Value` / `Message {envelope = Envelope
-{messageId, payload}}`. The `Envelope` pattern-match is unchanged (`messageId` and `payload`
-are still `Envelope` fields). `writerBatchHandler`'s type `BatchHandler es Value` needs no
-edit — the type alias in `Shibuya.Batch` now expands to `NonEmpty (Message es msg)`, so the
-body's `toList messages` and everything downstream compile once `decodeMessage` accepts
-`Message`.
-
-In `kansoku-core/test/Kansoku/Writer/BatchSpec.hs`: the fixture `ingestedEvent :: Ingested
-'[IOE] Value` constructs the old record including `ack = AckHandle (const (pure ()))`.
-Since the handler now takes `Message` and a `Message` has no `ack` field, construct
-`Message` directly (do not bother building an `Ingested` and projecting with `toMessage` —
-the test never exercises acking, and `Message` is the exact type the handler receives).
-Rename the fixture to `handlerMessage :: Message '[IOE] Value`, keep the identical
-`Envelope` construction, drop the `ack` field, keep `lease = Nothing`. Update the imports:
-`Shibuya.Core.Ingested (Message (..))` instead of `(Ingested (..))`, and delete the now-unused
-`Shibuya.Core.AckHandle (AckHandle (..))` import. Update the call site
-(`writerBatchHandler conn batchInfo (ingestedEvent :| [])` becomes `… (handlerMessage :| [])`).
-
-Acceptance: from the repo root, `nix develop -c cabal build all` finishes without errors and
-`nix develop -c cabal test` reports all suites passing (the BatchSpec ClickHouse case is
-`pendingWith`-skipped when ClickHouse is not running; with `process-compose up` active it
-runs for real — do the latter at least once). For the pgmq bootstrap cutover, additionally
-boot the server against a fresh dev database (with `process-compose up` running: `dropdb
-kansoku && just create-database && just run`) and observe it start cleanly — proving the
-pg-migrate path installs the pgmq schema and `createQueue` succeeds on an empty database.
+Acceptance: both commands exit zero, the EP-21 migration integration test passes, and a source
+search shows `runMigrationPlan` is reachable from the administrative migration executable but not
+from the ordinary server bootstrap path.
 
 
 ### Milestone 2 — Link writer and server lifetimes, wire real shutdown
@@ -657,8 +563,7 @@ Keep this section updated with reality as you go.
    `postgres`, `clickhouse`, and `create_schema` processes report healthy/done in the
    process-compose TUI.
 
-2. Milestone 1 edits: `kansoku-core/src/Kansoku/Writer/Batch.hs`,
-   `kansoku-core/test/Kansoku/Writer/BatchSpec.hs` as described above. Then:
+2. Verify EP-21 is Complete, read its recorded cohort and outcomes, and run:
 
    ```bash
    cabal build all
@@ -672,18 +577,8 @@ Keep this section updated with reality as you go.
    Test suite kansoku-core-test: PASS
    ```
 
-   Commit:
-
-   ```text
-   fix(writer): migrate batch handler to shibuya Message type
-
-   shibuya split its handler-facing type: batch handlers now receive
-   Message (envelope + lease, no ack handle) instead of Ingested. Adjust
-   decodeMessage and the BatchSpec fixture accordingly. Restores the build.
-
-   MasterPlan: docs/masterplans/2-kansoku-production-hardening-review-fixes-and-portfolio-service-readiness.md
-   ExecPlan: docs/plans/10-restore-the-build-and-supervise-the-writer.md
-   ```
+   There is no EP-10 source commit for this verification-only milestone. If it fails, return to
+   EP-21 instead of adding migration fallback code here.
 
 3. Milestone 2 edits: `kansoku-server/app/Main.hs`, `kansoku-server/kansoku-server.cabal`
    (add `unix`). Rebuild, then run the two acceptance transcripts from the milestone
@@ -747,7 +642,7 @@ demonstrably fails ClickHouse authentication while the unmodified dev flow is un
 
 ## Idempotence and Recovery
 
-Every step is safe to repeat. The edits are ordinary source changes on the `master` branch
+Every step is safe to repeat. The edits are ordinary source changes on the current branch
 committed per milestone, so `git status` / `git diff` always shows where you are, and a
 half-finished milestone can be resumed by re-reading its section — none of the edits are
 order-sensitive within a milestone. `cabal build all` and `cabal test` are idempotent.
@@ -755,7 +650,8 @@ order-sensitive within a milestone. `cabal build all` and `cabal test` are idemp
 `postgres`/`clickhouse` processes for the failure demonstrations is non-destructive (pgmq
 tables and ClickHouse data persist). The BatchSpec test truncates `analytics.events_raw` in
 the local dev ClickHouse — that is pre-existing behavior and only touches disposable dev
-data. No migrations, no destructive operations, no production systems are involved. If a
+data. EP-21's schema tests use an ephemeral PostgreSQL instance; EP-10 does not apply migrations
+to the repository-local database. No destructive operations or production systems are involved. If a
 demonstration leaves services stopped, `process-compose process start postgres` (or
 restarting `just up`) restores them. If a rebuild behaves strangely after the cabal edit,
 `cabal build all` again; as a last resort `rm -rf dist-newstyle` and rebuild (slow but
@@ -768,9 +664,8 @@ Libraries used, all already available except one cabal edit: `async`
 (`Control.Concurrent.Async`: `withAsync`, `wait`, `race_`, `poll`) — already a
 `kansoku-server` dependency; `unix` (`System.Posix.Signals`: `installHandler`, `Handler
 (Catch)`, `sigTERM`, `sigINT`) — must be added to `kansoku-server/kansoku-server.cabal`
-`build-depends` in Milestone 2; shibuya (`Shibuya.Core.Ingested` `Message (..)`,
-`Shibuya.Batch` `BatchHandler`) consumed as local cabal.project packages from
-`/Users/shinzui/Keikaku/bokuno/shibuya-project/shibuya/`; `pgmq-effectful`
+`build-depends` in Milestone 2; the portable Shibuya cohort established by EP-21
+(`Shibuya.Core.Ingested` `Message (..)`, `Shibuya.Batch` `BatchHandler`); `pgmq-effectful`
 (`Pgmq.Effectful`: `queueMetrics`, `runPgmq`, `QueueName`; `Pgmq.Effectful.Interpreter`:
 `PgmqRuntimeError`) — already a `kansoku-core` dependency; ClickHaskell (`ClickHaskell`:
 `setUser`, `setPassword`, both `String -> ConnectionArgs -> ConnectionArgs`) — already a
@@ -778,14 +673,12 @@ dependency, `setPassword` verified exported; `effectful` and `aeson` — already
 
 Signatures that must exist at the end of each milestone (full module paths):
 
-Milestone 1 — `Kansoku.Writer.Batch.writerBatchHandler :: (IOE :> es) => Connection ->
-BatchHandler es Value` (unchanged surface, now compiled against shibuya's
-`Message`-based `BatchHandler`); its internal `decodeMessage :: Message es Value -> Either
-(MessageId, DeadLetterReason) AnalyticsEvent`. `Kansoku.Ingest.Queue.bootstrapQueue`
-compiled against pg-migrate (`Pgmq.Migration.pgmqMigrations` + `migrationPlan` +
-`runMigrationPlan`); its signature may gain the hasql connection settings as an argument —
-whatever shape is chosen, `kansoku-server/app/Main.hs` remains its only caller. New
-build-depends in `kansoku-core.cabal`: `pg-migrate`.
+Milestone 1 — no new interface. Verify the EP-21 surfaces: the `Message`-based
+`Kansoku.Writer.Batch.writerBatchHandler`; the current adapter/AppConfig-based
+`Kansoku.Writer.Run.runWriter`; `Kansoku.Migrations`' PGMQ-only plan; an idempotent
+queue-provisioning operation in `Kansoku.Ingest.Queue`; and the `kansoku-migrate`
+administrative executable. Ordinary `kansoku-server` startup must not call
+`runMigrationPlan`.
 
 Milestone 2 — `Kansoku.Writer.Run.runWriter` keeps its existing signature (its last
 argument `IO ()` is now `readMVar shutdownVar` from `Main`); `kansoku-server/app/Main.hs`
@@ -825,3 +718,9 @@ Cabal/Nix alignment, ordered migration plan) with database-safety gates. The man
 instructions are retained as an explicitly-labeled fallback path. Progress and the Decision
 Log were updated to match; Milestone 2 gained a heads-up that the target cohort's shibuya
 `runApp` takes an `AppConfig` record.
+
+Revision note (2026-07-17): superseded the unexecuted external-blueprint prerequisite with the
+checked-in EP-21 hard dependency. Purpose, progress, context, Milestone 1, concrete steps,
+recovery, interfaces, and decisions now treat the coherent cohort and explicit PGMQ migration as
+an already-completed gate. EP-10 no longer contains a hand-fix or implicit-startup-migration
+fallback.

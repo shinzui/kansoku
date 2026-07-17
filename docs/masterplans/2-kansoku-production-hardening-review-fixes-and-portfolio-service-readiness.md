@@ -4,6 +4,7 @@ slug: kansoku-production-hardening-review-fixes-and-portfolio-service-readiness
 title: "Kansoku production hardening: review fixes and portfolio-service readiness"
 kind: master-plan
 created_at: 2026-07-15T21:30:13Z
+intention: intention_01kxr5jt2heyvt0n768ym9dwqd
 ---
 
 # Kansoku production hardening: review fixes and portfolio-service readiness
@@ -84,7 +85,8 @@ waves.
 
 | # | Title | Path | Hard Deps | Soft Deps | Status |
 |----|-------|------|-----------|-----------|--------|
-| 10 | Restore the build and supervise the writer | docs/plans/10-restore-the-build-and-supervise-the-writer.md | None | None | Not Started |
+| 21 | Migrate Kansoku to the coherent pg-migrate PGMQ and Shibuya cohort | docs/plans/21-migrate-kansoku-to-the-coherent-pg-migrate-pgmq-and-shibuya-cohort.md | None | None | In Progress |
+| 10 | Restore the build and supervise the writer | docs/plans/10-restore-the-build-and-supervise-the-writer.md | EP-21 | None | Not Started |
 | 11 | Split ClickHouse connections and adopt typed row decoding | docs/plans/11-split-clickhouse-connections-and-adopt-typed-row-decoding.md | EP-10 | None | Not Started |
 | 12 | ClickHouse schema v2: sort key, FINAL-free resolution, join-free rollups | docs/plans/12-clickhouse-schema-v2-sort-key-final-free-resolution-join-free-rollups.md | EP-10 | None | Not Started |
 | 9 | Convert kansoku to NamedRoutes, vertical slices, and MultiVerb | docs/plans/9-convert-kansoku-to-namedroutes-vertical-slices-and-multiverb.md | EP-10 | None | Not Started |
@@ -98,7 +100,7 @@ Hard Deps and Soft Deps reference other rows by their # prefix (e.g., EP-10).
 
 Phases (implementation waves):
 
-- Phase 1 — Stabilize: EP-10.
+- Phase 1 — Migrate and stabilize (sequential): EP-21, then EP-10.
 - Phase 2 — Resource and storage architecture (parallelizable after EP-10): EP-11, EP-12, EP-9.
 - Phase 3 — Query and contract quality (parallelizable once their deps land): EP-13, EP-14, EP-16.
 - Phase 4 — Portfolio readiness: EP-15.
@@ -106,26 +108,20 @@ Phases (implementation waves):
 
 ## Dependency Graph
 
-EP-10 blocks everything: the repository currently fails to compile for two independent
-reasons (`Kansoku/Writer/Batch.hs` still pattern-matches shibuya's removed `Ingested` type
-where the handler now receives `Message`, and `Kansoku/Ingest/Queue.hs` still calls
-`Pgmq.Migration.migrate`, which the pinned pgmq-migration removed when it cut over to the
-pg-migrate framework), so no other plan can run `cabal build all` or the test suite until
-EP-10 lands. This is the only reason the EP-11/EP-12/EP-9 dependencies on EP-10 are hard
-rather than soft.
+EP-21 blocks EP-10. The repository currently fails to compile for two independent reasons:
+`Kansoku/Writer/Batch.hs` still pattern-matches Shibuya's removed handler-facing `Ingested`
+type, and `Kansoku/Ingest/Queue.hs` still calls `Pgmq.Migration.migrate`, removed when PGMQ
+adopted pg-migrate. Cabal also resolves workstation-local current checkouts while the active
+Nix build pins an older PGMQ/Shibuya cohort. EP-21 owns that coherent migration: it makes both
+build paths portable and version-aligned, adapts the runtime APIs, adds the PGMQ-only
+pg-migrate plan and administrative executable, and proves first/second application on an
+ephemeral PostgreSQL database.
 
-The build restoration itself is delegated to an external prerequisite: the operator-run
-`migrate-keiro-stack` seihou blueprint
-(`/Users/shinzui/Keikaku/bokuno/agent-seihou/blueprints/migrate-keiro-stack`), an
-agent-driven cohort migration that adapts the shibuya and pgmq-migration runtime APIs,
-aligns Cabal/Nix on a source-verified cohort, and authors the ordered pg-migrate plan with
-database-state-aware safety gates. EP-10's Milestone 1 verifies that outcome (build and
-test green, fresh-database boot) rather than duplicating the fixes; its hand-fix
-instructions remain only as a fallback. Note the target cohort is NEWER than what the child
-plans were authored against (e.g. shibuya-core 0.8.x, whose `runApp` takes an `AppConfig`
-record) — every plan touching shibuya or pgmq surfaces must reconcile against the
-post-blueprint tree at implementation start, and EP-10 records the landed cohort in its
-Surprises & Discoveries for the others to consult.
+EP-10 then blocks every remaining plan because it owns the production stabilization built on
+that migrated baseline: writer/server lifetime linking, graceful shutdown, readiness, error
+hygiene, and ClickHouse configuration. This is why EP-11, EP-12, and EP-9 still hard-depend on
+EP-10 rather than directly on EP-21. Plans that touch Shibuya or PGMQ must use the cohort EP-21
+records rather than reintroducing older APIs or implicit startup migrations.
 
 EP-11, EP-12, and EP-9 are mutually independent and can proceed in parallel in any order:
 EP-11 changes how connections are owned (`kansoku-server/app/Main.hs`, `Kansoku/ClickHouse.hs`
@@ -188,6 +184,14 @@ host/user/password environment variables (currently hardcoded to `127.0.0.1` and
 record fields only; every plan keeps `loadConfig` total with defaults suitable for `nix
 develop` + `process-compose`.
 
+PostgreSQL migration ownership — EP-21 defines `Kansoku.Migrations` and the
+`kansoku-migrate` administrative executable. Its application plan contains only the PGMQ
+component because Kansoku has no Kiroku, Keiro, Kioku, or application-owned PostgreSQL SQL.
+Normal server startup may idempotently provision the configured queue after migration but
+must never apply schema migrations or create/repair a pg-migrate ledger. EP-15 must extend
+this checked-in application plan when it introduces authentication tables; it must not add a
+second migration framework or restore startup migration side effects.
+
 Readiness endpoint — EP-10 defines `/ready` (writer liveness, pgmq reachability); EP-16
 extends it with queue depth and lag thresholds. EP-16 must extend, not replace, EP-10's
 handler.
@@ -218,7 +222,11 @@ as frozen; EP-14 edits the expectation when it widens the tail.
 Track milestone-level progress across all child plans. Each entry names the child plan
 and the milestone. This section provides an at-a-glance view of the entire initiative.
 
-- [ ] EP-10: build restored (migrate-keiro-stack blueprint run verified, or fallback hand-fixes); `cabal build all` and `cabal test` green
+- [ ] EP-21: Cabal and Nix resolve one portable pg-migrate/PGMQ/Shibuya cohort
+- [ ] EP-21: writer runtime migrated to current Shibuya and adapter APIs
+- [ ] EP-21: explicit PGMQ-only migration plan and `kansoku-migrate` executable; server startup does not migrate
+- [ ] EP-21: ephemeral PostgreSQL first apply, strict verification, zero-work second apply, and queue provisioning proven
+- [ ] EP-10: migrated baseline verified; `cabal build all` and `cabal test` green
 - [ ] EP-10: writer and server lifetimes linked; writer death exits the process (demonstrated)
 - [ ] EP-10: `/ready` endpoint reports writer liveness and pgmq reachability
 - [ ] EP-10: error-body hygiene and ClickHouse credential configuration
@@ -282,6 +290,17 @@ interactions between child plans. Provide concise evidence.
     metrics-side wire changes (EP-13's funnel `window` param) touch only kansoku-api and
     the OpenAPI document.
 
+- 2026-07-17, at implementation start:
+  - The external cohort blueprint had never been run, so its prerequisite was not an auditable
+    repository state. EP-21 now captures and implements the relevant work as a checked-in child
+    plan before EP-10.
+  - The generic stack's complex ordering is not applicable here: `mori show --full` confirms
+    Kansoku consumes PGMQ and Shibuya but not Kiroku, Keiro, or Kioku, and the repository owns no
+    PostgreSQL application SQL. The migration plan is therefore PGMQ-only.
+  - Cabal and Nix were not merely on different source mechanisms; they selected different released
+    cohorts. Cabal selected pg-migrate 1.1.0.0, PGMQ 0.4.0.1, Shibuya 0.8.0.1, and adapter
+    0.12.0.0, while `nix/haskell.nix` pinned PGMQ 0.3.0.0, Shibuya 0.7.1.0, and adapter 0.8.0.0.
+
 
 ## Decision Log
 
@@ -313,25 +332,27 @@ interactions between child plans. Provide concise evidence.
   changing the key twice would mean two data rewrites. Recorded as an integration point.
   Date: 2026-07-15
 
-- Decision: EP-10 is deliberately small (build fix + supervision + readiness + config
-  hygiene) and is the only plan with no dependencies.
-  Rationale: The repo does not compile today, so every other plan's validation is blocked on
-  it; it must be landable in one sitting.
+- Decision: EP-10 remains deliberately small (supervision + readiness + config hygiene) but now
+  hard-depends on EP-21, which owns the cohort, runtime-API, and PostgreSQL migration cutover.
+  Rationale: The repository does not compile and the external blueprint was never run. Separating
+  the concrete migration into a checked-in plan makes the prerequisite auditable while keeping
+  production supervision independently verifiable.
   Date: 2026-07-15
 
-- Decision: The build restoration is delegated to the operator-run `migrate-keiro-stack`
-  seihou blueprint; EP-10 Milestone 1 becomes verification of its outcome, with hand-fix
-  instructions retained as a fallback. The blueprint run precedes MP-2 implementation as an
-  external prerequisite.
-  Rationale: User direction (2026-07-15) — a prepared cohort migration fixes all the
-  breaking changes (shibuya `Message`, pgmq-migration→pg-migrate) as part of a coherent,
-  source-verified upgrade with database-safety gates; hand-fixing against the current older
-  cohort would be redone by the upgrade anyway. Consequence: plans touching shibuya/pgmq
-  surfaces (EP-10 M2, EP-16 writer instrumentation) reconcile against the post-blueprint
-  tree, and EP-15's own-Postgres-migration mechanism must follow whatever the blueprint
-  establishes (pg-migrate application manifest) rather than its provisional hasql-migration
-  choice.
-  Date: 2026-07-15
+- Decision: SUPERSEDED — do not run or update the external `migrate-keiro-stack` blueprint for
+  this initiative. Implement its applicable migration work in EP-21 and leave the blueprint
+  repository untouched.
+  Rationale: User direction on 2026-07-17. The blueprint was never run, and Kansoku uses only the
+  straightforward PGMQ/Shibuya slice. A self-contained ExecPlan is sufficient and avoids adding
+  unused stack components or coupling completion to external repository state.
+  Date: 2026-07-17
+
+- Decision: EP-21 composes only the PGMQ pg-migrate component and keeps migration application out
+  of normal server startup.
+  Rationale: Kansoku has no other PostgreSQL component today. Explicit administrative migration
+  makes production ordering inspectable and allows repeat-application behavior to be tested on an
+  isolated database without touching persistent development state.
+  Date: 2026-07-17
 
 - Decision: Phases group eight children into four waves (Stabilize; Resource & storage;
   Query & contract quality; Portfolio readiness).
@@ -362,3 +383,8 @@ delegated to the operator-run `migrate-keiro-stack` seihou blueprint as an exter
 prerequisite; the Dependency Graph, Decision Log, EP-10's plan (Milestone 1 reframed as
 verification with a hand-fix fallback), and EP-15's plan (Postgres migration mechanism must
 follow the blueprint's pg-migrate manifest) were updated accordingly.
+
+Revision note (2026-07-17): superseded the unexecuted external-blueprint prerequisite with
+checked-in EP-21. The registry, first phase, dependency graph, PostgreSQL integration point,
+progress, surprises, and decisions now make the PGMQ-only cohort and migration cutover a hard gate
+before EP-10. Per user direction, no blueprint files are updated.
