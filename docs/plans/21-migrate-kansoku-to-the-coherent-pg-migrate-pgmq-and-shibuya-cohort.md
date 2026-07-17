@@ -54,10 +54,12 @@ This section must always reflect the actual current state of the work.
   migration from normal server startup while retaining idempotent queue provisioning.
 - [x] (2026-07-17 14:51Z) M3: added pure plan tests and an ephemeral PostgreSQL integration test covering first apply,
   strict verification, zero-work second apply, and queue provisioning.
-- [ ] M3: run final Cabal build/tests and `nix flake check`; `nix build .` is green.
+- [x] (2026-07-17 14:54Z) M3: final `cabal build all`, `cabal test all`, `nix build .`,
+  and `nix flake check` are green.
 - [x] (2026-07-17 14:51Z) M3: user classified Kansoku as not yet used, so this is a fresh-install
   migration with no legacy data or ledger cutover; no repository-local database was changed.
-- [ ] MasterPlan registry/dependencies and outcomes updated; migration plan marked Complete.
+- [x] (2026-07-17 14:54Z) MasterPlan registry/dependencies and outcomes updated; migration plan
+  marked Complete.
 
 
 ## Surprises & Discoveries
@@ -119,10 +121,10 @@ Record every decision made while working on the plan.
   schema migration was omitted rather than silently creating a migration ledger.
   Date: 2026-07-17
 
-- Decision: Validate database behavior with an isolated ephemeral PostgreSQL instance before
-  classifying or changing the repository-local development database.
-  Rationale: this proves the production migration artifact without assuming existing local data is
-  disposable. Database policy remains `ask`; destructive work needs separate approval.
+- Decision: Validate database behavior with an isolated ephemeral PostgreSQL instance and do not
+  couple automated verification to repository-local database state.
+  Rationale: this proves the production migration artifact deterministically. The later
+  fresh-install classification removed any need for legacy-state inspection or reconciliation.
   Date: 2026-07-17
 
 - Decision: Treat this as a fresh-install migration and do not author legacy-history import,
@@ -146,12 +148,18 @@ Record every decision made while working on the plan.
 Summarize outcomes, gaps, and lessons learned at major milestones or at completion.
 Compare the result against the original purpose.
 
-Milestones 1 and 2 are complete. Cabal and Nix now consume released packages rather than sibling
+EP-21 is complete. Cabal and Nix now consume released packages rather than sibling
 checkout state, both compile the same current runtime APIs, and the flake has a real multi-package
 build. `kansoku-migrate plan` reports one `pgmq` component with two migrations; `list` exposes
 their identities and checksums. Normal `kansoku-server` startup only provisions its queue. The
 ephemeral PostgreSQL test passes first application, strict verification, all-`AlreadyApplied`
-second application, and queue creation. Final whole-repository checks and plan closeout remain.
+second application, and queue creation.
+
+Final validation passed: `cabal build all`, `cabal test all` (28 core examples and 7 client
+examples, zero failures), `nix build .`, and `nix flake check`. Three pre-existing ClickHouse live
+tests and one client live-server test were reported pending because those services were not
+running; the PostgreSQL migration integration test was not skipped. No blueprint file or
+repository-local database was changed.
 
 
 ## Context and Orientation
@@ -193,9 +201,9 @@ registry. The affected Kansoku modules are:
 - `kansoku-server/app/Main.hs`, which invokes `bootstrapQueue` during ordinary server startup.
 
 The repository-local development PostgreSQL state lives under `db/` and defaults to database
-`kansoku`. Its persistence and contents are not known in advance. It is therefore classified
-read-only during this plan. All migration application tests use a separate ephemeral PostgreSQL
-instance; no reset, drop, or ledger repair of the repository-local database is authorized.
+`kansoku`. The user confirmed Kansoku has not been used, so no legacy data or ledger must be
+preserved and breaking changes are acceptable. Tests still use a separate ephemeral PostgreSQL
+instance so verification is deterministic and does not mutate incidental local state.
 
 
 ## Plan of Work
@@ -243,10 +251,9 @@ PostgreSQL database. The test applies the plan, strictly verifies it, applies it
 zero pending work, then provisions the Kansoku queue. It must not connect to the repository-local
 development database.
 
-Run the whole Cabal suite and both active Nix validations. Finally, perform only read-only checks
-against the repository-local database to record whether it is running and whether PGMQ and the
-pg-migrate ledgers already exist. Any persistent-database cutover is a separate operator action,
-not a hidden test step.
+Run the whole Cabal suite and both active Nix validations. No legacy-state classification or data
+cutover is necessary because Kansoku is a fresh install; leave incidental repository-local
+PostgreSQL state untouched during automated verification.
 
 
 ## Concrete Steps
@@ -288,14 +295,8 @@ Expected result: every build/test/check exits zero; the migration integration te
 successful first apply, successful strict verification, no work on the second apply, and successful
 queue provisioning.
 
-Classify the development database without changing it:
-
-    nix develop -c pg_ctl status -D db/db
-    nix develop -c psql -X -Atqc 'select current_database(), current_user'
-    nix develop -c psql -X -Atqc "select to_regclass('pgmq.meta'), to_regclass('public.pg_migrate_migrations')"
-
-The first command may report that PostgreSQL is stopped. Record that fact and stop; do not start,
-reset, drop, or migrate the repository-local database merely to make this checklist green.
+No development-database classification command is required. The user classified Kansoku as a
+fresh install, and the automated test creates and destroys its own PostgreSQL instance.
 
 
 ## Validation and Acceptance
@@ -321,11 +322,10 @@ Dependency-resolution, builds, pure tests, and ephemeral-database tests are safe
 creation remains idempotent. Applying the same pg-migrate plan twice is an explicit acceptance
 test and the second run must perform no migration work.
 
-The migration history is forward-only. Do not edit an already-applied migration identity or repair
-a persistent ledger by hand. If a new code defect is found before any persistent cutover, fix the
-component/plan and recreate only the ephemeral test database. If a persistent database already has
-state that does not verify, stop and record its classification; author a forward reconciliation or
-an operator-approved cutover plan rather than resetting it.
+The migration history is forward-only once Kansoku starts storing durable data. During this
+fresh-install phase, fix definition defects in code and recreate only ephemeral or explicitly
+disposable environments. Do not add legacy import or reconciliation machinery without an actual
+persisted state that requires it.
 
 For Nix resolution failures, remove or replace stale overrides one family at a time and rerun
 `nix build .`; do not mix unrelated package upgrades into this plan. Existing user changes outside
@@ -358,3 +358,10 @@ type is the OpenAPI source of truth, NamedRoutes/vertical slices are preferred, 
 are handwritten and exhaustively tested, authentication is declared per field, and non-readiness
 errors use RFC 7807 problem details. This migration does not change HTTP contracts, so it neither
 preempts EP-9 nor introduces a parallel API pattern.
+
+---
+
+Revision note (2026-07-17): implemented and completed the PGMQ-only fresh-install migration.
+Recorded the final released cohort, current Shibuya API adaptations, explicit administrative
+migration boundary, ephemeral PostgreSQL proof, repaired multi-package Nix build, fresh-install
+database policy, and final Cabal/Nix validation results. The external blueprint was not modified.

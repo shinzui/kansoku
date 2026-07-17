@@ -85,7 +85,7 @@ waves.
 
 | # | Title | Path | Hard Deps | Soft Deps | Status |
 |----|-------|------|-----------|-----------|--------|
-| 21 | Migrate Kansoku to the coherent pg-migrate PGMQ and Shibuya cohort | docs/plans/21-migrate-kansoku-to-the-coherent-pg-migrate-pgmq-and-shibuya-cohort.md | None | None | In Progress |
+| 21 | Migrate Kansoku to the coherent pg-migrate PGMQ and Shibuya cohort | docs/plans/21-migrate-kansoku-to-the-coherent-pg-migrate-pgmq-and-shibuya-cohort.md | None | None | Complete |
 | 10 | Restore the build and supervise the writer | docs/plans/10-restore-the-build-and-supervise-the-writer.md | EP-21 | None | Not Started |
 | 11 | Split ClickHouse connections and adopt typed row decoding | docs/plans/11-split-clickhouse-connections-and-adopt-typed-row-decoding.md | EP-10 | None | Not Started |
 | 12 | ClickHouse schema v2: sort key, FINAL-free resolution, join-free rollups | docs/plans/12-clickhouse-schema-v2-sort-key-final-free-resolution-join-free-rollups.md | EP-10 | None | Not Started |
@@ -396,3 +396,8 @@ Revision note (2026-07-17): superseded the unexecuted external-blueprint prerequ
 checked-in EP-21. The registry, first phase, dependency graph, PostgreSQL integration point,
 progress, surprises, and decisions now make the PGMQ-only cohort and migration cutover a hard gate
 before EP-10. Per user direction, no blueprint files are updated.
+
+Revision note (2026-07-17, second revision): EP-21 completed. Cabal and Nix now share the released
+cohort, the writer uses current Shibuya APIs, `kansoku-migrate` owns the PGMQ-only plan, normal
+server startup only provisions its queue, and fresh PostgreSQL application/reapplication is covered
+by an integration test. EP-10 remains Not Started per the user's request to do only the migration.
