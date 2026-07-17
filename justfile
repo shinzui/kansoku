@@ -30,8 +30,12 @@ ch-fixtures-ep6:
     clickhouse-client --port $CLICKHOUSE_TCP_PORT --multiquery < db/clickhouse/fixtures/ep6_fixtures.sql
 
 # Run the HTTP server.
-run:
+run: migrate
     cabal run kansoku-server
+
+# Apply Kansoku's explicit PostgreSQL migration plan.
+migrate:
+    cabal run kansoku-migrate -- up
 
 # Start the local services (postgres, clickhouse, create_schema) via process-compose.
 up:

@@ -222,10 +222,10 @@ as frozen; EP-14 edits the expectation when it widens the tail.
 Track milestone-level progress across all child plans. Each entry names the child plan
 and the milestone. This section provides an at-a-glance view of the entire initiative.
 
-- [ ] EP-21: Cabal and Nix resolve one portable pg-migrate/PGMQ/Shibuya cohort
-- [ ] EP-21: writer runtime migrated to current Shibuya and adapter APIs
-- [ ] EP-21: explicit PGMQ-only migration plan and `kansoku-migrate` executable; server startup does not migrate
-- [ ] EP-21: ephemeral PostgreSQL first apply, strict verification, zero-work second apply, and queue provisioning proven
+- [x] EP-21: Cabal and Nix resolve one portable pg-migrate/PGMQ/Shibuya cohort
+- [x] EP-21: writer runtime migrated to current Shibuya and adapter APIs
+- [x] EP-21: explicit PGMQ-only migration plan and `kansoku-migrate` executable; server startup does not migrate
+- [x] EP-21: ephemeral PostgreSQL first apply, strict verification, zero-work second apply, and queue provisioning proven
 - [ ] EP-10: migrated baseline verified; `cabal build all` and `cabal test` green
 - [ ] EP-10: writer and server lifetimes linked; writer death exits the process (demonstrated)
 - [ ] EP-10: `/ready` endpoint reports writer liveness and pgmq reachability
@@ -300,6 +300,8 @@ interactions between child plans. Provide concise evidence.
   - Cabal and Nix were not merely on different source mechanisms; they selected different released
     cohorts. Cabal selected pg-migrate 1.1.0.0, PGMQ 0.4.0.1, Shibuya 0.8.0.1, and adapter
     0.12.0.0, while `nix/haskell.nix` pinned PGMQ 0.3.0.0, Shibuya 0.7.1.0, and adapter 0.8.0.0.
+  - The user confirmed Kansoku is not yet used, so EP-21 is a fresh-install migration. No legacy
+    data-copy, history import, or persistent-ledger reconciliation is required.
 
 
 ## Decision Log
@@ -352,6 +354,12 @@ interactions between child plans. Provide concise evidence.
   Rationale: Kansoku has no other PostgreSQL component today. Explicit administrative migration
   makes production ordering inspectable and allows repeat-application behavior to be tested on an
   isolated database without touching persistent development state.
+  Date: 2026-07-17
+
+- Decision: Treat EP-21's database cutover as fresh-install-only; breaking schema changes are
+  acceptable until Kansoku acquires users or durable data.
+  Rationale: User direction on 2026-07-17. Validation should prove a clean install and repeat
+  application rather than build migration machinery for nonexistent state.
   Date: 2026-07-17
 
 - Decision: Phases group eight children into four waves (Stabilize; Resource & storage;

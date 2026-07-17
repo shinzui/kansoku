@@ -19,7 +19,8 @@ import Pgmq.Effectful (QueueName, runPgmqTraced)
 import Pgmq.Effectful.Interpreter (PgmqRuntimeError)
 import Shibuya.Adapter.Pgmq qualified as PgmqAdapter
 import Shibuya.App
-  ( BatchConfig (..),
+  ( AppConfig (..),
+    BatchConfig (..),
     ProcessorId (..),
     ShutdownConfig (..),
     SupervisionStrategy (..),
@@ -49,12 +50,18 @@ runWriter pool tracer clickHouse queueName visibilityTimeoutSec adapterBatchSize
         runPgmqTraced pool tracer $
           runTracing tracer $ do
             adapter <-
-              PgmqAdapter.pgmqAdapter $
-                PgmqAdapter.defaultConfig queueName
-                  & #visibilityTimeout
-                  .~ visibilityTimeoutSec
-                  & #batchSize
-                  .~ adapterBatchSize
+              PgmqAdapter.pgmqAdapter
+                (PgmqAdapter.mkPgmqAdapterEnv pool)
+                ( PgmqAdapter.defaultConfig queueName
+                    & #visibilityTimeout
+                    .~ visibilityTimeoutSec
+                    & #batchSize
+                    .~ adapterBatchSize
+                )
+                >>= \case
+                  Left err ->
+                    liftIO $ error ("invalid kansoku writer pgmq adapter configuration: " <> show err)
+                  Right configuredAdapter -> pure configuredAdapter
             let processor =
                   mkBatchProcessor
                     adapter
@@ -66,7 +73,13 @@ runWriter pool tracer clickHouse queueName visibilityTimeoutSec adapterBatchSize
                           tickInterval = Nothing
                         }
                     )
-            started <- runApp IgnoreFailures 100 [(ProcessorId "kansoku-writer", processor)]
+            started <-
+              runApp
+                AppConfig
+                  { strategy = IgnoreFailures,
+                    inboxSize = 100
+                  }
+                [(ProcessorId "kansoku-writer", processor)]
             case started of
               Left err ->
                 liftIO $ error ("kansoku writer failed to start: " <> show err)

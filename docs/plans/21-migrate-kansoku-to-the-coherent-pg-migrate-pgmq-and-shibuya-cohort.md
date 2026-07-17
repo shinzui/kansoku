@@ -44,19 +44,19 @@ This section must always reflect the actual current state of the work.
   `migrate`.
 - [x] (2026-07-17 14:02Z) Confirmed Kansoku uses only the PGMQ/Shibuya slice; Kiroku, Keiro, and
   Kioku are absent and must not be introduced.
-- [ ] M1: replace workstation-local Cabal dependency paths and the old Nix cohort overrides with
+- [x] (2026-07-17 14:51Z) M1: replaced workstation-local Cabal dependency paths and the old Nix cohort overrides with
   one portable released cohort.
-- [ ] M1: prove Cabal and Nix resolve pg-migrate 1.1.0.0, PGMQ 0.4.0.1, Shibuya 0.8.0.1, and
+- [x] (2026-07-17 14:51Z) M1: proved Cabal and Nix resolve pg-migrate 1.1.0.0, PGMQ 0.4.0.1, Shibuya 0.8.0.1, and
   shibuya-pgmq-adapter 0.12.0.0.
-- [ ] M2: migrate the writer handler to `Message`, create `PgmqAdapterEnv`, handle adapter
-  configuration failure, and call Shibuya `runApp` with `AppConfig`.
-- [ ] M2: add a PGMQ-only `MigrationPlan` and the explicit `kansoku-migrate` CLI; remove schema
+- [x] (2026-07-17 14:51Z) M2: migrated the writer handler to `Message`, created `PgmqAdapterEnv`, handled adapter
+  configuration failure, and called Shibuya `runApp` with `AppConfig`.
+- [x] (2026-07-17 14:51Z) M2: added a PGMQ-only `MigrationPlan` and the explicit `kansoku-migrate` CLI; removed schema
   migration from normal server startup while retaining idempotent queue provisioning.
-- [ ] M3: add pure plan tests and an ephemeral PostgreSQL integration test covering first apply,
+- [x] (2026-07-17 14:51Z) M3: added pure plan tests and an ephemeral PostgreSQL integration test covering first apply,
   strict verification, zero-work second apply, and queue provisioning.
-- [ ] M3: run Cabal build/tests and the active Nix build/check path.
-- [ ] M3: classify the repository-local development database read-only; run no reset or destructive
-  database command without explicit approval.
+- [ ] M3: run final Cabal build/tests and `nix flake check`; `nix build .` is green.
+- [x] (2026-07-17 14:51Z) M3: user classified Kansoku as not yet used, so this is a fresh-install
+  migration with no legacy data or ledger cutover; no repository-local database was changed.
 - [ ] MasterPlan registry/dependencies and outcomes updated; migration plan marked Complete.
 
 
@@ -73,6 +73,22 @@ implementation. Provide concise evidence.
 - 2026-07-17, before implementation: the generic keiro-stack migration order is conditional, not
   a requirement to add unused libraries. `mori show --full` lists PGMQ and Shibuya dependencies but
   no Kiroku, Keiro, or Kioku package. Kansoku's plan is therefore `pgmq` only.
+
+- 2026-07-17, Milestone 1: the flake's default package attempted `callCabal2nix` on the repository
+  root, which has no root Cabal file. The Nix path had therefore not been a working independent
+  build. `nix/haskell.nix` now constructs the four local Cabal packages explicitly and exposes
+  each as a flake package, with `kansoku-server` as the default.
+
+- 2026-07-17, Milestone 1: the released pg-migrate CLI uses
+  `optparse-applicative` 0.19's `parserOptionGroup`; the Nix snapshot supplied an older API even
+  after the main cohort was aligned. Pinning 0.19.0.0 in both graphs made the administrative CLI
+  build. The old Nix OpenAPI sources were also 4.0.0 while Cabal selected 4.1.0, so those overrides
+  were moved to the same released 4.1.0 packages.
+
+- 2026-07-17, Milestone 3: `pg-migrate-test-support` correctly depends on `ephemeral-pg`, which is
+  marked broken in the Nix snapshot. It remains a Cabal test-only dependency and is excluded from
+  the production Nix closure by disabling the Nix-level `kansoku-core` test phase; the same tests
+  run explicitly through `cabal test` in the dev shell.
 
 
 ## Decision Log
@@ -109,6 +125,13 @@ Record every decision made while working on the plan.
   disposable. Database policy remains `ask`; destructive work needs separate approval.
   Date: 2026-07-17
 
+- Decision: Treat this as a fresh-install migration and do not author legacy-history import,
+  data-copy, or reconciliation logic.
+  Rationale: the user confirmed on 2026-07-17 that Kansoku is not used yet and breaking changes are
+  acceptable. Fresh-database application plus idempotent reapplication is the relevant production
+  contract; preserving nonexistent data would add unexercised complexity.
+  Date: 2026-07-17
+
 - Decision: Keep Kansoku's existing flake and `nix/haskell.nix` structure during this migration;
   replace only the stale PGMQ/Shibuya overrides and use released Hackage packages or exact source
   pins as needed.
@@ -123,7 +146,12 @@ Record every decision made while working on the plan.
 Summarize outcomes, gaps, and lessons learned at major milestones or at completion.
 Compare the result against the original purpose.
 
-(To be filled during and after implementation.)
+Milestones 1 and 2 are complete. Cabal and Nix now consume released packages rather than sibling
+checkout state, both compile the same current runtime APIs, and the flake has a real multi-package
+build. `kansoku-migrate plan` reports one `pgmq` component with two migrations; `list` exposes
+their identities and checksums. Normal `kansoku-server` startup only provisions its queue. The
+ephemeral PostgreSQL test passes first application, strict verification, all-`AlreadyApplied`
+second application, and queue creation. Final whole-repository checks and plan closeout remain.
 
 
 ## Context and Orientation

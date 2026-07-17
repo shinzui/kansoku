@@ -38,36 +38,6 @@
               rev = "4aaff6c0919d1fe8e1c248c3ce4ce05775c59c8c";
               sha256 = "13nsr8jzmvqr3ka5liic1sgm8brszzyfvxd0djm3ccc4smphbh68";
             };
-            openapiHsSrc = pkgs.fetchFromGitHub {
-              owner = "shinzui";
-              repo = "openapi-hs";
-              rev = "e570ad70cf9bc1a2b229d33af0455dff28650010";
-              sha256 = "1s638lalywshrsgb3d6k5czrgb9fwmg3w19qvhmjk8qz2lsh5bj8";
-            };
-            servantOpenapiHsSrc = pkgs.fetchFromGitHub {
-              owner = "shinzui";
-              repo = "servant-openapi-hs";
-              rev = "aa4df1f831e02c6370c9eb4129b158f8268f3ae0";
-              sha256 = "1jsjbn2b01azyhl88x0z15mvdz9gjjwmyplhpqmd1c9jr97d1n8a";
-            };
-            pgmqHsSrc = pkgs.fetchFromGitHub {
-              owner = "shinzui";
-              repo = "pgmq-hs";
-              rev = "973c1076f469448818de5d2044a483296be2c02e";
-              sha256 = "1242gyf3yx2wr1fycsla5mbw4drdz1l6wp8q7hkcspx92yvr6vm7";
-            };
-            shibuyaSrc = pkgs.fetchFromGitHub {
-              owner = "shinzui";
-              repo = "shibuya";
-              rev = "bdfccae3aee883c232457c788c495d28a73ec6e3";
-              sha256 = "0hsxd4j6bizzzp9mc3rrsl8hk5zdjypcg31ayr74m25mj6jvl6ks";
-            };
-            shibuyaPgmqAdapterSrc = pkgs.fetchFromGitHub {
-              owner = "shinzui";
-              repo = "shibuya-pgmq-adapter";
-              rev = "71a7b82223449d84c395b64e480c9cfe4ff274f1";
-              sha256 = "095vl9rjdhrpsq5vwcfxf4627la44189gqvmbrda2idqlqj5p5pz";
-            };
             hsOpenTelemetrySrc = pkgs.fetchFromGitHub {
               owner = "iand675";
               repo = "hs-opentelemetry";
@@ -167,6 +137,7 @@
               { }));
             generic-lens-core = callHackageNoCheck "generic-lens-core" "2.3.0.0" "05im3y27lhjjy6hi0i85rlqsan510fmp63lqfwg18cnlzn0yvf81";
             generic-lens = callHackageNoCheck "generic-lens" "2.3.0.0" "06q0ghaj90hqp0chb3z5qzr3cx8ypanjk24d4wnb1b7b8s13rhsp";
+            optparse-applicative = callHackageNoCheck "optparse-applicative" "0.19.0.0" "0cs8fqipakad38lvm75nz98hmvf881mgjhnc7icblxfzh92ay6kn";
             streamly-core =
               dontCheck (doJailbreak (self.callCabal2nix "streamly-core"
                 (builtins.fetchTarball {
@@ -196,76 +167,35 @@
                   { }
               );
 
-            openapi-hs =
-              dontCheck (
-                doJailbreak (
-                  self.callCabal2nix
-                    "openapi-hs"
-                    openapiHsSrc
-                    { }
-                )
-              );
-            servant-openapi-hs =
-              dontCheck (
-                doJailbreak (
-                  self.callCabal2nix
-                    "servant-openapi-hs"
-                    servantOpenapiHsSrc
-                    { }
-                )
-              );
+            openapi-hs = callHackageNoCheck "openapi-hs" "4.1.0" "0pn1ml34hphjx8xfzhmdz3a53xicfl6694i7zvi9zi8pw1pb60s9";
+            servant-openapi-hs = callHackageNoCheck "servant-openapi-hs" "4.1.0" "1pm1563js3hl9xxv5pzkbclpx47dkjvyfcynv6alb69f5zhmdkl0";
 
-            pgmq-core =
-              dontCheck (
-                self.callCabal2nix
-                  "pgmq-core"
-                  "${pgmqHsSrc}/pgmq-core"
-                  { }
-              );
-            pgmq-hasql =
-              dontCheck (
-                self.callCabal2nix
-                  "pgmq-hasql"
-                  "${pgmqHsSrc}/pgmq-hasql"
-                  { }
-              );
-            pgmq-effectful =
-              dontCheck (
-                self.callCabal2nix
-                  "pgmq-effectful"
-                  "${pgmqHsSrc}/pgmq-effectful"
-                  { }
-              );
-            pgmq-migration =
-              dontCheck (
-                pkgs.haskell.lib.overrideCabal
-                  (self.callCabal2nix
-                    "pgmq-migration"
-                    "${pgmqHsSrc}/pgmq-migration"
-                    { })
-                  (old: {
-                    postPatch = (old.postPatch or "") + ''
-                      rm -f vendor
-                      ln -s ${pgmqHsSrc}/vendor vendor
-                    '';
-                  })
-              );
+            pg-migrate = callHackageNoCheck "pg-migrate" "1.1.0.0" "103y2bddn50pvrjnlhnfcqznlfihp68bpm72xg8s9xv2x8kv3s2b";
+            pg-migrate-cli = callHackageNoCheck "pg-migrate-cli" "1.1.0.0" "1mc2scspfr1p872lxxl8pcpgf3gm2kp2xhjfwad9xv2wcnz1dj6w";
+            pg-migrate-embed = callHackageNoCheck "pg-migrate-embed" "1.1.0.0" "01gxqrcqf9l6q2b6g6f1cnxymwkqlwn9cq34n5dj5whgh08gh335";
+            pg-migrate-import-hasql-migration = callHackageNoCheck "pg-migrate-import-hasql-migration" "1.1.0.0" "0yih6qv870g1qri1sl1c99vdd86xvacpp40png5zz4mdzwsdxxsq";
+            pg-migrate-test-support = callHackageNoCheck "pg-migrate-test-support" "1.1.0.0" "12f9kazn0kq34b7dacrwd1qkgbj3zmxhjr2xbr2q5lz7z80bs9cw";
 
-            shibuya-core =
-              dontCheck (
-                self.callCabal2nix
-                  "shibuya-core"
-                  "${shibuyaSrc}/shibuya-core"
-                  { }
-              );
-            shibuya-pgmq-adapter =
-              dontCheck (
-                self.callCabal2nix
-                  "shibuya-pgmq-adapter"
-                  "${shibuyaPgmqAdapterSrc}/shibuya-pgmq-adapter"
-                  { }
-              );
+            pgmq-core = callHackageNoCheck "pgmq-core" "0.4.0.1" "0cj8m5fdjk3sf4zsgj35ck4pjal7qlrmm5d0z7mm9ssc9kgmr6cn";
+            pgmq-hasql = callHackageNoCheck "pgmq-hasql" "0.4.0.1" "0gkj8a56r10xkhqgwn07bpkg8x4gqb0v2px7anh3ghwjycc7kw66";
+            pgmq-effectful = callHackageNoCheck "pgmq-effectful" "0.4.0.1" "1a3vkm5v52j0id1b8xf7fdpi9cv4s6jj7xg53dfccnj3x9rihxzz";
+            pgmq-migration = callHackageNoCheck "pgmq-migration" "0.4.0.1" "01dq48chyx2fpqk740gz5z8f934az1ljfh5cb3319c44azqamr2y";
+
+            shibuya-core = callHackageNoCheck "shibuya-core" "0.8.0.1" "1ks1pc9yz7xg18c3p719ad5608409s1gjd0qqaj0fp2qc2yjbc3s";
+            shibuya-pgmq-adapter = callHackageNoCheck "shibuya-pgmq-adapter" "0.12.0.0" "15zgpvfdx4ab75ap95zmkyhlsqk3jj017vcd8j2p18jjwbpffh9f";
           };
+      };
+
+      kansokuApi = haskellPackages.callCabal2nix "kansoku-api" "${inputs.self}/kansoku-api" { };
+      kansokuCore = pkgs.haskell.lib.dontCheck (haskellPackages.callCabal2nix "kansoku-core" "${inputs.self}/kansoku-core" {
+        kansoku-api = kansokuApi;
+      });
+      kansokuClient = haskellPackages.callCabal2nix "kansoku-client" "${inputs.self}/kansoku-client" {
+        kansoku-api = kansokuApi;
+      };
+      kansokuServer = haskellPackages.callCabal2nix "kansoku-server" "${inputs.self}/kansoku-server" {
+        kansoku-api = kansokuApi;
+        kansoku-core = kansokuCore;
       };
 
       baseDevPackages = [
@@ -315,7 +245,13 @@
       };
     in
     {
-      packages.default = haskellPackages.callCabal2nix "kansoku-server" inputs.self { };
+      packages = {
+        default = kansokuServer;
+        kansoku-api = kansokuApi;
+        kansoku-client = kansokuClient;
+        kansoku-core = kansokuCore;
+        kansoku-server = kansokuServer;
+      };
 
       devShells.default = mkProjectShell "ghc9124";
       devShells."ghc9124" = mkProjectShell "ghc9124";

@@ -33,3 +33,18 @@ executable kansoku-server
     , hasql-pool
     , kansoku-api
     , kansoku-core
+
+executable kansoku-migrate
+  import:         common
+  hs-source-dirs: app
+  main-is:        Migrate.hs
+  build-depends:
+    , aeson
+    , base                  >=4.21 && <5
+    , bytestring
+    , hasql
+    , kansoku-core
+    , optparse-applicative
+    , pg-migrate
+    , pg-migrate-cli
+    , text

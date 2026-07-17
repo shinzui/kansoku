@@ -25,7 +25,7 @@ import Shibuya.Core.Ack
     DeadLetterReason (..),
     RetryDelay (..),
   )
-import Shibuya.Core.Ingested (Ingested (..))
+import Shibuya.Core.Ingested (Message (..))
 import Shibuya.Core.Types (Envelope (..), MessageId)
 
 writerBatchHandler :: (IOE :> es) => Connection -> BatchHandler es Value
@@ -47,8 +47,8 @@ writerBatchHandler conn _info messages = do
                 (annotateInsertFailure err bad)
             )
 
-decodeMessage :: Ingested es Value -> Either (MessageId, DeadLetterReason) AnalyticsEvent
-decodeMessage Ingested {envelope = Envelope {messageId, payload}} =
+decodeMessage :: Message es Value -> Either (MessageId, DeadLetterReason) AnalyticsEvent
+decodeMessage Message {envelope = Envelope {messageId, payload}} =
   case decodeEvent payload of
     Just event -> Right event
     Nothing ->

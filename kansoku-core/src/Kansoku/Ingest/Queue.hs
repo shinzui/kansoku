@@ -1,6 +1,6 @@
 -- | pgmq queue names, message encoding, and bootstrap.
 module Kansoku.Ingest.Queue
-  ( bootstrapQueue,
+  ( provisionQueue,
     decodeEvent,
     encodeEvent,
     eventsQueueName,
@@ -12,7 +12,6 @@ import Hasql.Pool qualified as Pool
 import Kansoku.Event (AnalyticsEvent)
 import Kansoku.Prelude
 import Pgmq qualified
-import Pgmq.Migration qualified as Migration
 import Pgmq.Types (MessageBody (..), QueueName, parseQueueName)
 
 eventsQueueName :: Text -> QueueName
@@ -27,14 +26,9 @@ encodeEvent = MessageBody . toJSON
 decodeEvent :: Value -> Maybe AnalyticsEvent
 decodeEvent = parseMaybe parseJSON
 
-bootstrapQueue :: Pool.Pool -> QueueName -> IO ()
-bootstrapQueue pool queueName = do
-  migrated <- Pool.use pool Migration.migrate
-  case migrated of
-    Left err -> error ("pgmq migration session error: " <> show err)
-    Right (Left err) -> error ("pgmq migration error: " <> show err)
-    Right (Right ()) -> pure ()
-
+-- | Idempotently create an application queue after schema migration.
+provisionQueue :: Pool.Pool -> QueueName -> IO ()
+provisionQueue pool queueName = do
   created <- Pool.use pool (Pgmq.createQueue queueName)
   case created of
     Left err -> error ("pgmq create queue error: " <> show err)

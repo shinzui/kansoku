@@ -28,8 +28,7 @@ import Shibuya.Batch
     BatchTrigger (..),
     defaultBatchKey,
   )
-import Shibuya.Core.AckHandle (AckHandle (..))
-import Shibuya.Core.Ingested (Ingested (..))
+import Shibuya.Core.Ingested (Message (..))
 import Shibuya.Core.Types (Envelope (..), MessageId (..))
 import Test.Hspec
 
@@ -39,7 +38,7 @@ spec = describe "Kansoku.Writer.Batch" $ do
     withClickHouse $ \conn -> do
       command conn "TRUNCATE TABLE analytics.events_raw"
       countBefore <- countEvents conn
-      _ <- runEff (writerBatchHandler conn batchInfo (ingestedEvent :| []))
+      _ <- runEff (writerBatchHandler conn batchInfo (handlerMessage :| []))
       countAfter <- countEvents conn
       countAfter `shouldBe` countBefore + 1
 
@@ -69,9 +68,9 @@ batchInfo =
       partition = Nothing
     }
 
-ingestedEvent :: Ingested '[IOE] Value
-ingestedEvent =
-  Ingested
+handlerMessage :: Message '[IOE] Value
+handlerMessage =
+  Message
     { envelope =
         Envelope
           { messageId = MessageId "writer-spec-1",
@@ -84,7 +83,6 @@ ingestedEvent =
             attributes = HashMap.empty,
             payload = Aeson.toJSON sampleEvent
           },
-      ack = AckHandle (const (pure ())),
       lease = Nothing
     }
 

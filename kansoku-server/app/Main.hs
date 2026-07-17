@@ -11,7 +11,7 @@ import Kansoku.ClickHouse
     openClickHouse,
   )
 import Kansoku.Config (loadConfig)
-import Kansoku.Ingest.Queue (bootstrapQueue, eventsQueueName)
+import Kansoku.Ingest.Queue (eventsQueueName, provisionQueue)
 import Kansoku.Postgres (createPool)
 import Kansoku.Prelude
 import Kansoku.Runtime (runApp)
@@ -31,7 +31,7 @@ main = do
     Right cfg -> do
       let queueName = eventsQueueName (cfg ^. #eventsQueueName)
       bracket (createPool (cfg ^. #pgConnectionString)) Pool.release $ \pool -> do
-        bootstrapQueue pool queueName
+        provisionQueue pool queueName
         clickHouse <- openClickHouse (clickHouseConfigFromConfig cfg)
         tracer <- makeTracer
         let app = kansokuApp pool queueName clickHouse

@@ -40,6 +40,7 @@ library
     Kansoku.Metrics.Definition
     Kansoku.Metrics.Handler
     Kansoku.Metrics.Registry
+    Kansoku.Migrations
     Kansoku.OpenApi
     Kansoku.Postgres
     Kansoku.Query
@@ -65,6 +66,7 @@ library
     , http-types
     , kansoku-api
     , openapi-hs
+    , pg-migrate
     , pgmq-core
     , pgmq-effectful
     , pgmq-hasql
@@ -90,22 +92,27 @@ test-suite kansoku-core-test
     Kansoku.ConfigSpec
     Kansoku.EventSpec
     Kansoku.Ingest.QueueSpec
+    Kansoku.MigrationsSpec
     Kansoku.OpenApiSpec
     Kansoku.QuerySpec
     Kansoku.Writer.BatchSpec
 
   build-depends:
     , aeson
-    , base                  >=4.21 && <5
+    , base                     >=4.21 && <5
     , bytestring
     , ClickHaskell
     , effectful
     , generic-lens
+    , hasql
     , hspec
     , kansoku-api
     , kansoku-core
     , openapi-hs
+    , pg-migrate
+    , pg-migrate-test-support
     , pgmq-core
+    , pgmq-hasql
     , shibuya-core
     , text
     , time
