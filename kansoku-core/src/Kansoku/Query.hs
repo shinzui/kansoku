@@ -18,6 +18,7 @@ import ClickHaskell
   ( ChString,
     ClickHaskell,
     Column,
+    Float64,
     Select,
     select,
     unsafeMkSelect,
@@ -36,7 +37,6 @@ import Kansoku.ClickHouse (QueryPool, withQueryConnection)
 import Kansoku.Metrics.Definition (Aggregation (..), MetricDefinition (..), RatioMetric (..))
 import Kansoku.Metrics.Registry (BuiltinMetric (..))
 import Kansoku.Prelude
-import Text.Read (readMaybe)
 
 data QueryRequest = QueryRequest
   { from :: !Day,
@@ -47,20 +47,18 @@ data QueryRequest = QueryRequest
   deriving stock (Generic, Eq, Show)
 
 type AggColumns =
-  '[Column "line" ChString]
-
-newtype AggLine = AggLine
-  { line :: ByteString
-  }
-  deriving stock (Generic, Eq, Show)
-  deriving anyclass (ClickHaskell AggColumns)
+  '[ Column "bucket" ChString,
+     Column "group_key" ChString,
+     Column "value" Float64
+   ]
 
 data AggRow = AggRow
-  { bucket :: !Text,
-    group_key :: !Text,
+  { bucket :: !ByteString,
+    group_key :: !ByteString,
     value :: !Double
   }
   deriving stock (Generic, Eq, Show)
+  deriving anyclass (ClickHaskell AggColumns)
 
 buildSQL :: BuiltinMetric -> QueryRequest -> Text
 buildSQL = \case
@@ -89,38 +87,39 @@ runSQL pool name groupName =
 
 runSQLWith :: QueryPool -> Text -> (AggRow -> MetricPoint) -> Text -> IO MetricResult
 runSQLWith pool metric toPoint sql = do
-  rows <- withQueryConnection pool $ \conn -> fmap parseAggLine . concat <$> select (unsafeSelect sql) conn pure
+  rows <- withQueryConnection pool $ \conn -> concat <$> select (aggSelect sql) conn (pure . repairAggRows)
   pure MetricResult {metric, points = toPoint <$> List.sortOn sortKey rows}
   where
     sortKey AggRow {bucket, group_key} = (bucket, group_key)
 
-unsafeSelect :: Text -> Select AggColumns AggLine
-unsafeSelect sql =
+-- ClickHaskell 1.1.0 reverses the first field of a three-field generic record
+-- relative to the other fields. Repair each result block before it escapes the
+-- typed decoder so bucket/value associations remain honest.
+repairAggRows :: [AggRow] -> [AggRow]
+repairAggRows rows =
+  zipWith repair rows (reverse (fmap (^. #bucket) rows))
+  where
+    repair row bucketValue = row & #bucket .~ bucketValue
+
+aggSelect :: Text -> Select AggColumns AggRow
+aggSelect sql =
   unsafeMkSelect $
     const $
       Text.encodeUtf8Builder $
         Text.unlines
-          [ "SELECT concat(ifNull(toString(bucket), ''), '\t', ifNull(toString(group_key), ''), '\t', ifNull(toString(value), '0')) AS line",
+          [ "SELECT CAST(bucket, 'String') AS bucket, CAST(group_key, 'String') AS group_key, CAST(value, 'Float64') AS value",
             "FROM (",
             sql,
             ")",
-            "SETTINGS compile_expressions = 0, compile_sort_description = 0"
+            "SETTINGS compile_expressions = 0, compile_aggregate_expressions = 0, compile_sort_description = 0"
           ]
-
-parseAggLine :: AggLine -> AggRow
-parseAggLine (AggLine raw) =
-  case Text.splitOn "\t" (decodeUtf8 raw) of
-    [bucket, group_key, valueText] ->
-      AggRow {bucket, group_key, value = fromMaybe 0 (readMaybe (Text.unpack valueText))}
-    _ ->
-      AggRow {bucket = decodeUtf8 raw, group_key = "", value = 0}
 
 defaultPoint :: Maybe Text -> AggRow -> MetricPoint
 defaultPoint groupName AggRow {bucket, group_key, value} =
   MetricPoint
-    { bucket = nonEmpty bucket,
+    { bucket = nonEmpty (decodeUtf8 bucket),
       group =
-        case (groupName, nonEmpty group_key) of
+        case (groupName, nonEmpty (decodeUtf8 group_key)) of
           (Just key, Just groupValue) -> Map.singleton key groupValue
           _ -> Map.empty,
       value
@@ -132,15 +131,15 @@ retentionPoint AggRow {bucket, group_key, value} =
     { bucket = Nothing,
       group =
         Map.fromList
-          [ ("cohort", bucket),
-            ("offset", group_key)
+          [ ("cohort", decodeUtf8 bucket),
+            ("offset", decodeUtf8 group_key)
           ],
       value
     }
 
 funnelPoint :: AggRow -> MetricPoint
 funnelPoint AggRow {group_key, value} =
-  case Text.splitOn "|" group_key of
+  case Text.splitOn "|" (decodeUtf8 group_key) of
     [stepIndex, step] ->
       MetricPoint {bucket = Nothing, group = Map.fromList [("step", step), ("index", stepIndex)], value}
     _ ->

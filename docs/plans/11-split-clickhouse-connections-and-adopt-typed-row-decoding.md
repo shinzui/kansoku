@@ -77,12 +77,12 @@ even if it requires splitting a partially completed task into two ("done" vs. "r
 - [x] (2026-07-18 13:35Z) M2: `QueryPool` threaded through `Kansoku.Server.kansokuApp` -> `Kansoku.Metrics.Handler.metricsApp`/`metricsServer` -> `Kansoku.Query` run functions; `Main.hs` builds the pool.
 - [x] (2026-07-18 13:35Z) M2: concurrency test proving N pooled queries progress in parallel (pool of 4 runs four 1-second queries in ~1s; pool of 1 runs them in ~4s).
 - [x] (2026-07-18 13:35Z) M2: commit `feat(clickhouse): pool query-side connections behind QueryPool`.
-- [ ] M3: `AggColumns`/`AggRow` decode three real columns in `Kansoku.Query`; `AggLine`, `parseAggLine`, and the concat wrapper are deleted.
-- [ ] M3: `EventProjection` decodes five real columns in `Kansoku.ClickHouse`; `ProjectionLine`, `ProjectionLineColumns`, `parseProjectionLine` are deleted from `Kansoku.ClickHouse.EventRow` and `Kansoku.ClickHouse`.
-- [ ] M3: `SETTINGS compile_expressions = 0, compile_sort_description = 0` re-investigated against the current local ClickHouse; finding recorded in Surprises & Discoveries; setting kept or dropped accordingly.
-- [ ] M3: tab-in-group-key round-trip test; decode-mismatch-raises test; projection round-trip tests still green.
-- [ ] M3: fixture-backed HTTP check (`just ch-fixtures-ep6`, curl a metrics endpoint) returns the same numbers as before the decode change.
-- [ ] M3: commit.
+- [x] (2026-07-18 14:02Z) M3: `AggColumns`/`AggRow` decode three real columns in `Kansoku.Query`; `AggLine`, `parseAggLine`, and the concat wrapper are deleted.
+- [x] (2026-07-18 14:02Z) M3: `EventProjection` decodes five real columns in `Kansoku.ClickHouse`; `ProjectionLine`, `ProjectionLineColumns`, `parseProjectionLine` are deleted from `Kansoku.ClickHouse.EventRow` and `Kansoku.ClickHouse`.
+- [x] (2026-07-18 14:02Z) M3: the read-path JIT workaround was re-investigated against the current local ClickHouse; all three required settings and the evidence for them are recorded below.
+- [x] (2026-07-18 14:02Z) M3: tab-in-group-key round-trip test; decode-mismatch-raises test; projection round-trip tests still green.
+- [x] (2026-07-18 14:02Z) M3: fixture-backed HTTP check (`just ch-fixtures-ep6`, then `/metrics/users`) returns the same active-user numbers as before the decode change.
+- [x] (2026-07-18 14:02Z) M3: commit `fix(query): decode typed ClickHouse columns instead of tab-joined lines`.
 - [ ] Living sections of this plan updated; MasterPlan registry row EP-11 set to Complete; MasterPlan Progress checkboxes for EP-11 ticked.
 
 
@@ -115,6 +115,35 @@ implementation. Provide concise evidence.
   2.5-second bound, while the size-one control took at least four seconds. Starting the server
   with pool size zero failed before dependency setup with `ConfigError
   "KANSOKU_CH_QUERY_POOL_SIZE: must be at least 1"`.
+
+- 2026-07-18, Milestone 3: the pinned ClickHaskell generic product decoder returns product
+  fields in reverse accumulation order at each product node. The first typed projection test
+  made this visible by pairing `evt_storage_2` with `page_view` and `evt_storage_1` with
+  `signup`; the `source` column was displaced in the same pattern. The defect is present at
+  the exact Cabal pin (`56efc1840d79c89c2a6ade3794932588b65febab`) and in the current
+  dependency checkout. Per-result-block normalization now repairs only those displaced field
+  sequences after the driver has validated every header and type. The two-row projection and
+  grouped-query integration cases pin that behavior until EP-13 can re-evaluate it after the
+  planned driver upgrade.
+
+- 2026-07-18, Milestone 3: removing the old read settings still crashes the local ClickHouse
+  JIT with `std::bad_alloc`, first in `compileSortDescriptionIfNeeded`. Restoring
+  `compile_expressions = 0` and `compile_sort_description = 0` exposed the same failure in
+  `Aggregator::compileAggregateFunctionsIfNeeded`, so the workaround now also sets
+  `compile_aggregate_expressions = 0`. With all three settings, three concurrent retention
+  requests and three concurrent funnel requests completed with the exact EP-6 fixture
+  responses. The before/after active-users response was also byte-for-byte identical.
+
+- 2026-07-18, Milestone 3: the plan's fixture command named the obsolete
+  `/metrics/active_users` route, and local `127.0.0.1:8080` belonged to process-compose rather
+  than Warp. The live parity check used the actual `/metrics/users` route on the machine's LAN
+  address. This is a plan-document correction only; the public API was not changed.
+
+- 2026-07-18, Milestone 3: Cabal already pinned ClickHaskell 1.1.0 source, while the Nix
+  package set selected 1.0.0, which does not expose the typed `Float64` column API used by the
+  plan. `nix/haskell.nix` now overrides ClickHaskell to the exact Cabal git revision and
+  verified source hash. `nix build .#packages.aarch64-darwin.default --no-link` then built the
+  coherent dependency graph successfully.
 
 
 ## Decision Log
@@ -182,6 +211,37 @@ Record every decision made while working on the plan.
   and keep or drop with that evidence.
   Date: 2026-07-15
 
+- Decision: Keep the two existing JIT-disabling settings and add
+  `compile_aggregate_expressions = 0` to the metric read wrapper.
+  Rationale: the current local server still reproduces the original LLVM sort-compilation
+  crash without the workaround and reproduces an aggregate-compilation crash with only the
+  original pair. Six concurrent fixture-backed funnel/retention requests succeeded with all
+  three disabled. This remains a narrowly scoped server-stability workaround, not part of
+  typed decoding semantics.
+  Date: 2026-07-18
+
+- Decision: Normalize the pinned driver's generic product output inside the two typed select
+  callbacks rather than patch or vendor ClickHaskell in this repository.
+  Rationale: the callbacks receive one result block at a time, so reversing only the known
+  displaced field sequences repairs row alignment while retaining the driver's loud header,
+  column-count, and wire-type validation. EP-13 already owns the driver upgrade; it must
+  re-run the multi-row cases and remove this compatibility layer only after the upstream
+  decoder is confirmed fixed.
+  Date: 2026-07-18
+
+- Decision: Pin Nix's ClickHaskell derivation to the exact git revision already declared by
+  `cabal.project`.
+  Rationale: the Nix package set's ClickHaskell 1.0.0 API cannot express this plan's typed
+  `Float64` columns. One source revision across both build systems prevents an API and runtime
+  behavior split.
+  Date: 2026-07-18
+
+- Decision: Leave `Text.splitOn "|"` in `funnelPoint` for EP-13.
+  Rationale: it interprets the synthetic step/label value intentionally produced by the
+  funnel SQL builder; it is not a wire-format row decoder. EP-11 removes tab-concatenated
+  ClickHouse transport decoding without taking ownership of EP-13's funnel result shape.
+  Date: 2026-07-18
+
 - Decision: Decode `ChString` columns to `ByteString` record fields and convert to `Text`
   with strict `Data.Text.Encoding.decodeUtf8` at the edge.
   Rationale: `ByteString` is the driver's native mapping for `ChString` (the insert-side
@@ -195,7 +255,23 @@ Record every decision made while working on the plan.
 Summarize outcomes, gaps, and lessons learned at major milestones or at completion.
 Compare the result against the original purpose.
 
-(To be filled during and after implementation.)
+EP-11 achieved its purpose. The writer and request path no longer contend for one
+ClickHaskell connection: the writer owns one dedicated connection and request-side queries
+use a configurable, bounded `QueryPool`. Live timing tests demonstrate both boundaries — a
+slow request does not delay writer insertion, and four pooled queries progress concurrently
+while the size-one control serializes them.
+
+The read path now asks ClickHouse for real typed columns. The tab-delimited transport records
+and their parsers are gone; tabs in group keys and event names round-trip intact, and declared
+type mismatches raise `UnmatchedResult`. The implementation retains a small, explicitly
+tested per-block compatibility normalization for the pinned driver's generic-product field
+ordering defect. That workaround is the main handoff to EP-13.
+
+The current ClickHouse still requires JIT expression, aggregate-expression, and sort
+compilation to be disabled for stable funnel/retention reads. Fixture-backed HTTP responses
+remain unchanged, the full Cabal suite passes (7 client examples with one opt-in live case
+pending; 35 core examples), and the Darwin Nix package build succeeds against the same
+ClickHaskell revision as Cabal.
 
 
 ## Context and Orientation

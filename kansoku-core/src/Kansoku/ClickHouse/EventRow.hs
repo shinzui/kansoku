@@ -5,8 +5,7 @@ module Kansoku.ClickHouse.EventRow
     EventColumns,
     EventProjection (..),
     EventRow (..),
-    ProjectionLine (..),
-    ProjectionLineColumns,
+    ProjectionColumns,
     eventRowFromEvent,
   )
 where
@@ -86,12 +85,15 @@ data EventProjection = EventProjection
     user_id :: !ByteString
   }
   deriving stock (Generic, Eq, Show)
+  deriving anyclass (ClickHaskell ProjectionColumns)
 
-type ProjectionLineColumns = '[Column "line" ChString]
-
-newtype ProjectionLine = ProjectionLine {line :: ByteString}
-  deriving stock (Generic, Eq, Show)
-  deriving anyclass (ClickHaskell ProjectionLineColumns)
+type ProjectionColumns =
+  '[ Column "event_id" ChString,
+     Column "event_name" ChString,
+     Column "source" ChString,
+     Column "account_id" ChString,
+     Column "user_id" ChString
+   ]
 
 type CountColumns = '[Column "count" UInt64]
 

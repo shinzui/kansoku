@@ -32,6 +32,12 @@
                   inherit pkg ver sha256;
                 }
                 { }));
+            clickHaskellSrc = pkgs.fetchFromGitHub {
+              owner = "KovalevDima";
+              repo = "ClickHaskell";
+              rev = "56efc1840d79c89c2a6ade3794932588b65febab";
+              hash = "sha256-Ysw1QYu1Qma1yjGythDatXTXk+t/qmpzFJu6BGjz8uE=";
+            };
             hasqlMigrationSrc = pkgs.fetchFromGitHub {
               owner = "shinzui";
               repo = "hasql-migration";
@@ -56,6 +62,7 @@
               dontCheck (doJailbreak (self.callCabal2nix name (threadUtilsSrc + subdir) { }));
           in
           {
+            ClickHaskell = dontCheck (doJailbreak (self.callCabal2nix "ClickHaskell" (clickHaskellSrc + "/library") { }));
             unicode-data = dontCheck super.unicode-data;
             warp = disableCabalFlag "x509" super.warp;
             hasql = dontCheck (doJailbreak (self.callHackageDirect

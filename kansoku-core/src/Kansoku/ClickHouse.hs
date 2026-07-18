@@ -34,7 +34,7 @@ import ClickHaskell
     unsafeMkSelect,
   )
 import Control.Exception (SomeException, throwIO, try)
-import Data.ByteString.Char8 qualified as BS8
+import Data.Generics.Labels ()
 import Data.Pool qualified as Pool
 import Data.String (IsString)
 import Kansoku.ClickHouse.EventRow
@@ -109,9 +109,22 @@ insertEvents conn events =
   insert (intoTable @"events_raw" @EventColumns @EventRow) conn (eventRowFromEvent <$> events)
 
 selectEventProjections :: Connection -> IO [EventProjection]
-selectEventProjections conn = do
-  rows <- concat <$> select projectionLineSelect conn pure
-  pure (parseProjectionLine <$> rows)
+selectEventProjections conn =
+  concat <$> select projectionSelect conn (pure . repairProjectionRows)
+
+-- ClickHaskell 1.1.0 reverses the accumulated row list at each generic product
+-- node. For this five-field record that reverses fields 1 and 3 relative to
+-- fields 2, 4, and 5. Repair each native-protocol block before concatenating.
+repairProjectionRows :: [EventProjection] -> [EventProjection]
+repairProjectionRows rows =
+  zipWith3 repair rows (reverse (fmap (^. #event_id) rows)) (reverse (fmap (^. #source) rows))
+  where
+    repair row eventId sourceName =
+      row
+        & #event_id
+        .~ eventId
+        & #source
+        .~ sourceName
 
 countEvents :: Connection -> IO UInt64
 countEvents conn = do
@@ -120,29 +133,15 @@ countEvents conn = do
     CountRow n : _ -> pure n
     [] -> pure 0
 
-projectionLineSelect :: Select ProjectionLineColumns ProjectionLine
-projectionLineSelect =
+projectionSelect :: Select ProjectionColumns EventProjection
+projectionSelect =
   unsafeMkSelect $ \_ ->
-    "SELECT concat(event_id, '\t', CAST(event_name, 'String'), '\t', CAST(source, 'String'), '\t', account_id, '\t', user_id) AS line FROM events_raw"
+    "SELECT event_id, CAST(event_name, 'String') AS event_name, CAST(source, 'String') AS source, account_id, user_id FROM events_raw"
 
 countSelect :: Select CountColumns CountRow
 countSelect =
   unsafeMkSelect $ \_ ->
     "SELECT count() AS count FROM events_raw"
-
-parseProjectionLine :: ProjectionLine -> EventProjection
-parseProjectionLine (ProjectionLine line) =
-  case BS8.split '\t' line of
-    [event_id, event_name, source, account_id, user_id] ->
-      EventProjection {event_id, event_name, source, account_id, user_id}
-    _ ->
-      EventProjection
-        { event_id = line,
-          event_name = "",
-          source = "",
-          account_id = "",
-          user_id = ""
-        }
 
 createEventsRawTable :: (IsString a) => a
 createEventsRawTable =

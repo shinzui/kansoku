@@ -1,6 +1,6 @@
 module Kansoku.ClickHouseSpec (spec) where
 
-import ClickHaskell (ClickHaskell, Column, Select, UInt8, command, select, unsafeMkSelect)
+import ClickHaskell (ClickHaskell, ClientError (UnmatchedResult), Column, Float64, Select, UInt8, command, select, unsafeMkSelect)
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (wait, withAsync)
 import Data.Aeson.KeyMap qualified as KeyMap
@@ -19,11 +19,12 @@ spec = describe "Kansoku.ClickHouse" $ do
   it "ensures the schema, inserts events, and reads a projection back" $
     withClickHouse $ \conn -> do
       resetTable conn
-      insertEvents conn [sampleEvent "evt_storage_1" "page_view", sampleEvent "evt_storage_2" "signup"]
+      let appSignup = sampleEvent "evt_storage_2" "signup" & #source .~ App
+      insertEvents conn [sampleEvent "evt_storage_1" "page_view", appSignup]
       countEvents conn `shouldReturn` 2
       rows <- selectEventProjections conn
       rows `shouldContain` [expectedProjection "evt_storage_1" "page_view"]
-      rows `shouldContain` [expectedProjection "evt_storage_2" "signup"]
+      rows `shouldContain` [expectedProjectionWithSource "evt_storage_2" "signup" "app"]
 
   it "collapses replayed events after a final ReplacingMergeTree merge" $
     withClickHouse $ \conn -> do
@@ -34,6 +35,20 @@ spec = describe "Kansoku.ClickHouse" $ do
       countEvents conn `shouldReturn` 2
       command conn "OPTIMIZE TABLE analytics.events_raw FINAL"
       countEvents conn `shouldReturn` 1
+
+  it "round-trips an event name containing a tab through projections" $
+    withClickHouse $ \conn -> do
+      resetTable conn
+      insertEvents conn [sampleEvent "evt_tab_1" "signup\tstep"]
+      rows <- selectEventProjections conn
+      rows `shouldContain` [expectedProjection "evt_tab_1" "signup\tstep"]
+
+  it "raises on a column type mismatch instead of fabricating values" $
+    withClickHouse $ \conn ->
+      select mistypedSelect conn pure
+        `shouldThrow` \case
+          UnmatchedResult _ -> True
+          _ -> False
 
   describe "connection ownership" $
     it "does not block a writer insert behind a slow query on another connection" $
@@ -57,6 +72,15 @@ newtype SleepRow = SleepRow {s :: Word8}
 sleepSelect :: Select SleepColumns SleepRow
 sleepSelect = unsafeMkSelect (const "SELECT toUInt8(sleep(2)) AS s")
 
+type MistypedColumns = '[Column "value" Float64]
+
+newtype MistypedRow = MistypedRow {value :: Double}
+  deriving stock (Generic, Eq, Show)
+  deriving anyclass (ClickHaskell MistypedColumns)
+
+mistypedSelect :: Select MistypedColumns MistypedRow
+mistypedSelect = unsafeMkSelect (const "SELECT 'oops' AS value")
+
 sampleEvent :: Text -> Text -> AnalyticsEvent
 sampleEvent eid name =
   baseEvent (EventId eid) (EventName name) Web (read "2026-07-01 12:00:00 UTC") (read "2026-07-01 12:00:01 UTC")
@@ -73,10 +97,14 @@ sampleEvent eid name =
 
 expectedProjection :: ByteString -> ByteString -> EventProjection
 expectedProjection eid name =
+  expectedProjectionWithSource eid name "web"
+
+expectedProjectionWithSource :: ByteString -> ByteString -> ByteString -> EventProjection
+expectedProjectionWithSource eid name sourceName =
   EventProjection
     { event_id = eid,
       event_name = name,
-      source = "web",
+      source = sourceName,
       account_id = "acct_storage",
       user_id = "user_storage"
     }
