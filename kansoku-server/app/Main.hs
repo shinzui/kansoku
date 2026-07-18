@@ -36,13 +36,13 @@ main = do
       let queueName = eventsQueueName (cfg ^. #eventsQueueName)
       bracket (createPool (cfg ^. #pgConnectionString)) Pool.release $ \pool -> do
         provisionQueue pool queueName
-        clickHouse <- openClickHouse (clickHouseConfigFromConfig cfg)
+        queryConn <- openClickHouse (clickHouseConfigFromConfig cfg)
         tracer <- makeTracer
         withAsync
           ( runWriter
               pool
               tracer
-              clickHouse
+              (clickHouseConfigFromConfig cfg)
               queueName
               (cfg ^. #writerVisibilityTimeoutSec)
               (cfg ^. #writerAdapterBatchSize)
@@ -56,7 +56,7 @@ main = do
                       { writerAlive = isNothing <$> poll writerAsync,
                         pgmqReachable = pgmqReady pool queueName
                       }
-                  app = kansokuApp probe pool queueName clickHouse
+                  app = kansokuApp probe pool queueName queryConn
                in race_
                     (wait writerAsync)
                     (runApp cfg (startServer app))

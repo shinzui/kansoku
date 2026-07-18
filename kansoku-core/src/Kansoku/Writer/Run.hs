@@ -4,7 +4,6 @@ module Kansoku.Writer.Run
   )
 where
 
-import ClickHaskell (Connection)
 import Data.Generics.Labels ()
 import Data.Int (Int32)
 import Data.Text qualified as Text
@@ -14,6 +13,7 @@ import Effectful.Concurrent qualified as Concurrent
 import Effectful.Concurrent.Async qualified as Async
 import Effectful.Error.Static (runErrorNoCallStack)
 import Hasql.Pool qualified as Pool
+import Kansoku.ClickHouse (ClickHouseConfig, openClickHouse)
 import Kansoku.Prelude
 import Kansoku.Writer.Batch (writerBatchHandler)
 import OpenTelemetry.Trace.Core qualified as OTel
@@ -38,7 +38,7 @@ import Shibuya.Telemetry.Effect (runTracing)
 runWriter ::
   Pool.Pool ->
   OTel.Tracer ->
-  Connection ->
+  ClickHouseConfig ->
   QueueName ->
   Int32 ->
   Int32 ->
@@ -46,7 +46,8 @@ runWriter ::
   Int ->
   IO () ->
   IO ()
-runWriter pool tracer clickHouse queueName visibilityTimeoutSec adapterBatchSize maxBatchSize maxLatencyMs waitForShutdown = do
+runWriter pool tracer clickHouseConfig queueName visibilityTimeoutSec adapterBatchSize maxBatchSize maxLatencyMs waitForShutdown = do
+  clickHouse <- openClickHouse clickHouseConfig
   result <-
     runEff $
       Concurrent.runConcurrent $

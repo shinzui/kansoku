@@ -4,6 +4,7 @@ slug: split-clickhouse-connections-and-adopt-typed-row-decoding
 title: "Split ClickHouse connections and adopt typed row decoding"
 kind: exec-plan
 created_at: 2026-07-15T21:30:34Z
+intention: intention_01kxr5jt2heyvt0n768ym9dwqd
 master_plan: "docs/masterplans/2-kansoku-production-hardening-review-fixes-and-portfolio-service-readiness.md"
 ---
 
@@ -65,11 +66,11 @@ integration point "Kansoku.Query").
 Use a checklist to summarize granular steps. Every stopping point must be documented here,
 even if it requires splitting a partially completed task into two ("done" vs. "remaining").
 
-- [ ] Confirm EP-10 is Complete: `cabal build all` and `cabal test` are green on `master`.
-- [ ] M1: `runWriter` in `kansoku-core/src/Kansoku/Writer/Run.hs` takes `ClickHouseConfig` and opens its own dedicated `Connection`.
-- [ ] M1: `kansoku-server/app/Main.hs` no longer shares one connection; the server side opens its own (still single) query connection.
-- [ ] M1: integration test proving a 2-second query on the query connection does not delay a writer insert.
-- [ ] M1: commit.
+- [x] (2026-07-18 13:27Z) Confirm EP-10 is Complete: `cabal build all` and `cabal test all` are green on `master`.
+- [x] (2026-07-18 13:30Z) M1: `runWriter` in `kansoku-core/src/Kansoku/Writer/Run.hs` takes `ClickHouseConfig` and opens its own dedicated `Connection`.
+- [x] (2026-07-18 13:30Z) M1: `kansoku-server/app/Main.hs` no longer shares one connection; the server side opens its own (still single) query connection.
+- [x] (2026-07-18 13:30Z) M1: integration test proving a 2-second query on the query connection does not delay a writer insert.
+- [x] (2026-07-18 13:30Z) M1: commit `refactor(clickhouse): give the writer a dedicated ClickHouse connection`.
 - [ ] M2: `resource-pool` added to `kansoku-core/kansoku-core.cabal` build-depends; `async` added to the test suite build-depends.
 - [ ] M2: `QueryPool`, `newQueryPool`, `withQueryConnection` defined and exported from `Kansoku.ClickHouse`.
 - [ ] M2: additive `clickHouseQueryPoolSize` Config field, env `KANSOKU_CH_QUERY_POOL_SIZE`, default 4, validated >= 1; `Kansoku.ConfigSpec` extended.
@@ -90,7 +91,21 @@ even if it requires splitting a partially completed task into two ("done" vs. "r
 Document unexpected behaviors, bugs, optimizations, or insights discovered during
 implementation. Provide concise evidence.
 
-(None yet.)
+- 2026-07-18, pre-implementation baseline: `just build` succeeds, but the repository's
+  `just test` recipe runs bare `cabal test`, which Cabal 3.14 rejects in this multi-package
+  project with `No targets given and there is no package in the current directory`.
+  Running the explicit equivalent `cabal test all` passes both suites (7 client examples,
+  28 core examples; four live-service cases pending because ClickHouse and a server URL are
+  unavailable). EP-11 uses `cabal test all` for its validation rather than expanding this
+  ClickHouse-focused plan into an unrelated justfile repair.
+
+- 2026-07-18, Milestone 1: EP-10's two-level supervision shape required no structural
+  compromise. `Main.hs` still links the writer `Async` to Warp, while `runWriter` opens the
+  dedicated ClickHouse connection before entering its existing `StopAllOnFailure`/`waitApp`
+  effect stack. With local PostgreSQL and ClickHouse running, `cabal test all` passed the
+  new two-connection timing case and the existing writer integration case (29 core examples,
+  zero failures), while the client suite remained at 7 examples with only its opt-in live
+  server case pending.
 
 
 ## Decision Log

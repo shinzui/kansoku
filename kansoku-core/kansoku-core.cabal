@@ -89,6 +89,7 @@ test-suite kansoku-core-test
   main-is:        Spec.hs
   other-modules:
     Kansoku.ClickHouseSpec
+    Kansoku.ClickHouseTestSupport
     Kansoku.ConfigSpec
     Kansoku.EventSpec
     Kansoku.Ingest.QueueSpec
@@ -99,6 +100,7 @@ test-suite kansoku-core-test
 
   build-depends:
     , aeson
+    , async
     , base                     >=4.21 && <5
     , bytestring
     , ClickHaskell

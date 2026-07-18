@@ -1,12 +1,15 @@
 module Kansoku.ClickHouseSpec (spec) where
 
-import ClickHaskell (Connection, command, ping)
-import Control.Exception (SomeException, try)
+import ClickHaskell (ClickHaskell, Column, Select, UInt8, command, select, unsafeMkSelect)
+import Control.Concurrent (threadDelay)
+import Control.Concurrent.Async (wait, withAsync)
 import Data.Aeson.KeyMap qualified as KeyMap
 import Data.ByteString (ByteString)
 import Data.Generics.Labels ()
+import Data.Time.Clock (diffUTCTime)
+import Data.Word (Word8)
 import Kansoku.ClickHouse
-import Kansoku.Config
+import Kansoku.ClickHouseTestSupport
 import Kansoku.Event
 import Kansoku.Prelude
 import Test.Hspec
@@ -32,26 +35,27 @@ spec = describe "Kansoku.ClickHouse" $ do
       command conn "OPTIMIZE TABLE analytics.events_raw FINAL"
       countEvents conn `shouldReturn` 1
 
-withClickHouse :: (Connection -> Expectation) -> Expectation
-withClickHouse action = do
-  configResult <- loadConfig
-  case configResult of
-    Left err -> expectationFailure ("failed to load config: " <> show err)
-    Right cfg -> do
-      setupResult <- try @SomeException $ do
-        bootstrap <- openBootstrapConnection (clickHouseConfigFromConfig cfg)
-        ping bootstrap
-        ensureSchema bootstrap
-        conn <- openClickHouse (clickHouseConfigFromConfig cfg)
-        ping conn
-        pure conn
-      case setupResult of
-        Left err -> pendingWith ("ClickHouse not reachable: " <> show err)
-        Right conn -> action conn
+  describe "connection ownership" $
+    it "does not block a writer insert behind a slow query on another connection" $
+      withClickHouse $ \queryConn -> do
+        resetTable queryConn
+        writerConn <- openClickHouse . clickHouseConfigFromConfig =<< requireConfig
+        withAsync (select sleepSelect queryConn pure) $ \slow -> do
+          threadDelay 100_000
+          started <- getCurrentTime
+          insertEvents writerConn [sampleEvent "evt_split_1" "page_view"]
+          finished <- getCurrentTime
+          _ <- wait slow
+          diffUTCTime finished started `shouldSatisfy` (< 1)
 
-resetTable :: Connection -> IO ()
-resetTable conn =
-  command conn "TRUNCATE TABLE analytics.events_raw"
+type SleepColumns = '[Column "s" UInt8]
+
+newtype SleepRow = SleepRow {s :: Word8}
+  deriving stock (Generic, Eq, Show)
+  deriving anyclass (ClickHaskell SleepColumns)
+
+sleepSelect :: Select SleepColumns SleepRow
+sleepSelect = unsafeMkSelect (const "SELECT toUInt8(sleep(2)) AS s")
 
 sampleEvent :: Text -> Text -> AnalyticsEvent
 sampleEvent eid name =
