@@ -52,18 +52,18 @@ current `nix develop` + `process-compose up` dev flow working unchanged.
 Use this checklist to track granular steps. Every stopping point must be documented here,
 even if it requires splitting a partially completed task into two ("done" vs. "remaining").
 
-- [ ] M1: EP-21 is Complete in the MasterPlan; its coherent cohort, current runtime APIs, and explicit PGMQ migration path are present
-- [ ] M1: `cabal build all` succeeds inside `nix develop`
-- [ ] M1: `cabal test` succeeds inside `nix develop`
-- [ ] M1: EP-21's ephemeral PostgreSQL test proves schema application and queue provisioning; ordinary server startup does not migrate
-- [ ] M1: migrated cohort and any `runWriter` signature constraints recorded in Surprises & Discoveries
-- [ ] M2: shutdown `MVar` + SIGTERM/SIGINT handlers in `kansoku-server/app/Main.hs`
-- [ ] M2: `runWriter`'s `waitForShutdown` is `readMVar shutdownVar`, not `forever threadDelay`
-- [ ] M2: writer and server linked via `withAsync` + `race_ (wait writerAsync) …`
-- [ ] M2: `unix` added to `kansoku-server.cabal` build-depends
-- [ ] M2: demonstrated — stop postgres, writer errors, process exits non-zero
-- [ ] M2: demonstrated — Ctrl-C drains writer (`stopAppGracefully`, 30 s) and exits 0
-- [ ] M2: commit `fix(server): link writer and server lifetimes, wire graceful shutdown`
+- [x] (2026-07-18 04:07Z) M1: EP-21 is Complete in the MasterPlan; its coherent cohort, current runtime APIs, and explicit PGMQ migration path are present
+- [x] (2026-07-18 04:07Z) M1: `cabal build all` succeeds inside `nix develop`
+- [x] (2026-07-18 04:07Z) M1: `cabal test` succeeds inside `nix develop`
+- [x] (2026-07-18 04:07Z) M1: EP-21's ephemeral PostgreSQL test proves schema application and queue provisioning; ordinary server startup does not migrate
+- [x] (2026-07-18 04:07Z) M1: migrated cohort and any `runWriter` signature constraints recorded in Surprises & Discoveries
+- [x] (2026-07-18 04:13Z) M2: shutdown `MVar` + SIGTERM/SIGINT handlers in `kansoku-server/app/Main.hs`
+- [x] (2026-07-18 04:13Z) M2: `runWriter`'s `waitForShutdown` is `readMVar shutdownVar`, not `forever threadDelay`
+- [x] (2026-07-18 04:13Z) M2: writer and server linked via `withAsync` + `race_ (wait writerAsync) …`
+- [x] (2026-07-18 04:13Z) M2: `unix` added to `kansoku-server.cabal` build-depends
+- [x] (2026-07-18 04:13Z) M2: demonstrated — stop postgres, writer errors, process exits non-zero
+- [x] (2026-07-18 04:13Z) M2: demonstrated — Ctrl-C drains writer (`stopAppGracefully`, 30 s) and exits 0
+- [x] (2026-07-18 04:13Z) M2: commit `fix(server): link writer and server lifetimes, wire graceful shutdown`
 - [ ] M3: `ReadyProbe` type and `pgmqReady` helper in `kansoku-core`
 - [ ] M3: `GET /ready` route in `kansokuApp` (200 ready / 503 naming failing deps)
 - [ ] M3: `Main.hs` wires `poll writerAsync` liveness + `pgmqReady` into the probe
@@ -84,7 +84,29 @@ even if it requires splitting a partially completed task into two ("done" vs. "r
 Document unexpected behaviors, bugs, optimizations, or insights discovered during
 implementation. Provide concise evidence.
 
-(None yet.)
+- 2026-07-18, Milestone 1 verification: Cabal and Nix both select pg-migrate 1.1.0.0,
+  PGMQ 0.4.0.1, Shibuya core 0.8.0.1, and shibuya-pgmq-adapter 0.12.0.0.
+  `runWriter` accepts shutdown as its final `IO ()` argument and constructs the migrated
+  `PgmqAdapterEnv` and `AppConfig` internally, so supervision can change entirely in
+  `kansoku-server/app/Main.hs`. Its `IgnoreFailures` strategy still requires the planned
+  failure demonstration to prove that an adapter failure escapes the writer.
+  Evidence: `nix develop -c cabal build all` and `nix develop -c cabal test all` passed;
+  the core suite ran the ephemeral PostgreSQL apply/strict-verify/zero-work-reapply/queue-
+  provisioning test (28 examples, zero failures, three ClickHouse-only pending cases).
+
+- 2026-07-18, Milestone 2: Shibuya 0.8.0.1 documents and implements `IgnoreFailures` as
+  failure isolation: a failed processor remains failed while the application stays alive.
+  Kansoku therefore now selects `StopAllOnFailure` and races the external shutdown action
+  against `waitApp`; this lets the adapter's linked exception escape `runWriter` and reach
+  the executable's `wait writerAsync` boundary. Live evidence: after PostgreSQL stopped,
+  the server exited 1 with `ExceptionInLinkedThread` carrying `PgmqSessionError`; Ctrl-C
+  with healthy services exited 0 after the graceful drain path.
+
+- 2026-07-18, Milestone 2: the existing repository-local `kansoku` database contains
+  pre-ledger PGMQ objects, so the new explicit migration correctly refused to replay the
+  first migration (`type "message_record" already exists`). The persistent database was
+  left untouched; demonstrations use the fresh `kansoku_ep10_20260717` database, where
+  both PGMQ migrations applied successfully.
 
 
 ## Decision Log
@@ -100,6 +122,15 @@ implementation. Provide concise evidence.
   poisoned connections. `race_` also gives graceful shutdown for free: when the writer
   returns normally after draining, the server side is torn down and `main` exits 0.
   Date: 2026-07-15
+
+- Decision: Run Kansoku's sole Shibuya processor under `StopAllOnFailure` and race
+  `waitForShutdown` against `waitApp` inside `runWriter`.
+  Rationale: dependency source and lifecycle tests show `IgnoreFailures` deliberately
+  isolates a failed processor, so linking only the outer `runWriter` thread would retain
+  the silent-death mode. `StopAllOnFailure` propagates real processor failures while
+  treating graceful exits separately; the process-compose failure demonstration proved
+  the linked exception reaches `main`.
+  Date: 2026-07-18
 
 - Decision: Keep the `/ready` endpoint minimal — writer liveness plus a single cheap pgmq
   reachability call (`queueMetrics`), no thresholds, no ClickHouse check.
@@ -330,16 +361,15 @@ Concretely in `kansoku-server/app/Main.hs`: remove the `Control.Concurrent (thre
 is). Keep everything else — config loading, pool `bracket`, `bootstrapQueue`,
 `openClickHouse`, `makeTracer` — as is.
 
-One risk to verify by demonstration, not assumption: `runWriter` starts the shibuya app with
-`runApp IgnoreFailures 100 …` (see `kansoku-core/src/Kansoku/Writer/Run.hs`). If shibuya's
-`IgnoreFailures` supervision swallows the pgmq error inside its own processor thread instead
-of letting the `Error PgmqRuntimeError` surface out of `runWriter`'s `runErrorNoCallStack`,
-then killing Postgres would leave the writer "running but dead" and the process would not
-exit. The acceptance transcript below is therefore mandatory. If the process does not exit
-when Postgres stops, read shibuya's supervision semantics
-(`/Users/shinzui/Keikaku/bokuno/shibuya-project/shibuya/`), switch the strategy or propagate
-the failure so that a dead pipeline is fatal, and record what you found in Surprises &
-Discoveries.
+Dependency inspection resolved the plan's supervision risk before the live test:
+`IgnoreFailures` deliberately keeps the application alive after a processor failure. In
+`kansoku-core/src/Kansoku/Writer/Run.hs`, select `StopAllOnFailure`, add Effectful's
+concurrency interpreter, and race `liftIO waitForShutdown` against `waitApp handle`. A
+shutdown request wins the race and enters `stopAppGracefully`; unexpected processor
+completion is fatal. Under `StopAllOnFailure`, a real adapter exception is linked back to
+the `runWriter` thread and then crosses the executable's `wait writerAsync` boundary. This
+extra inner lifetime link is required; the outer `Async` link alone cannot observe a child
+that Shibuya intentionally isolates.
 
 Acceptance is demonstrated behavior. With `process-compose up` running in one terminal and
 the server started in another, stopping Postgres must kill the whole process:
@@ -581,7 +611,8 @@ Keep this section updated with reality as you go.
    EP-21 instead of adding migration fallback code here.
 
 3. Milestone 2 edits: `kansoku-server/app/Main.hs`, `kansoku-server/kansoku-server.cabal`
-   (add `unix`). Rebuild, then run the two acceptance transcripts from the milestone
+   (add `unix`), and `kansoku-core/src/Kansoku/Writer/Run.hs` (select
+   `StopAllOnFailure`; race shutdown against `waitApp`). Rebuild, then run the two acceptance transcripts from the milestone
    (postgres-stop → exit 1; Ctrl-C → exit 0). Commit as
    `fix(server): link writer and server lifetimes, wire graceful shutdown` with the same
    two trailers.
@@ -681,7 +712,8 @@ administrative executable. Ordinary `kansoku-server` startup must not call
 `runMigrationPlan`.
 
 Milestone 2 — `Kansoku.Writer.Run.runWriter` keeps its existing signature (its last
-argument `IO ()` is now `readMVar shutdownVar` from `Main`); `kansoku-server/app/Main.hs`
+argument `IO ()` is now `readMVar shutdownVar` from `Main`), runs Shibuya with
+`StopAllOnFailure`, and races that argument against `waitApp`; `kansoku-server/app/Main.hs`
 `main :: IO ()` uses `withAsync` + `race_ (wait writerAsync) …` and installs SIGTERM/SIGINT
 handlers.
 
@@ -724,3 +756,9 @@ checked-in EP-21 hard dependency. Purpose, progress, context, Milestone 1, concr
 recovery, interfaces, and decisions now treat the coherent cohort and explicit PGMQ migration as
 an already-completed gate. EP-10 no longer contains a hand-fix or implicit-startup-migration
 fallback.
+
+Revision note (2026-07-18): Milestone 2 dependency inspection proved `IgnoreFailures` cannot
+make processor death fatal. The plan now records the implemented inner lifetime link
+(`StopAllOnFailure` plus a shutdown/`waitApp` race), its extra source file, the successful live
+failure and graceful-shutdown evidence, and the untouched pre-ledger local database that prompted
+use of a fresh EP-10 validation database.

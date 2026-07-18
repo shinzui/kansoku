@@ -1,9 +1,8 @@
 module Main (main) where
 
-import Control.Concurrent (threadDelay)
-import Control.Concurrent.Async (withAsync)
+import Control.Concurrent.Async (race_, wait, withAsync)
+import Control.Concurrent.MVar (newEmptyMVar, readMVar, tryPutMVar)
 import Control.Exception (bracket)
-import Control.Monad (forever)
 import Data.Generics.Labels ()
 import Hasql.Pool qualified as Pool
 import Kansoku.ClickHouse
@@ -20,9 +19,14 @@ import Kansoku.Telemetry (makeTracer)
 import Kansoku.Writer.Run (runWriter)
 import System.Exit (exitFailure)
 import System.IO (hPutStrLn, stderr)
+import System.Posix.Signals (Handler (Catch), installHandler, sigINT, sigTERM)
 
 main :: IO ()
 main = do
+  shutdownVar <- newEmptyMVar
+  let requestShutdown = void (tryPutMVar shutdownVar ())
+  void $ installHandler sigTERM (Catch requestShutdown) Nothing
+  void $ installHandler sigINT (Catch requestShutdown) Nothing
   result <- loadConfig
   case result of
     Left err -> do
@@ -35,7 +39,6 @@ main = do
         clickHouse <- openClickHouse (clickHouseConfigFromConfig cfg)
         tracer <- makeTracer
         let app = kansokuApp pool queueName clickHouse
-            keepRunning = forever (threadDelay 1000000000)
         withAsync
           ( runWriter
               pool
@@ -46,6 +49,10 @@ main = do
               (cfg ^. #writerAdapterBatchSize)
               (cfg ^. #writerMaxBatchSize)
               (cfg ^. #writerMaxLatencyMs)
-              keepRunning
+              (readMVar shutdownVar)
           )
-          (const (runApp cfg (startServer app)))
+          ( \writerAsync ->
+              race_
+                (wait writerAsync)
+                (runApp cfg (startServer app))
+          )
