@@ -86,7 +86,7 @@ This section must always reflect the actual current state of the work.
       expectations updated for v2 semantics
 - [x] (2026-07-18 14:45Z) M4: fresh `just ch-reset` + fixture load + metric equivalence transcript captured
 - [x] (2026-07-18 14:45Z) M4: synthetic 100k-event load + `system.parts` storage comparison transcript captured
-- [ ] MasterPlan registry row for EP-12 updated to Complete; Outcomes written
+- [x] (2026-07-18 14:48Z) MasterPlan registry row for EP-12 updated to Complete; Outcomes written
 
 
 ## Surprises & Discoveries
@@ -305,6 +305,14 @@ seven migrations. Fixture queries and live HTTP responses report active users 4,
 raw storage is 8,034,824 bytes while all four rollups total 10,898 bytes (0.136%, roughly
 737x smaller); the same metrics report 500 users and 100,000 page views. All 43 test examples
 pass, with only the intentionally disabled client live-server case pending.
+
+EP-12 is complete. It delivered every behavior in the original purpose: one recorded and
+immutable ClickHouse migration history, one DDL owner, a query-oriented raw schema, FINAL-free
+resolution, join-free active-user ingestion, and rollups whose storage is bounded rather than
+linear in event IDs. EP-13 can now rewrite metric SQL against these final v2 objects. EP-15
+still needs to decide how account-scoped metrics interact with rollups that intentionally do
+not yet include `account_id`. The stale local PostgreSQL migration ledger is a developer-state
+cleanup outside EP-12; it did not affect ClickHouse, Haskell tests, or isolated HTTP proof.
 
 
 ## Context and Orientation

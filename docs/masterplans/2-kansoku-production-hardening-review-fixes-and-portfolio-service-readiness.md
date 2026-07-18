@@ -88,7 +88,7 @@ waves.
 | 21 | Migrate Kansoku to the coherent pg-migrate PGMQ and Shibuya cohort | docs/plans/21-migrate-kansoku-to-the-coherent-pg-migrate-pgmq-and-shibuya-cohort.md | None | None | Complete |
 | 10 | Restore the build and supervise the writer | docs/plans/10-restore-the-build-and-supervise-the-writer.md | EP-21 | None | Complete |
 | 11 | Split ClickHouse connections and adopt typed row decoding | docs/plans/11-split-clickhouse-connections-and-adopt-typed-row-decoding.md | EP-10 | None | Complete |
-| 12 | ClickHouse schema v2: sort key, FINAL-free resolution, join-free rollups | docs/plans/12-clickhouse-schema-v2-sort-key-final-free-resolution-join-free-rollups.md | EP-10 | None | In Progress |
+| 12 | ClickHouse schema v2: sort key, FINAL-free resolution, join-free rollups | docs/plans/12-clickhouse-schema-v2-sort-key-final-free-resolution-join-free-rollups.md | EP-10 | None | Complete |
 | 9 | Convert kansoku to NamedRoutes, vertical slices, and MultiVerb | docs/plans/9-convert-kansoku-to-namedroutes-vertical-slices-and-multiverb.md | EP-10 | None | Not Started |
 | 13 | Safe and correct metric SQL: validated inputs, ordered funnels, honest failures | docs/plans/13-safe-and-correct-metric-sql-validated-inputs-ordered-funnels-honest-failures.md | EP-12 | EP-11, EP-9 | Not Started |
 | 14 | SDK-grade ingest contract: partial batch acceptance, CORS, and payload limits | docs/plans/14-sdk-grade-ingest-contract-partial-batch-acceptance-cors-and-payload-limits.md | EP-9 | None | Not Started |
@@ -426,11 +426,19 @@ longer leak through 503 responses, and ClickHouse credentials are configurable. 
 build and test suite passes with live PostgreSQL and ClickHouse, and an accepted HTTP event
 was observed end-to-end in `analytics.events_raw`.
 
-EP-11 is complete; EP-12 and EP-9 remain independently implementable in Phase 2. The writer
+EP-11 and EP-12 are complete; EP-9 remains independently implementable in Phase 2. The writer
 now owns a dedicated ClickHouse connection, request-side queries use a bounded configurable
 pool, and real typed columns replace tab-delimited wire parsing with loud header/type failures.
 The main EP-11 handoff is to EP-13: its driver bump must re-evaluate the pinned driver's
 per-block generic-product normalization before removing it.
+
+EP-12 established a seven-file immutable ClickHouse migration history and made it the only DDL
+owner. The raw table now uses the account/event/time sort key, string absence is consistently
+represented by `''`, identity resolution no longer forces `FINAL`, and DAU/WAU ingestion no
+longer joins the identity map. Under a representative 100,000-event load, all four rollups
+occupied 10,898 bytes versus 8,034,824 bytes raw (0.136%, roughly 737x smaller); live HTTP
+queries returned the fixture-backed active-user and page-view values. EP-13's hard dependency
+is now satisfied, while its EP-9 dependency remains soft.
 
 The broader coordination lesson remains that Shibuya's internal processor lifetime is a
 separate supervision boundary from the executable's writer thread; EP-16 in particular must
@@ -472,3 +480,8 @@ Revision note (2026-07-18, second revision): EP-11 completed. The registry and a
 now record dedicated writer ownership, bounded query pooling, and typed multi-column decoding.
 Cross-plan discoveries capture the pinned ClickHaskell generic-product ordering defect for EP-13,
 the expanded ClickHouse JIT workaround, and the exact Cabal/Nix driver-source alignment.
+
+Revision note (2026-07-18, third revision): EP-12 completed. The registry, aggregate progress,
+outcomes, and cross-plan discoveries now record the immutable migration ledger, events_raw v2,
+FINAL-free and join-free resolution path, bounded rollup states, 737x representative storage
+reduction, fixture/HTTP evidence, explicit Cabal targets, and stale local PostgreSQL ledger note.
