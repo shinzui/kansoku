@@ -1,6 +1,6 @@
 module Main (main) where
 
-import Control.Concurrent.Async (race_, wait, withAsync)
+import Control.Concurrent.Async (poll, race_, wait, withAsync)
 import Control.Concurrent.MVar (newEmptyMVar, readMVar, tryPutMVar)
 import Control.Exception (bracket)
 import Data.Generics.Labels ()
@@ -14,7 +14,7 @@ import Kansoku.Ingest.Queue (eventsQueueName, provisionQueue)
 import Kansoku.Postgres (createPool)
 import Kansoku.Prelude
 import Kansoku.Runtime (runApp)
-import Kansoku.Server (kansokuApp, startServer)
+import Kansoku.Server (ReadyProbe (..), kansokuApp, pgmqReady, startServer)
 import Kansoku.Telemetry (makeTracer)
 import Kansoku.Writer.Run (runWriter)
 import System.Exit (exitFailure)
@@ -38,7 +38,6 @@ main = do
         provisionQueue pool queueName
         clickHouse <- openClickHouse (clickHouseConfigFromConfig cfg)
         tracer <- makeTracer
-        let app = kansokuApp pool queueName clickHouse
         withAsync
           ( runWriter
               pool
@@ -52,7 +51,13 @@ main = do
               (readMVar shutdownVar)
           )
           ( \writerAsync ->
-              race_
-                (wait writerAsync)
-                (runApp cfg (startServer app))
+              let probe =
+                    ReadyProbe
+                      { writerAlive = isNothing <$> poll writerAsync,
+                        pgmqReachable = pgmqReady pool queueName
+                      }
+                  app = kansokuApp probe pool queueName clickHouse
+               in race_
+                    (wait writerAsync)
+                    (runApp cfg (startServer app))
           )

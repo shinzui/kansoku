@@ -64,11 +64,11 @@ even if it requires splitting a partially completed task into two ("done" vs. "r
 - [x] (2026-07-18 04:13Z) M2: demonstrated — stop postgres, writer errors, process exits non-zero
 - [x] (2026-07-18 04:13Z) M2: demonstrated — Ctrl-C drains writer (`stopAppGracefully`, 30 s) and exits 0
 - [x] (2026-07-18 04:13Z) M2: commit `fix(server): link writer and server lifetimes, wire graceful shutdown`
-- [ ] M3: `ReadyProbe` type and `pgmqReady` helper in `kansoku-core`
-- [ ] M3: `GET /ready` route in `kansokuApp` (200 ready / 503 naming failing deps)
-- [ ] M3: `Main.hs` wires `poll writerAsync` liveness + `pgmqReady` into the probe
-- [ ] M3: demonstrated with `curl` in both healthy and degraded states
-- [ ] M3: commit `feat(server): add /ready endpoint reporting writer and pgmq readiness`
+- [x] (2026-07-18 04:18Z) M3: `ReadyProbe` type and `pgmqReady` helper in `kansoku-core`
+- [x] (2026-07-18 04:18Z) M3: `GET /ready` route in `kansokuApp` (200 ready / 503 naming failing deps)
+- [x] (2026-07-18 04:18Z) M3: `Main.hs` wires `poll writerAsync` liveness + `pgmqReady` into the probe
+- [x] (2026-07-18 04:18Z) M3: demonstrated with `curl` in both healthy and degraded states
+- [x] (2026-07-18 04:18Z) M3: commit `feat(server): add /ready endpoint reporting writer and pgmq readiness`
 - [ ] M4a: `Ingest/Handler.hs` 503 body generic; pgmq detail logged to stderr
 - [ ] M4a: `Metrics/Handler.hs` 503 body generic; ClickHouse detail logged to stderr
 - [ ] M4b: `Config.hs` gains `clickHouseUser`/`clickHousePassword`; four `KANSOKU_CLICKHOUSE_*` env vars read with dev-compatible defaults
@@ -108,6 +108,12 @@ implementation. Provide concise evidence.
   left untouched; demonstrations use the fresh `kansoku_ep10_20260717` database, where
   both PGMQ migrations applied successfully.
 
+- 2026-07-18, Milestone 3: the readiness and supervision paths agree during a real
+  PostgreSQL outage. A bounded curl loop observed HTTP 503 with
+  `{"failing":["postgres"],"status":"unavailable"}` before the writer detected the same
+  outage and terminated the process with exit 1. Healthy `/ready` returned HTTP 200 with
+  `{"status":"ready"}`, and `/health` remained HTTP 200 `OK`.
+
 
 ## Decision Log
 
@@ -139,6 +145,13 @@ implementation. Provide concise evidence.
   Integration Points section requires EP-16 to extend, not replace, EP-10's handler.
   Gold-plating here would be redone there.
   Date: 2026-07-15
+
+- Decision: Define `ReadyProbe` and `pgmqReady` together in `Kansoku.Server`.
+  Rationale: `ReadyProbe` is an HTTP-layer dependency record and keeping its concrete PGMQ
+  implementation beside the route avoids exposing Effectful or PGMQ dependencies from the
+  executable. Tests and future routing work can still replace both probe actions, while
+  EP-16 has one module to extend with thresholds.
+  Date: 2026-07-18
 
 - Decision: ClickHouse configuration additions (`KANSOKU_CLICKHOUSE_HOST`,
   `KANSOKU_CLICKHOUSE_DATABASE`, `KANSOKU_CLICKHOUSE_USER`, `KANSOKU_CLICKHOUSE_PASSWORD`)
