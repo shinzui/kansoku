@@ -32,6 +32,7 @@ data Config = Config
     clickHouseDatabase :: !String,
     clickHouseUser :: !String,
     clickHousePassword :: !String,
+    clickHouseQueryPoolSize :: !Int,
     eventsQueueName :: !Text,
     writerMaxBatchSize :: !Int,
     writerMaxLatencyMs :: !Int,
@@ -56,6 +57,7 @@ loadConfig = do
   chDatabase <- fromMaybe "analytics" <$> lookupEnv "KANSOKU_CLICKHOUSE_DATABASE"
   chUser <- fromMaybe "default" <$> lookupEnv "KANSOKU_CLICKHOUSE_USER"
   chPassword <- fromMaybe "" <$> lookupEnv "KANSOKU_CLICKHOUSE_PASSWORD"
+  chQueryPoolSize <- lookupEnv "KANSOKU_CH_QUERY_POOL_SIZE"
   queue <- maybe defaultEventsQueueName Text.pack <$> lookupEnv "KANSOKU_QUEUE_NAME"
   writerBatch <- lookupEnv "KANSOKU_WRITER_MAX_BATCH"
   writerLatency <- lookupEnv "KANSOKU_WRITER_MAX_LATENCY_MS"
@@ -69,6 +71,7 @@ loadConfig = do
     maxLatency <- parseInt "KANSOKU_WRITER_MAX_LATENCY_MS" 5000 writerLatency
     visibility <- parseInt32 "KANSOKU_WRITER_VT_SEC" 60 writerVt
     adapterBatch <- parseInt32 "KANSOKU_WRITER_ADAPTER_BATCH" 1000 writerAdapterBatch
+    queryPoolSize <- parsePositiveInt "KANSOKU_CH_QUERY_POOL_SIZE" 4 chQueryPoolSize
     port <- parsePort "KANSOKU_SERVER_PORT" defaultServerPort srv
     Right
       Config
@@ -79,6 +82,7 @@ loadConfig = do
           clickHouseDatabase = chDatabase,
           clickHouseUser = chUser,
           clickHousePassword = chPassword,
+          clickHouseQueryPoolSize = queryPoolSize,
           eventsQueueName = queue,
           writerMaxBatchSize = maxBatch,
           writerMaxLatencyMs = maxLatency,
@@ -99,6 +103,13 @@ parseInt name _ (Just raw) =
     Just n -> Right n
     Nothing ->
       Left (ConfigError (name <> ": not a valid integer: " <> Text.pack raw))
+
+parsePositiveInt :: Text -> Int -> Maybe String -> Either ConfigError Int
+parsePositiveInt name def raw = do
+  value <- parseInt name def raw
+  if value >= 1
+    then Right value
+    else Left (ConfigError (name <> ": must be at least 1"))
 
 parseInt32 :: Text -> Int32 -> Maybe String -> Either ConfigError Int32
 parseInt32 _ def Nothing = Right def

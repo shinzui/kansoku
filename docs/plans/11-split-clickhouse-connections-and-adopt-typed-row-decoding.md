@@ -71,12 +71,12 @@ even if it requires splitting a partially completed task into two ("done" vs. "r
 - [x] (2026-07-18 13:30Z) M1: `kansoku-server/app/Main.hs` no longer shares one connection; the server side opens its own (still single) query connection.
 - [x] (2026-07-18 13:30Z) M1: integration test proving a 2-second query on the query connection does not delay a writer insert.
 - [x] (2026-07-18 13:30Z) M1: commit `refactor(clickhouse): give the writer a dedicated ClickHouse connection`.
-- [ ] M2: `resource-pool` added to `kansoku-core/kansoku-core.cabal` build-depends; `async` added to the test suite build-depends.
-- [ ] M2: `QueryPool`, `newQueryPool`, `withQueryConnection` defined and exported from `Kansoku.ClickHouse`.
-- [ ] M2: additive `clickHouseQueryPoolSize` Config field, env `KANSOKU_CH_QUERY_POOL_SIZE`, default 4, validated >= 1; `Kansoku.ConfigSpec` extended.
-- [ ] M2: `QueryPool` threaded through `Kansoku.Server.kansokuApp` -> `Kansoku.Metrics.Handler.metricsApp`/`metricsServer` -> `Kansoku.Query` run functions; `Main.hs` builds the pool.
-- [ ] M2: concurrency test proving N pooled queries progress in parallel (pool of 4 runs four 1-second queries in ~1s; pool of 1 runs them in ~4s).
-- [ ] M2: commit.
+- [x] (2026-07-18 13:35Z) M2: `resource-pool` added to `kansoku-core/kansoku-core.cabal` build-depends; `async` added to the test suite build-depends.
+- [x] (2026-07-18 13:35Z) M2: `QueryPool`, `newQueryPool`, `withQueryConnection` defined and exported from `Kansoku.ClickHouse`.
+- [x] (2026-07-18 13:35Z) M2: additive `clickHouseQueryPoolSize` Config field, env `KANSOKU_CH_QUERY_POOL_SIZE`, default 4, validated >= 1; `Kansoku.ConfigSpec` extended.
+- [x] (2026-07-18 13:35Z) M2: `QueryPool` threaded through `Kansoku.Server.kansokuApp` -> `Kansoku.Metrics.Handler.metricsApp`/`metricsServer` -> `Kansoku.Query` run functions; `Main.hs` builds the pool.
+- [x] (2026-07-18 13:35Z) M2: concurrency test proving N pooled queries progress in parallel (pool of 4 runs four 1-second queries in ~1s; pool of 1 runs them in ~4s).
+- [x] (2026-07-18 13:35Z) M2: commit `feat(clickhouse): pool query-side connections behind QueryPool`.
 - [ ] M3: `AggColumns`/`AggRow` decode three real columns in `Kansoku.Query`; `AggLine`, `parseAggLine`, and the concat wrapper are deleted.
 - [ ] M3: `EventProjection` decodes five real columns in `Kansoku.ClickHouse`; `ProjectionLine`, `ProjectionLineColumns`, `parseProjectionLine` are deleted from `Kansoku.ClickHouse.EventRow` and `Kansoku.ClickHouse`.
 - [ ] M3: `SETTINGS compile_expressions = 0, compile_sort_description = 0` re-investigated against the current local ClickHouse; finding recorded in Surprises & Discoveries; setting kept or dropped accordingly.
@@ -107,6 +107,15 @@ implementation. Provide concise evidence.
   zero failures), while the client suite remained at 7 examples with only its opt-in live
   server case pending.
 
+- 2026-07-18, Milestone 2: Cabal resolved `resource-pool-0.5.0.1`. Its current default is
+  one stripe, unlike the authoring-time assumption that the default followed RTS capabilities;
+  `newQueryPool` still sets `Just 1` explicitly so the configured pool size remains the exact
+  process-wide maximum across dependency-version changes. The live control cases passed in an
+  8.21-second core-suite run: four one-second sleeps through a pool of four finished below the
+  2.5-second bound, while the size-one control took at least four seconds. Starting the server
+  with pool size zero failed before dependency setup with `ConfigError
+  "KANSOKU_CH_QUERY_POOL_SIZE: must be at least 1"`.
+
 
 ## Decision Log
 
@@ -129,7 +138,9 @@ Record every decision made while working on the plan.
   always safe to return to the pool, and destroying one can only leak a socket. A hand-rolled
   round-robin vector of connections was considered and rejected: `resource-pool` gives
   lazy creation, checkout blocking, and exception safety for one small dependency, and the
-  MasterPlan expects a named pool type either way.
+  MasterPlan expects a named pool type either way. The resolved `resource-pool-0.5.0.1`
+  defaults to one stripe; `setNumStripes (Just 1)` is retained to pin that invariant explicitly
+  rather than depend on a version-specific default.
   Date: 2026-07-15
 
 - Decision: Split milestones so M1 only moves connection ownership (writer opens its own

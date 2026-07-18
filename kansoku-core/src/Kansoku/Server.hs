@@ -10,7 +10,6 @@ module Kansoku.Server
   )
 where
 
-import ClickHaskell (Connection)
 import Data.Aeson qualified as Aeson
 import Data.Generics.Labels ()
 import Data.Text qualified as Text
@@ -18,6 +17,7 @@ import Effectful (Eff, IOE, runEff, type (:>))
 import Effectful.Error.Static qualified as Error
 import Effectful.Reader.Static (Reader, asks)
 import Hasql.Pool qualified as Pool
+import Kansoku.ClickHouse (QueryPool)
 import Kansoku.Config (Config)
 import Kansoku.Ingest.Handler (ingestApp)
 import Kansoku.Logging (Log, logInfo)
@@ -47,8 +47,8 @@ healthApp req respond =
     _ ->
       respond (responseLBS status404 [(hContentType, "text/plain")] "Not Found")
 
-kansokuApp :: ReadyProbe -> Pool.Pool -> QueueName -> Connection -> Application
-kansokuApp probe pool queueName clickHouse req respond =
+kansokuApp :: ReadyProbe -> Pool.Pool -> QueueName -> QueryPool -> Application
+kansokuApp probe pool queueName queryPool req respond =
   case pathInfo req of
     ["health"] ->
       healthApp req respond
@@ -73,7 +73,7 @@ kansokuApp probe pool queueName clickHouse req respond =
     ["openapi.json"] ->
       respond (responseLBS status200 [(hContentType, "application/json")] (Aeson.encode openApiDoc))
     "metrics" : _ ->
-      metricsApp clickHouse req respond
+      metricsApp queryPool req respond
     _ ->
       ingestApp pool queueName req respond
 

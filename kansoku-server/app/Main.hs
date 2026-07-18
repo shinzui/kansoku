@@ -7,7 +7,7 @@ import Data.Generics.Labels ()
 import Hasql.Pool qualified as Pool
 import Kansoku.ClickHouse
   ( clickHouseConfigFromConfig,
-    openClickHouse,
+    newQueryPool,
   )
 import Kansoku.Config (loadConfig)
 import Kansoku.Ingest.Queue (eventsQueueName, provisionQueue)
@@ -36,7 +36,7 @@ main = do
       let queueName = eventsQueueName (cfg ^. #eventsQueueName)
       bracket (createPool (cfg ^. #pgConnectionString)) Pool.release $ \pool -> do
         provisionQueue pool queueName
-        queryConn <- openClickHouse (clickHouseConfigFromConfig cfg)
+        queryPool <- newQueryPool (clickHouseConfigFromConfig cfg) (cfg ^. #clickHouseQueryPoolSize)
         tracer <- makeTracer
         withAsync
           ( runWriter
@@ -56,7 +56,7 @@ main = do
                       { writerAlive = isNothing <$> poll writerAsync,
                         pgmqReachable = pgmqReady pool queueName
                       }
-                  app = kansokuApp probe pool queueName queryConn
+                  app = kansokuApp probe pool queueName queryPool
                in race_
                     (wait writerAsync)
                     (runApp cfg (startServer app))

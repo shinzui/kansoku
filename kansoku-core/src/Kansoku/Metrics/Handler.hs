@@ -7,13 +7,13 @@ module Kansoku.Metrics.Handler
   )
 where
 
-import ClickHaskell (Connection)
 import Control.Exception (SomeException, try)
 import Data.Aeson qualified as Aeson
 import Data.Text qualified as Text
 import Data.Time (Day)
 import Effectful (Eff, IOE, runEff)
 import Kansoku.Api.Metrics (MetricResult, MetricsAPI, TimeGrain)
+import Kansoku.ClickHouse (QueryPool)
 import Kansoku.Logging (logError, runLogStderr)
 import Kansoku.Metrics.Registry (builtinMetric)
 import Kansoku.Prelude
@@ -32,12 +32,12 @@ import Servant
     type (:<|>) (..),
   )
 
-metricsApp :: Connection -> Application
-metricsApp conn =
-  serve (Proxy @MetricsAPI) (metricsServer conn)
+metricsApp :: QueryPool -> Application
+metricsApp pool =
+  serve (Proxy @MetricsAPI) (metricsServer pool)
 
-metricsServer :: Connection -> Server MetricsAPI
-metricsServer conn =
+metricsServer :: QueryPool -> Server MetricsAPI
+metricsServer pool =
   metricHandler "events"
     :<|> metricHandler "page_views"
     :<|> sessionsHandler
@@ -54,23 +54,23 @@ metricsServer conn =
     metricHandler key fromDay toDay groupBy timeGrain =
       case builtinMetric key of
         Nothing -> throwError (jsonError err404 "metric not found" (Aeson.object ["metric" Aeson..= key]))
-        Just metric -> effToHandler (Query.run conn metric (queryRequest fromDay toDay groupBy timeGrain))
+        Just metric -> effToHandler (Query.run pool metric (queryRequest fromDay toDay groupBy timeGrain))
 
     sessionsHandler :: Day -> Day -> Maybe Text -> Maybe TimeGrain -> Handler MetricResult
     sessionsHandler fromDay toDay groupBy timeGrain =
-      effToHandler (Query.runSessions conn (queryRequest fromDay toDay groupBy timeGrain))
+      effToHandler (Query.runSessions pool (queryRequest fromDay toDay groupBy timeGrain))
 
     funnelHandler :: Day -> Day -> Text -> Handler MetricResult
     funnelHandler fromDay toDay stepsParam =
       case nonEmptyCsv stepsParam of
         [] -> throwError (jsonError err400 "invalid funnel steps" (Aeson.object ["steps" Aeson..= stepsParam]))
-        steps -> effToHandler (Query.runFunnel conn (queryRequest fromDay toDay Nothing Nothing) steps)
+        steps -> effToHandler (Query.runFunnel pool (queryRequest fromDay toDay Nothing Nothing) steps)
 
     retentionHandler :: Day -> Day -> Maybe Text -> Handler MetricResult
     retentionHandler fromDay toDay daysParam =
       case parseOffsets daysParam of
         Left message -> throwError (jsonError err400 "invalid retention days" (Aeson.object ["details" Aeson..= message]))
-        Right offsets -> effToHandler (Query.runRetention conn (queryRequest fromDay toDay Nothing Nothing) offsets)
+        Right offsets -> effToHandler (Query.runRetention pool (queryRequest fromDay toDay Nothing Nothing) offsets)
 
     notImplemented :: Text -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> Handler MetricResult
     notImplemented name _ _ _ _ =

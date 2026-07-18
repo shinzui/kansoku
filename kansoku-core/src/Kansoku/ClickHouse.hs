@@ -2,13 +2,16 @@
 module Kansoku.ClickHouse
   ( ClickHouseConfig (..),
     EventProjection (..),
+    QueryPool,
     clickHouseConfigFromConfig,
     countEvents,
     ensureSchema,
     insertEvents,
     openBootstrapConnection,
     openClickHouse,
+    newQueryPool,
     selectEventProjections,
+    withQueryConnection,
   )
 where
 
@@ -30,7 +33,9 @@ import ClickHaskell
     setUser,
     unsafeMkSelect,
   )
+import Control.Exception (SomeException, throwIO, try)
 import Data.ByteString.Char8 qualified as BS8
+import Data.Pool qualified as Pool
 import Data.String (IsString)
 import Kansoku.ClickHouse.EventRow
 import Kansoku.Config qualified as Config
@@ -62,6 +67,28 @@ openBootstrapConnection cfg =
 
 openClickHouse :: ClickHouseConfig -> IO Connection
 openClickHouse = openConnection . connectionArgs
+
+-- | A fixed-size pool of ClickHouse connections for the metrics query path.
+-- The writer never uses this; it owns its own dedicated connection.
+newtype QueryPool = QueryPool (Pool.Pool Connection)
+
+newQueryPool :: ClickHouseConfig -> Int -> IO QueryPool
+newQueryPool cfg size =
+  QueryPool
+    <$> Pool.newPool
+      ( Pool.setNumStripes (Just 1) $
+          Pool.defaultPoolConfig (openClickHouse cfg) (const (pure ())) queryConnectionIdleSeconds size
+      )
+
+-- | Effectively never reap idle connections: ClickHaskell exposes no close,
+-- so reaping could only leak sockets.
+queryConnectionIdleSeconds :: Double
+queryConnectionIdleSeconds = 1e9
+
+withQueryConnection :: QueryPool -> (Connection -> IO a) -> IO a
+withQueryConnection (QueryPool pool) action = do
+  result <- Pool.withResource pool (try @SomeException . action)
+  either throwIO pure result
 
 connectionArgs :: ClickHouseConfig -> ConnectionArgs
 connectionArgs ClickHouseConfig {clickHouseHost = host, clickHouseTcpPort = port, clickHouseDatabase = database, clickHouseUser = user, clickHousePassword = password} =

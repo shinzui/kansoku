@@ -18,7 +18,6 @@ import ClickHaskell
   ( ChString,
     ClickHaskell,
     Column,
-    Connection,
     Select,
     select,
     unsafeMkSelect,
@@ -33,6 +32,7 @@ import Data.Time (Day)
 import Data.Time.Format (defaultTimeLocale, formatTime)
 import Effectful (Eff, IOE, type (:>))
 import Kansoku.Api.Metrics (MetricPoint (..), MetricResult (..), TimeGrain (..))
+import Kansoku.ClickHouse (QueryPool, withQueryConnection)
 import Kansoku.Metrics.Definition (Aggregation (..), MetricDefinition (..), RatioMetric (..))
 import Kansoku.Metrics.Registry (BuiltinMetric (..))
 import Kansoku.Prelude
@@ -67,29 +67,29 @@ buildSQL = \case
   Simple def -> buildSimpleSQL def
   Ratioed ratio -> buildRatioSQL ratio
 
-run :: (IOE :> es) => Connection -> BuiltinMetric -> QueryRequest -> Eff es MetricResult
-run conn metric req =
-  liftIO (runSQL conn (metricName metric) (groupLabel req) (buildSQL metric req))
+run :: (IOE :> es) => QueryPool -> BuiltinMetric -> QueryRequest -> Eff es MetricResult
+run pool metric req =
+  liftIO (runSQL pool (metricName metric) (groupLabel req) (buildSQL metric req))
 
-runSessions :: (IOE :> es) => Connection -> QueryRequest -> Eff es MetricResult
-runSessions conn req =
-  liftIO (runSQL conn "sessions" Nothing (buildSessionsSQL req))
+runSessions :: (IOE :> es) => QueryPool -> QueryRequest -> Eff es MetricResult
+runSessions pool req =
+  liftIO (runSQL pool "sessions" Nothing (buildSessionsSQL req))
 
-runRetention :: (IOE :> es) => Connection -> QueryRequest -> [Int] -> Eff es MetricResult
-runRetention conn req offsets =
-  liftIO (runSQLWith conn "retention" retentionPoint (buildRetentionSQL req offsets))
+runRetention :: (IOE :> es) => QueryPool -> QueryRequest -> [Int] -> Eff es MetricResult
+runRetention pool req offsets =
+  liftIO (runSQLWith pool "retention" retentionPoint (buildRetentionSQL req offsets))
 
-runFunnel :: (IOE :> es) => Connection -> QueryRequest -> [Text] -> Eff es MetricResult
-runFunnel conn req steps =
-  liftIO (runSQLWith conn "funnel" funnelPoint (buildFunnelSQL req steps))
+runFunnel :: (IOE :> es) => QueryPool -> QueryRequest -> [Text] -> Eff es MetricResult
+runFunnel pool req steps =
+  liftIO (runSQLWith pool "funnel" funnelPoint (buildFunnelSQL req steps))
 
-runSQL :: Connection -> Text -> Maybe Text -> Text -> IO MetricResult
-runSQL conn name groupName =
-  runSQLWith conn name (defaultPoint groupName)
+runSQL :: QueryPool -> Text -> Maybe Text -> Text -> IO MetricResult
+runSQL pool name groupName =
+  runSQLWith pool name (defaultPoint groupName)
 
-runSQLWith :: Connection -> Text -> (AggRow -> MetricPoint) -> Text -> IO MetricResult
-runSQLWith conn metric toPoint sql = do
-  rows <- fmap parseAggLine . concat <$> select (unsafeSelect sql) conn pure
+runSQLWith :: QueryPool -> Text -> (AggRow -> MetricPoint) -> Text -> IO MetricResult
+runSQLWith pool metric toPoint sql = do
+  rows <- withQueryConnection pool $ \conn -> fmap parseAggLine . concat <$> select (unsafeSelect sql) conn pure
   pure MetricResult {metric, points = toPoint <$> List.sortOn sortKey rows}
   where
     sortKey AggRow {bucket, group_key} = (bucket, group_key)

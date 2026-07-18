@@ -71,6 +71,7 @@ library
     , pgmq-effectful
     , pgmq-hasql
     , pgmq-migration
+    , resource-pool
     , servant
     , servant-openapi-hs
     , servant-server
@@ -95,6 +96,7 @@ test-suite kansoku-core-test
     Kansoku.Ingest.QueueSpec
     Kansoku.MigrationsSpec
     Kansoku.OpenApiSpec
+    Kansoku.QueryIntegrationSpec
     Kansoku.QuerySpec
     Kansoku.Writer.BatchSpec
 

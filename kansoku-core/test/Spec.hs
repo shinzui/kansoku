@@ -6,6 +6,7 @@ import Kansoku.EventSpec qualified
 import Kansoku.Ingest.QueueSpec qualified
 import Kansoku.MigrationsSpec qualified
 import Kansoku.OpenApiSpec qualified
+import Kansoku.QueryIntegrationSpec qualified
 import Kansoku.QuerySpec qualified
 import Kansoku.Writer.BatchSpec qualified
 import Test.Hspec (hspec)
@@ -18,5 +19,6 @@ main = hspec $ do
   Kansoku.Ingest.QueueSpec.spec
   Kansoku.MigrationsSpec.spec
   Kansoku.OpenApiSpec.spec
+  Kansoku.QueryIntegrationSpec.spec
   Kansoku.QuerySpec.spec
   Kansoku.Writer.BatchSpec.spec

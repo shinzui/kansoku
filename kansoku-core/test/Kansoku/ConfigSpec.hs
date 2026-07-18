@@ -1,7 +1,7 @@
 module Kansoku.ConfigSpec (spec) where
 
 import Data.Generics.Labels ()
-import Kansoku.Config (loadConfig)
+import Kansoku.Config (ConfigError (..), loadConfig)
 import Kansoku.Prelude
 import System.Environment (setEnv, unsetEnv)
 import Test.Hspec (Spec, describe, it, shouldBe, shouldSatisfy)
@@ -16,6 +16,7 @@ clearEnv =
       "KANSOKU_CLICKHOUSE_DATABASE",
       "KANSOKU_CLICKHOUSE_USER",
       "KANSOKU_CLICKHOUSE_PASSWORD",
+      "KANSOKU_CH_QUERY_POOL_SIZE",
       "CLICKHOUSE_TCP_PORT",
       "CLICKHOUSE_HTTP_PORT",
       "KANSOKU_QUEUE_NAME",
@@ -40,6 +41,7 @@ spec = describe "Kansoku.Config.loadConfig" $ do
         (cfg ^. #clickHouseDatabase) `shouldBe` "analytics"
         (cfg ^. #clickHouseUser) `shouldBe` "default"
         (cfg ^. #clickHousePassword) `shouldBe` ""
+        (cfg ^. #clickHouseQueryPoolSize) `shouldBe` 4
         (cfg ^. #eventsQueueName) `shouldBe` "kansoku_events"
         (cfg ^. #writerMaxBatchSize) `shouldBe` 5000
         (cfg ^. #writerMaxLatencyMs) `shouldBe` 5000
@@ -54,6 +56,7 @@ spec = describe "Kansoku.Config.loadConfig" $ do
     setEnv "KANSOKU_CLICKHOUSE_DATABASE" "product_analytics"
     setEnv "KANSOKU_CLICKHOUSE_USER" "kansoku"
     setEnv "KANSOKU_CLICKHOUSE_PASSWORD" "secret"
+    setEnv "KANSOKU_CH_QUERY_POOL_SIZE" "8"
     setEnv "CLICKHOUSE_TCP_PORT" "9100"
     setEnv "KANSOKU_QUEUE_NAME" "custom_events"
     setEnv "KANSOKU_WRITER_MAX_BATCH" "2000"
@@ -71,6 +74,7 @@ spec = describe "Kansoku.Config.loadConfig" $ do
         (cfg ^. #clickHouseDatabase) `shouldBe` "product_analytics"
         (cfg ^. #clickHouseUser) `shouldBe` "kansoku"
         (cfg ^. #clickHousePassword) `shouldBe` "secret"
+        (cfg ^. #clickHouseQueryPoolSize) `shouldBe` 8
         (cfg ^. #clickHouseTcpPort) `shouldBe` 9100
         (cfg ^. #eventsQueueName) `shouldBe` "custom_events"
         (cfg ^. #writerMaxBatchSize) `shouldBe` 2000
@@ -85,6 +89,13 @@ spec = describe "Kansoku.Config.loadConfig" $ do
     result <- loadConfig
     clearEnv
     result `shouldSatisfy` isLeft
+
+  it "rejects a query pool size below one" $ do
+    clearEnv
+    setEnv "KANSOKU_CH_QUERY_POOL_SIZE" "0"
+    result <- loadConfig
+    clearEnv
+    result `shouldBe` Left (ConfigError "KANSOKU_CH_QUERY_POOL_SIZE: must be at least 1")
   where
     isLeft (Left _) = True
     isLeft _ = False
