@@ -74,9 +74,9 @@ This section must always reflect the actual current state of the work.
       `ChString` for the cleaned columns; `source_global_position` stays `Maybe`)
 - [x] (2026-07-18 14:31Z) M2: `Kansoku.Query.buildSessionsSQL` predicate reduced to `session_id != ''`
 - [x] (2026-07-18 14:31Z) M2: `cabal build all` and `cabal test all` green against the v2 table
-- [ ] M3: `db/clickhouse/migrations/0005_final_free_resolution.sql` written (events_resolved
+- [x] (2026-07-18 14:34Z) M3: `db/clickhouse/migrations/0005_final_free_resolution.sql` written (events_resolved
       without FINAL; mv_dau/mv_wau join-free; dau/wau truncated and backfilled)
-- [ ] M3: fixture check — stitched vs raw-identity active-user numbers both observable
+- [x] (2026-07-18 14:34Z) M3: fixture check — stitched vs raw-identity active-user numbers both observable
 - [ ] M4: `db/clickhouse/migrations/0006_rollups_v2.sql` written (count states, uniqCombined
       states, tables rebuilt, MVs recreated, backfilled)
 - [ ] M4: `db/clickhouse/migrations/0007_drop_events_raw_v1.sql` written (final DROP of the
@@ -104,6 +104,12 @@ observed transcript here when it is captured.
   selected. `cabal test all` is the explicit project-wide equivalent and passed both suites
   (35 core examples, 7 client examples with the live-server case intentionally pending).
   The `just test` recipe and this plan's validation commands now use `cabal test all`.
+
+- 2026-07-18: The pre-0006 storage baseline confirms the review finding more strongly than
+  expected. After a 100,000-page-view load, `events_raw` occupied 731,952 bytes while each
+  exact-distinct event rollup occupied about 1.61 MB (`daily_event_counts` 1,607,416 bytes;
+  `page_views_by_route` 1,607,423 bytes). The v1 “rollups” were each over twice the size of
+  the raw table; M4's bounded states must reverse this relationship.
 
 
 ## Decision Log
@@ -244,6 +250,11 @@ migrated schema. Migration 0004 copied a non-empty dev table with equal v1/v2 ro
 swapped in the account/event/time-oriented sort key, removed every `Nullable(String)`, and
 retained the v1 table for rollback. Typed ClickHaskell inserts, replay deduplication, both
 fixture sets, `cabal build all`, and `cabal test all` are green against the v2 table.
+
+Milestone 3 is complete. `events_resolved` no longer forces `FINAL`, DAU/WAU inserts no
+longer scan identity_map, and their tables were backfilled consistently with raw-identity
+semantics. The EP-5 fixture demonstrates the intended distinction: the rollup reports 4 raw
+identities while query-time stitching reports 3 users. The full test suite remains green.
 
 
 ## Context and Orientation
@@ -1551,3 +1562,7 @@ explicit target.
 Revision note (2026-07-18, second revision): M2 completed the events_raw v2 rewrite, Haskell
 wire-type alignment, sessions predicate cleanup, non-empty row-count verification, and
 fresh-reset fixture compatibility checks.
+
+Revision note (2026-07-18, third revision): M3 removed `FINAL`, made DAU/WAU materialized
+views join-free, captured the 4-raw/3-stitched fixture evidence, and recorded the pre-M4
+100,000-event storage baseline.

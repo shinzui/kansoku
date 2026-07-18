@@ -235,7 +235,7 @@ and the milestone. This section provides an at-a-glance view of the entire initi
 - [x] EP-11: typed row decoding replaces tab-delimited line parsing; decode failures are loud
 - [x] EP-12: versioned ClickHouse migration mechanism; single DDL owner
 - [x] EP-12: schema v2 migration (sort key, Nullable cleanup) applied and data rewritten
-- [ ] EP-12: FINAL-free `events_resolved`; join-free DAU/WAU materialized views
+- [x] EP-12: FINAL-free `events_resolved`; join-free DAU/WAU materialized views
 - [ ] EP-12: rollup aggregate states replaced; storage and query-time verified against fixtures
 - [ ] EP-9: (see plan file for its milestones; registry tracks overall status)
 - [ ] EP-13: metric SQL inputs validated or parameterized end-to-end
