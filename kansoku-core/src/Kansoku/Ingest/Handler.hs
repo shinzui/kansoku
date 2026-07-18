@@ -26,6 +26,7 @@ import Kansoku.Event
     validateEvent,
   )
 import Kansoku.Ingest.Producer (enqueueMany, enqueueOne)
+import Kansoku.Logging (logError, runLogStderr)
 import Kansoku.Prelude
 import Network.Wai (Application)
 import Pgmq.Effectful (Pgmq, QueueName, runPgmq)
@@ -101,8 +102,10 @@ effToHandler pool action = do
           runPgmq pool $
             Error.runErrorNoCallStack @[ValidationError] action
   case result of
-    Left pgErr ->
-      throwError (jsonError err503 "queue unavailable" [Text.pack (show pgErr)])
+    Left pgErr -> do
+      liftIO . runEff . runLogStderr $
+        logError ("ingest enqueue failed: " <> Text.pack (show pgErr))
+      throwError (jsonError err503 "queue unavailable" [])
     Right (Left validationErrs) ->
       throwError (jsonError err400 "validation failed" (validationErrorText <$> validationErrs))
     Right (Right value) ->

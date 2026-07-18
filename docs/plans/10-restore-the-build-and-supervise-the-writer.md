@@ -69,12 +69,12 @@ even if it requires splitting a partially completed task into two ("done" vs. "r
 - [x] (2026-07-18 04:18Z) M3: `Main.hs` wires `poll writerAsync` liveness + `pgmqReady` into the probe
 - [x] (2026-07-18 04:18Z) M3: demonstrated with `curl` in both healthy and degraded states
 - [x] (2026-07-18 04:18Z) M3: commit `feat(server): add /ready endpoint reporting writer and pgmq readiness`
-- [ ] M4a: `Ingest/Handler.hs` 503 body generic; pgmq detail logged to stderr
-- [ ] M4a: `Metrics/Handler.hs` 503 body generic; ClickHouse detail logged to stderr
-- [ ] M4b: `Config.hs` gains `clickHouseUser`/`clickHousePassword`; four `KANSOKU_CLICKHOUSE_*` env vars read with dev-compatible defaults
-- [ ] M4b: `ClickHouse.hs` `connectionArgs` uses configured user and `setPassword`
-- [ ] M4b: `ConfigSpec.hs` updated (clearEnv list, default + parse assertions)
-- [ ] M4: `cabal build all` and `cabal test` still green; commit `fix(server): generic error bodies and configurable ClickHouse credentials`
+- [x] (2026-07-18 04:23Z) M4a: `Ingest/Handler.hs` 503 body generic; pgmq detail logged to stderr
+- [x] (2026-07-18 04:23Z) M4a: `Metrics/Handler.hs` 503 body generic; ClickHouse detail logged to stderr
+- [x] (2026-07-18 04:23Z) M4b: `Config.hs` gains `clickHouseUser`/`clickHousePassword`; four `KANSOKU_CLICKHOUSE_*` env vars read with dev-compatible defaults
+- [x] (2026-07-18 04:23Z) M4b: `ClickHouse.hs` `connectionArgs` uses configured user and `setPassword`
+- [x] (2026-07-18 04:23Z) M4b: `ConfigSpec.hs` updated (clearEnv list, default + parse assertions)
+- [x] (2026-07-18 04:23Z) M4: `cabal build all` and `cabal test` still green; commit `fix(server): generic error bodies and configurable ClickHouse credentials`
 - [ ] MasterPlan registry row for EP-10 set to Complete; its Progress boxes ticked
 - [ ] Outcomes & Retrospective written
 
@@ -113,6 +113,14 @@ implementation. Provide concise evidence.
   `{"failing":["postgres"],"status":"unavailable"}` before the writer detected the same
   outage and terminated the process with exit 1. Healthy `/ready` returned HTTP 200 with
   `{"status":"ready"}`, and `/health` remained HTTP 200 `OK`.
+
+- 2026-07-18, Milestone 4: live dependency failures now preserve useful operator detail
+  without returning it to callers. With ClickHouse stopped, the metrics route returned
+  `{"details":{},"error":"clickhouse query failed"}` and stderr recorded the refused
+  socket. During a PostgreSQL outage, ingest returned
+  `{"details":[],"error":"queue unavailable"}` and stderr recorded the PGMQ statement
+  failure. Starting with `KANSOKU_CLICKHOUSE_USER=nosuchuser` failed authentication with
+  ClickHouse error code 516, proving the configured user reaches the driver.
 
 
 ## Decision Log

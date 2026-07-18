@@ -12,6 +12,10 @@ clearEnv =
   mapM_
     unsetEnv
     [ "PG_CONNECTION_STRING",
+      "KANSOKU_CLICKHOUSE_HOST",
+      "KANSOKU_CLICKHOUSE_DATABASE",
+      "KANSOKU_CLICKHOUSE_USER",
+      "KANSOKU_CLICKHOUSE_PASSWORD",
       "CLICKHOUSE_TCP_PORT",
       "CLICKHOUSE_HTTP_PORT",
       "KANSOKU_QUEUE_NAME",
@@ -34,6 +38,8 @@ spec = describe "Kansoku.Config.loadConfig" $ do
         (cfg ^. #clickHouseTcpPort) `shouldBe` 9000
         (cfg ^. #clickHouseHttpPort) `shouldBe` 8123
         (cfg ^. #clickHouseDatabase) `shouldBe` "analytics"
+        (cfg ^. #clickHouseUser) `shouldBe` "default"
+        (cfg ^. #clickHousePassword) `shouldBe` ""
         (cfg ^. #eventsQueueName) `shouldBe` "kansoku_events"
         (cfg ^. #writerMaxBatchSize) `shouldBe` 5000
         (cfg ^. #writerMaxLatencyMs) `shouldBe` 5000
@@ -44,6 +50,10 @@ spec = describe "Kansoku.Config.loadConfig" $ do
   it "parses values from the environment" $ do
     clearEnv
     setEnv "PG_CONNECTION_STRING" "postgresql:///kansoku"
+    setEnv "KANSOKU_CLICKHOUSE_HOST" "clickhouse.internal"
+    setEnv "KANSOKU_CLICKHOUSE_DATABASE" "product_analytics"
+    setEnv "KANSOKU_CLICKHOUSE_USER" "kansoku"
+    setEnv "KANSOKU_CLICKHOUSE_PASSWORD" "secret"
     setEnv "CLICKHOUSE_TCP_PORT" "9100"
     setEnv "KANSOKU_QUEUE_NAME" "custom_events"
     setEnv "KANSOKU_WRITER_MAX_BATCH" "2000"
@@ -57,6 +67,10 @@ spec = describe "Kansoku.Config.loadConfig" $ do
       Left err -> fail ("expected a config, got error: " <> show err)
       Right cfg -> do
         (cfg ^. #pgConnectionString) `shouldBe` "postgresql:///kansoku"
+        (cfg ^. #clickHouseHost) `shouldBe` "clickhouse.internal"
+        (cfg ^. #clickHouseDatabase) `shouldBe` "product_analytics"
+        (cfg ^. #clickHouseUser) `shouldBe` "kansoku"
+        (cfg ^. #clickHousePassword) `shouldBe` "secret"
         (cfg ^. #clickHouseTcpPort) `shouldBe` 9100
         (cfg ^. #eventsQueueName) `shouldBe` "custom_events"
         (cfg ^. #writerMaxBatchSize) `shouldBe` 2000

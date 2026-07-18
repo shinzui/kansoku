@@ -25,6 +25,7 @@ import ClickHaskell
     select,
     setDatabase,
     setHost,
+    setPassword,
     setPort,
     setUser,
     unsafeMkSelect,
@@ -39,7 +40,9 @@ import Kansoku.Prelude
 data ClickHouseConfig = ClickHouseConfig
   { clickHouseHost :: !String,
     clickHouseTcpPort :: !String,
-    clickHouseDatabase :: !String
+    clickHouseDatabase :: !String,
+    clickHouseUser :: !String,
+    clickHousePassword :: !String
   }
   deriving stock (Generic, Eq, Show)
 
@@ -48,21 +51,24 @@ clickHouseConfigFromConfig cfg =
   ClickHouseConfig
     { clickHouseHost = Config.clickHouseHost cfg,
       clickHouseTcpPort = show (Config.clickHouseTcpPort cfg),
-      clickHouseDatabase = Config.clickHouseDatabase cfg
+      clickHouseDatabase = Config.clickHouseDatabase cfg,
+      clickHouseUser = Config.clickHouseUser cfg,
+      clickHousePassword = Config.clickHousePassword cfg
     }
 
 openBootstrapConnection :: ClickHouseConfig -> IO Connection
 openBootstrapConnection cfg =
-  openConnection (connectionArgs cfg {clickHouseDatabase = "default"})
+  openConnection (connectionArgs (cfg & #clickHouseDatabase .~ "default"))
 
 openClickHouse :: ClickHouseConfig -> IO Connection
 openClickHouse = openConnection . connectionArgs
 
 connectionArgs :: ClickHouseConfig -> ConnectionArgs
-connectionArgs ClickHouseConfig {clickHouseHost = host, clickHouseTcpPort = port, clickHouseDatabase = database} =
+connectionArgs ClickHouseConfig {clickHouseHost = host, clickHouseTcpPort = port, clickHouseDatabase = database, clickHouseUser = user, clickHousePassword = password} =
   setHost host
     . setPort port
-    . setUser "default"
+    . setUser user
+    . setPassword password
     . setDatabase database
     $ defaultConnectionArgs
 

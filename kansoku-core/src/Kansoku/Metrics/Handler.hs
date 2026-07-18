@@ -14,6 +14,7 @@ import Data.Text qualified as Text
 import Data.Time (Day)
 import Effectful (Eff, IOE, runEff)
 import Kansoku.Api.Metrics (MetricResult, MetricsAPI, TimeGrain)
+import Kansoku.Logging (logError, runLogStderr)
 import Kansoku.Metrics.Registry (builtinMetric)
 import Kansoku.Prelude
 import Kansoku.Query qualified as Query
@@ -114,8 +115,10 @@ effToHandler :: Eff '[IOE] MetricResult -> Handler MetricResult
 effToHandler action = do
   result <- liftIO (try @SomeException (runEff action))
   case result of
-    Left err ->
-      throwError (jsonError err503 "clickhouse query failed" (Aeson.object ["details" Aeson..= show err]))
+    Left err -> do
+      liftIO . runEff . runLogStderr $
+        logError ("clickhouse query failed: " <> Text.pack (show err))
+      throwError (jsonError err503 "clickhouse query failed" (Aeson.object []))
     Right value ->
       pure value
 

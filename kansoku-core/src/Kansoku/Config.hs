@@ -30,6 +30,8 @@ data Config = Config
     clickHouseTcpPort :: !Int,
     clickHouseHttpPort :: !Int,
     clickHouseDatabase :: !String,
+    clickHouseUser :: !String,
+    clickHousePassword :: !String,
     eventsQueueName :: !Text,
     writerMaxBatchSize :: !Int,
     writerMaxLatencyMs :: !Int,
@@ -48,8 +50,12 @@ newtype ConfigError = ConfigError Text
 loadConfig :: IO (Either ConfigError Config)
 loadConfig = do
   pg <- maybe defaultPg Text.pack <$> lookupEnv "PG_CONNECTION_STRING"
+  chHost <- fromMaybe "127.0.0.1" <$> lookupEnv "KANSOKU_CLICKHOUSE_HOST"
   chTcp <- lookupEnv "CLICKHOUSE_TCP_PORT"
   chHttp <- lookupEnv "CLICKHOUSE_HTTP_PORT"
+  chDatabase <- fromMaybe "analytics" <$> lookupEnv "KANSOKU_CLICKHOUSE_DATABASE"
+  chUser <- fromMaybe "default" <$> lookupEnv "KANSOKU_CLICKHOUSE_USER"
+  chPassword <- fromMaybe "" <$> lookupEnv "KANSOKU_CLICKHOUSE_PASSWORD"
   queue <- maybe defaultEventsQueueName Text.pack <$> lookupEnv "KANSOKU_QUEUE_NAME"
   writerBatch <- lookupEnv "KANSOKU_WRITER_MAX_BATCH"
   writerLatency <- lookupEnv "KANSOKU_WRITER_MAX_LATENCY_MS"
@@ -67,10 +73,12 @@ loadConfig = do
     Right
       Config
         { pgConnectionString = pg,
-          clickHouseHost = "127.0.0.1",
+          clickHouseHost = chHost,
           clickHouseTcpPort = tcp,
           clickHouseHttpPort = http,
-          clickHouseDatabase = "analytics",
+          clickHouseDatabase = chDatabase,
+          clickHouseUser = chUser,
+          clickHousePassword = chPassword,
           eventsQueueName = queue,
           writerMaxBatchSize = maxBatch,
           writerMaxLatencyMs = maxLatency,
