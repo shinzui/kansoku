@@ -126,7 +126,7 @@ route.
       guard against a same-typed transposition — the record does not type-check the nine against
       it — so it is a hard prerequisite, not a precaution. It must assert each of the nine returns
       *its own* metric. `cabal test all` passes.
-- [ ] Milestone 2: convert `MetricsAPI`, `IngestAPI`, and the umbrella `KansokuAPI` from `:<|>`
+- [x] Milestone 2 (completed 2026-07-18): convert `MetricsAPI`, `IngestAPI`, and the umbrella `KansokuAPI` from `:<|>`
       chains to `NamedRoutes` records; rewrite the servers as handler records; rewrite the SDK
       client with `genericClient`; collapse the server's manual `pathInfo` metrics-vs-ingest
       dispatch into one servant application. The Milestone 1 routing test still passes.
@@ -173,8 +173,9 @@ implementation. Provide concise evidence.
   **thirteen** paths — `/v1/events`, `/v1/batch`, and the eleven `/metrics/*`. The running
   `kansokuApp` serves those thirteen (`serve (Proxy @MetricsAPI)` for the metrics prefix,
   `serve (Proxy @IngestAPI)` for the rest) **plus** `/health` and `/openapi.json`, answered at
-  the WAI level. So today there are two endpoints **served but undocumented** (`/health`,
-  `/openapi.json`) and **none documented but unserved**. The thirteen line up *only* because the
+  the WAI level. At audit time there were two endpoints **served but undocumented** (`/health`,
+  `/openapi.json`) and **none documented but unserved**; EP-10 later added `/ready` as a third
+  operational WAI endpoint. The thirteen analytics paths line up *only* because the
   router's `"metrics" : _` prefix happens to match the `"metrics"` literal in the route type and
   its `_ -> ingestApp` catch-all happens to reach the ingest sub-API — a coincidence of two
   independently-edited surfaces, not an enforced invariant. Move a metric under a different
@@ -252,6 +253,23 @@ implementation. Provide concise evidence.
   `but got: "organizations"`. Restoring the intended mapping returned the full suite
   to 37 core examples, 0 failures, with 9 dependency-backed examples pending.
 
+- Discovery (Milestone 2, 2026-07-18): `Servant.Client.Generic` is exposed by the
+  `servant-client-core` package, not by `servant-client`. Mori source inspection and
+  the working meibo client both show it as a direct dependency. `kansoku-client` now
+  declares `servant-client-core` explicitly; Cabal continues to resolve the same
+  released 0.20.3.0 cohort.
+
+- Discovery (Milestone 2, 2026-07-18): EP-10 and EP-11 changed the assembly context
+  after this child plan was authored. `kansokuApp` now carries `ReadyProbe` and must
+  retain the WAI-level `/ready` route; metrics handlers consume `QueryPool`, not a
+  single ClickHouse `Connection`. The NamedRoutes assembly preserves both completed
+  dependencies while removing only the manual metrics-versus-ingest dispatch.
+
+- Discovery (Milestone 2, 2026-07-18): temporarily declaring `pageViews` before
+  `events` in `MetricsRoutes` left all 37 core examples green, including the thirteen-
+  path sentinel guard. Restoring the presentation order did not change behavior. This
+  verifies in Kansoku that record field declaration order is not load-bearing.
+
 
 ## Decision Log
 
@@ -289,14 +307,14 @@ implementation. Provide concise evidence.
 
 - Decision: In Milestone 2, collapse the server's hand-written `pathInfo` dispatch between
   metrics and ingest into a single servant application serving the `NamedRoutes KansokuAPI`
-  record, keeping only `["health"]` and `["openapi.json"]` at the WAI level.
+  record, keeping `["health"]`, `["ready"]`, and `["openapi.json"]` at the WAI level.
   Rationale: The manual `"metrics" : _ -> metricsApp; _ -> ingestApp` branch in
   `kansoku-core/src/Kansoku/Server.hs` is a second, hand-maintained router that can disagree
   with the type — a route family added to one sub-API but forgotten in the dispatch would 404 or
   worse. A single `serve (Proxy @(NamedRoutes KansokuAPI))` makes servant the sole router and is
-  the natural payoff of having a record that mounts both sub-records. Health and the OpenAPI JSON
-  stay at the WAI level to keep the diff minimal; folding them into the record is possible later
-  but out of scope here.
+  the natural payoff of having a record that mounts both sub-records. Health, readiness, and the
+  OpenAPI JSON stay at the WAI level because they are operational/meta endpoints; EP-10 introduced
+  readiness after this decision was first recorded.
   Date: 2026-07-09
 
 - Decision: Keep `Kansoku/Event/*` and `Kansoku/Prelude.hs` in `kansoku-api`, and keep
@@ -373,18 +391,20 @@ implementation. Provide concise evidence.
   not provide.
   Date: 2026-07-09
 
-- Decision: Keep `/health` and `/openapi.json` outside the servant `KansokuAPI` record (served at
-  the WAI level, as today); the document describes exactly the thirteen analytics-contract paths.
-  Rationale: Both are operational/meta endpoints, not part of the analytics contract.
+- Decision: Keep `/health`, `/ready`, and `/openapi.json` outside the servant `KansokuAPI` record
+  (served at the WAI level); the document describes exactly the thirteen analytics-contract paths.
+  Rationale: All three are operational/meta endpoints, not part of the analytics contract.
   `/openapi.json` *delivers* the document and returns the raw document rather than a DTO — putting
   it into the document it serves is self-referential noise. `/health` is a liveness probe
   returning plain `"OK"` with no DTO and, decisively, no error modes; folding it into the record
   would either force an artificial `MultiVerb` error tail onto a route that genuinely has none, or
   require exempting it from the "every operation declares its error responses" conformance test —
-  weakening a test that should be total. Keeping both out keeps the documented surface exactly the
-  analytics contract and keeps the error-tail test exemption-free. The served==documented test
+  weakening a test that should be total. `/ready` is a dependency probe introduced by EP-10 and
+  returns operational state rather than analytics data. Keeping all three out keeps the documented
+  surface exactly the analytics contract and keeps the error-tail test exemption-free. The served==documented test
   accounts for this precisely: it asserts (a) the documented path set equals the servant-routed
-  path set, and (b) the only WAI-level escapes are exactly the allowlist `{/health, /openapi.json}`
+  path set, and (b) the only WAI-level escapes are exactly the allowlist
+  `{/health, /ready, /openapi.json}`
   — so a *new* hand-rolled route fails the test rather than passing unnoticed. To make (b)
   testable without a live ClickHouse, Milestone 5 factors `kansokuApp`'s WAI wrapper to accept the
   inner servant `Application` as an argument, so the wrapper can be exercised over a sentinel
@@ -414,6 +434,15 @@ implementation. Provide concise evidence.
   `Proxy @KansokuAPI` pins all thirteen paths and the current top-level composition in one
   database-free test. The exported sentinel servers remain reusable when Milestone 2
   converts each level to records and when Milestone 5 compares served and documented paths.
+  Date: 2026-07-18
+
+- Decision: Preserve `/ready` alongside `/health` and `/openapi.json` as a WAI-level
+  operational route while serving the thirteen analytics paths through the one
+  `kansokuAPI :: Proxy (NamedRoutes KansokuAPI)` value.
+  Rationale: EP-10 introduced readiness after EP-9 was authored. It is operational rather
+  than part of the analytics contract, and removing or documenting it here would violate
+  the completed dependency. Milestone 5's WAI allowlist and conformance test must therefore
+  include all three operational/meta escapes, not the older two-route list.
   Date: 2026-07-18
 
 
@@ -1382,33 +1411,34 @@ add these, all **pure of ClickHouse** — no live database anywhere in this spec
      `expectedServedPaths` is *routed* (a request reaches a sentinel, i.e. does not get servant's
      routing 404) while a path outside it (e.g. `/v1/definitely-missing`) *does* 404. This ties the
      documented set to what servant actually routes, both over the one `KansokuAPI` proxy.
-   - The **WAI allowlist**: `/health` and `/openapi.json` are served but deliberately *not* in the
-     document (see the Decision Log). Assert they are absent from `documentedPaths`, and — standing
-     up the WAI wrapper over the sentinel servant app (see below) — that `/health` returns `200`
-     `"OK"` and `/openapi.json` returns `200` with the document, so the non-servant surface is
-     pinned to exactly those two. A *new* hand-rolled route added to `kansokuApp` is then either
+   - The **WAI allowlist**: `/health`, `/ready`, and `/openapi.json` are served but deliberately
+     *not* in the document (see the Decision Log). Assert they are absent from `documentedPaths`,
+     and — standing up the WAI wrapper over the sentinel servant app and an always-ready probe
+     (see below) — that `/health` returns `200` `"OK"`, `/ready` returns `200` with
+     `status = "ready"`, and `/openapi.json` returns `200` with the document, so the non-servant
+     surface is pinned to exactly those three. A *new* hand-rolled route added to `kansokuApp` is then either
      documented (it went through the record) or fails this assertion.
 
    To exercise the WAI wrapper without a live `Connection`, factor `kansokuApp` so its wrapper takes
    the inner servant `Application` as an argument:
 
    ```haskell
-   -- The WAI wrapper: /health and /openapi.json at the WAI level, everything else delegated to
-   -- the servant application. Taking `inner` as a parameter makes the allowlist testable over a
-   -- sentinel servant app, with no ClickHouse Connection required.
-   waiWrapper :: Application -> Application
-   waiWrapper inner req respond =
+   -- The WAI wrapper: operational/meta routes at the WAI level, everything else delegated to
+   -- servant. Taking the probe and inner app as parameters keeps this testable without databases.
+   waiWrapper :: ReadyProbe -> Application -> Application
+   waiWrapper probe inner req respond =
      case pathInfo req of
        ["health"]       -> healthApp req respond
+       ["ready"]        -> readyApp probe req respond
        ["openapi.json"] -> respond (responseLBS status200 [(hContentType, "application/json")] (Aeson.encode kansokuOpenApi))
        _                -> inner req respond
 
-   kansokuApp :: Pool.Pool -> QueueName -> Connection -> Application
-   kansokuApp pool queueName conn =
-     waiWrapper (serve (Proxy @(NamedRoutes KansokuAPI)) (kansokuServer pool queueName conn))
+   kansokuApp :: ReadyProbe -> Pool.Pool -> QueueName -> QueryPool -> Application
+   kansokuApp probe pool queueName queryPool =
+     waiWrapper probe (serve kansokuAPI (kansokuServer pool queueName queryPool))
    ```
 
-   The test builds `waiWrapper (serve (Proxy @(NamedRoutes KansokuAPI)) sentinelKansokuServer)`.
+   The test builds `waiWrapper alwaysReadyProbe (serve kansokuAPI sentinelKansokuServer)`.
 
 Wire the (unchanged-named) `Kansoku.OpenApiSpec` into `test/Spec.hs` as before. The four stub
 endpoints' Milestone-4 change from HTTP 501 to HTTP 404 `code=not_implemented` needs **no** special
@@ -1667,7 +1697,7 @@ The conformance suite asserts: the documented path set equals the thirteen-path 
 every operation declares the shared 400/404/503 tail plus one success status; every DTO's `ToJSON`
 validates against its `ToSchema`; and — the guard unique to this service — the servant-routed path
 set (probed over sentinel handlers, no ClickHouse) equals the documented path set, with `/health`
-and `/openapi.json` pinned as the only WAI-level escapes. That last test is what makes the
+`/ready`, and `/openapi.json` pinned as the only WAI-level escapes. That last test is what makes the
 served-vs-documented drift impossible to reintroduce silently.
 
 A malformed body should now come back as the shared envelope, not a bare servant string:
@@ -1822,7 +1852,7 @@ kansokuOpenApi :: OpenApi   -- toOpenApi (Proxy @(NamedRoutes KansokuAPI)), with
 main :: IO ()               -- the kansoku-openapi executable; writes docs/api/openapi.json
 
 -- kansoku-core/src/Kansoku/Server.hs
-waiWrapper :: Application -> Application   -- /health + /openapi.json, else the inner servant app
+waiWrapper :: ReadyProbe -> Application -> Application -- /health + /ready + /openapi.json, else inner
 ```
 
 and `Kansoku.OpenApi` (in `kansoku-core`) no longer exists; `docs/api/openapi.json` is checked in
@@ -1893,3 +1923,9 @@ holds the four conformance tests, all pure of ClickHouse.
   Mori source inspection plus Hackage/upstream-tag verification showed that Kansoku already
   resolves the current Servant 0.20.3.0 and OpenAPI-fork 4.1.0 cohort. No dependency bound or
   compatibility workaround is required.
+
+- 2026-07-18, Milestone 2 — Reconciled this plan with completed EP-10 and EP-11. The server
+  assembly examples and Milestone-5 conformance design now preserve `/ready`, use `QueryPool`, and
+  treat `/health`, `/ready`, and `/openapi.json` as the exact WAI-level operational/meta allowlist.
+  Also recorded the direct `servant-client-core` dependency required by `genericClient` and the
+  successful Kansoku field-order experiment.

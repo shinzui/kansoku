@@ -1,11 +1,22 @@
 -- | Shared servant API type for the Kansoku service.
 module Kansoku.Api
-  ( KansokuAPI,
+  ( KansokuAPI (..),
+    kansokuAPI,
   )
 where
 
-import Kansoku.Api.Ingest (IngestAPI)
-import Kansoku.Api.Metrics (MetricsAPI)
-import Servant.API (type (:<|>))
+import Kansoku.Api.Ingest (IngestRoutes)
+import Kansoku.Api.Metrics (MetricsRoutes)
+import Kansoku.Prelude
+import Servant.API (NamedRoutes)
+import Servant.API.Generic (type (:-))
 
-type KansokuAPI = IngestAPI :<|> MetricsAPI
+-- | The analytics contract served and documented by Kansoku.
+data KansokuAPI mode = KansokuAPI
+  { ingest :: mode :- NamedRoutes IngestRoutes,
+    metrics :: mode :- NamedRoutes MetricsRoutes
+  }
+  deriving stock (Generic)
+
+kansokuAPI :: Proxy (NamedRoutes KansokuAPI)
+kansokuAPI = Proxy

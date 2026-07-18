@@ -7,7 +7,7 @@ where
 
 import Data.Char (toLower)
 import Data.OpenApi qualified as O
-import Kansoku.Api (KansokuAPI)
+import Kansoku.Api (kansokuAPI)
 import Kansoku.Api.Ingest (BatchAck, IngestAck)
 import Kansoku.Api.Metrics (MetricPoint, MetricResult, TimeGrain)
 import Kansoku.Event
@@ -103,7 +103,7 @@ lowerEnumOptions =
 
 openApiDoc :: O.OpenApi
 openApiDoc =
-  toOpenApi (Proxy @KansokuAPI)
+  toOpenApi kansokuAPI
     & O.info
     . O.title
     .~ "Kansoku Analytics API"

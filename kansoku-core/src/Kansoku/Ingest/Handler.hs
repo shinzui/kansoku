@@ -2,8 +2,7 @@
 
 -- | Servant handlers for HTTP ingestion.
 module Kansoku.Ingest.Handler
-  ( ingestApp,
-    ingestServer,
+  ( ingestServer,
   )
 where
 
@@ -16,8 +15,8 @@ import Effectful.Error.Static qualified as Error
 import Hasql.Pool qualified as Pool
 import Kansoku.Api.Ingest
   ( BatchAck (..),
-    IngestAPI,
     IngestAck (..),
+    IngestRoutes (..),
   )
 import Kansoku.Event
   ( AnalyticsEvent,
@@ -28,19 +27,16 @@ import Kansoku.Event
 import Kansoku.Ingest.Producer (enqueueMany, enqueueOne)
 import Kansoku.Logging (logError, runLogStderr)
 import Kansoku.Prelude
-import Network.Wai (Application)
 import Pgmq.Effectful (Pgmq, QueueName, runPgmq)
 import Pgmq.Effectful.Interpreter (PgmqRuntimeError)
 import Servant
   ( Handler,
-    Server,
     ServerError (..),
     err400,
     err503,
-    serve,
     throwError,
-    type (:<|>) (..),
   )
+import Servant.Server.Generic (AsServerT)
 
 type HandlerEff =
   '[ Error.Error [ValidationError],
@@ -49,16 +45,15 @@ type HandlerEff =
      IOE
    ]
 
-ingestApp :: Pool.Pool -> QueueName -> Application
-ingestApp pool queueName =
-  serve (Proxy @IngestAPI) (ingestServer pool queueName)
-
-ingestServer :: Pool.Pool -> QueueName -> Server IngestAPI
+ingestServer :: Pool.Pool -> QueueName -> IngestRoutes (AsServerT Handler)
 ingestServer pool queueName =
-  postEvent :<|> postBatch
+  IngestRoutes
+    { postEvent = postEventHandler,
+      postBatch = postBatchHandler
+    }
   where
-    postEvent :: AnalyticsEvent -> Handler IngestAck
-    postEvent raw = effToHandler pool $ do
+    postEventHandler :: AnalyticsEvent -> Handler IngestAck
+    postEventHandler raw = effToHandler pool $ do
       now <- liftIO getCurrentTime
       event <- validateOrThrow (raw & #receivedAt .~ now)
       _ <- enqueueOne queueName event
@@ -68,8 +63,8 @@ ingestServer pool queueName =
             eventId = unEventId (event ^. #eventId)
           }
 
-    postBatch :: [AnalyticsEvent] -> Handler BatchAck
-    postBatch raw = effToHandler pool $ do
+    postBatchHandler :: [AnalyticsEvent] -> Handler BatchAck
+    postBatchHandler raw = effToHandler pool $ do
       now <- liftIO getCurrentTime
       events <- validateBatchOrThrow ((& #receivedAt .~ now) <$> raw)
       _ <- enqueueMany queueName events

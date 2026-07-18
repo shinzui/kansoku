@@ -21,7 +21,7 @@ import Data.ByteString.Lazy qualified as BSL
 import Data.Foldable (traverse_)
 import Data.Text (Text)
 import Data.Time (Day)
-import Kansoku.Api (KansokuAPI)
+import Kansoku.Api qualified as Api
 import Kansoku.Api.Ingest qualified as Ingest
 import Kansoku.Api.Metrics qualified as Metrics
 import Kansoku.Event
@@ -31,7 +31,6 @@ import Kansoku.Event
     EventSource (..),
     baseEvent,
   )
-import Kansoku.Prelude (Proxy (..))
 import Network.HTTP.Client qualified as HTTP
 import Network.HTTP.Types
   ( hContentType,
@@ -43,10 +42,9 @@ import Network.Wai (Application)
 import Network.Wai.Handler.Warp qualified as Warp
 import Servant
   ( Handler,
-    Server,
     serve,
-    type (:<|>) (..),
   )
+import Servant.Server.Generic (AsServerT)
 import Test.Hspec
 
 spec :: Spec
@@ -136,29 +134,37 @@ sampleEvent =
 
 sentinelApplication :: Application
 sentinelApplication =
-  serve (Proxy @KansokuAPI) sentinelKansokuServer
+  serve Api.kansokuAPI sentinelKansokuServer
 
-sentinelKansokuServer :: Server KansokuAPI
-sentinelKansokuServer = sentinelIngestServer :<|> sentinelMetricsServer
+sentinelKansokuServer :: Api.KansokuAPI (AsServerT Handler)
+sentinelKansokuServer =
+  Api.KansokuAPI
+    { Api.ingest = sentinelIngestServer,
+      Api.metrics = sentinelMetricsServer
+    }
 
-sentinelIngestServer :: Server Ingest.IngestAPI
+sentinelIngestServer :: Ingest.IngestRoutes (AsServerT Handler)
 sentinelIngestServer =
-  (\_event -> pure Ingest.IngestAck {Ingest.accepted = 1, Ingest.eventId = "events"})
-    :<|> (\_events -> pure Ingest.BatchAck {Ingest.accepted = 2})
+  Ingest.IngestRoutes
+    { Ingest.postEvent = \_event -> pure Ingest.IngestAck {Ingest.accepted = 1, Ingest.eventId = "events"},
+      Ingest.postBatch = \_events -> pure Ingest.BatchAck {Ingest.accepted = 2}
+    }
 
-sentinelMetricsServer :: Server Metrics.MetricsAPI
+sentinelMetricsServer :: Metrics.MetricsRoutes (AsServerT Handler)
 sentinelMetricsServer =
-  metricSentinel "events"
-    :<|> metricSentinel "page-views"
-    :<|> metricSentinel "sessions"
-    :<|> funnelSentinel
-    :<|> retentionSentinel
-    :<|> metricSentinel "acquisition"
-    :<|> metricSentinel "feature-adoption"
-    :<|> metricSentinel "conversion"
-    :<|> metricSentinel "users"
-    :<|> metricSentinel "organizations"
-    :<|> metricSentinel "custom"
+  Metrics.MetricsRoutes
+    { Metrics.events = metricSentinel "events",
+      Metrics.pageViews = metricSentinel "page-views",
+      Metrics.sessions = metricSentinel "sessions",
+      Metrics.funnel = funnelSentinel,
+      Metrics.retention = retentionSentinel,
+      Metrics.acquisition = metricSentinel "acquisition",
+      Metrics.featureAdoption = metricSentinel "feature-adoption",
+      Metrics.conversion = metricSentinel "conversion",
+      Metrics.users = metricSentinel "users",
+      Metrics.organizations = metricSentinel "organizations",
+      Metrics.custom = metricSentinel "custom"
+    }
   where
     metricSentinel :: Text -> Day -> Day -> Maybe Text -> Maybe Metrics.TimeGrain -> Handler Metrics.MetricResult
     metricSentinel name _fromDay _toDay _groupBy _timeGrain = pure (sentinelResult name)

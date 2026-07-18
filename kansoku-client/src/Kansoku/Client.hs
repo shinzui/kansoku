@@ -32,14 +32,15 @@ import Data.Generics.Labels ()
 import Data.Text qualified as Text
 import Data.UUID qualified as UUID
 import Data.UUID.V4 qualified as UUID
-import Kansoku.Api.Ingest (BatchAck, IngestAPI, IngestAck)
+import Kansoku.Api.Ingest (BatchAck, IngestRoutes)
+import Kansoku.Api.Ingest qualified as Ingest
 import Kansoku.Event (AccountId (..), AnalyticsEvent (..), AnonymousId (..), EventId (..), EventName (..), EventSource (..), OrganizationId (..), SessionId (..), UserId (..), baseEvent)
 import Kansoku.Prelude
 import Network.HTTP.Client qualified as HTTP
 import Network.HTTP.Client.TLS qualified as HTTP.TLS
-import Servant.API (type (:<|>) (..))
 import Servant.Client (BaseUrl, ClientEnv, ClientM, mkClientEnv, parseBaseUrl, runClientM)
 import Servant.Client qualified as ServantClient
+import Servant.Client.Generic (AsClientT, genericClient)
 
 data ClientConfig = ClientConfig
   { baseUrl :: !Text,
@@ -98,9 +99,10 @@ data ClientError
   = DeliveryFailed !ServantClient.ClientError
   deriving stock (Eq, Show)
 
-_postEvent :: AnalyticsEvent -> ClientM IngestAck
-postBatch :: [AnalyticsEvent] -> ClientM BatchAck
-_postEvent :<|> postBatch = ServantClient.client (Proxy @IngestAPI)
+-- NamedRoutes fields are type-family applications, so record-dot syntax cannot
+-- see them. Use qualified selector application at call sites.
+ingestClient :: IngestRoutes (AsClientT ClientM)
+ingestClient = genericClient
 
 newClient :: ClientConfig -> IO Client
 newClient cfg = do
@@ -229,7 +231,7 @@ deliverWithRetry cfg env events =
   go 0
   where
     go attempt = do
-      result <- runClientM (postBatch events) env
+      result <- runClientM (Ingest.postBatch ingestClient events) env
       case result of
         Right ack -> pure (Right ack)
         Left err

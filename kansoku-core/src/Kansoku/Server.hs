@@ -5,6 +5,7 @@ module Kansoku.Server
   ( ReadyProbe (..),
     healthApp,
     kansokuApp,
+    kansokuServer,
     pgmqReady,
     startServer,
   )
@@ -17,11 +18,12 @@ import Effectful (Eff, IOE, runEff, type (:>))
 import Effectful.Error.Static qualified as Error
 import Effectful.Reader.Static (Reader, asks)
 import Hasql.Pool qualified as Pool
+import Kansoku.Api (KansokuAPI (..), kansokuAPI)
 import Kansoku.ClickHouse (QueryPool)
 import Kansoku.Config (Config)
-import Kansoku.Ingest.Handler (ingestApp)
+import Kansoku.Ingest.Handler (ingestServer)
 import Kansoku.Logging (Log, logInfo)
-import Kansoku.Metrics.Handler (metricsApp)
+import Kansoku.Metrics.Handler (metricsServer)
 import Kansoku.OpenApi (openApiDoc)
 import Kansoku.Prelude
 import Network.HTTP.Types (status200, status404, status503)
@@ -30,6 +32,8 @@ import Network.Wai (Application, pathInfo, responseLBS)
 import Network.Wai.Handler.Warp qualified as Warp
 import Pgmq.Effectful (QueueName, queueMetrics, runPgmq)
 import Pgmq.Effectful.Interpreter (PgmqRuntimeError)
+import Servant (Handler, serve)
+import Servant.Server.Generic (AsServerT)
 
 -- | Runtime checks used to answer GET /ready.
 data ReadyProbe = ReadyProbe
@@ -46,6 +50,13 @@ healthApp req respond =
       respond (responseLBS status200 [(hContentType, "text/plain")] "OK")
     _ ->
       respond (responseLBS status404 [(hContentType, "text/plain")] "Not Found")
+
+kansokuServer :: Pool.Pool -> QueueName -> QueryPool -> KansokuAPI (AsServerT Handler)
+kansokuServer pool queueName queryPool =
+  KansokuAPI
+    { ingest = ingestServer pool queueName,
+      metrics = metricsServer queryPool
+    }
 
 kansokuApp :: ReadyProbe -> Pool.Pool -> QueueName -> QueryPool -> Application
 kansokuApp probe pool queueName queryPool req respond =
@@ -72,10 +83,8 @@ kansokuApp probe pool queueName queryPool req respond =
       respond (responseLBS status [(hContentType, "application/json")] (Aeson.encode body))
     ["openapi.json"] ->
       respond (responseLBS status200 [(hContentType, "application/json")] (Aeson.encode openApiDoc))
-    "metrics" : _ ->
-      metricsApp queryPool req respond
     _ ->
-      ingestApp pool queueName req respond
+      serve kansokuAPI (kansokuServer pool queueName queryPool) req respond
 
 -- | Check that PostgreSQL and pgmq answer one inexpensive metrics query.
 pgmqReady :: Pool.Pool -> QueueName -> IO (Either Text ())

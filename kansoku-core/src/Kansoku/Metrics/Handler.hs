@@ -2,8 +2,7 @@
 
 -- | Servant handlers for the semantic metrics API.
 module Kansoku.Metrics.Handler
-  ( metricsApp,
-    metricsServer,
+  ( metricsServer,
   )
 where
 
@@ -12,43 +11,38 @@ import Data.Aeson qualified as Aeson
 import Data.Text qualified as Text
 import Data.Time (Day)
 import Effectful (Eff, IOE, runEff)
-import Kansoku.Api.Metrics (MetricResult, MetricsAPI, TimeGrain)
+import Kansoku.Api.Metrics (MetricResult, MetricsRoutes (..), TimeGrain)
 import Kansoku.ClickHouse (QueryPool)
 import Kansoku.Logging (logError, runLogStderr)
 import Kansoku.Metrics.Registry (builtinMetric)
 import Kansoku.Prelude
 import Kansoku.Query qualified as Query
-import Network.Wai (Application)
 import Servant
   ( Handler,
-    Server,
     ServerError (..),
     err400,
     err404,
     err501,
     err503,
-    serve,
     throwError,
-    type (:<|>) (..),
   )
+import Servant.Server.Generic (AsServerT)
 
-metricsApp :: QueryPool -> Application
-metricsApp pool =
-  serve (Proxy @MetricsAPI) (metricsServer pool)
-
-metricsServer :: QueryPool -> Server MetricsAPI
+metricsServer :: QueryPool -> MetricsRoutes (AsServerT Handler)
 metricsServer pool =
-  metricHandler "events"
-    :<|> metricHandler "page_views"
-    :<|> sessionsHandler
-    :<|> funnelHandler
-    :<|> retentionHandler
-    :<|> notImplemented "acquisition"
-    :<|> notImplemented "feature_adoption"
-    :<|> metricHandler "conversion_rate"
-    :<|> metricHandler "active_users"
-    :<|> notImplemented "organizations"
-    :<|> notImplemented "custom"
+  MetricsRoutes
+    { events = metricHandler "events",
+      pageViews = metricHandler "page_views",
+      sessions = sessionsHandler,
+      funnel = funnelHandler,
+      retention = retentionHandler,
+      acquisition = notImplemented "acquisition",
+      featureAdoption = notImplemented "feature_adoption",
+      conversion = metricHandler "conversion_rate",
+      users = metricHandler "active_users",
+      organizations = notImplemented "organizations",
+      custom = notImplemented "custom"
+    }
   where
     metricHandler :: Text -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> Handler MetricResult
     metricHandler key fromDay toDay groupBy timeGrain =

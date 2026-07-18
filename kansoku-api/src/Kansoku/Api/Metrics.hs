@@ -3,7 +3,7 @@ module Kansoku.Api.Metrics
   ( MetricPoint (..),
     MetricQuery,
     MetricResult (..),
-    MetricsAPI,
+    MetricsRoutes (..),
     TimeGrain (..),
     timeGrainText,
   )
@@ -20,9 +20,9 @@ import Servant.API
     QueryParam,
     QueryParam',
     Required,
-    type (:<|>),
     type (:>),
   )
+import Servant.API.Generic (type (:-))
 import Web.HttpApiData (FromHttpApiData (..))
 
 data TimeGrain = Hour | Day | Week | Month
@@ -77,25 +77,34 @@ type MetricQuery =
     :> QueryParam "timeGrain" TimeGrain
     :> Get '[JSON] MetricResult
 
-type MetricsAPI =
-  "metrics" :> "events" :> MetricQuery
-    :<|> "metrics" :> "page-views" :> MetricQuery
-    :<|> "metrics" :> "sessions" :> MetricQuery
-    :<|> "metrics"
-      :> "funnel"
-      :> QueryParam' '[Required] "from" Day
-      :> QueryParam' '[Required] "to" Day
-      :> QueryParam' '[Required] "steps" Text
-      :> Get '[JSON] MetricResult
-    :<|> "metrics"
-      :> "retention"
-      :> QueryParam' '[Required] "from" Day
-      :> QueryParam' '[Required] "to" Day
-      :> QueryParam "days" Text
-      :> Get '[JSON] MetricResult
-    :<|> "metrics" :> "acquisition" :> MetricQuery
-    :<|> "metrics" :> "feature-adoption" :> MetricQuery
-    :<|> "metrics" :> "conversion" :> MetricQuery
-    :<|> "metrics" :> "users" :> MetricQuery
-    :<|> "metrics" :> "organizations" :> MetricQuery
-    :<|> "metrics" :> "custom" :> MetricQuery
+-- | Metric routes keyed by field name. Nine fields deliberately share
+-- 'MetricQuery'; their runtime path-to-handler guard lives in RoutingSpec.
+-- Record field order is not load-bearing for servant routing.
+data MetricsRoutes mode = MetricsRoutes
+  { events :: mode :- "metrics" :> "events" :> MetricQuery,
+    pageViews :: mode :- "metrics" :> "page-views" :> MetricQuery,
+    sessions :: mode :- "metrics" :> "sessions" :> MetricQuery,
+    funnel ::
+      mode
+        :- "metrics"
+          :> "funnel"
+          :> QueryParam' '[Required] "from" Day
+          :> QueryParam' '[Required] "to" Day
+          :> QueryParam' '[Required] "steps" Text
+          :> Get '[JSON] MetricResult,
+    retention ::
+      mode
+        :- "metrics"
+          :> "retention"
+          :> QueryParam' '[Required] "from" Day
+          :> QueryParam' '[Required] "to" Day
+          :> QueryParam "days" Text
+          :> Get '[JSON] MetricResult,
+    acquisition :: mode :- "metrics" :> "acquisition" :> MetricQuery,
+    featureAdoption :: mode :- "metrics" :> "feature-adoption" :> MetricQuery,
+    conversion :: mode :- "metrics" :> "conversion" :> MetricQuery,
+    users :: mode :- "metrics" :> "users" :> MetricQuery,
+    organizations :: mode :- "metrics" :> "organizations" :> MetricQuery,
+    custom :: mode :- "metrics" :> "custom" :> MetricQuery
+  }
+  deriving stock (Generic)

@@ -1,8 +1,8 @@
 -- | Public servant API for analytics ingestion.
 module Kansoku.Api.Ingest
   ( BatchAck (..),
-    IngestAPI,
     IngestAck (..),
+    IngestRoutes (..),
   )
 where
 
@@ -11,15 +11,18 @@ import Kansoku.Prelude
 import Servant.API
   ( JSON,
     ReqBody,
-    type (:<|>),
     type (:>),
   )
+import Servant.API.Generic (type (:-))
 import Servant.API.Verbs (Verb)
 import Servant.API.Verbs qualified as Servant
 
-type IngestAPI =
-  "v1" :> "events" :> ReqBody '[JSON] AnalyticsEvent :> Verb 'Servant.POST 202 '[JSON] IngestAck
-    :<|> "v1" :> "batch" :> ReqBody '[JSON] [AnalyticsEvent] :> Verb 'Servant.POST 202 '[JSON] BatchAck
+-- | Ingestion routes keyed by field name. Field order is not load-bearing.
+data IngestRoutes mode = IngestRoutes
+  { postEvent :: mode :- "v1" :> "events" :> ReqBody '[JSON] AnalyticsEvent :> Verb 'Servant.POST 202 '[JSON] IngestAck,
+    postBatch :: mode :- "v1" :> "batch" :> ReqBody '[JSON] [AnalyticsEvent] :> Verb 'Servant.POST 202 '[JSON] BatchAck
+  }
+  deriving stock (Generic)
 
 data IngestAck = IngestAck
   { accepted :: !Int,

@@ -29,16 +29,17 @@ library
   build-depends:
     , aeson
     , async
-    , base             >=4.21 && <5
+    , base                 >=4.21 && <5
     , bytestring
     , containers
-    , generic-lens     >=2.2  && <2.4
+    , generic-lens         >=2.2  && <2.4
     , http-client
     , http-client-tls
     , kansoku-api
-    , lens             ^>=5.3
+    , lens                 ^>=5.3
     , servant
     , servant-client
+    , servant-client-core
     , stm
     , text
     , time
