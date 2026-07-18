@@ -75,8 +75,8 @@ even if it requires splitting a partially completed task into two ("done" vs. "r
 - [x] (2026-07-18 04:23Z) M4b: `ClickHouse.hs` `connectionArgs` uses configured user and `setPassword`
 - [x] (2026-07-18 04:23Z) M4b: `ConfigSpec.hs` updated (clearEnv list, default + parse assertions)
 - [x] (2026-07-18 04:23Z) M4: `cabal build all` and `cabal test` still green; commit `fix(server): generic error bodies and configurable ClickHouse credentials`
-- [ ] MasterPlan registry row for EP-10 set to Complete; its Progress boxes ticked
-- [ ] Outcomes & Retrospective written
+- [x] (2026-07-18 04:27Z) MasterPlan registry row for EP-10 set to Complete; its Progress boxes ticked
+- [x] (2026-07-18 04:27Z) Outcomes & Retrospective written
 
 
 ## Surprises & Discoveries
@@ -121,6 +121,12 @@ implementation. Provide concise evidence.
   `{"details":[],"error":"queue unavailable"}` and stderr recorded the PGMQ statement
   failure. Starting with `KANSOKU_CLICKHOUSE_USER=nosuchuser` failed authentication with
   ClickHouse error code 516, proving the configured user reaches the driver.
+
+- 2026-07-18, final end-to-end validation: an accepted event can leave PGMQ before it is
+  visible in ClickHouse because the Shibuya writer is holding it in its in-memory batch.
+  `evt_ep10_final` initially counted zero after the queue reached length zero, then appeared
+  in `analytics.events_raw` after the batch-flush interval. This is expected batching
+  behavior, but EP-16 should distinguish queue depth from writer-held batch lag.
 
 
 ## Decision Log
@@ -200,7 +206,28 @@ implementation. Provide concise evidence.
 
 Compare the result against the original purpose at completion.
 
-(To be filled during and after implementation.)
+EP-10 is complete. The executable now owns SIGINT/SIGTERM handling, requests Shibuya's
+30-second graceful drain, and links both relevant lifetime boundaries: Shibuya processor
+failure reaches `runWriter` via `StopAllOnFailure` plus `waitApp`, and writer termination
+reaches Warp through `wait writerAsync`. A real PostgreSQL outage terminated the service
+with exit 1; Ctrl-C with healthy dependencies exited 0.
+
+`GET /ready` reports the supervised writer and PGMQ reachability. Live checks produced
+HTTP 200 `{"status":"ready"}` when healthy and HTTP 503
+`{"failing":["postgres"],"status":"unavailable"}` during the outage window, while
+`GET /health` remained the static HTTP 200 liveness route. Queue and ClickHouse exceptions
+now appear in structured stderr logs but not response bodies. ClickHouse host, database,
+user, and password are configurable with backward-compatible defaults, and a deliberately
+invalid configured user produced ClickHouse authentication error 516.
+
+Final validation passed from a clean worktree: `nix develop -c cabal build all` and
+`nix develop -c cabal test all` succeeded with PostgreSQL and ClickHouse live (28 core
+examples and 7 client examples, zero failures; only the client test requiring
+`KANSOKU_SERVER_URL` remained pending). The end-to-end event `evt_ep10_final` was accepted,
+drained from PGMQ, and observed in `analytics.events_raw`. The main lesson is that process
+supervision had to cross both the framework's internal processor boundary and the
+executable's writer-thread boundary; linking only the outer `Async` would not have fixed
+silent pipeline death under Shibuya's `IgnoreFailures` semantics.
 
 
 ## Context and Orientation

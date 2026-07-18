@@ -86,7 +86,7 @@ waves.
 | # | Title | Path | Hard Deps | Soft Deps | Status |
 |----|-------|------|-----------|-----------|--------|
 | 21 | Migrate Kansoku to the coherent pg-migrate PGMQ and Shibuya cohort | docs/plans/21-migrate-kansoku-to-the-coherent-pg-migrate-pgmq-and-shibuya-cohort.md | None | None | Complete |
-| 10 | Restore the build and supervise the writer | docs/plans/10-restore-the-build-and-supervise-the-writer.md | EP-21 | None | In Progress |
+| 10 | Restore the build and supervise the writer | docs/plans/10-restore-the-build-and-supervise-the-writer.md | EP-21 | None | Complete |
 | 11 | Split ClickHouse connections and adopt typed row decoding | docs/plans/11-split-clickhouse-connections-and-adopt-typed-row-decoding.md | EP-10 | None | Not Started |
 | 12 | ClickHouse schema v2: sort key, FINAL-free resolution, join-free rollups | docs/plans/12-clickhouse-schema-v2-sort-key-final-free-resolution-join-free-rollups.md | EP-10 | None | Not Started |
 | 9 | Convert kansoku to NamedRoutes, vertical slices, and MultiVerb | docs/plans/9-convert-kansoku-to-namedroutes-vertical-slices-and-multiverb.md | EP-10 | None | Not Started |
@@ -226,10 +226,10 @@ and the milestone. This section provides an at-a-glance view of the entire initi
 - [x] EP-21: writer runtime migrated to current Shibuya and adapter APIs
 - [x] EP-21: explicit PGMQ-only migration plan and `kansoku-migrate` executable; server startup does not migrate
 - [x] EP-21: ephemeral PostgreSQL first apply, strict verification, zero-work second apply, and queue provisioning proven
-- [ ] EP-10: migrated baseline verified; `cabal build all` and `cabal test` green
-- [ ] EP-10: writer and server lifetimes linked; writer death exits the process (demonstrated)
-- [ ] EP-10: `/ready` endpoint reports writer liveness and pgmq reachability
-- [ ] EP-10: error-body hygiene and ClickHouse credential configuration
+- [x] EP-10: migrated baseline verified; `cabal build all` and `cabal test` green
+- [x] EP-10: writer and server lifetimes linked; writer death exits the process (demonstrated)
+- [x] EP-10: `/ready` endpoint reports writer liveness and pgmq reachability
+- [x] EP-10: error-body hygiene and ClickHouse credential configuration
 - [ ] EP-11: dedicated writer connection separated from query-side connections
 - [ ] EP-11: query-side connection pool serving concurrent metrics requests
 - [ ] EP-11: typed row decoding replaces tab-delimited line parsing; decode failures are loud
@@ -303,6 +303,17 @@ interactions between child plans. Provide concise evidence.
   - The user confirmed Kansoku is not yet used, so EP-21 is a fresh-install migration. No legacy
     data-copy, history import, or persistent-ledger reconciliation is required.
 
+- 2026-07-18, during EP-10 implementation:
+  - Shibuya's `IgnoreFailures` semantics intentionally isolate a failed processor, so linking the
+    outer `runWriter` thread to Warp was insufficient. EP-10 now uses `StopAllOnFailure` and races
+    shutdown against `waitApp` inside the writer; stopping PostgreSQL proved the linked processor
+    exception terminates the whole process with exit 1. EP-16 must preserve this inner lifetime
+    link when it adds writer heartbeat and metrics.
+  - Queue depth alone cannot describe all pipeline lag. An accepted event left PGMQ while it was
+    still held in Shibuya's in-memory batch and became visible in ClickHouse only after the flush
+    interval. EP-16 should treat queue depth, batch-flush latency, and writer heartbeat as distinct
+    signals rather than assuming a zero-depth queue means every event is already queryable.
+
 
 ## Decision Log
 
@@ -368,13 +379,31 @@ interactions between child plans. Provide concise evidence.
   parallelizable work visible without merging unrelated concerns.
   Date: 2026-07-15
 
+- Decision: Preserve EP-10's two-level failure propagation in all later writer changes:
+  Shibuya runs with `StopAllOnFailure` and `waitApp`, while the executable waits on the
+  writer `Async` alongside Warp.
+  Rationale: live dependency failure proved both boundaries are necessary to eliminate
+  silent pipeline death. EP-16 will extend the writer and readiness path and must not
+  accidentally restore `IgnoreFailures` or stop observing the framework handle.
+  Date: 2026-07-18
+
 
 ## Outcomes & Retrospective
 
 Summarize outcomes, gaps, and lessons learned at major milestones or at completion.
 Compare the result against the original vision.
 
-(To be filled during and after implementation.)
+Phase 1 is complete. EP-21 established one coherent dependency and migration cohort, and
+EP-10 made that baseline operationally trustworthy: writer failure is process-fatal,
+signals drain gracefully, readiness reports writer/PGMQ state, internal exceptions no
+longer leak through 503 responses, and ClickHouse credentials are configurable. The full
+build and test suite passes with live PostgreSQL and ClickHouse, and an accepted HTTP event
+was observed end-to-end in `analytics.events_raw`.
+
+EP-11, EP-12, and EP-9 are now unblocked and may proceed independently as Phase 2. The main
+coordination lesson for later work is that Shibuya's internal processor lifetime is a
+separate supervision boundary from the executable's writer thread; EP-16 in particular
+must preserve both while adding heartbeat and telemetry.
 
 ---
 
@@ -401,3 +430,9 @@ Revision note (2026-07-17, second revision): EP-21 completed. Cabal and Nix now 
 cohort, the writer uses current Shibuya APIs, `kansoku-migrate` owns the PGMQ-only plan, normal
 server startup only provisions its queue, and fresh PostgreSQL application/reapplication is covered
 by an integration test. EP-10 remains Not Started per the user's request to do only the migration.
+
+Revision note (2026-07-18): EP-10 completed. The registry and aggregate progress now record the
+verified build, two-level writer supervision, graceful signal handling, readiness, response-body
+hygiene, and ClickHouse connection configuration. Cross-plan discoveries capture Shibuya's
+failure-isolation semantics and the distinction between queue depth and in-memory batch lag for
+EP-16; Phase 2 is now unblocked.
