@@ -233,7 +233,7 @@ activeUsersDaySQL :: QueryRequest -> Text
 activeUsersDaySQL req =
   Text.unlines
     [ "SELECT toString(day) AS bucket, '' AS group_key,",
-      "       toFloat64(uniqExactMerge(users)) AS value",
+      "       toFloat64(uniqCombinedMerge(users)) AS value",
       "FROM analytics.dau",
       "WHERE day >= " <> sqlString (renderDay (req ^. #from)) <> " AND day < " <> sqlString (renderDay (req ^. #to)),
       "GROUP BY day",
@@ -244,7 +244,7 @@ activeUsersWeekSQL :: QueryRequest -> Text
 activeUsersWeekSQL req =
   Text.unlines
     [ "SELECT toString(week) AS bucket, '' AS group_key,",
-      "       toFloat64(uniqExactMerge(users)) AS value",
+      "       toFloat64(uniqCombinedMerge(users)) AS value",
       "FROM analytics.wau",
       "WHERE week >= " <> sqlString (renderDay (req ^. #from)) <> " AND week < " <> sqlString (renderDay (req ^. #to)),
       "GROUP BY week",
@@ -257,7 +257,7 @@ pageViewsDaySQL req =
     Just "route" ->
       Text.unlines
         [ "SELECT toString(day) AS bucket, route AS group_key,",
-          "       toFloat64(uniqExactMerge(views)) AS value",
+          "       toFloat64(countMerge(views)) AS value",
           "FROM analytics.page_views_by_route",
           "WHERE day >= " <> sqlString (renderDay (req ^. #from)) <> " AND day < " <> sqlString (renderDay (req ^. #to)),
           "GROUP BY day, route",
@@ -266,7 +266,7 @@ pageViewsDaySQL req =
     _ ->
       Text.unlines
         [ "SELECT toString(day) AS bucket, '' AS group_key,",
-          "       toFloat64(uniqExactMerge(views)) AS value",
+          "       toFloat64(countMerge(views)) AS value",
           "FROM analytics.page_views_by_route",
           "WHERE day >= " <> sqlString (renderDay (req ^. #from)) <> " AND day < " <> sqlString (renderDay (req ^. #to)),
           "GROUP BY day",

@@ -47,7 +47,7 @@ events =
 
 pageViews :: MetricDefinition
 pageViews =
-  metric "page_views" "Distinct page view events." ["page_view"] Count [] (Just Day)
+  metric "page_views" "Page view event rows from the daily rollup." ["page_view"] Count [] (Just Day)
 
 sessions :: MetricDefinition
 sessions =
@@ -55,7 +55,7 @@ sessions =
 
 activeUsers :: MetricDefinition
 activeUsers =
-  metric "active_users" "Distinct identity-resolved active users." [] UniqueCount [] (Just Day)
+  metric "active_users" "Approximate distinct raw active identities." [] UniqueCount [] (Just Day)
 
 newUsers :: MetricDefinition
 newUsers =

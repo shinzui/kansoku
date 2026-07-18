@@ -1,9 +1,9 @@
 -- EP-5 rollup fixtures. All events on 2026-06-08 (a Monday), so day = week = 2026-06-08.
--- The identify event is inserted FIRST so the DAU/WAU MVs resolve anon-2 -> user-10
--- at insert time (deterministic, common ordering).
--- f7 is a NEVER-identified visitor (anon-3, no identify anywhere): it must count
--- as one DAU/WAU actor under its own anonymous id. If it vanishes from DAU, the
--- join_use_nulls trap has regressed.
+-- DAU/WAU count four raw identities: user-10, anon-2, user-20, and anon-3.
+-- Query-time stitching through events_resolved counts three users because anon-2
+-- resolves to user-10. The identify event happens to be inserted first, but the
+-- join-free DAU/WAU materialized views no longer depend on insertion order.
+-- f7 is a never-identified visitor and must appear in both counts as anon-3.
 INSERT INTO analytics.events_raw
     (event_id, event_name, source, occurred_at, received_at, anonymous_id, user_id, url)
 VALUES

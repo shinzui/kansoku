@@ -10,12 +10,23 @@ import Test.Hspec
 
 spec :: Spec
 spec = describe "Kansoku.Query.buildSQL" $ do
-  it "reads active users at day grain from analytics.dau with uniqExactMerge" $
+  it "reads active users at day grain from analytics.dau with uniqCombinedMerge" $
     buildSQL (Simple activeUsers) dayRequest
       `shouldBe` Text.unlines
         [ "SELECT toString(day) AS bucket, '' AS group_key,",
-          "       toFloat64(uniqExactMerge(users)) AS value",
+          "       toFloat64(uniqCombinedMerge(users)) AS value",
           "FROM analytics.dau",
+          "WHERE day >= '2026-06-01' AND day < '2026-06-08'",
+          "GROUP BY day",
+          "ORDER BY day"
+        ]
+
+  it "reads page views at day grain from the count-state rollup" $
+    buildSQL (Simple pageViews) dayRequest
+      `shouldBe` Text.unlines
+        [ "SELECT toString(day) AS bucket, '' AS group_key,",
+          "       toFloat64(countMerge(views)) AS value",
+          "FROM analytics.page_views_by_route",
           "WHERE day >= '2026-06-01' AND day < '2026-06-08'",
           "GROUP BY day",
           "ORDER BY day"

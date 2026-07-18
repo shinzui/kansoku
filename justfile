@@ -38,7 +38,7 @@ ch-fixtures-ep6:
 
 # Run the HTTP server.
 run: migrate
-    cabal run kansoku-server
+    cabal run kansoku-server:exe:kansoku-server
 
 # Apply Kansoku's explicit PostgreSQL migration plan.
 migrate:

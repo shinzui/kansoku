@@ -236,7 +236,7 @@ and the milestone. This section provides an at-a-glance view of the entire initi
 - [x] EP-12: versioned ClickHouse migration mechanism; single DDL owner
 - [x] EP-12: schema v2 migration (sort key, Nullable cleanup) applied and data rewritten
 - [x] EP-12: FINAL-free `events_resolved`; join-free DAU/WAU materialized views
-- [ ] EP-12: rollup aggregate states replaced; storage and query-time verified against fixtures
+- [x] EP-12: rollup aggregate states replaced; storage and query-time verified against fixtures
 - [ ] EP-9: (see plan file for its milestones; registry tracks overall status)
 - [ ] EP-13: metric SQL inputs validated or parameterized end-to-end
 - [ ] EP-13: funnel computed via ordered `windowFunnel` single pass
@@ -332,6 +332,13 @@ interactions between child plans. Provide concise evidence.
   - The current Cabal executable rejects bare `cabal test` with `Cabal-7134` because no target is
     selected. `cabal test all` is the verified project-wide gate, and EP-12 updates `just test`
     accordingly; later child plans should use the explicit target.
+  - The local persistent PostgreSQL database predates EP-21's pg-migrate ledger and already owns
+    PGMQ types, so `just run` cannot reconcile it automatically (`message_record already exists`).
+    EP-21 remains fresh-install-only as decided; developers with this stale local state must reset
+    or reconcile PostgreSQL separately. EP-12 HTTP validation used the already-provisioned queue.
+  - Current Cabal also requires the qualified `kansoku-server:exe:kansoku-server` target because
+    the package contains two executables; EP-12 fixes `just run`. Port 8080 was occupied by another
+    local process-compose project, so endpoint evidence was captured on isolated port 18080.
 
 
 ## Decision Log

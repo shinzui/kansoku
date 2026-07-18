@@ -1,4 +1,8 @@
--- EP-6 metrics fixtures. The duplicate e2 row verifies replay-safe distinct counts.
+-- EP-6 metrics fixtures. The duplicate e2 row verifies that raw-table event
+-- counts remain replay-proof: count(DISTINCT event_id) returns three page views
+-- on 2026-06-01. The page-views rollup intentionally counts inserted rows, so
+-- countMerge reports four; OPTIMIZE collapses the raw replay but cannot retract
+-- the already-recorded count state. This is the accepted count-state tradeoff.
 INSERT INTO analytics.events_raw
   (event_id, event_name, source, occurred_at, received_at, user_id, url, session_id)
 VALUES
