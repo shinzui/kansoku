@@ -1,7 +1,7 @@
 {-# LANGUAGE TypeApplications #-}
 
 -- | Query compiler and executor for semantic metrics.
-module Kansoku.Query
+module Kansoku.Metrics.Query
   ( QueryRequest (..),
     buildFunnelSQL,
     buildRetentionSQL,
@@ -32,8 +32,8 @@ import Data.Text.Encoding qualified as Text
 import Data.Time (Day)
 import Data.Time.Format (defaultTimeLocale, formatTime)
 import Effectful (Eff, IOE, type (:>))
-import Kansoku.Api.Metrics (MetricPoint (..), MetricResult (..), TimeGrain (..))
 import Kansoku.ClickHouse (QueryPool, withQueryConnection)
+import Kansoku.Metrics.Api (MetricPoint (..), MetricResult (..), TimeGrain (..))
 import Kansoku.Metrics.Definition (Aggregation (..), MetricDefinition (..), RatioMetric (..))
 import Kansoku.Metrics.Registry (BuiltinMetric (..))
 import Kansoku.Prelude

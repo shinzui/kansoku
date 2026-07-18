@@ -9,13 +9,13 @@ import Data.Time.Calendar (fromGregorian)
 import Data.Time.Clock (NominalDiffTime, diffUTCTime)
 import Data.Word (Word8)
 import Effectful (runEff)
-import Kansoku.Api.Metrics (TimeGrain (Day))
 import Kansoku.ClickHouse
 import Kansoku.ClickHouseTestSupport
 import Kansoku.Event
+import Kansoku.Metrics.Api (TimeGrain (Day))
+import Kansoku.Metrics.Query qualified as Query
 import Kansoku.Metrics.Registry (BuiltinMetric, builtinMetric)
 import Kansoku.Prelude
-import Kansoku.Query qualified as Query
 import Test.Hspec
 
 spec :: Spec

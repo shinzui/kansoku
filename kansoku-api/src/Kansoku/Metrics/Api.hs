@@ -1,5 +1,5 @@
 -- | Public servant API and DTOs for semantic metric queries.
-module Kansoku.Api.Metrics
+module Kansoku.Metrics.Api
   ( MetricPoint (..),
     MetricQuery,
     MetricResult (..),

@@ -5,8 +5,8 @@ module Kansoku.Api
   )
 where
 
-import Kansoku.Api.Ingest (IngestRoutes)
-import Kansoku.Api.Metrics (MetricsRoutes)
+import Kansoku.Ingest.Api (IngestRoutes)
+import Kansoku.Metrics.Api (MetricsRoutes)
 import Kansoku.Prelude
 import Servant.API (NamedRoutes)
 import Servant.API.Generic (type (:-))

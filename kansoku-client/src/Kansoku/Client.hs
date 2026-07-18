@@ -32,9 +32,9 @@ import Data.Generics.Labels ()
 import Data.Text qualified as Text
 import Data.UUID qualified as UUID
 import Data.UUID.V4 qualified as UUID
-import Kansoku.Api.Ingest (BatchAck, IngestRoutes)
-import Kansoku.Api.Ingest qualified as Ingest
 import Kansoku.Event (AccountId (..), AnalyticsEvent (..), AnonymousId (..), EventId (..), EventName (..), EventSource (..), OrganizationId (..), SessionId (..), UserId (..), baseEvent)
+import Kansoku.Ingest.Api (BatchAck, IngestRoutes)
+import Kansoku.Ingest.Api qualified as Ingest
 import Kansoku.Prelude
 import Network.HTTP.Client qualified as HTTP
 import Network.HTTP.Client.TLS qualified as HTTP.TLS

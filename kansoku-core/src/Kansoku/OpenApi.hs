@@ -8,8 +8,6 @@ where
 import Data.Char (toLower)
 import Data.OpenApi qualified as O
 import Kansoku.Api (kansokuAPI)
-import Kansoku.Api.Ingest (BatchAck, IngestAck)
-import Kansoku.Api.Metrics (MetricPoint, MetricResult, TimeGrain)
 import Kansoku.Event
   ( AccountId,
     AnalyticsEvent,
@@ -24,6 +22,8 @@ import Kansoku.Event
     SourceEventId,
     UserId,
   )
+import Kansoku.Ingest.Api (BatchAck, IngestAck)
+import Kansoku.Metrics.Api (MetricPoint, MetricResult, TimeGrain)
 import Kansoku.Prelude
 import Servant.OpenApi (toOpenApi)
 

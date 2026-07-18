@@ -10,7 +10,7 @@ import Data.Aeson (Value)
 import Data.Aeson qualified as Aeson
 import Data.Map.Strict (Map)
 import Data.Text qualified as Text
-import Kansoku.Api.Metrics (TimeGrain)
+import Kansoku.Metrics.Api (TimeGrain)
 import Kansoku.Prelude
 
 data Aggregation = Count | UniqueCount | Sum | Average | Ratio

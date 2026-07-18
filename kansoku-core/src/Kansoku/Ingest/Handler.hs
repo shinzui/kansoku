@@ -13,16 +13,16 @@ import Data.Text qualified as Text
 import Effectful (Eff, IOE, runEff, type (:>))
 import Effectful.Error.Static qualified as Error
 import Hasql.Pool qualified as Pool
-import Kansoku.Api.Ingest
-  ( BatchAck (..),
-    IngestAck (..),
-    IngestRoutes (..),
-  )
 import Kansoku.Event
   ( AnalyticsEvent,
     EventId (..),
     ValidationError,
     validateEvent,
+  )
+import Kansoku.Ingest.Api
+  ( BatchAck (..),
+    IngestAck (..),
+    IngestRoutes (..),
   )
 import Kansoku.Ingest.Producer (enqueueMany, enqueueOne)
 import Kansoku.Logging (logError, runLogStderr)

@@ -27,12 +27,12 @@ library
   hs-source-dirs:  src
   exposed-modules:
     Kansoku.Api
-    Kansoku.Api.Ingest
-    Kansoku.Api.Metrics
     Kansoku.Event
     Kansoku.Event.Registry
     Kansoku.Event.Types
     Kansoku.Event.Validation
+    Kansoku.Ingest.Api
+    Kansoku.Metrics.Api
     Kansoku.Prelude
 
   build-depends:

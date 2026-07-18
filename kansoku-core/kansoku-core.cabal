@@ -39,11 +39,11 @@ library
     Kansoku.Logging
     Kansoku.Metrics.Definition
     Kansoku.Metrics.Handler
+    Kansoku.Metrics.Query
     Kansoku.Metrics.Registry
     Kansoku.Migrations
     Kansoku.OpenApi
     Kansoku.Postgres
-    Kansoku.Query
     Kansoku.Runtime
     Kansoku.Server
     Kansoku.Telemetry

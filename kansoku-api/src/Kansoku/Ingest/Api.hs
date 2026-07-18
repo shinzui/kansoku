@@ -1,5 +1,5 @@
 -- | Public servant API for analytics ingestion.
-module Kansoku.Api.Ingest
+module Kansoku.Ingest.Api
   ( BatchAck (..),
     IngestAck (..),
     IngestRoutes (..),

@@ -130,10 +130,10 @@ route.
       chains to `NamedRoutes` records; rewrite the servers as handler records; rewrite the SDK
       client with `genericClient`; collapse the server's manual `pathInfo` metrics-vs-ingest
       dispatch into one servant application. The Milestone 1 routing test still passes.
-- [ ] Milestone 3: move the layer-first route/DTO modules into vertical slices —
+- [x] Milestone 3 (completed 2026-07-18): move the layer-first route/DTO modules into vertical slices —
       `Kansoku/Api/Ingest.hs` → `Kansoku/Ingest/Api.hs`, `Kansoku/Api/Metrics.hs` →
       `Kansoku/Metrics/Api.hs`, `Kansoku/Query.hs` → `Kansoku/Metrics/Query.hs`. Update cabals
-      and imports. Routing test unchanged.
+      and imports. `cabal build all` and the full test suite pass; the routing guard remains green.
 - [ ] Milestone 4: adopt `MultiVerb`. Add `Kansoku/Api/Response.hs` (error envelope, the
       `KansokuResult` sum, the `OkResponses`/`AcceptedResponses` aliases, a hand-written
       `AsUnion` with an exhaustiveness witness, `faultToResult`). Make every route a `MultiVerb`
@@ -269,6 +269,12 @@ implementation. Provide concise evidence.
   `events` in `MetricsRoutes` left all 37 core examples green, including the thirteen-
   path sentinel guard. Restoring the presentation order did not change behavior. This
   verifies in Kansoku that record field declaration order is not load-bearing.
+
+- Discovery (Milestone 3, 2026-07-18): the original structural acceptance command's
+  `/Query\.hs$` alternative also matched the intended destination
+  `Kansoku/Metrics/Query.hs`, so it could not distinguish residue from success. The
+  acceptance check now names the three obsolete paths exactly and asserts that each is
+  absent; the new paths are asserted present separately.
 
 
 ## Decision Log
@@ -1049,9 +1055,17 @@ and `Kansoku/Prelude.hs` stay in `kansoku-api`; `Kansoku/ClickHouse.hs` and
 Ingest/Metrics handler/producer/queue/definition/registry modules do not move.
 
 Acceptance: `cabal build all && cabal test all` passes, including the Milestone 1 routing test
-unchanged. `git status` shows renames (`R`), not delete+add. `find kansoku-api/src
-kansoku-core/src -name '*.hs' | grep -iE 'Api/(Ingest|Metrics)|/Query\.hs$'` returns nothing (the
-layer-first residue is gone).
+unchanged. `git status` shows renames (`R`), not delete+add. The following exact-path probe passes
+(the layer-first residue is gone), and the three destination paths exist:
+
+```bash
+test ! -e kansoku-api/src/Kansoku/Api/Ingest.hs
+test ! -e kansoku-api/src/Kansoku/Api/Metrics.hs
+test ! -e kansoku-core/src/Kansoku/Query.hs
+test -e kansoku-api/src/Kansoku/Ingest/Api.hs
+test -e kansoku-api/src/Kansoku/Metrics/Api.hs
+test -e kansoku-core/src/Kansoku/Metrics/Query.hs
+```
 
 Commit message form:
 
@@ -1929,3 +1943,8 @@ holds the four conformance tests, all pure of ClickHouse.
   treat `/health`, `/ready`, and `/openapi.json` as the exact WAI-level operational/meta allowlist.
   Also recorded the direct `servant-client-core` dependency required by `genericClient` and the
   successful Kansoku field-order experiment.
+
+- 2026-07-18, Milestone 3 — Completed the three history-preserving vertical-slice moves and updated
+  every package export and import. Corrected the structural acceptance probe after execution showed
+  that its broad `/Query\.hs$` alternative also matched the intended destination; the plan now checks
+  exact obsolete and destination paths separately.

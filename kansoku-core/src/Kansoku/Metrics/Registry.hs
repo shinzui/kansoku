@@ -13,7 +13,7 @@ where
 
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Kansoku.Api.Metrics (TimeGrain (..))
+import Kansoku.Metrics.Api (TimeGrain (..))
 import Kansoku.Metrics.Definition
 import Kansoku.Prelude
 

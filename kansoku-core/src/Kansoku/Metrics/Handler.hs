@@ -11,12 +11,12 @@ import Data.Aeson qualified as Aeson
 import Data.Text qualified as Text
 import Data.Time (Day)
 import Effectful (Eff, IOE, runEff)
-import Kansoku.Api.Metrics (MetricResult, MetricsRoutes (..), TimeGrain)
 import Kansoku.ClickHouse (QueryPool)
 import Kansoku.Logging (logError, runLogStderr)
+import Kansoku.Metrics.Api (MetricResult, MetricsRoutes (..), TimeGrain)
+import Kansoku.Metrics.Query qualified as Query
 import Kansoku.Metrics.Registry (builtinMetric)
 import Kansoku.Prelude
-import Kansoku.Query qualified as Query
 import Servant
   ( Handler,
     ServerError (..),

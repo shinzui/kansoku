@@ -2,10 +2,10 @@ module Kansoku.QuerySpec (spec) where
 
 import Data.Text qualified as Text
 import Data.Time (fromGregorian)
-import Kansoku.Api.Metrics (TimeGrain (..))
+import Kansoku.Metrics.Api (TimeGrain (..))
+import Kansoku.Metrics.Query
 import Kansoku.Metrics.Registry
 import Kansoku.Prelude
-import Kansoku.Query
 import Test.Hspec
 
 spec :: Spec

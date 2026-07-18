@@ -22,8 +22,6 @@ import Data.Foldable (traverse_)
 import Data.Text (Text)
 import Data.Time (Day)
 import Kansoku.Api qualified as Api
-import Kansoku.Api.Ingest qualified as Ingest
-import Kansoku.Api.Metrics qualified as Metrics
 import Kansoku.Event
   ( AnalyticsEvent,
     EventId (..),
@@ -31,6 +29,8 @@ import Kansoku.Event
     EventSource (..),
     baseEvent,
   )
+import Kansoku.Ingest.Api qualified as Ingest
+import Kansoku.Metrics.Api qualified as Metrics
 import Network.HTTP.Client qualified as HTTP
 import Network.HTTP.Types
   ( hContentType,
