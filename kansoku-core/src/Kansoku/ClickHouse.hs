@@ -5,9 +5,7 @@ module Kansoku.ClickHouse
     QueryPool,
     clickHouseConfigFromConfig,
     countEvents,
-    ensureSchema,
     insertEvents,
-    openBootstrapConnection,
     openClickHouse,
     newQueryPool,
     selectEventProjections,
@@ -20,7 +18,6 @@ import ClickHaskell
     ConnectionArgs,
     Select,
     UInt64,
-    command,
     defaultConnectionArgs,
     insert,
     intoTable,
@@ -36,7 +33,6 @@ import ClickHaskell
 import Control.Exception (SomeException, throwIO, try)
 import Data.Generics.Labels ()
 import Data.Pool qualified as Pool
-import Data.String (IsString)
 import Kansoku.ClickHouse.EventRow
 import Kansoku.Config qualified as Config
 import Kansoku.Event (AnalyticsEvent)
@@ -60,10 +56,6 @@ clickHouseConfigFromConfig cfg =
       clickHouseUser = Config.clickHouseUser cfg,
       clickHousePassword = Config.clickHousePassword cfg
     }
-
-openBootstrapConnection :: ClickHouseConfig -> IO Connection
-openBootstrapConnection cfg =
-  openConnection (connectionArgs (cfg & #clickHouseDatabase .~ "default"))
 
 openClickHouse :: ClickHouseConfig -> IO Connection
 openClickHouse = openConnection . connectionArgs
@@ -98,11 +90,6 @@ connectionArgs ClickHouseConfig {clickHouseHost = host, clickHouseTcpPort = port
     . setPassword password
     . setDatabase database
     $ defaultConnectionArgs
-
-ensureSchema :: Connection -> IO ()
-ensureSchema conn = do
-  command conn "CREATE DATABASE IF NOT EXISTS analytics"
-  command conn createEventsRawTable
 
 insertEvents :: Connection -> [AnalyticsEvent] -> IO ()
 insertEvents conn events =
@@ -142,38 +129,3 @@ countSelect :: Select CountColumns CountRow
 countSelect =
   unsafeMkSelect $ \_ ->
     "SELECT count() AS count FROM events_raw"
-
-createEventsRawTable :: (IsString a) => a
-createEventsRawTable =
-  """
-  CREATE TABLE IF NOT EXISTS analytics.events_raw
-  (
-      event_id               String,
-      event_name             LowCardinality(String),
-      source                 LowCardinality(String),
-      source_service         Nullable(String),
-      occurred_at            DateTime64(3, 'UTC'),
-      received_at            DateTime64(3, 'UTC'),
-      anonymous_id           Nullable(String),
-      user_id                String,
-      organization_id        Nullable(String),
-      account_id             String,
-      session_id             Nullable(String),
-      url                    Nullable(String),
-      referrer               Nullable(String),
-      utm_source             Nullable(String),
-      utm_medium             Nullable(String),
-      utm_campaign           Nullable(String),
-      utm_content            Nullable(String),
-      utm_term               Nullable(String),
-      correlation_id         Nullable(String),
-      causation_id           Nullable(String),
-      source_event_id        Nullable(String),
-      source_global_position Nullable(UInt64),
-      properties             String,
-      context                String
-  )
-  ENGINE = ReplacingMergeTree(received_at)
-  PARTITION BY toYYYYMM(occurred_at)
-  ORDER BY (account_id, user_id, event_name, occurred_at, event_id)
-  """

@@ -149,7 +149,7 @@ tasks are in the `justfile`:
 nix develop            # enter the dev shell
 just up                # start postgres, clickhouse, create the db
 just create-database   # create the `kansoku` database (if needed)
-just ch-migrate        # apply ClickHouse migrations
+just ch-migrate        # apply and record unapplied ClickHouse migrations
 just build             # cabal build all
 just test              # run the test suite
 just run               # run the kansoku-server executable

@@ -88,7 +88,7 @@ waves.
 | 21 | Migrate Kansoku to the coherent pg-migrate PGMQ and Shibuya cohort | docs/plans/21-migrate-kansoku-to-the-coherent-pg-migrate-pgmq-and-shibuya-cohort.md | None | None | Complete |
 | 10 | Restore the build and supervise the writer | docs/plans/10-restore-the-build-and-supervise-the-writer.md | EP-21 | None | Complete |
 | 11 | Split ClickHouse connections and adopt typed row decoding | docs/plans/11-split-clickhouse-connections-and-adopt-typed-row-decoding.md | EP-10 | None | Complete |
-| 12 | ClickHouse schema v2: sort key, FINAL-free resolution, join-free rollups | docs/plans/12-clickhouse-schema-v2-sort-key-final-free-resolution-join-free-rollups.md | EP-10 | None | Not Started |
+| 12 | ClickHouse schema v2: sort key, FINAL-free resolution, join-free rollups | docs/plans/12-clickhouse-schema-v2-sort-key-final-free-resolution-join-free-rollups.md | EP-10 | None | In Progress |
 | 9 | Convert kansoku to NamedRoutes, vertical slices, and MultiVerb | docs/plans/9-convert-kansoku-to-namedroutes-vertical-slices-and-multiverb.md | EP-10 | None | Not Started |
 | 13 | Safe and correct metric SQL: validated inputs, ordered funnels, honest failures | docs/plans/13-safe-and-correct-metric-sql-validated-inputs-ordered-funnels-honest-failures.md | EP-12 | EP-11, EP-9 | Not Started |
 | 14 | SDK-grade ingest contract: partial batch acceptance, CORS, and payload limits | docs/plans/14-sdk-grade-ingest-contract-partial-batch-acceptance-cors-and-payload-limits.md | EP-9 | None | Not Started |
@@ -327,6 +327,11 @@ interactions between child plans. Provide concise evidence.
   - Cabal and Nix selected different ClickHaskell APIs (the pinned 1.1.0 source versus Nix's
     1.0.0 package). EP-11 pins Nix to the exact Cabal revision so typed columns and driver behavior
     remain coherent across both build paths.
+
+- 2026-07-18, during EP-12 implementation:
+  - The current Cabal executable rejects bare `cabal test` with `Cabal-7134` because no target is
+    selected. `cabal test all` is the verified project-wide gate, and EP-12 updates `just test`
+    accordingly; later child plans should use the explicit target.
 
 
 ## Decision Log

@@ -4,6 +4,7 @@ slug: clickhouse-schema-v2-sort-key-final-free-resolution-join-free-rollups
 title: "ClickHouse schema v2: sort key, FINAL-free resolution, join-free rollups"
 kind: exec-plan
 created_at: 2026-07-15T21:30:34Z
+intention: intention_01kxr5jt2heyvt0n768ym9dwqd
 master_plan: "docs/masterplans/2-kansoku-production-hardening-review-fixes-and-portfolio-service-readiness.md"
 ---
 
@@ -15,12 +16,10 @@ Decision Log, and Outcomes & Retrospective must be kept up to date as work proce
 This is child plan EP-12 of the MasterPlan at
 `docs/masterplans/2-kansoku-production-hardening-review-fixes-and-portfolio-service-readiness.md`.
 It has one hard dependency: EP-10
-(`docs/plans/10-restore-the-build-and-supervise-the-writer.md`) must land first, because the
-repository does not compile today (shibuya renamed the handler-facing message type that
-`Kansoku/Writer/Batch.hs` pattern-matches on) and none of this plan's Haskell edits or test
-runs can be validated until it does. The migration files in Milestones 1 through 4 can be
-*drafted* before EP-10 lands, but nothing should be committed as done until `cabal build all`
-and `cabal test` are green.
+(`docs/plans/10-restore-the-build-and-supervise-the-writer.md`), which is complete. EP-10
+restored the build after the Shibuya handler-facing message type changed and established the
+green baseline required to validate this plan. Every milestone here must keep `cabal build all`
+and `cabal test all` green.
 
 
 ## Purpose / Big Picture
@@ -59,14 +58,14 @@ Use a checklist to summarize granular steps. Every stopping point must be docume
 even if it requires splitting a partially completed task into two ("done" vs. "remaining").
 This section must always reflect the actual current state of the work.
 
-- [ ] M1: `db/clickhouse/migrate.sh` written (ledger bootstrap + apply-unapplied-in-order)
-- [ ] M1: justfile `ch-migrate` recipe delegates to the script; `ch-reset` recipe added
-- [ ] M1: `ensureSchema`, `createEventsRawTable`, `openBootstrapConnection` deleted from
+- [x] (2026-07-18 14:24Z) M1: `db/clickhouse/migrate.sh` written (ledger bootstrap + apply-unapplied-in-order)
+- [x] (2026-07-18 14:24Z) M1: justfile `ch-migrate` recipe delegates to the script; `ch-reset` recipe added
+- [x] (2026-07-18 14:24Z) M1: `ensureSchema`, `createEventsRawTable`, `openBootstrapConnection` deleted from
       `kansoku-core/src/Kansoku/ClickHouse.hs` (exports and unused imports cleaned)
-- [ ] M1: `kansoku-core/test/Kansoku/ClickHouseSpec.hs` and
+- [x] (2026-07-18 14:24Z) M1: `kansoku-core/test/Kansoku/ClickHouseSpec.hs` and
       `kansoku-core/test/Kansoku/Writer/BatchSpec.hs` bootstrap via migrations, pending with
       a "run just ch-migrate" hint when the schema is absent
-- [ ] M1: migration-immutability rule documented in `db/clickhouse/migrations/` (header
+- [x] (2026-07-18 14:24Z) M1: migration-immutability rule documented in `db/clickhouse/migrations/` (header
       comment in the runner script) and verified: `just ch-migrate` twice shows skips
 - [ ] M2: `db/clickhouse/migrations/0004_events_raw_v2.sql` written (v2 table, copy,
       exchange, dependent objects recreated with v1 semantics)
@@ -74,7 +73,7 @@ This section must always reflect the actual current state of the work.
 - [ ] M2: `kansoku-core/src/Kansoku/ClickHouse/EventRow.hs` updated (`Maybe ChString` →
       `ChString` for the cleaned columns; `source_global_position` stays `Maybe`)
 - [ ] M2: `Kansoku.Query.buildSessionsSQL` predicate reduced to `session_id != ''`
-- [ ] M2: `cabal build all` and `cabal test` green against the v2 table
+- [ ] M2: `cabal build all` and `cabal test all` green against the v2 table
 - [ ] M3: `db/clickhouse/migrations/0005_final_free_resolution.sql` written (events_resolved
       without FINAL; mv_dau/mv_wau join-free; dau/wau truncated and backfilled)
 - [ ] M3: fixture check — stitched vs raw-identity active-user numbers both observable
@@ -95,11 +94,16 @@ This section must always reflect the actual current state of the work.
 Document unexpected behaviors, bugs, optimizations, or insights discovered during
 implementation. Provide concise evidence.
 
-(None yet. One drift is *predicted* and documented ahead of time in Milestone 4: the ep6
+- One drift is *predicted* and documented ahead of time in Milestone 4: the ep6
 fixture deliberately inserts a duplicate `e2` row, so the count-state rollup will report 4
 page views on 2026-06-01 where the exact-distinct rollup reported 3. This is the accepted
 count-vs-distinct tradeoff made visible by an adversarial fixture, not a bug — record the
-observed transcript here when it is captured.)
+observed transcript here when it is captured.
+
+- 2026-07-18: Current Cabal rejects bare `cabal test` with `Cabal-7134` because no target is
+  selected. `cabal test all` is the explicit project-wide equivalent and passed both suites
+  (35 core examples, 7 client examples with the live-server case intentionally pending).
+  The `just test` recipe and this plan's validation commands now use `cabal test all`.
 
 
 ## Decision Log
@@ -221,6 +225,12 @@ Record every decision made while working on the plan.
   Rationale: MasterPlan boundary — EP-13 hard-depends on EP-12 precisely so its builders
   target the v2 schema once, not twice.
   Date: 2026-07-15
+
+- Decision: Use `cabal test all` for project-wide test gates and make `just test` delegate
+  to that explicit target.
+  Rationale: The current Cabal executable rejects bare `cabal test` with `Cabal-7134`;
+  selecting `all` preserves the intended four-package validation and is verified green.
+  Date: 2026-07-18
 
 
 ## Outcomes & Retrospective
@@ -395,7 +405,7 @@ Scope: introduce the `analytics.schema_migrations` ledger and a runner script th
 only unapplied files in filename order, recording each; rewire the `ch-migrate` just recipe
 to it and add a `ch-reset` recipe; delete the duplicated DDL from Haskell and fix the test
 bootstrap. At the end, running `just ch-migrate` twice in a row shows files applied once
-and skipped the second time, the ledger lists them, and `cabal test` still passes (the
+and skipped the second time, the ledger lists them, and `cabal test all` still passes (the
 ClickHouse-touching specs pass when the schema exists, and pend with a helpful hint when it
 does not). No schema *content* changes in this milestone.
 
@@ -519,7 +529,7 @@ Acceptance: from the repo root inside `nix develop`, with ClickHouse running, `j
 ch-reset` prints one `applying <file>` line per migration file; an immediate second `just
 ch-migrate` prints only `skipping <file> (already applied)` lines; `clickhouse-client --port
 $CLICKHOUSE_TCP_PORT --query "SELECT filename FROM analytics.schema_migrations ORDER BY
-filename"` lists exactly the migration filenames; `cabal build all` and `cabal test` are
+filename"` lists exactly the migration filenames; `cabal build all` and `cabal test all` are
 green; and `grep -rn "ensureSchema\|createEventsRawTable" --include='*.hs' .` returns
 nothing.
 
@@ -805,7 +815,7 @@ wholesale builder rewrite is EP-13's (this boundary is recorded in the Decision 
 
 Acceptance: `just ch-migrate` applies 0004 (and skips 0001–0003); the row-count
 verification matches; `SHOW CREATE TABLE analytics.events_raw` shows the v2 ORDER BY and
-non-Nullable columns; `cabal build all` and `cabal test` are green (the ClickHouseSpec
+non-Nullable columns; `cabal build all` and `cabal test all` are green (the ClickHouseSpec
 dedup test — insert twice, `OPTIMIZE TABLE analytics.events_raw FINAL`, count collapses to
 1 — proves the new ORDER BY tuple still dedups replays); loading
 `db/clickhouse/fixtures/ep5_fixtures.sql` and `ep6_fixtures.sql` on a `just ch-reset`
@@ -970,7 +980,7 @@ returns `3` — the stitched count (`anon-2` resolves to `user-10`). Both number
 each labeled with its semantics: that is the design. Also verify FINAL is gone:
 `SHOW CREATE VIEW analytics.events_resolved` contains no `FINAL`, and
 `EXPLAIN SELECT uniqExact(canonical_user) FROM analytics.events_resolved` runs without a
-merge-at-read step. `cabal test` stays green (no Haskell changes here).
+merge-at-read step. `cabal test all` stays green (no Haskell changes here).
 
 Suggested commit message:
 
@@ -1180,7 +1190,7 @@ recorded state). That drift is the documented cost of `countState`; production d
 are rare, replay-driven, and transient in the raw table.
 
 Acceptance: the full verification suite in Validation and Acceptance below runs clean, its
-transcripts are pasted into this plan, `cabal build all` and `cabal test` are green, and
+transcripts are pasted into this plan, `cabal build all` and `cabal test all` are green, and
 the MasterPlan's EP-12 milestones can be checked off.
 
 Suggested commit message:
@@ -1215,7 +1225,7 @@ chmod +x db/clickhouse/migrate.sh
 # 3. Verify
 just ch-reset
 just ch-migrate
-cabal build all && cabal test
+cabal build all && cabal test all
 ```
 
 Expected `just ch-reset` output (fresh database, only 0001–0003 exist yet):
@@ -1256,7 +1266,7 @@ clickhouse-client --port $CLICKHOUSE_TCP_PORT --query "
   SELECT (SELECT count() FROM analytics.events_raw) AS v2_rows,
          (SELECT count() FROM analytics.events_raw_v2) AS v1_rows"
 # edit EventRow.hs and Query.hs (sessions predicate), then:
-cabal build all && cabal test
+cabal build all && cabal test all
 ```
 
 Expected: `applying 0004_events_raw_v2.sql` (three skips before it); the count query prints
@@ -1284,7 +1294,7 @@ $EDITOR db/clickhouse/migrations/0006_rollups_v2.sql
 $EDITOR db/clickhouse/migrations/0007_drop_events_raw_v1.sql   # only after 0004 verification
 just ch-migrate            # applies 0006 then 0007
 # edit Query.hs merges and both fixture files' comments, then:
-cabal build all && cabal test
+cabal build all && cabal test all
 # full verification (next section)
 ```
 
@@ -1354,7 +1364,7 @@ one lower because `anon-2` resolves to `user-10`; (c) `/dashboard 1`, `/docs 1`,
 drift on the deliberately duplicated `e2` (this is the ep6 fixture doing its job, not a
 regression; the raw-table number is the replay-proof one).
 
-Third, end-to-end through the Haskell query layer: `cabal test` green, and with the server
+Third, end-to-end through the Haskell query layer: `cabal test all` green, and with the server
 running against the fixture-loaded database (`just run`), the active-users and page-views
 metric endpoints return the numbers above (active_users day 2026-06-08 = 4; page_views day
 2026-06-01 = 4, day 2026-06-08 = 5). Exercise whatever metric-query route the post-EP-10
@@ -1464,10 +1474,10 @@ exactly the failure mode the old mechanism had).
 ## Interfaces and Dependencies
 
 Hard dependency: EP-10 (`docs/plans/10-restore-the-build-and-supervise-the-writer.md`).
-The repo does not compile until it lands; every Haskell edit and `cabal test` gate in this
-plan is blocked on it. EP-10 also touches `kansoku-core/test/Kansoku/Writer/BatchSpec.hs`
-(shibuya `Ingested` → `Message`); Milestone 1's edit to that file's `withClickHouse` helper
-must be applied to whatever shape EP-10 leaves behind.
+EP-10 is complete and restored the build; every Haskell edit and `cabal test all` gate in this
+plan uses that baseline. EP-10 also changed `kansoku-core/test/Kansoku/Writer/BatchSpec.hs`
+from Shibuya `Ingested` to `Message`; Milestone 1 preserved that completed shape while changing
+the file's `withClickHouse` helper.
 
 ClickHouse objects that exist at the end (all owned exclusively by
 `db/clickhouse/migrations/`): `analytics.schema_migrations` (MergeTree, `filename` +
@@ -1525,3 +1535,10 @@ runner. Haskell code standards for all edits: GHC2024, `Kansoku.Prelude`, postpo
 qualified imports, generic-lens `#labels` optics, strict fields, explicit deriving;
 embedded SQL in Haskell uses MultilineStrings (after this plan, the only embedded SQL left
 in `kansoku-core` is query-side, in `Kansoku.Query` — DDL lives only in migration files).
+
+---
+
+Revision note (2026-07-18): implementation began with the MasterPlan Intention ID, M1 was
+completed and verified, and project-wide test commands were corrected from bare
+`cabal test` to `cabal test all` after current Cabal returned `Cabal-7134` without an
+explicit target.

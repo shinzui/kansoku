@@ -9,8 +9,6 @@ import Effectful (IOE, runEff)
 import Kansoku.ClickHouse
   ( clickHouseConfigFromConfig,
     countEvents,
-    ensureSchema,
-    openBootstrapConnection,
     openClickHouse,
   )
 import Kansoku.Config (loadConfig)
@@ -49,14 +47,14 @@ withClickHouse action = do
     Left err -> expectationFailure ("failed to load config: " <> show err)
     Right cfg -> do
       setupResult <- try @SomeException $ do
-        bootstrap <- openBootstrapConnection (clickHouseConfigFromConfig cfg)
-        ping bootstrap
-        ensureSchema bootstrap
         conn <- openClickHouse (clickHouseConfigFromConfig cfg)
         ping conn
+        _ <- countEvents conn
         pure conn
       case setupResult of
-        Left err -> pendingWith ("ClickHouse not reachable: " <> show err)
+        Left err ->
+          pendingWith
+            ("ClickHouse not reachable or schema missing (run `just ch-migrate`): " <> show err)
         Right conn -> action conn
 
 batchInfo :: BatchInfo

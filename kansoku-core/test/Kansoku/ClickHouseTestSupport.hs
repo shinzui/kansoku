@@ -22,14 +22,14 @@ withClickHouse :: (Connection -> Expectation) -> Expectation
 withClickHouse action = do
   cfg <- requireConfig
   setupResult <- try @SomeException $ do
-    bootstrap <- openBootstrapConnection (clickHouseConfigFromConfig cfg)
-    ping bootstrap
-    ensureSchema bootstrap
     conn <- openClickHouse (clickHouseConfigFromConfig cfg)
     ping conn
+    _ <- countEvents conn
     pure conn
   case setupResult of
-    Left err -> pendingWith ("ClickHouse not reachable: " <> show err)
+    Left err ->
+      pendingWith
+        ("ClickHouse not reachable or schema missing (run `just ch-migrate`): " <> show err)
     Right conn -> action conn
 
 resetTable :: Connection -> IO ()

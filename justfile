@@ -15,11 +15,18 @@ build:
 
 # Run the unit tests.
 test:
-    cabal test
+    cabal test all
 
-# Apply ClickHouse migrations in filename order.
+# Apply unapplied ClickHouse migrations in filename order, recording each in
+# analytics.schema_migrations. Migration files are immutable once applied.
 ch-migrate:
-    for f in db/clickhouse/migrations/*.sql; do echo "applying $f"; clickhouse-client --port $CLICKHOUSE_TCP_PORT --multiquery < "$f"; done
+    ./db/clickhouse/migrate.sh
+
+# Drop the analytics database (including the migration ledger) and replay all
+# migrations from scratch. Dev-only; destroys all analytics data.
+ch-reset:
+    clickhouse-client --port $CLICKHOUSE_TCP_PORT --query "DROP DATABASE IF EXISTS analytics"
+    ./db/clickhouse/migrate.sh
 
 # Load the EP-5 ClickHouse verification fixtures.
 ch-fixtures-ep5:

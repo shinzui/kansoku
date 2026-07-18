@@ -16,7 +16,7 @@ import Test.Hspec
 
 spec :: Spec
 spec = describe "Kansoku.ClickHouse" $ do
-  it "ensures the schema, inserts events, and reads a projection back" $
+  it "inserts events and reads a projection back" $
     withClickHouse $ \conn -> do
       resetTable conn
       let appSignup = sampleEvent "evt_storage_2" "signup" & #source .~ App
