@@ -24,6 +24,14 @@ spec = describe "Kansoku.OpenApi.openApiDoc" $ do
     let schemas = objectAt ["components", "schemas"] documentValue
     schemas `shouldSatisfy` hasKey "AnalyticsEvent"
 
+  it "declares the shared error envelope and 400/404/503 on every operation" $ do
+    let schemas = objectAt ["components", "schemas"] documentValue
+    schemas `shouldSatisfy` hasKey "ErrorEnvelopeWire"
+    operationValues documentValue `shouldSatisfy` (not . null)
+    operationValues documentValue
+      `shouldSatisfy` all
+        (\operation -> all (\status -> hasKey status (objectAt ["responses"] operation)) ["400", "404", "503"])
+
   it "describes event IDs as strings and event sources as lowercase wire tags" $ do
     lookupText ["components", "schemas", "EventId", "type"] documentValue `shouldBe` Just "string"
     lookupTextArray ["components", "schemas", "EventSource", "enum"] documentValue `shouldSatisfy` maybe False (elem "web")
@@ -81,3 +89,17 @@ containsEnumValue expected = \case
           expected `elem` [text | Aeson.String text <- Foldable.toList values]
         _ ->
           False
+
+operationValues :: Aeson.Value -> [Aeson.Value]
+operationValues value =
+  [ operation
+  | pathItem <- objectValues (objectAt ["paths"] value),
+    (method, operation) <- KeyMap.toList pathItem,
+    Key.toText method `elem` (["get", "post", "put", "patch", "delete"] :: [Text])
+  ]
+
+objectValues :: Aeson.Object -> [Aeson.Object]
+objectValues object =
+  [ nested
+  | Aeson.Object nested <- KeyMap.elems object
+  ]

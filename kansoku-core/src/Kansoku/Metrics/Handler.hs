@@ -7,25 +7,22 @@ module Kansoku.Metrics.Handler
 where
 
 import Control.Exception (SomeException, try)
-import Data.Aeson qualified as Aeson
 import Data.Text qualified as Text
 import Data.Time (Day)
 import Effectful (Eff, IOE, runEff)
+import Kansoku.Api.Response
+  ( KansokuResult (..),
+    badRequest,
+    notFound,
+    unavailable,
+  )
 import Kansoku.ClickHouse (QueryPool)
 import Kansoku.Logging (logError, runLogStderr)
 import Kansoku.Metrics.Api (MetricResult, MetricsRoutes (..), TimeGrain)
 import Kansoku.Metrics.Query qualified as Query
 import Kansoku.Metrics.Registry (builtinMetric)
 import Kansoku.Prelude
-import Servant
-  ( Handler,
-    ServerError (..),
-    err400,
-    err404,
-    err501,
-    err503,
-    throwError,
-  )
+import Servant (Handler)
 import Servant.Server.Generic (AsServerT)
 
 metricsServer :: QueryPool -> MetricsRoutes (AsServerT Handler)
@@ -44,42 +41,33 @@ metricsServer pool =
       custom = notImplemented "custom"
     }
   where
-    metricHandler :: Text -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> Handler MetricResult
+    metricHandler :: Text -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> Handler (KansokuResult MetricResult)
     metricHandler key fromDay toDay groupBy timeGrain =
       case builtinMetric key of
-        Nothing -> throwError (jsonError err404 "metric not found" (Aeson.object ["metric" Aeson..= key]))
+        Nothing -> pure (KansokuNotFound (notFound "metric_not_found" ("no such metric: " <> key)))
         Just metric -> effToHandler (Query.run pool metric (queryRequest fromDay toDay groupBy timeGrain))
 
-    sessionsHandler :: Day -> Day -> Maybe Text -> Maybe TimeGrain -> Handler MetricResult
+    sessionsHandler :: Day -> Day -> Maybe Text -> Maybe TimeGrain -> Handler (KansokuResult MetricResult)
     sessionsHandler fromDay toDay groupBy timeGrain =
       effToHandler (Query.runSessions pool (queryRequest fromDay toDay groupBy timeGrain))
 
-    funnelHandler :: Day -> Day -> Text -> Handler MetricResult
+    funnelHandler :: Day -> Day -> Text -> Handler (KansokuResult MetricResult)
     funnelHandler fromDay toDay stepsParam =
       case nonEmptyCsv stepsParam of
-        [] -> throwError (jsonError err400 "invalid funnel steps" (Aeson.object ["steps" Aeson..= stepsParam]))
+        [] -> pure (KansokuBadRequest (badRequest "invalid_funnel_steps" ("invalid funnel steps: " <> stepsParam)))
         steps -> effToHandler (Query.runFunnel pool (queryRequest fromDay toDay Nothing Nothing) steps)
 
-    retentionHandler :: Day -> Day -> Maybe Text -> Handler MetricResult
+    retentionHandler :: Day -> Day -> Maybe Text -> Handler (KansokuResult MetricResult)
     retentionHandler fromDay toDay daysParam =
       case parseOffsets daysParam of
-        Left message -> throwError (jsonError err400 "invalid retention days" (Aeson.object ["details" Aeson..= message]))
+        Left message -> pure (KansokuBadRequest (badRequest "invalid_retention_days" message))
         Right offsets -> effToHandler (Query.runRetention pool (queryRequest fromDay toDay Nothing Nothing) offsets)
 
-    notImplemented :: Text -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> Handler MetricResult
+    notImplemented :: Text -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> Handler (KansokuResult MetricResult)
     notImplemented name _ _ _ _ =
-      throwError
-        ( err501
-            { errBody =
-                Aeson.encode
-                  ( Aeson.object
-                      [ "error" Aeson..= ("not_implemented" :: Text),
-                        "metric" Aeson..= name,
-                        "message" Aeson..= ("This metric endpoint is stubbed in the MVP." :: Text)
-                      ]
-                  ),
-              errHeaders = [("content-type", "application/json")]
-            }
+      pure
+        ( KansokuNotFound
+            (notFound "not_implemented" ("metric endpoint is stubbed in the MVP: " <> name))
         )
 
 queryRequest :: Day -> Day -> Maybe Text -> Maybe TimeGrain -> Query.QueryRequest
@@ -105,26 +93,13 @@ parseOffsets (Just raw) =
         [(n, "")] | n > 0 -> Right n
         _ -> Left ("invalid day offset: " <> piece)
 
-effToHandler :: Eff '[IOE] MetricResult -> Handler MetricResult
+effToHandler :: Eff '[IOE] MetricResult -> Handler (KansokuResult MetricResult)
 effToHandler action = do
   result <- liftIO (try @SomeException (runEff action))
   case result of
     Left err -> do
       liftIO . runEff . runLogStderr $
         logError ("clickhouse query failed: " <> Text.pack (show err))
-      throwError (jsonError err503 "clickhouse query failed" (Aeson.object []))
+      pure (KansokuUnavailable (unavailable "clickhouse_unavailable" "analytics storage is unavailable"))
     Right value ->
-      pure value
-
-jsonError :: ServerError -> Text -> Aeson.Value -> ServerError
-jsonError err message details =
-  err
-    { errBody =
-        Aeson.encode
-          ( Aeson.object
-              [ "error" Aeson..= message,
-                "details" Aeson..= details
-              ]
-          ),
-      errHeaders = [("content-type", "application/json")]
-    }
+      pure (KansokuOk value)

@@ -134,11 +134,12 @@ route.
       `Kansoku/Api/Ingest.hs` → `Kansoku/Ingest/Api.hs`, `Kansoku/Api/Metrics.hs` →
       `Kansoku/Metrics/Api.hs`, `Kansoku/Query.hs` → `Kansoku/Metrics/Query.hs`. Update cabals
       and imports. `cabal build all` and the full test suite pass; the routing guard remains green.
-- [ ] Milestone 4: adopt `MultiVerb`. Add `Kansoku/Api/Response.hs` (error envelope, the
+- [x] Milestone 4 (completed 2026-07-18): adopt `MultiVerb`. Add `Kansoku/Api/Response.hs` (error envelope, the
       `KansokuResult` sum, the `OkResponses`/`AcceptedResponses` aliases, a hand-written
-      `AsUnion` with an exhaustiveness witness, `faultToResult`). Make every route a `MultiVerb`
+      `AsUnion` with an exhaustiveness witness, and total envelope constructors). Make every route a `MultiVerb`
       and every handler return a `KansokuResult`. Install `ErrorFormatters` so pre-handler
-      rejections carry the same envelope.
+      rejections carry the same envelope. `cabal build all` and both suites pass: 39 core
+      examples and 8 client examples, with only dependency-backed/live checks pending.
 - [ ] Milestone 5: adopt the OpenAPI-from-types recipe. Relocate the generator into `kansoku-api`
       as `Kansoku.Api.OpenApi`, deriving the document from the served `Proxy (NamedRoutes
       KansokuAPI)`; assign stable `operationId`s; add a `kansoku-openapi` executable that writes
@@ -276,6 +277,20 @@ implementation. Provide concise evidence.
   acceptance check now names the three obsolete paths exactly and asserts that each is
   absent; the new paths are asserted present separately.
 
+- Discovery (Milestone 4, 2026-07-18): `AsUnion`'s `Z`/`S` and `I` constructors come
+  from `Data.SOP`; Servant uses them internally but does not re-export them from
+  `Servant.API.MultiVerb`. Mori located the released Servant source and the working en/meibo
+  implementations, and the resolved Cabal plan identifies `sop-core` 0.5.0.2. Therefore
+  `kansoku-api` needs `sop-core` as an explicit direct dependency rather than relying on
+  Servant's transitive dependency.
+
+- Discovery (Milestone 4, 2026-07-18): changing ingestion to `MultiVerb` changes the
+  generated batch client from `ClientM BatchAck` to `ClientM (KansokuResult BatchAck)`.
+  Servant's released client source confirms declared HTTP statuses decode into the inner
+  result value while transport and decoding failures stay in the outer `ClientError`.
+  The SDK retry loop now retries transport failures and retryable 503 envelopes, rejects
+  400/404 values without retrying, and has tests for both application paths.
+
 
 ## Decision Log
 
@@ -347,6 +362,15 @@ implementation. Provide concise evidence.
   named resource is not available"). This is a deliberate, documented behavior change; Milestone
   4 updates the Milestone 1 test's pinned status expectations in the same commit.
   Date: 2026-07-09
+
+- Decision: Preserve Servant MultiVerb's two client failure channels in the ingestion SDK.
+  Rationale: a returned 400/404/503 is an application answer represented by `KansokuResult`,
+  while a dropped connection or undecodable response is an outer `ServantClient.ClientError`.
+  `deliverWithRetry` converts either channel into the SDK's `ClientError`: `DeliveryRejected`
+  carries a typed envelope and `DeliveryFailed` carries the transport error. It retries only
+  transport failures and `retryable = True` envelopes, preventing invalid events from being
+  resubmitted while still retrying queue outages.
+  Date: 2026-07-18
 
 - Decision: Keep the package split (`kansoku-api`, `kansoku-core`, `kansoku-client`,
   `kansoku-server`) exactly as it is.
@@ -1197,6 +1221,15 @@ and `funnel`/`retention` end in the same `MultiVerb 'GET …` tail. In
 `MultiVerb 'POST '[JSON] (AcceptedResponses "Event accepted" IngestAck) (KansokuResult IngestAck)`
 and likewise for the batch endpoint with `BatchAck`.
 
+The derived ingestion client now returns `ClientM (KansokuResult BatchAck)`. Update
+`kansoku-client/src/Kansoku/Client.hs` so its retry loop preserves MultiVerb's two failure
+channels: outer `ServantClient.ClientError` values are delivery/transport failures; inner
+`KansokuBadRequest`/`KansokuNotFound`/`KansokuUnavailable` values are application responses.
+Add `DeliveryRejected ErrorEnvelopeWire` beside `DeliveryFailed`, retry transport failures and
+retryable `KansokuUnavailable` values up to `maxRetries`, and do not retry 400/404 envelopes. The
+client tests must return real envelopes for their simulated 400/503 responses and prove both the
+retryable and non-retryable paths.
+
 Now rewrite the handlers to return `KansokuResult` instead of throwing. In
 `kansoku-core/src/Kansoku/Metrics/Handler.hs`:
 
@@ -1776,12 +1809,15 @@ not an optional check around it.
 
 ## Interfaces and Dependencies
 
-No new package dependencies for the library code — `servant`, `servant-server`, and
-`servant-client` (already in `kansoku-api`, `kansoku-core`, and `kansoku-client` respectively)
-supply everything:
+One already-resolved transitive package becomes a direct library dependency: `kansoku-api`
+declares `sop-core`, because the hand-written `AsUnion` instances import `Data.SOP` directly.
+The other required packages — `servant`, `servant-server`, and `servant-client` — were already
+present:
 
 - `servant` supplies `NamedRoutes`, `Servant.API.Generic (type (:-))`, and
-  `Servant.API.MultiVerb (MultiVerb, Respond, RespondEmpty, AsUnion, Z, S, I)`.
+  `Servant.API.MultiVerb (MultiVerb, Respond, RespondEmpty, AsUnion)`.
+- `sop-core` supplies `Data.SOP (I, NS)` and therefore the `I`, `Z`, and `S` constructors used by
+  the exhaustive union mapping. The resolved package remains 0.5.0.2; no new bound or pin is added.
 - `servant-server` supplies `Servant.Server.Generic (AsServerT)`, `serve`, `serveWithContext`,
   and `ErrorFormatters`.
 - `servant-client` supplies `Servant.Client.Generic (AsClientT, genericClient)`.
@@ -1948,3 +1984,10 @@ holds the four conformance tests, all pure of ClickHouse.
   every package export and import. Corrected the structural acceptance probe after execution showed
   that its broad `/Query\.hs$` alternative also matched the intended destination; the plan now checks
   exact obsolete and destination paths separately.
+
+- 2026-07-18, Milestone 4 — Added the shared typed response union, converted all thirteen routes
+  and their generated client to MultiVerb, replaced handler-thrown statuses with result values,
+  and installed/tested the pre-handler error envelope formatters. Expanded the execution detail
+  after Mori/source inspection showed that `Data.SOP` requires an explicit `sop-core` dependency
+  and that the SDK must preserve MultiVerb's outer transport versus inner application-result
+  channels. The client now tests retryable 503 and non-retryable 400 behavior explicitly.

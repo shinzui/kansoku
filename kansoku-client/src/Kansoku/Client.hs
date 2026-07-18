@@ -32,6 +32,7 @@ import Data.Generics.Labels ()
 import Data.Text qualified as Text
 import Data.UUID qualified as UUID
 import Data.UUID.V4 qualified as UUID
+import Kansoku.Api.Response (ErrorEnvelopeWire, KansokuResult (..))
 import Kansoku.Event (AccountId (..), AnalyticsEvent (..), AnonymousId (..), EventId (..), EventName (..), EventSource (..), OrganizationId (..), SessionId (..), UserId (..), baseEvent)
 import Kansoku.Ingest.Api (BatchAck, IngestRoutes)
 import Kansoku.Ingest.Api qualified as Ingest
@@ -97,6 +98,7 @@ data Client = Client
 
 data ClientError
   = DeliveryFailed !ServantClient.ClientError
+  | DeliveryRejected !ErrorEnvelopeWire
   deriving stock (Eq, Show)
 
 -- NamedRoutes fields are type-family applications, so record-dot syntax cannot
@@ -226,16 +228,23 @@ deliverBatch cfg env dropped events = do
     Right _ -> pure ()
     Left _ -> atomically (modifyTVar' dropped (+ length events))
 
-deliverWithRetry :: ClientConfig -> ClientEnv -> [AnalyticsEvent] -> IO (Either ServantClient.ClientError BatchAck)
+deliverWithRetry :: ClientConfig -> ClientEnv -> [AnalyticsEvent] -> IO (Either ClientError BatchAck)
 deliverWithRetry cfg env events =
   go 0
   where
     go attempt = do
       result <- runClientM (Ingest.postBatch ingestClient events) env
       case result of
-        Right ack -> pure (Right ack)
+        Right (KansokuOk ack) -> pure (Right ack)
+        Right (KansokuUnavailable envelope)
+          | envelope ^. #retryable && attempt < cfg ^. #maxRetries -> do
+              threadDelay (backoff attempt)
+              go (attempt + 1)
+          | otherwise -> pure (Left (DeliveryRejected envelope))
+        Right (KansokuBadRequest envelope) -> pure (Left (DeliveryRejected envelope))
+        Right (KansokuNotFound envelope) -> pure (Left (DeliveryRejected envelope))
         Left err
-          | attempt >= cfg ^. #maxRetries -> pure (Left err)
+          | attempt >= cfg ^. #maxRetries -> pure (Left (DeliveryFailed err))
           | otherwise -> do
               threadDelay (backoff attempt)
               go (attempt + 1)

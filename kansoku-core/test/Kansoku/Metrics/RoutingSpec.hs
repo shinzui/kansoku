@@ -2,10 +2,9 @@
 
 -- | Pins every analytics-contract path to a distinct sentinel handler.
 --
--- Nine metric routes have exactly the same handler type. Neither their current
--- positional @:<|>@ chain nor the upcoming NamedRoutes record can detect a
--- same-typed transposition statically, so these runtime assertions are the
--- load-bearing dispatch guard. Deliberately swapping the @users@ and
+-- Nine metric routes have exactly the same handler type. The NamedRoutes record
+-- cannot detect a same-typed transposition statically, so these runtime assertions
+-- are the load-bearing dispatch guard. Deliberately swapping the @users@ and
 -- @organizations@ sentinels makes the users assertion observe
 -- @"organizations"@ and fail.
 module Kansoku.Metrics.RoutingSpec
@@ -20,8 +19,10 @@ import Data.Aeson qualified as Aeson
 import Data.ByteString.Lazy qualified as BSL
 import Data.Foldable (traverse_)
 import Data.Text (Text)
+import Data.Text qualified as Text
 import Data.Time (Day)
 import Kansoku.Api qualified as Api
+import Kansoku.Api.Response qualified as Response
 import Kansoku.Event
   ( AnalyticsEvent,
     EventId (..),
@@ -31,18 +32,22 @@ import Kansoku.Event
   )
 import Kansoku.Ingest.Api qualified as Ingest
 import Kansoku.Metrics.Api qualified as Metrics
+import Kansoku.Server (envelopeFormatters)
 import Network.HTTP.Client qualified as HTTP
 import Network.HTTP.Types
   ( hContentType,
     methodPost,
     status200,
     status202,
+    status400,
+    status404,
   )
 import Network.Wai (Application)
 import Network.Wai.Handler.Warp qualified as Warp
 import Servant
-  ( Handler,
-    serve,
+  ( Context (..),
+    Handler,
+    serveWithContext,
   )
 import Servant.Server.Generic (AsServerT)
 import Test.Hspec
@@ -54,6 +59,20 @@ spec = describe "Kansoku analytics route dispatch" $ do
       manager <- HTTP.newManager HTTP.defaultManagerSettings
       traverse_ (assertMetricRoute manager port) metricRoutes
       assertIngestRoutes manager port
+
+  it "wraps malformed bodies and unknown paths in the shared error envelope" $
+    Warp.testWithApplication (pure sentinelApplication) $ \port -> do
+      manager <- HTTP.newManager HTTP.defaultManagerSettings
+      malformed <- postJson manager port "/v1/events" "{"
+      HTTP.responseStatus malformed `shouldBe` status400
+      malformedEnvelope <- decodeBody @Response.ErrorEnvelopeWire (HTTP.responseBody malformed)
+      Response.code malformedEnvelope `shouldBe` "malformed_request"
+
+      request <- HTTP.parseRequest (baseUrl port <> "/not-a-route")
+      missing <- HTTP.httpLbs request manager
+      HTTP.responseStatus missing `shouldBe` status404
+      missingEnvelope <- decodeBody @Response.ErrorEnvelopeWire (HTTP.responseBody missing)
+      Response.code missingEnvelope `shouldBe` "not_found"
 
 metricRoutes :: [(String, Text)]
 metricRoutes =
@@ -84,9 +103,19 @@ assertMetricRoute manager port (path, expected) = do
           <> extraQuery
   request <- HTTP.parseRequest url
   response <- HTTP.httpLbs request manager
-  HTTP.responseStatus response `shouldBe` status200
-  result <- decodeBody @Metrics.MetricResult (HTTP.responseBody response)
-  Metrics.metric result `shouldBe` expected
+  if path `elem` stubPaths
+    then do
+      HTTP.responseStatus response `shouldBe` status404
+      envelope <- decodeBody @Response.ErrorEnvelopeWire (HTTP.responseBody response)
+      Response.code envelope `shouldBe` "not_implemented"
+      Response.message envelope `shouldSatisfy` Text.isSuffixOf expected
+    else do
+      HTTP.responseStatus response `shouldBe` status200
+      result <- decodeBody @Metrics.MetricResult (HTTP.responseBody response)
+      Metrics.metric result `shouldBe` expected
+
+stubPaths :: [String]
+stubPaths = ["acquisition", "feature-adoption", "organizations", "custom"]
 
 assertIngestRoutes :: HTTP.Manager -> Warp.Port -> Expectation
 assertIngestRoutes manager port = do
@@ -134,7 +163,10 @@ sampleEvent =
 
 sentinelApplication :: Application
 sentinelApplication =
-  serve Api.kansokuAPI sentinelKansokuServer
+  serveWithContext
+    Api.kansokuAPI
+    (envelopeFormatters :. EmptyContext)
+    sentinelKansokuServer
 
 sentinelKansokuServer :: Api.KansokuAPI (AsServerT Handler)
 sentinelKansokuServer =
@@ -146,8 +178,8 @@ sentinelKansokuServer =
 sentinelIngestServer :: Ingest.IngestRoutes (AsServerT Handler)
 sentinelIngestServer =
   Ingest.IngestRoutes
-    { Ingest.postEvent = \_event -> pure Ingest.IngestAck {Ingest.accepted = 1, Ingest.eventId = "events"},
-      Ingest.postBatch = \_events -> pure Ingest.BatchAck {Ingest.accepted = 2}
+    { Ingest.postEvent = \_event -> pure (Response.KansokuOk Ingest.IngestAck {Ingest.accepted = 1, Ingest.eventId = "events"}),
+      Ingest.postBatch = \_events -> pure (Response.KansokuOk Ingest.BatchAck {Ingest.accepted = 2})
     }
 
 sentinelMetricsServer :: Metrics.MetricsRoutes (AsServerT Handler)
@@ -158,22 +190,26 @@ sentinelMetricsServer =
       Metrics.sessions = metricSentinel "sessions",
       Metrics.funnel = funnelSentinel,
       Metrics.retention = retentionSentinel,
-      Metrics.acquisition = metricSentinel "acquisition",
-      Metrics.featureAdoption = metricSentinel "feature-adoption",
+      Metrics.acquisition = stubSentinel "acquisition",
+      Metrics.featureAdoption = stubSentinel "feature-adoption",
       Metrics.conversion = metricSentinel "conversion",
       Metrics.users = metricSentinel "users",
-      Metrics.organizations = metricSentinel "organizations",
-      Metrics.custom = metricSentinel "custom"
+      Metrics.organizations = stubSentinel "organizations",
+      Metrics.custom = stubSentinel "custom"
     }
   where
-    metricSentinel :: Text -> Day -> Day -> Maybe Text -> Maybe Metrics.TimeGrain -> Handler Metrics.MetricResult
-    metricSentinel name _fromDay _toDay _groupBy _timeGrain = pure (sentinelResult name)
+    metricSentinel :: Text -> Day -> Day -> Maybe Text -> Maybe Metrics.TimeGrain -> Handler (Response.KansokuResult Metrics.MetricResult)
+    metricSentinel name _fromDay _toDay _groupBy _timeGrain = pure (Response.KansokuOk (sentinelResult name))
 
-    funnelSentinel :: Day -> Day -> Text -> Handler Metrics.MetricResult
-    funnelSentinel _fromDay _toDay _steps = pure (sentinelResult "funnel")
+    stubSentinel :: Text -> Day -> Day -> Maybe Text -> Maybe Metrics.TimeGrain -> Handler (Response.KansokuResult Metrics.MetricResult)
+    stubSentinel name _fromDay _toDay _groupBy _timeGrain =
+      pure (Response.KansokuNotFound (Response.notFound "not_implemented" ("metric endpoint is stubbed in the MVP: " <> name)))
 
-    retentionSentinel :: Day -> Day -> Maybe Text -> Handler Metrics.MetricResult
-    retentionSentinel _fromDay _toDay _days = pure (sentinelResult "retention")
+    funnelSentinel :: Day -> Day -> Text -> Handler (Response.KansokuResult Metrics.MetricResult)
+    funnelSentinel _fromDay _toDay _steps = pure (Response.KansokuOk (sentinelResult "funnel"))
+
+    retentionSentinel :: Day -> Day -> Maybe Text -> Handler (Response.KansokuResult Metrics.MetricResult)
+    retentionSentinel _fromDay _toDay _days = pure (Response.KansokuOk (sentinelResult "retention"))
 
 sentinelResult :: Text -> Metrics.MetricResult
 sentinelResult name = Metrics.MetricResult {Metrics.metric = name, Metrics.points = []}

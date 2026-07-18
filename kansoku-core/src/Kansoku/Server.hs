@@ -3,6 +3,7 @@
 -- | The minimal HTTP server for EP-1: a single /health route returning 200 OK.
 module Kansoku.Server
   ( ReadyProbe (..),
+    envelopeFormatters,
     healthApp,
     kansokuApp,
     kansokuServer,
@@ -19,6 +20,8 @@ import Effectful.Error.Static qualified as Error
 import Effectful.Reader.Static (Reader, asks)
 import Hasql.Pool qualified as Pool
 import Kansoku.Api (KansokuAPI (..), kansokuAPI)
+import Kansoku.Api.Response (ErrorEnvelopeWire, badRequest)
+import Kansoku.Api.Response qualified as Response
 import Kansoku.ClickHouse (QueryPool)
 import Kansoku.Config (Config)
 import Kansoku.Ingest.Handler (ingestServer)
@@ -32,7 +35,15 @@ import Network.Wai (Application, pathInfo, responseLBS)
 import Network.Wai.Handler.Warp qualified as Warp
 import Pgmq.Effectful (QueueName, queueMetrics, runPgmq)
 import Pgmq.Effectful.Interpreter (PgmqRuntimeError)
-import Servant (Handler, serve)
+import Servant
+  ( Context (..),
+    Handler,
+    ServerError (..),
+    err400,
+    err404,
+    serveWithContext,
+  )
+import Servant.Server (ErrorFormatter, ErrorFormatters (..), defaultErrorFormatters)
 import Servant.Server.Generic (AsServerT)
 
 -- | Runtime checks used to answer GET /ready.
@@ -84,7 +95,38 @@ kansokuApp probe pool queueName queryPool req respond =
     ["openapi.json"] ->
       respond (responseLBS status200 [(hContentType, "application/json")] (Aeson.encode openApiDoc))
     _ ->
-      serve kansokuAPI (kansokuServer pool queueName queryPool) req respond
+      serveWithContext
+        kansokuAPI
+        (envelopeFormatters :. EmptyContext)
+        (kansokuServer pool queueName queryPool)
+        req
+        respond
+
+-- | Make Servant's pre-handler rejections use the same envelope as typed
+-- handler results. Servant raises 405 and 415 outside ErrorFormatters; those
+-- responses retain its empty body.
+envelopeFormatters :: ErrorFormatters
+envelopeFormatters =
+  defaultErrorFormatters
+    { bodyParserErrorFormatter = malformed,
+      urlParseErrorFormatter = malformed,
+      headerParseErrorFormatter = malformed,
+      notFoundErrorFormatter = const unknownPath
+    }
+  where
+    malformed :: ErrorFormatter
+    malformed _typeRep _request detail =
+      envelopeError err400 (badRequest "malformed_request" (Text.pack detail))
+
+    unknownPath =
+      envelopeError err404 (Response.notFound "not_found" "no such endpoint")
+
+envelopeError :: ServerError -> ErrorEnvelopeWire -> ServerError
+envelopeError err envelope =
+  err
+    { errBody = Aeson.encode envelope,
+      errHeaders = [(hContentType, "application/json")]
+    }
 
 -- | Check that PostgreSQL and pgmq answer one inexpensive metrics query.
 pgmqReady :: Pool.Pool -> QueueName -> IO (Either Text ())

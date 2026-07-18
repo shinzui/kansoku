@@ -13,16 +13,18 @@ import Data.Aeson qualified as Aeson
 import Data.Map.Strict (Map)
 import Data.Text qualified as Text
 import Data.Time (Day)
+import Kansoku.Api.Response (KansokuResult, OkResponses)
 import Kansoku.Prelude
 import Servant.API
-  ( Get,
-    JSON,
+  ( JSON,
     QueryParam,
     QueryParam',
     Required,
     type (:>),
   )
 import Servant.API.Generic (type (:-))
+import Servant.API.MultiVerb (MultiVerb)
+import Servant.API.Verbs qualified as Servant
 import Web.HttpApiData (FromHttpApiData (..))
 
 data TimeGrain = Hour | Day | Week | Month
@@ -75,7 +77,7 @@ type MetricQuery =
     :> QueryParam' '[Required] "to" Day
     :> QueryParam "groupBy" Text
     :> QueryParam "timeGrain" TimeGrain
-    :> Get '[JSON] MetricResult
+    :> MultiVerb 'Servant.GET '[JSON] (OkResponses "Metric result" MetricResult) (KansokuResult MetricResult)
 
 -- | Metric routes keyed by field name. Nine fields deliberately share
 -- 'MetricQuery'; their runtime path-to-handler guard lives in RoutingSpec.
@@ -91,7 +93,7 @@ data MetricsRoutes mode = MetricsRoutes
           :> QueryParam' '[Required] "from" Day
           :> QueryParam' '[Required] "to" Day
           :> QueryParam' '[Required] "steps" Text
-          :> Get '[JSON] MetricResult,
+          :> MultiVerb 'Servant.GET '[JSON] (OkResponses "Metric result" MetricResult) (KansokuResult MetricResult),
     retention ::
       mode
         :- "metrics"
@@ -99,7 +101,7 @@ data MetricsRoutes mode = MetricsRoutes
           :> QueryParam' '[Required] "from" Day
           :> QueryParam' '[Required] "to" Day
           :> QueryParam "days" Text
-          :> Get '[JSON] MetricResult,
+          :> MultiVerb 'Servant.GET '[JSON] (OkResponses "Metric result" MetricResult) (KansokuResult MetricResult),
     acquisition :: mode :- "metrics" :> "acquisition" :> MetricQuery,
     featureAdoption :: mode :- "metrics" :> "feature-adoption" :> MetricQuery,
     conversion :: mode :- "metrics" :> "conversion" :> MetricQuery,

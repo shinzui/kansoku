@@ -11,10 +11,11 @@ import Data.Foldable (traverse_)
 import Data.Generics.Labels ()
 import Data.Text qualified as Text
 import Data.Time.Format (defaultTimeLocale, formatTime)
+import Kansoku.Api.Response (ErrorEnvelopeWire (..))
 import Kansoku.Client
 import Kansoku.Event
 import Kansoku.Prelude
-import Network.HTTP.Types (Status, status202, status503)
+import Network.HTTP.Types (Status, status202, status400, status503)
 import Network.Wai (Application, Request, pathInfo, requestMethod, responseLBS, strictRequestBody)
 import Network.Wai.Handler.Warp qualified as Warp
 import System.Environment (lookupEnv)
@@ -94,6 +95,15 @@ spec = describe "Kansoku.Client" $ do
       fmap length batches `shouldBe` [1, 1, 1]
       length (uniqueEventIds (concat batches)) `shouldBe` 1
 
+  it "does not retry a non-retryable API rejection" $
+    withRecorder (const (pure status400)) $ \port _ attempts -> do
+      client <- newClient ((testConfig port) & #maxRetries .~ 3 & #retryBaseDelayMicros .~ 1_000)
+      trackEvent client emptyIds "invalid_event" []
+      flush client
+      readTVarIO attempts `shouldReturn` 1
+      droppedCount client `shouldReturn` 1
+      close client
+
   it "drops newest events on buffer overflow" $
     withRecorder (const (pure status202)) $ \port _ _ -> do
       client <- newClient ((testConfig port) & #bufferCapacity .~ 2 & #batchMaxIntervalMicros .~ 10000000)
@@ -137,10 +147,15 @@ recorderApp received attempts nextStatus request respond = do
   status <- nextStatus attempts
   when (requestMethod request == "POST" && pathInfo request == ["v1", "batch"]) $
     atomically (modifyTVar' received (<> [body]))
-  respond (responseLBS status [("content-type", "application/json")] (ackBody request body))
+  respond (responseLBS status [("content-type", "application/json")] (responseBodyFor status request body))
 
-ackBody :: Request -> LBS.ByteString -> LBS.ByteString
-ackBody request body
+responseBodyFor :: Status -> Request -> LBS.ByteString -> LBS.ByteString
+responseBodyFor status _request _body
+  | status == status400 =
+      Aeson.encode ErrorEnvelopeWire {code = "validation_failed", message = "validation failed", retryable = False}
+  | status == status503 =
+      Aeson.encode ErrorEnvelopeWire {code = "queue_unavailable", message = "analytics queue is unavailable", retryable = True}
+responseBodyFor _status request body
   | pathInfo request == ["v1", "events"] = "{\"accepted\":1,\"eventId\":\"test\"}"
   | otherwise =
       case Aeson.decode body :: Maybe [AnalyticsEvent] of

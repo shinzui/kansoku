@@ -6,6 +6,7 @@ module Kansoku.Ingest.Api
   )
 where
 
+import Kansoku.Api.Response (AcceptedResponses, KansokuResult)
 import Kansoku.Event (AnalyticsEvent)
 import Kansoku.Prelude
 import Servant.API
@@ -14,13 +15,13 @@ import Servant.API
     type (:>),
   )
 import Servant.API.Generic (type (:-))
-import Servant.API.Verbs (Verb)
+import Servant.API.MultiVerb (MultiVerb)
 import Servant.API.Verbs qualified as Servant
 
 -- | Ingestion routes keyed by field name. Field order is not load-bearing.
 data IngestRoutes mode = IngestRoutes
-  { postEvent :: mode :- "v1" :> "events" :> ReqBody '[JSON] AnalyticsEvent :> Verb 'Servant.POST 202 '[JSON] IngestAck,
-    postBatch :: mode :- "v1" :> "batch" :> ReqBody '[JSON] [AnalyticsEvent] :> Verb 'Servant.POST 202 '[JSON] BatchAck
+  { postEvent :: mode :- "v1" :> "events" :> ReqBody '[JSON] AnalyticsEvent :> MultiVerb 'Servant.POST '[JSON] (AcceptedResponses "Event accepted" IngestAck) (KansokuResult IngestAck),
+    postBatch :: mode :- "v1" :> "batch" :> ReqBody '[JSON] [AnalyticsEvent] :> MultiVerb 'Servant.POST '[JSON] (AcceptedResponses "Batch accepted" BatchAck) (KansokuResult BatchAck)
   }
   deriving stock (Generic)
 

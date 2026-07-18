@@ -8,6 +8,7 @@ where
 import Data.Char (toLower)
 import Data.OpenApi qualified as O
 import Kansoku.Api (kansokuAPI)
+import Kansoku.Api.Response (ErrorEnvelopeWire)
 import Kansoku.Event
   ( AccountId,
     AnalyticsEvent,
@@ -58,6 +59,8 @@ instance O.ToSchema EventName where
 instance O.ToSchema EventSource where
   declareNamedSchema =
     O.genericDeclareNamedSchema lowerEnumOptions
+
+instance O.ToSchema ErrorEnvelopeWire
 
 instance O.ToSchema IngestAck
 

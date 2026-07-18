@@ -27,6 +27,7 @@ library
   hs-source-dirs:  src
   exposed-modules:
     Kansoku.Api
+    Kansoku.Api.Response
     Kansoku.Event
     Kansoku.Event.Registry
     Kansoku.Event.Types
@@ -43,6 +44,7 @@ library
     , http-api-data
     , lens           ^>=5.3
     , servant
+    , sop-core
     , text
     , time
     , uuid
