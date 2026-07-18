@@ -85,6 +85,7 @@ library
 
 test-suite kansoku-core-test
   import:         common
+  ghc-options:    -threaded
   type:           exitcode-stdio-1.0
   hs-source-dirs: test
   main-is:        Spec.hs
@@ -94,6 +95,7 @@ test-suite kansoku-core-test
     Kansoku.ConfigSpec
     Kansoku.EventSpec
     Kansoku.Ingest.QueueSpec
+    Kansoku.Metrics.RoutingSpec
     Kansoku.MigrationsSpec
     Kansoku.OpenApiSpec
     Kansoku.QueryIntegrationSpec
@@ -111,6 +113,8 @@ test-suite kansoku-core-test
     , generic-lens
     , hasql
     , hspec
+    , http-client
+    , http-types
     , kansoku-api
     , kansoku-core
     , openapi-hs
@@ -118,7 +122,10 @@ test-suite kansoku-core-test
     , pg-migrate-test-support
     , pgmq-core
     , pgmq-hasql
+    , servant-server
     , shibuya-core
     , text
     , time
     , unordered-containers
+    , wai
+    , warp

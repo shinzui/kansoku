@@ -4,7 +4,7 @@ slug: convert-kansoku-to-namedroutes-vertical-slices-and-multiverb
 title: "Convert kansoku to NamedRoutes, vertical slices, and MultiVerb"
 kind: exec-plan
 created_at: 2026-07-09T14:38:45Z
-intention: "intention_01kx3mmsbxetw93xg4cxargpbe"
+intention: intention_01kxr5jt2heyvt0n768ym9dwqd
 master_plan: docs/masterplans/2-kansoku-production-hardening-review-fixes-and-portfolio-service-readiness.md
 ---
 
@@ -120,7 +120,7 @@ route.
 
 ## Progress
 
-- [ ] Milestone 1 (the centrepiece): add a routing test that pins each of the eleven metric paths
+- [x] Milestone 1 (completed 2026-07-18; the centrepiece): add a routing test that pins each of the eleven metric paths
       (all nine that share `MetricQuery`, plus `funnel` and `retention`) and the two ingest paths
       to a distinct handler, over the *current* `:<|>` API, before any conversion. This is the only
       guard against a same-typed transposition — the record does not type-check the nine against
@@ -230,6 +230,27 @@ implementation. Provide concise evidence.
   plan now instructs the implementer to *verify* order-independence in kansoku (reorder the record's
   fields, re-run `cabal test all`, confirm each path still resolves to itself) rather than assume it,
   and to record the result here.
+
+- Discovery (implementation audit, 2026-07-18): the repository resolves `servant`,
+  `servant-server`, `servant-client`, and `servant-client-core` 0.20.3.0, plus
+  `openapi-hs` and `servant-openapi-hs` 4.1.0. Mori source inspection confirmed that
+  MultiVerb is present in Servant and that the fork's `HasOpenApi (MultiVerb ...)`
+  instances are compiled only for Servant 0.20.3 or newer. Hackage and upstream release
+  tags identify these as the current releases. The earlier `>=0.20` fallback advice was
+  therefore too broad; this implementation keeps the already-resolved cohort and adds no
+  dependency bound or compatibility workaround.
+
+- Discovery (Milestone 1, 2026-07-18): `Warp.testWithApplication` requires the test
+  executable to use GHC's threaded runtime. The first run failed before accepting a
+  request with `the TimerManager requires linking against the threaded runtime`;
+  adding `ghc-options: -threaded` to `kansoku-core-test` made the database-free
+  routing harness reliable.
+
+- Discovery (Milestone 1, 2026-07-18): the runtime guard demonstrably detects the
+  same-typed hazard. Temporarily crossing only the `users` and `organizations`
+  sentinels compiled and ran, then failed with `expected: "users"` and
+  `but got: "organizations"`. Restoring the intended mapping returned the full suite
+  to 37 core examples, 0 failures, with 9 dependency-backed examples pending.
 
 
 ## Decision Log
@@ -378,6 +399,22 @@ implementation. Provide concise evidence.
   *dependency* from `kansoku-core` to `kansoku-api` but changes no pin. Recorded so a future reader
   does not "simplify" to the Hackage packages and quietly destroy the error contract.
   Date: 2026-07-09
+
+- Decision: Associate EP-9 implementation commits with the parent MasterPlan intention
+  `intention_01kxr5jt2heyvt0n768ym9dwqd`.
+  Rationale: The user asked to use the intention recorded in the plan being implemented;
+  EP-9 is now a child of MasterPlan 2, whose intention is the active initiative-level
+  identifier. The child frontmatter and commit examples are aligned so the plan remains
+  self-contained.
+  Date: 2026-07-18
+
+- Decision: Exercise the current umbrella `KansokuAPI` chain in one sentinel application
+  during Milestone 1, rather than stand up the ingest and metrics sub-APIs separately.
+  Rationale: Serving `sentinelIngestServer :<|> sentinelMetricsServer` through
+  `Proxy @KansokuAPI` pins all thirteen paths and the current top-level composition in one
+  database-free test. The exported sentinel servers remain reusable when Milestone 2
+  converts each level to records and when Milestone 5 compares served and documented paths.
+  Date: 2026-07-18
 
 
 ## Outcomes & Retrospective
@@ -742,7 +779,7 @@ Adds Kansoku.Metrics.RoutingSpec, a runtime routing guard over the current
 silently reintroduce a same-typed misroute.
 
 ExecPlan: docs/plans/9-convert-kansoku-to-namedroutes-vertical-slices-and-multiverb.md
-Intention: intention_01kx3mmsbxetw93xg4cxargpbe
+Intention: intention_01kxr5jt2heyvt0n768ym9dwqd
 ```
 
 ### Milestone 2 — Convert the route types to `NamedRoutes`
@@ -939,7 +976,7 @@ field name; collapses the server's hand-written pathInfo dispatch into a single
 served NamedRoutes KansokuAPI; derives the SDK client with genericClient.
 
 ExecPlan: docs/plans/9-convert-kansoku-to-namedroutes-vertical-slices-and-multiverb.md
-Intention: intention_01kx3mmsbxetw93xg4cxargpbe
+Intention: intention_01kxr5jt2heyvt0n768ym9dwqd
 ```
 
 ### Milestone 3 — Move the layer-first modules into vertical slices
@@ -997,7 +1034,7 @@ Kansoku/Metrics/Api.hs, and Kansoku/Query.hs -> Kansoku/Metrics/Query.hs so each
 concept owns its routes, DTOs, and query compiler under one module prefix.
 
 ExecPlan: docs/plans/9-convert-kansoku-to-namedroutes-vertical-slices-and-multiverb.md
-Intention: intention_01kx3mmsbxetw93xg4cxargpbe
+Intention: intention_01kxr5jt2heyvt0n768ym9dwqd
 ```
 
 ### Milestone 4 — Adopt `MultiVerb` and the shared error tail
@@ -1009,11 +1046,10 @@ per-handler change; it comes last because the routes are now named and sliced, s
 localized.
 
 First confirm the tooling. `MultiVerb`, `Respond`, `RespondEmpty`, and `AsUnion` live in
-`Servant.API.MultiVerb`, available in `servant >= 0.20`. Kansoku's `cabal.project` does not pin
-`servant`, so it resolves to whatever the index provides; the sibling `meibo` project already
-builds `MultiVerb` against `servant >=0.20 && <0.21`, so the combinator is available. If a build
-error reports `Servant.API.MultiVerb` is missing, add `servant >=0.20 && <0.21` to the
-`build-depends` of `kansoku-api` to pin it, and record that in Surprises & Discoveries.
+`Servant.API.MultiVerb`. The implementation audit on 2026-07-18 verified that Kansoku resolves
+the current released Servant 0.20.3.0 cohort and that the pinned `servant-openapi-hs` 4.1.0 fork
+enables its MultiVerb OpenAPI instances for Servant 0.20.3 or newer. Keep that coherent cohort;
+do not add a broader `>=0.20` fallback bound or a compatibility workaround.
 
 Create `kansoku-api/src/Kansoku/Api/Response.hs` (this is shared, cross-slice infrastructure — the
 one error envelope every operation uses — so it belongs under the assembly-level `Kansoku/Api/`
@@ -1184,7 +1220,7 @@ throwing ServerError; installs ErrorFormatters so pre-handler rejections carry
 the same envelope. The four stub endpoints move from 501 to 404 code=not_implemented.
 
 ExecPlan: docs/plans/9-convert-kansoku-to-namedroutes-vertical-slices-and-multiverb.md
-Intention: intention_01kx3mmsbxetw93xg4cxargpbe
+Intention: intention_01kxr5jt2heyvt0n768ym9dwqd
 ```
 
 ### Milestone 5 — Generate the OpenAPI document from the served type (the recipe)
@@ -1398,7 +1434,7 @@ the exact path set, per-operation error responses, DTO ToJSON/ToSchema agreement
 the served-path-set == documented-path-set guard.
 
 ExecPlan: docs/plans/9-convert-kansoku-to-namedroutes-vertical-slices-and-multiverb.md
-Intention: intention_01kx3mmsbxetw93xg4cxargpbe
+Intention: intention_01kxr5jt2heyvt0n768ym9dwqd
 ```
 
 ### Milestone 6 — Amend the plans of record
@@ -1440,7 +1476,7 @@ Commit message form:
 docs(plans): update plans 4/6/7/8 to the NamedRoutes + MultiVerb shapes
 
 ExecPlan: docs/plans/9-convert-kansoku-to-namedroutes-vertical-slices-and-multiverb.md
-Intention: intention_01kx3mmsbxetw93xg4cxargpbe
+Intention: intention_01kxr5jt2heyvt0n768ym9dwqd
 ```
 
 
@@ -1707,10 +1743,9 @@ supply everything:
 - `servant-client` supplies `Servant.Client.Generic (AsClientT, genericClient)`.
 
 The `kansoku-core-test` suite gains, in Milestone 1, test-only dependencies already present
-elsewhere in the project: `servant-server`, `warp`, `wai`, `http-client`, `http-types`. Milestone
-4 may need to pin `servant >=0.20 && <0.21` in `kansoku-api`'s `build-depends` if the resolver
-does not already select a `MultiVerb`-carrying version; add it only if the build reports
-`Servant.API.MultiVerb` missing.
+elsewhere in the project: `servant-server`, `warp`, `wai`, `http-client`, `http-types`. No
+Servant bound change is needed: the resolved 0.20.3.0 release provides MultiVerb and matches
+the pinned OpenAPI fork's compatibility guard.
 
 Milestone 5 moves the OpenAPI dependency, and adds one build-time dependency:
 
@@ -1852,3 +1887,9 @@ holds the four conformance tests, all pure of ClickHouse.
   The canonical `haskell-jitsurei/api/servant-routes.md` was corrected in the same effort ("Positional
   chains silently misroute", "Same-Typed Routes Need a Dispatch Test", "Field Order Is Not
   Load-Bearing").
+
+- 2026-07-18 — Began implementation under MasterPlan 2. Aligned the child frontmatter and
+  commit-message examples with the parent intention, and corrected the dependency guidance after
+  Mori source inspection plus Hackage/upstream-tag verification showed that Kansoku already
+  resolves the current Servant 0.20.3.0 and OpenAPI-fork 4.1.0 cohort. No dependency bound or
+  compatibility workaround is required.

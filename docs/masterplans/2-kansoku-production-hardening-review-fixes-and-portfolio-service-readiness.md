@@ -89,7 +89,7 @@ waves.
 | 10 | Restore the build and supervise the writer | docs/plans/10-restore-the-build-and-supervise-the-writer.md | EP-21 | None | Complete |
 | 11 | Split ClickHouse connections and adopt typed row decoding | docs/plans/11-split-clickhouse-connections-and-adopt-typed-row-decoding.md | EP-10 | None | Complete |
 | 12 | ClickHouse schema v2: sort key, FINAL-free resolution, join-free rollups | docs/plans/12-clickhouse-schema-v2-sort-key-final-free-resolution-join-free-rollups.md | EP-10 | None | Complete |
-| 9 | Convert kansoku to NamedRoutes, vertical slices, and MultiVerb | docs/plans/9-convert-kansoku-to-namedroutes-vertical-slices-and-multiverb.md | EP-10 | None | Not Started |
+| 9 | Convert kansoku to NamedRoutes, vertical slices, and MultiVerb | docs/plans/9-convert-kansoku-to-namedroutes-vertical-slices-and-multiverb.md | EP-10 | None | In Progress |
 | 13 | Safe and correct metric SQL: validated inputs, ordered funnels, honest failures | docs/plans/13-safe-and-correct-metric-sql-validated-inputs-ordered-funnels-honest-failures.md | EP-12 | EP-11, EP-9 | Not Started |
 | 14 | SDK-grade ingest contract: partial batch acceptance, CORS, and payload limits | docs/plans/14-sdk-grade-ingest-contract-partial-batch-acceptance-cors-and-payload-limits.md | EP-9 | None | Not Started |
 | 16 | Pipeline observability: queue depth, writer lag, and exported telemetry | docs/plans/16-pipeline-observability-queue-depth-writer-lag-and-exported-telemetry.md | EP-10 | EP-11 | Not Started |
