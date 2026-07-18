@@ -233,8 +233,8 @@ and the milestone. This section provides an at-a-glance view of the entire initi
 - [x] EP-11: dedicated writer connection separated from query-side connections
 - [x] EP-11: query-side connection pool serving concurrent metrics requests
 - [x] EP-11: typed row decoding replaces tab-delimited line parsing; decode failures are loud
-- [ ] EP-12: versioned ClickHouse migration mechanism; single DDL owner
-- [ ] EP-12: schema v2 migration (sort key, Nullable cleanup) applied and data rewritten
+- [x] EP-12: versioned ClickHouse migration mechanism; single DDL owner
+- [x] EP-12: schema v2 migration (sort key, Nullable cleanup) applied and data rewritten
 - [ ] EP-12: FINAL-free `events_resolved`; join-free DAU/WAU materialized views
 - [ ] EP-12: rollup aggregate states replaced; storage and query-time verified against fixtures
 - [ ] EP-9: (see plan file for its milestones; registry tracks overall status)

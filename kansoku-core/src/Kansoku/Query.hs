@@ -280,7 +280,7 @@ buildSessionsSQL req =
       "       toFloat64(uniqExact(session_id)) AS value",
       "FROM analytics.events_raw",
       "WHERE " <> timestampPredicate req,
-      "  AND isNotNull(session_id) AND session_id != ''",
+      "  AND session_id != ''",
       "GROUP BY bucket, group_key",
       "ORDER BY bucket, group_key"
     ]

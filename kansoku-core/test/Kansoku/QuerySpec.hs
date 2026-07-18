@@ -43,7 +43,7 @@ spec = describe "Kansoku.Query.buildSQL" $ do
           "       toFloat64(uniqExact(session_id)) AS value",
           "FROM analytics.events_raw",
           "WHERE occurred_at >= '2026-06-01 00:00:00' AND occurred_at < '2026-06-08 00:00:00'",
-          "  AND isNotNull(session_id) AND session_id != ''",
+          "  AND session_id != ''",
           "GROUP BY bucket, group_key",
           "ORDER BY bucket, group_key"
         ]

@@ -67,13 +67,13 @@ This section must always reflect the actual current state of the work.
       a "run just ch-migrate" hint when the schema is absent
 - [x] (2026-07-18 14:24Z) M1: migration-immutability rule documented in `db/clickhouse/migrations/` (header
       comment in the runner script) and verified: `just ch-migrate` twice shows skips
-- [ ] M2: `db/clickhouse/migrations/0004_events_raw_v2.sql` written (v2 table, copy,
+- [x] (2026-07-18 14:31Z) M2: `db/clickhouse/migrations/0004_events_raw_v2.sql` written (v2 table, copy,
       exchange, dependent objects recreated with v1 semantics)
-- [ ] M2: row-count verification run on the dev database; old table retained
-- [ ] M2: `kansoku-core/src/Kansoku/ClickHouse/EventRow.hs` updated (`Maybe ChString` →
+- [x] (2026-07-18 14:31Z) M2: row-count verification run on the dev database; old table retained
+- [x] (2026-07-18 14:31Z) M2: `kansoku-core/src/Kansoku/ClickHouse/EventRow.hs` updated (`Maybe ChString` →
       `ChString` for the cleaned columns; `source_global_position` stays `Maybe`)
-- [ ] M2: `Kansoku.Query.buildSessionsSQL` predicate reduced to `session_id != ''`
-- [ ] M2: `cabal build all` and `cabal test all` green against the v2 table
+- [x] (2026-07-18 14:31Z) M2: `Kansoku.Query.buildSessionsSQL` predicate reduced to `session_id != ''`
+- [x] (2026-07-18 14:31Z) M2: `cabal build all` and `cabal test all` green against the v2 table
 - [ ] M3: `db/clickhouse/migrations/0005_final_free_resolution.sql` written (events_resolved
       without FINAL; mv_dau/mv_wau join-free; dau/wau truncated and backfilled)
 - [ ] M3: fixture check — stitched vs raw-identity active-user numbers both observable
@@ -238,7 +238,12 @@ Record every decision made while working on the plan.
 Summarize outcomes, gaps, and lessons learned at major milestones or at completion.
 Compare the result against the original purpose.
 
-(To be filled during and after implementation.)
+Milestones 1 and 2 are complete. ClickHouse now records immutable migrations and skips
+applied files, Haskell no longer owns a duplicate raw-table DDL string, and tests probe the
+migrated schema. Migration 0004 copied a non-empty dev table with equal v1/v2 row counts,
+swapped in the account/event/time-oriented sort key, removed every `Nullable(String)`, and
+retained the v1 table for rollback. Typed ClickHaskell inserts, replay deduplication, both
+fixture sets, `cabal build all`, and `cabal test all` are green against the v2 table.
 
 
 ## Context and Orientation
@@ -1542,3 +1547,7 @@ Revision note (2026-07-18): implementation began with the MasterPlan Intention I
 completed and verified, and project-wide test commands were corrected from bare
 `cabal test` to `cabal test all` after current Cabal returned `Cabal-7134` without an
 explicit target.
+
+Revision note (2026-07-18, second revision): M2 completed the events_raw v2 rewrite, Haskell
+wire-type alignment, sessions predicate cleanup, non-empty row-count verification, and
+fresh-reset fixture compatibility checks.
