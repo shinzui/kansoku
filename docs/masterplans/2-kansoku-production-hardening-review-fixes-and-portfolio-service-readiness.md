@@ -87,7 +87,7 @@ waves.
 |----|-------|------|-----------|-----------|--------|
 | 21 | Migrate Kansoku to the coherent pg-migrate PGMQ and Shibuya cohort | docs/plans/21-migrate-kansoku-to-the-coherent-pg-migrate-pgmq-and-shibuya-cohort.md | None | None | Complete |
 | 10 | Restore the build and supervise the writer | docs/plans/10-restore-the-build-and-supervise-the-writer.md | EP-21 | None | Complete |
-| 11 | Split ClickHouse connections and adopt typed row decoding | docs/plans/11-split-clickhouse-connections-and-adopt-typed-row-decoding.md | EP-10 | None | In Progress |
+| 11 | Split ClickHouse connections and adopt typed row decoding | docs/plans/11-split-clickhouse-connections-and-adopt-typed-row-decoding.md | EP-10 | None | Complete |
 | 12 | ClickHouse schema v2: sort key, FINAL-free resolution, join-free rollups | docs/plans/12-clickhouse-schema-v2-sort-key-final-free-resolution-join-free-rollups.md | EP-10 | None | Not Started |
 | 9 | Convert kansoku to NamedRoutes, vertical slices, and MultiVerb | docs/plans/9-convert-kansoku-to-namedroutes-vertical-slices-and-multiverb.md | EP-10 | None | Not Started |
 | 13 | Safe and correct metric SQL: validated inputs, ordered funnels, honest failures | docs/plans/13-safe-and-correct-metric-sql-validated-inputs-ordered-funnels-honest-failures.md | EP-12 | EP-11, EP-9 | Not Started |
@@ -230,9 +230,9 @@ and the milestone. This section provides an at-a-glance view of the entire initi
 - [x] EP-10: writer and server lifetimes linked; writer death exits the process (demonstrated)
 - [x] EP-10: `/ready` endpoint reports writer liveness and pgmq reachability
 - [x] EP-10: error-body hygiene and ClickHouse credential configuration
-- [ ] EP-11: dedicated writer connection separated from query-side connections
-- [ ] EP-11: query-side connection pool serving concurrent metrics requests
-- [ ] EP-11: typed row decoding replaces tab-delimited line parsing; decode failures are loud
+- [x] EP-11: dedicated writer connection separated from query-side connections
+- [x] EP-11: query-side connection pool serving concurrent metrics requests
+- [x] EP-11: typed row decoding replaces tab-delimited line parsing; decode failures are loud
 - [ ] EP-12: versioned ClickHouse migration mechanism; single DDL owner
 - [ ] EP-12: schema v2 migration (sort key, Nullable cleanup) applied and data rewritten
 - [ ] EP-12: FINAL-free `events_resolved`; join-free DAU/WAU materialized views
@@ -313,6 +313,20 @@ interactions between child plans. Provide concise evidence.
     still held in Shibuya's in-memory batch and became visible in ClickHouse only after the flush
     interval. EP-16 should treat queue depth, batch-flush latency, and writer heartbeat as distinct
     signals rather than assuming a zero-depth queue means every event is already queryable.
+
+- 2026-07-18, during EP-11 implementation:
+  - The pinned ClickHaskell generic-product decoder reverses accumulated fields within each
+    native-protocol result block. EP-11 retains typed header and wire-type validation, then
+    normalizes the two known result records per block. EP-13 must re-run the multi-row tests
+    after its planned driver bump and remove the normalization only when the upstream decoder
+    is confirmed fixed.
+  - The local ClickHouse still crashes in LLVM/JIT sort compilation when the read workaround is
+    removed, and aggregate compilation can fail when only the original two settings are disabled.
+    Metric reads now disable expression, aggregate-expression, and sort compilation; concurrent
+    fixture-backed funnel and retention requests succeed with all three.
+  - Cabal and Nix selected different ClickHaskell APIs (the pinned 1.1.0 source versus Nix's
+    1.0.0 package). EP-11 pins Nix to the exact Cabal revision so typed columns and driver behavior
+    remain coherent across both build paths.
 
 
 ## Decision Log
@@ -400,10 +414,15 @@ longer leak through 503 responses, and ClickHouse credentials are configurable. 
 build and test suite passes with live PostgreSQL and ClickHouse, and an accepted HTTP event
 was observed end-to-end in `analytics.events_raw`.
 
-EP-11, EP-12, and EP-9 are now unblocked and may proceed independently as Phase 2. The main
-coordination lesson for later work is that Shibuya's internal processor lifetime is a
-separate supervision boundary from the executable's writer thread; EP-16 in particular
-must preserve both while adding heartbeat and telemetry.
+EP-11 is complete; EP-12 and EP-9 remain independently implementable in Phase 2. The writer
+now owns a dedicated ClickHouse connection, request-side queries use a bounded configurable
+pool, and real typed columns replace tab-delimited wire parsing with loud header/type failures.
+The main EP-11 handoff is to EP-13: its driver bump must re-evaluate the pinned driver's
+per-block generic-product normalization before removing it.
+
+The broader coordination lesson remains that Shibuya's internal processor lifetime is a
+separate supervision boundary from the executable's writer thread; EP-16 in particular must
+preserve both while adding heartbeat and telemetry.
 
 ---
 
@@ -436,3 +455,8 @@ verified build, two-level writer supervision, graceful signal handling, readines
 hygiene, and ClickHouse connection configuration. Cross-plan discoveries capture Shibuya's
 failure-isolation semantics and the distinction between queue depth and in-memory batch lag for
 EP-16; Phase 2 is now unblocked.
+
+Revision note (2026-07-18, second revision): EP-11 completed. The registry and aggregate progress
+now record dedicated writer ownership, bounded query pooling, and typed multi-column decoding.
+Cross-plan discoveries capture the pinned ClickHaskell generic-product ordering defect for EP-13,
+the expanded ClickHouse JIT workaround, and the exact Cabal/Nix driver-source alignment.

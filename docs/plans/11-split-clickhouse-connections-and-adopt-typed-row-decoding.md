@@ -83,7 +83,7 @@ even if it requires splitting a partially completed task into two ("done" vs. "r
 - [x] (2026-07-18 14:02Z) M3: tab-in-group-key round-trip test; decode-mismatch-raises test; projection round-trip tests still green.
 - [x] (2026-07-18 14:02Z) M3: fixture-backed HTTP check (`just ch-fixtures-ep6`, then `/metrics/users`) returns the same active-user numbers as before the decode change.
 - [x] (2026-07-18 14:02Z) M3: commit `fix(query): decode typed ClickHouse columns instead of tab-joined lines`.
-- [ ] Living sections of this plan updated; MasterPlan registry row EP-11 set to Complete; MasterPlan Progress checkboxes for EP-11 ticked.
+- [x] (2026-07-18 14:02Z) Living sections of this plan updated; MasterPlan registry row EP-11 set to Complete; MasterPlan Progress checkboxes for EP-11 ticked.
 
 
 ## Surprises & Discoveries
