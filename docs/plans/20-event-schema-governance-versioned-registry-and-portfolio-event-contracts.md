@@ -91,11 +91,11 @@ This section must always reflect the actual current state of the work.
       committed artifact; registry version invariants; JSON round-trip); drift demo
       performed; M2 committed
 - [x] (2026-07-19 15:12 PDT) M2: `kansoku-client` exposes `fetchSchemaCatalog`; committed with M2's wire change
-- [ ] M3: `docs/event-schema-governance.md` authored for kikan service authors
-- [ ] M3: full validation pass (transcripts captured into this plan), MasterPlan 3
+- [x] (2026-07-19 15:23 PDT) M3: `docs/event-schema-governance.md` authored for kikan service authors
+- [x] (2026-07-19 15:23 PDT) M3: full validation pass (transcripts captured into this plan), MasterPlan 3
       progress checkboxes updated, portfolio-publication hook recorded as future scope;
       M3 committed
-- [ ] Outcomes & Retrospective written
+- [x] (2026-07-19 15:23 PDT) Outcomes & Retrospective written
 
 
 ## Surprises & Discoveries
@@ -272,6 +272,14 @@ Record every decision made while working on the plan.
   and leaves room for additional typed patterns in future catalog versions.
   Date: 2026-07-19
 
+- Decision: Adopt ADR 0007 as the durable owner of event schema versioning, validation,
+  persistence, publication, and producer compatibility policy.
+  Rationale: These rules span event producers, ingestion, ClickHouse, SDKs, CI, and future
+  portfolio tooling. Distilling them from this implementation plan prevents consumers from
+  treating absence as latest, editing released versions in place, or dropping enforced
+  property patterns from derived contracts.
+  Date: 2026-07-19
+
 
 ## Outcomes & Retrospective
 
@@ -298,6 +306,15 @@ Compare the result against the original purpose.
   opt-in live test pending). Repeated generation preserved SHA-256
   `f930d8ad022ca281994a8adbbb840f4fa55eae29a5766804be3faf9c08337eff` for the contract and
   `dc40604e6611d7683cf7800193526940db90856f358f6fbf3710f88df8f96680` for OpenAPI.
+
+- EP-20 completed (2026-07-19): `docs/event-schema-governance.md` now gives producers the
+  source-of-truth, declaration, immutable bumping, pinning, compatibility, and analytics
+  workflow. ADR 0007 distills the cross-system contract. The final closure battery replayed
+  migration 0016 as a no-op, built every package, passed 133 core and 13 client examples
+  with zero failures (one intentional opt-in pending), regenerated both artifacts without a
+  diff, and found no whitespace or plan-fence errors. MasterPlan 3 now has four complete
+  children and records the remaining external publication and version-specific metric work
+  as future scope.
 
 
 ## Context and Orientation
@@ -666,7 +683,7 @@ changelog line), and `properties`, an array of `{name, type, required, pattern, 
 `type` is one of `"string"`, `"number"`, `"bool"`, `"object"`, `"array"`, `"any"` (the
 lowercase rendering of `PropertyType`), `pattern` is the validation expression or `null`,
 and `description` is a string or `null`. Excerpt of
-the version-1 catalog (two of the five events; key order shown alphabetically as the
+the version-1 catalog (two of the eight events; key order shown alphabetically as the
 regenerator writes it, but consumers and the golden test must not depend on key order):
 
 ```json
@@ -1107,11 +1124,8 @@ $ cabal test kansoku-core-test 2>&1 | grep -A4 "committed contract"
 Regenerate and the suite passes again (`cabal run kansoku-contracts && cabal test`) — and
 `git diff docs/contracts/events.json` now shows the reviewer-visible contract change,
 which is precisely what a reviewer would reject as an in-place edit to a released version.
-Restore the tree afterwards:
-
-```bash
-git checkout -- kansoku-api/src/Kansoku/Event/Registry.hs docs/contracts/events.json
-```
+Restore the tree afterwards by reversing the temporary registry edit with `apply_patch`,
+then rerun the targeted golden test. Do not restore unrelated worktree changes.
 
 Full-suite and regeneration checks, all green / empty:
 
@@ -1121,6 +1135,46 @@ just test
 cabal run kansoku-openapi   && git diff --exit-code docs/api/openapi.json
 cabal run kansoku-contracts && git diff --exit-code docs/contracts/events.json
 ```
+
+Captured implementation evidence on 2026-07-19 used isolated PostgreSQL databases and port
+18080 because process-compose owns 8080. The unknown known-event version returned the landed
+shared envelope, while legacy, pinned, and unknown-name events were accepted:
+
+```console
+{"code":"validation_failed","message":"validation failed: event 'page_view': schemaVersion 2 is unknown; known versions: [1]","retryable":false}
+HTTP 400
+{"accepted":1,"eventId":"ep20-m1-versionless"}
+HTTP 202
+{"accepted":1,"eventId":"ep20-m1-pinned-v1"}
+HTTP 202
+{"accepted":1,"eventId":"ep20-m1-unknown-event"}
+HTTP 202
+```
+
+The writer then persisted the effective versions exactly:
+
+```text
+ep20-m1-pinned-v1      page_view          1
+ep20-m1-unknown-event  totally_new_thing  7
+ep20-m1-versionless    page_view          1
+```
+
+The public endpoint returned HTTP 200, `application/json`, eight events, the full
+`page_view` contract, and both experiment patterns; an Origin-bearing request also returned
+`Access-Control-Allow-Origin: *`. A temporary optional `page_view.title` edit produced:
+
+```text
+Kansoku event schema contract
+  matches the committed contract artifact [FAILED]
+  docs/contracts/events.json is stale - run `cabal run kansoku-contracts` from the repo root and commit the result.
+```
+
+Reversing the edit restored the targeted test. The final closure battery applied no new
+migrations, passed 133 core and 13 client examples with zero failures (one intentional
+opt-in pending), and both regeneration checks exited with no diff. Contract and OpenAPI
+SHA-256 values remained respectively
+`f930d8ad022ca281994a8adbbb840f4fa55eae29a5766804be3faf9c08337eff` and
+`dc40604e6611d7683cf7800193526940db90856f358f6fbf3710f88df8f96680`.
 
 Acceptance summary: all transcripts above behave as shown; `docs/event-schema-governance.md`
 exists and covers declaration, bumping, pinning, and compatibility; `docs/api/openapi.json`
@@ -1247,3 +1301,8 @@ tree before implementation. The registry now has eight declarations and property
 the wire/storage model already includes identifiers, the immutable migration ledger reaches
 0015, validation renders stable messages, and the public catalog joins the root NamedRoutes
 record without moving the WAI-level operational endpoints.
+
+Revision note (2026-07-19, completion): Implemented all three milestones, extended the
+published DTO to retain EP-19's property patterns, captured live ingest/storage/catalog and
+golden-drift evidence, authored the producer guide, adopted ADR 0007, and closed EP-20 plus
+MasterPlan 3 after the full build/test/migration/artifact battery passed.

@@ -80,7 +80,7 @@ it non-trivial; recorded as future scope.
 | 17 | Queryable event properties: typed storage and property-based grouping | docs/plans/17-queryable-event-properties-typed-storage-and-property-based-grouping.md | None (external: MP-2) | EP-20 | Complete |
 | 18 | Multi-signal identity: identifier kinds, fingerprints, and confidence-aware stitching | docs/plans/18-multi-signal-identity-identifier-kinds-fingerprints-and-confidence-aware-stitching.md | None (external: MP-2) | None | Complete |
 | 19 | Experiment analytics: assignment events, variant rollups, and per-variant metrics | docs/plans/19-experiment-analytics-assignment-events-variant-rollups-and-per-variant-metrics.md | EP-17 | EP-18, EP-20 | Complete |
-| 20 | Event schema governance: versioned registry and portfolio event contracts | docs/plans/20-event-schema-governance-versioned-registry-and-portfolio-event-contracts.md | None (external: MP-2) | None | In Progress |
+| 20 | Event schema governance: versioned registry and portfolio event contracts | docs/plans/20-event-schema-governance-versioned-registry-and-portfolio-event-contracts.md | None (external: MP-2) | None | Complete |
 
 Status values: Not Started, In Progress, Complete, Cancelled.
 Hard Deps and Soft Deps reference other rows by their # prefix (e.g., EP-17). "External:
@@ -136,19 +136,18 @@ dot syntax is not reliable. EP-19's variant grouping and rollup MVs must use tho
 expressions, never `JSONExtract*` over the raw string. Full evidence and alternatives are
 in EP-17's Decision Log.
 
-Event registry (`kansoku-api/src/Kansoku/Event/Registry.hs`) — EP-17 reads it to know which
-properties are declared (and, if it chooses materialized columns, to drive them); EP-19 adds
-experiment event schemas (`experiment_viewed` / assignment) to it; EP-20 versions and
-externalizes it. Until EP-20 lands, the in-code registry is the source of truth and EP-17/
-EP-19 write against it; EP-20 must migrate their entries without semantic change.
+Event registry (`kansoku-api/src/Kansoku/Event/Registry.hs`) — the in-code registry remains
+the authoring source of truth and now maps each name to immutable contiguous versions. EP-17
+reads the latest schema for property-query compilation, EP-19's `experiment_viewed` entry
+retains both SQL-safe patterns, and EP-20 migrated all eight landed entries as version 1.
+The complete producer contract is public at `GET /v1/schemas` and committed at
+`docs/contracts/events.json`; ADR 0007 owns its governance and compatibility rules.
 
 `AnalyticsEvent` wire type (`kansoku-api/src/Kansoku/Event/Types.hs`) — EP-18 shipped the
-optional `identifiers :: Maybe (Map Text Text)` field; EP-20 adds an optional
-schema-version field. Both are
-additive and optional (existing producers keep working); each plan updates `kansoku-client`,
-validation, `EventRow`/ClickHouse columns (through the migration mechanism), and the OpenAPI
-document in the same change. If both plans are in flight simultaneously, coordinate field
-naming here before either merges.
+optional `identifiers :: Maybe (Map Text Text)` field; EP-20 shipped optional
+`schemaVersion :: Maybe Int`, where absence means 1. Both are additive and optional, and
+both moved `kansoku-client`, validation, `EventRow`/ClickHouse storage, and OpenAPI in their
+wire-changing commits.
 
 Identity resolution (`analytics.events_resolved` and successors) — EP-18 now computes
 `canonical_user` from account-scoped `identity_signals` plus the view-time confidence
@@ -190,14 +189,13 @@ Any plan needing more columns from the view extends the contract HERE first. ADR
 records the durable rationale.
 
 Wire-field name claims on `AnalyticsEvent` — EP-18 shipped `identifiers` (kind→value map),
-EP-20 claims `schemaVersion` (optional Int, absent = 1). Both are recorded in the
+and EP-20 shipped `schemaVersion` (optional Int, absent = 1). Both are recorded in the
 respective plans; no collision. Future additive fields are claimed in this paragraph before
 implementation.
 
-Registry gap carried between plans — `payment_completed` and `feature_used` are queried by
-builtin metrics today but undeclared in `defaultRegistry` (pre-existing gap found during
-EP-17 authoring). EP-17 Milestone 2 declares them; EP-20 must carry those entries as
-version 1 when it versions the registry.
+Registry gap carried between plans — EP-17 declared the previously missing
+`payment_completed` and `feature_used` builtins, and EP-20 carried both as version 1 with
+their types and requiredness unchanged.
 
 
 ## Progress
@@ -213,8 +211,8 @@ and the milestone. This section provides an at-a-glance view of the entire initi
 - [x] EP-18: fingerprint retention/deletion policy implemented and documented
 - [x] EP-19: assignment event schemas registered; variant rollups populated
 - [x] EP-19: per-variant metrics endpoints (exposure, conversion, funnel) serving
-- [ ] EP-20: events carry schema version; versioned registry established
-- [ ] EP-20: portfolio event contract published and consumable by other kikan services
+- [x] EP-20: events carry schema version; versioned registry established
+- [x] EP-20: portfolio event contract published and consumable by other kikan services
 
 
 ## Surprises & Discoveries
@@ -282,6 +280,19 @@ interactions between child plans. Provide concise evidence.
     ordered funnels `1/1` and `4/3`; account B remained isolated. ADR 0006 owns these
     semantics and explicitly excludes significance claims.
 
+- 2026-07-19, during EP-20 implementation:
+  - The landed registry contained eight entries plus EP-19's generic `SqlNamePattern`, not
+    the five-entry pre-sibling sketch. All eight became immutable version 1, and the public
+    catalog gained a nullable `pattern` field so it does not omit enforced semantics.
+  - `schemaVersion` is compatible with EP-18's `identifiers`: both optional wire fields and
+    their ClickHouse columns coexist, while migration `0016` appends the version after the
+    identifier map. Live ingest persisted versionless/pinned-v1 events as 1 and an unknown
+    event's explicit version as 7.
+  - The deterministic catalog is one pure value served publicly, decoded by the Haskell SDK,
+    and committed as JSON. A deliberate illegal in-place schema edit made the golden test
+    fail with its regeneration instruction; reversing the edit restored the suite. ADR 0007
+    owns the durable versioning and publication policy.
+
 
 ## Decision Log
 
@@ -337,6 +348,16 @@ interactions between child plans. Provide concise evidence.
   contamination visible. Durable rationale and consequences live in ADR 0006.
   Date: 2026-07-19
 
+- Decision: EP-20's cross-plan schema contract is an in-source, immutable and contiguous
+  version registry; absence means version 1, known names require an exact known version,
+  unknown names remain permissive, and the same pattern-complete catalog is public at
+  `GET /v1/schemas` and committed at `docs/contracts/events.json`.
+  Rationale: This pins legacy producer meaning, preserves organic event adoption, records
+  the accepting schema era in ClickHouse, and gives runtime and review-time consumers one
+  drift-guarded contract without operating a separate registry service. Durable rationale
+  and consequences live in ADR 0007.
+  Date: 2026-07-19
+
 
 ## Outcomes & Retrospective
 
@@ -363,8 +384,22 @@ contract; an account/experiment/variant/day exposure rollup; authenticated expos
 conversion, and ordered-funnel endpoints; typed client selectors and regenerated OpenAPI;
 and ADR 0006's durable attribution semantics. Fresh migrations, real HTTP acceptance, and
 the final 120-core/11-client test pass verified exact post-exposure counts, tenant
-isolation, malformed-input rejection, and empty unknown-experiment results. EP-20 is the
-only remaining child plan in this initiative.
+isolation, malformed-input rejection, and empty unknown-experiment results.
+
+EP-20 completed on 2026-07-19. It delivered immutable per-event schema versions,
+version-aware validation and persistence, producer pinning, a public browser-readable
+catalog, a deterministic committed artifact, SDK catalog fetching, a golden drift guard,
+the producer governance guide, and ADR 0007. Live HTTP/ClickHouse acceptance proved legacy,
+pinned, unavailable-version, unknown-name, catalog, pattern, and CORS behavior. The final
+suite reached 133 core and 13 client examples with no failures (the one opt-in live client
+test remained intentionally pending), and both generated artifacts were byte-stable.
+
+MasterPlan 3 is complete. Queryable properties, evidence-based multi-signal identity,
+exposure-based experiment analytics, and schema governance now compose through the stable
+`events_resolved`, event registry, wire, storage, client, and OpenAPI contracts. ADRs
+0004–0007 own the four durable capability boundaries. Deferred scope remains explicit:
+browser SDK/dashboard work, statistical significance, version-specific property metrics,
+organization analytics, and external kikan/mori publication pointers.
 
 ---
 
@@ -384,3 +419,8 @@ Revision note (2026-07-19, EP-19 completion): marked EP-19 complete, recorded th
 exposure rollup and three per-variant endpoints, captured the ClickHouse Dynamic cast
 correction and end-to-end counts, linked ADR 0006, and left EP-20 as the sole remaining
 child plan.
+
+Revision note (2026-07-19, initiative completion): marked EP-20 and MasterPlan 3 complete,
+recorded the versioned registry and pattern-complete public catalog, captured the golden
+drift proof and live persistence/catalog evidence, and distilled the final durable boundary
+into ADR 0007 alongside ADRs 0004–0006.
