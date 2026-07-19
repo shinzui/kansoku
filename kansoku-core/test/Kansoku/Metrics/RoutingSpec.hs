@@ -2,7 +2,7 @@
 
 -- | Pins every analytics-contract path to a distinct sentinel handler.
 --
--- Nine metric routes have exactly the same handler type. The NamedRoutes record
+-- Ten metric routes have exactly the same handler type. The NamedRoutes record
 -- cannot detect a same-typed transposition statically, so these runtime assertions
 -- are the load-bearing dispatch guard. Deliberately swapping the @users@ and
 -- @organizations@ sentinels makes the users assertion observe
@@ -68,7 +68,7 @@ import Test.Hspec
 
 spec :: Spec
 spec = describe "Kansoku analytics route dispatch" $ do
-  it "routes all eleven metrics and both ingest operations to their own handlers" $
+  it "routes all twelve metrics and both ingest operations to their own handlers" $
     Warp.testWithApplication (pure sentinelApplication) $ \port -> do
       manager <- HTTP.newManager HTTP.defaultManagerSettings
       traverse_ (assertMetricRoute manager port) metricRoutes
@@ -99,6 +99,7 @@ metricRoutes =
     ("feature-adoption", "feature-adoption"),
     ("conversion", "conversion"),
     ("users", "users"),
+    ("revenue", "revenue"),
     ("organizations", "organizations"),
     ("custom", "custom")
   ]
@@ -224,6 +225,7 @@ sentinelMetricsServer =
       Metrics.featureAdoption = metricSentinel "feature-adoption",
       Metrics.conversion = metricSentinel "conversion",
       Metrics.users = metricSentinel "users",
+      Metrics.revenue = metricSentinel "revenue",
       Metrics.organizations = stubSentinel "organizations",
       Metrics.custom = stubSentinel "custom"
     }

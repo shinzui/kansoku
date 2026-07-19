@@ -202,7 +202,7 @@ and the milestone. This section provides an at-a-glance view of the entire initi
 
 - [x] EP-17: property storage representation decided, prototyped, and migrated
 - [x] EP-17: query builders support declared-property grouping and filtering
-- [ ] EP-17: metrics API groupBy/filter contract extended; client + OpenAPI regenerated
+- [x] EP-17: metrics API groupBy/filter contract extended; client + OpenAPI regenerated
 - [ ] EP-18: identity-signals model (wire field, storage, ingestion) live
 - [ ] EP-18: confidence-aware resolution replaces latest-wins; merge conflicts representable
 - [ ] EP-18: fingerprint retention/deletion policy implemented and documented
@@ -239,6 +239,9 @@ interactions between child plans. Provide concise evidence.
     `analytics.events_resolved`; its shared contract now has a seventh `properties_json`
     column. ADR 0004 records the decision, and EP-18 must preserve it when replacing the
     view's identity-resolution internals.
+  - The `revenue` builtin existed in the registry and compiler but had no HTTP route.
+    EP-17 exposes it additively as `GET /metrics/revenue`; the generated OpenAPI contract
+    now contains 14 analytics paths.
 
 
 ## Decision Log

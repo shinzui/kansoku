@@ -61,7 +61,7 @@ spec = describe "Kansoku.Metrics.Handler" $ do
         HTTP.parseRequest
           ( "http://127.0.0.1:"
               <> show port
-              <> "/metrics/feature-adoption?from=2026-06-01&to=2026-06-08&groupBy=prop:nope"
+              <> "/metrics/revenue?from=2026-06-01&to=2026-06-08&groupBy=prop:nope"
           )
       response <- HTTP.httpLbs request manager
       HTTP.responseStatus response `shouldBe` status400

@@ -76,9 +76,10 @@ This section must always reflect the actual current state of the work.
 - [x] (2026-07-19 18:55Z) M2: `QuerySpec` golden SQL tests for all new shapes; core
       suite green with 101 examples and 0 failures, including live ClickHouse property
       grouping
-- [ ] M3: `groupBy` query-param documentation extended in the metrics route record;
-      OpenAPI document regenerated and client compiles in the same commit
-- [ ] M3: account scoping verified present in every new SQL shape
+- [x] (2026-07-19 18:58Z) M3: `groupBy` query-param documentation extended in the
+      metrics route record; `/metrics/revenue` exposed; OpenAPI document regenerated and
+      client compiles in the same commit
+- [x] (2026-07-19 18:58Z) M3: account scoping verified present in every new SQL shape
 - [ ] M3: end-to-end transcripts captured (revenue by plan, feature adoption by feature,
       400 for undeclared property) and pasted into Validation and Acceptance
 - [ ] Outcomes & Retrospective written
@@ -166,6 +167,10 @@ Implementation findings (2026-07-19, Milestone 1):
   ClickHouse was live. The integration cases observed revenue groups `{free: 9, pro: 98}`
   and canonical feature-user groups `{export: 1, search: 2}`. Handler validation returned
   HTTP 400 `unknown_property` without forcing the query pool.
+- The builtin registry and compiler already defined `revenue`, but the landed Servant route
+  record did not expose it. Because this plan's required demonstration is
+  `GET /metrics/revenue?groupBy=prop:plan`, Milestone 3 adds the first-class
+  `/metrics/revenue` route and regenerates the OpenAPI document (now 14 analytics paths).
 
 
 ## Decision Log
@@ -261,6 +266,14 @@ Record every decision made while working on the plan.
   change ClickHaskell result types. This durable contract is recorded in
   `docs/adr/0004-queryable-event-properties-and-identity-resolved-projection.md` and the
   MasterPlan Integration Points section.
+  Date: 2026-07-19
+
+- Decision: Expose the existing `revenue` builtin at `GET /metrics/revenue` as part of the
+  shared `MetricQuery` route family.
+  Rationale: `revenue` was queryable only through internal compiler tests; without a route,
+  the plan's public user story and end-to-end acceptance request could not be performed.
+  The additive route uses the same authentication, account scoping, validation, response
+  DTOs, generated client, and OpenAPI contract as the other builtin metrics.
   Date: 2026-07-19
 
 

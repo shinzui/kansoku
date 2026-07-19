@@ -34,7 +34,8 @@ groups without the prefix and declare Sum/Average inputs through
 `aggregationProperty`. SQL reads group strings with
 `toString(properties_json.<name>)` and numeric values with
 `CAST(properties_json.<name>, 'Float64')`; it never applies `JSONExtract*` to the raw
-column.
+column. The existing `revenue` builtin is exposed through the additive
+`GET /metrics/revenue` route so this contract is available through the public metrics API.
 
 `analytics.events_resolved` extends its stable projection with a seventh,
 server-only `properties_json` column. This lets unique-user property metrics keep canonical

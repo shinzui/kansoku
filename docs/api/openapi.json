@@ -284,6 +284,7 @@
   "paths": {
     "/metrics/acquisition": {
       "get": {
+        "description": "The optional groupBy parameter accepts exactly one dimension: event_name, source, route, or prop:<name>. Property names must be declared in the event registry for every event queried by the metric. Unknown, undeclared, or multiple dimensions return HTTP 400 naming the invalid value.",
         "operationId": "getMetricsAcquisition",
         "parameters": [
           {
@@ -423,6 +424,7 @@
     },
     "/metrics/conversion": {
       "get": {
+        "description": "The optional groupBy parameter accepts exactly one dimension: event_name, source, route, or prop:<name>. Property names must be declared in the event registry for every event queried by the metric. Unknown, undeclared, or multiple dimensions return HTTP 400 naming the invalid value.",
         "operationId": "getMetricsConversion",
         "parameters": [
           {
@@ -562,6 +564,7 @@
     },
     "/metrics/custom": {
       "get": {
+        "description": "The optional groupBy parameter accepts exactly one dimension: event_name, source, route, or prop:<name>. Property names must be declared in the event registry for every event queried by the metric. Unknown, undeclared, or multiple dimensions return HTTP 400 naming the invalid value.",
         "operationId": "getMetricsCustom",
         "parameters": [
           {
@@ -701,6 +704,7 @@
     },
     "/metrics/events": {
       "get": {
+        "description": "The optional groupBy parameter accepts exactly one dimension: event_name, source, route, or prop:<name>. Property names must be declared in the event registry for every event queried by the metric. Unknown, undeclared, or multiple dimensions return HTTP 400 naming the invalid value.",
         "operationId": "getMetricsEvents",
         "parameters": [
           {
@@ -840,6 +844,7 @@
     },
     "/metrics/feature-adoption": {
       "get": {
+        "description": "The optional groupBy parameter accepts exactly one dimension: event_name, source, route, or prop:<name>. Property names must be declared in the event registry for every event queried by the metric. Unknown, undeclared, or multiple dimensions return HTTP 400 naming the invalid value.",
         "operationId": "getMetricsFeatureAdoption",
         "parameters": [
           {
@@ -1115,6 +1120,7 @@
     },
     "/metrics/organizations": {
       "get": {
+        "description": "The optional groupBy parameter accepts exactly one dimension: event_name, source, route, or prop:<name>. Property names must be declared in the event registry for every event queried by the metric. Unknown, undeclared, or multiple dimensions return HTTP 400 naming the invalid value.",
         "operationId": "getMetricsOrganizations",
         "parameters": [
           {
@@ -1254,6 +1260,7 @@
     },
     "/metrics/page-views": {
       "get": {
+        "description": "The optional groupBy parameter accepts exactly one dimension: event_name, source, route, or prop:<name>. Property names must be declared in the event registry for every event queried by the metric. Unknown, undeclared, or multiple dimensions return HTTP 400 naming the invalid value.",
         "operationId": "getMetricsPageViews",
         "parameters": [
           {
@@ -1517,8 +1524,149 @@
         ]
       }
     },
+    "/metrics/revenue": {
+      "get": {
+        "description": "The optional groupBy parameter accepts exactly one dimension: event_name, source, route, or prop:<name>. Property names must be declared in the event registry for every event queried by the metric. Unknown, undeclared, or multiple dimensions return HTTP 400 naming the invalid value.",
+        "operationId": "getMetricsRevenue",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "groupBy",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "timeGrain",
+            "required": false,
+            "schema": {
+              "enum": [
+                "hour",
+                "day",
+                "week",
+                "month"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricResult"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricResult"
+                }
+              }
+            },
+            "description": "Metric result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Malformed request or `timeGrain` or `groupBy` or `to` or `from`"
+          },
+          "401": {
+            "description": "Missing, malformed, unknown, or revoked credential"
+          },
+          "403": {
+            "description": "A valid credential lacks metrics-read permission"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Payload too large"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Storage unavailable"
+          }
+        },
+        "security": [
+          {
+            "serviceToken": []
+          }
+        ],
+        "tags": [
+          "ingestion",
+          "metrics"
+        ]
+      }
+    },
     "/metrics/sessions": {
       "get": {
+        "description": "The optional groupBy parameter accepts exactly one dimension: event_name, source, route, or prop:<name>. Property names must be declared in the event registry for every event queried by the metric. Unknown, undeclared, or multiple dimensions return HTTP 400 naming the invalid value.",
         "operationId": "getMetricsSessions",
         "parameters": [
           {
@@ -1658,6 +1806,7 @@
     },
     "/metrics/users": {
       "get": {
+        "description": "The optional groupBy parameter accepts exactly one dimension: event_name, source, route, or prop:<name>. Property names must be declared in the event registry for every event queried by the metric. Unknown, undeclared, or multiple dimensions return HTTP 400 naming the invalid value.",
         "operationId": "getMetricsUsers",
         "parameters": [
           {

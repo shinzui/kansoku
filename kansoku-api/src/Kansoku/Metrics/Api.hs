@@ -74,13 +74,14 @@ data MetricResult = MetricResult
   deriving anyclass (FromJSON, ToJSON)
 
 type MetricQuery =
-  QueryParam' '[Required] "from" Day
+  Description "The optional groupBy parameter accepts exactly one dimension: event_name, source, route, or prop:<name>. Property names must be declared in the event registry for every event queried by the metric. Unknown, undeclared, or multiple dimensions return HTTP 400 naming the invalid value."
+    :> QueryParam' '[Required] "from" Day
     :> QueryParam' '[Required] "to" Day
     :> QueryParam "groupBy" Text
     :> QueryParam "timeGrain" TimeGrain
     :> MultiVerb 'Servant.GET '[JSON] (OkResponses "Metric result" MetricResult) (KansokuResult MetricResult)
 
--- | Metric routes keyed by field name. Nine fields deliberately share
+-- | Metric routes keyed by field name. Ten fields deliberately share
 -- 'MetricQuery'; their runtime path-to-handler guard lives in RoutingSpec.
 -- Record field order is not load-bearing for servant routing.
 data MetricsRoutes mode = MetricsRoutes
@@ -110,6 +111,7 @@ data MetricsRoutes mode = MetricsRoutes
     featureAdoption :: mode :- "metrics" :> "feature-adoption" :> MetricQuery,
     conversion :: mode :- "metrics" :> "conversion" :> MetricQuery,
     users :: mode :- "metrics" :> "users" :> MetricQuery,
+    revenue :: mode :- "metrics" :> "revenue" :> MetricQuery,
     organizations :: mode :- "metrics" :> "organizations" :> MetricQuery,
     custom :: mode :- "metrics" :> "custom" :> MetricQuery
   }

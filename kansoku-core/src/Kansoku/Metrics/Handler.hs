@@ -40,6 +40,7 @@ metricsServer principal pool =
       featureAdoption = metricHandler "feature_adoption",
       conversion = metricHandler "conversion_rate",
       users = metricHandler "active_users",
+      revenue = metricHandler "revenue",
       organizations = notImplemented "organizations",
       custom = notImplemented "custom"
     }

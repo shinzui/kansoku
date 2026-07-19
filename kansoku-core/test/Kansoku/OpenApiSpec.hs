@@ -52,7 +52,7 @@ spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
     lookupText ["components", "securitySchemes", "serviceToken", "scheme"] documentValue `shouldBe` Just "bearer"
     traverse_ assertSecurity operationValues
 
-  it "documents exactly the thirteen analytics paths with stable operation IDs" $ do
+  it "documents exactly the fourteen analytics paths with stable operation IDs" $ do
     documentedPaths `shouldBe` expectedServedPaths
     fmap operationIdentity operationValues `shouldMatchList` expectedOperationIds
 
@@ -71,6 +71,13 @@ spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
       `shouldSatisfy` maybe False (Text.isInfixOf "new-in-window cohorts")
     lookupText ["description"] retentionOperation
       `shouldSatisfy` maybe False (Text.isInfixOf "Offset 0")
+
+  it "documents declared-property grouping and the one-dimension limit" $ do
+    let revenueOperation = fromMaybe Aeson.Null (valueAt ["paths", "/metrics/revenue", "get"] documentValue)
+    lookupText ["description"] revenueOperation
+      `shouldSatisfy` maybe False (Text.isInfixOf "prop:<name>")
+    lookupText ["description"] revenueOperation
+      `shouldSatisfy` maybe False (Text.isInfixOf "exactly one dimension")
 
   it "keeps every wire DTO's ToJSON representation within its ToSchema" $ do
     conforms "AnalyticsEvent" sampleEvent
@@ -161,6 +168,7 @@ expectedServedPaths =
       "/metrics/organizations",
       "/metrics/page-views",
       "/metrics/retention",
+      "/metrics/revenue",
       "/metrics/sessions",
       "/metrics/users",
       "/v1/batch",
@@ -181,6 +189,7 @@ expectedOperationIds =
     ("/metrics/organizations", "get", "getMetricsOrganizations"),
     ("/metrics/page-views", "get", "getMetricsPageViews"),
     ("/metrics/retention", "get", "getMetricsRetention"),
+    ("/metrics/revenue", "get", "getMetricsRevenue"),
     ("/metrics/sessions", "get", "getMetricsSessions"),
     ("/metrics/users", "get", "getMetricsUsers"),
     ("/v1/batch", "post", "postV1Batch"),
