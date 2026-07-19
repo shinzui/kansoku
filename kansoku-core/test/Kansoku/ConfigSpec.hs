@@ -27,6 +27,8 @@ clearEnv =
       "KANSOKU_CORS_ORIGINS",
       "KANSOKU_INGEST_MAX_BODY_BYTES",
       "KANSOKU_INGEST_MAX_BATCH_LENGTH",
+      "KANSOKU_QUEUE_POLL_INTERVAL_SEC",
+      "KANSOKU_INTERNAL_METRICS_ENABLED",
       "KANSOKU_SERVER_PORT"
     ]
 
@@ -53,6 +55,8 @@ spec = describe "Kansoku.Config.loadConfig" $ do
         (cfg ^. #corsAllowedOrigins) `shouldBe` Nothing
         (cfg ^. #ingestMaxBodyBytes) `shouldBe` 5242880
         (cfg ^. #ingestMaxBatchLength) `shouldBe` 500
+        (cfg ^. #queuePollIntervalSec) `shouldBe` 15
+        (cfg ^. #internalMetricsEnabled) `shouldBe` True
         (cfg ^. #serverPort) `shouldBe` 8080
 
   it "parses values from the environment" $ do
@@ -72,6 +76,8 @@ spec = describe "Kansoku.Config.loadConfig" $ do
     setEnv "KANSOKU_CORS_ORIGINS" "https://app.example.com, https://admin.example.com,"
     setEnv "KANSOKU_INGEST_MAX_BODY_BYTES" "1048576"
     setEnv "KANSOKU_INGEST_MAX_BATCH_LENGTH" "250"
+    setEnv "KANSOKU_QUEUE_POLL_INTERVAL_SEC" "5"
+    setEnv "KANSOKU_INTERNAL_METRICS_ENABLED" "false"
     setEnv "KANSOKU_SERVER_PORT" "9999"
     result <- loadConfig
     clearEnv
@@ -94,6 +100,8 @@ spec = describe "Kansoku.Config.loadConfig" $ do
           `shouldBe` Just ["https://app.example.com", "https://admin.example.com"]
         (cfg ^. #ingestMaxBodyBytes) `shouldBe` 1048576
         (cfg ^. #ingestMaxBatchLength) `shouldBe` 250
+        (cfg ^. #queuePollIntervalSec) `shouldBe` 5
+        (cfg ^. #internalMetricsEnabled) `shouldBe` False
         (cfg ^. #serverPort) `shouldBe` 9999
 
   it "treats an explicit wildcard CORS origin as unrestricted" $ do
@@ -123,6 +131,22 @@ spec = describe "Kansoku.Config.loadConfig" $ do
     result <- loadConfig
     clearEnv
     result `shouldBe` Left (ConfigError "KANSOKU_INGEST_MAX_BODY_BYTES: must be at least 1")
+
+  it "rejects a non-positive queue poll interval" $ do
+    clearEnv
+    setEnv "KANSOKU_QUEUE_POLL_INTERVAL_SEC" "0"
+    result <- loadConfig
+    clearEnv
+    result `shouldBe` Left (ConfigError "KANSOKU_QUEUE_POLL_INTERVAL_SEC: must be at least 1")
+
+  it "rejects an invalid internal metrics toggle" $ do
+    clearEnv
+    setEnv "KANSOKU_INTERNAL_METRICS_ENABLED" "sometimes"
+    result <- loadConfig
+    clearEnv
+    result
+      `shouldBe` Left
+        (ConfigError "KANSOKU_INTERNAL_METRICS_ENABLED: expected true, false, 1, or 0")
   where
     isLeft (Left _) = True
     isLeft _ = False

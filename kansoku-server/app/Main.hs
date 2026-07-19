@@ -11,6 +11,12 @@ import Kansoku.ClickHouse
   )
 import Kansoku.Config (loadConfig)
 import Kansoku.Ingest.Queue (eventsQueueName, provisionQueue)
+import Kansoku.Observability
+  ( newQueueDepthCell,
+    newWriterHeartbeat,
+    registerPipelineMetrics,
+    runQueueDepthPoller,
+  )
 import Kansoku.Postgres (createPool)
 import Kansoku.Prelude
 import Kansoku.Runtime (runApp)
@@ -39,8 +45,13 @@ main = do
         queryPool <- newQueryPool (clickHouseConfigFromConfig cfg) (cfg ^. #clickHouseQueryPoolSize)
         bracket makeTelemetry shutdownTelemetry $ \telemetry -> do
           let tracer = telemetry ^. #tracer
+          metrics <- registerPipelineMetrics
+          heartbeat <- newWriterHeartbeat
+          queueDepth <- newQueueDepthCell
           withAsync
             ( runWriter
+                metrics
+                heartbeat
                 pool
                 tracer
                 (clickHouseConfigFromConfig cfg)
@@ -52,13 +63,26 @@ main = do
                 (readMVar shutdownVar)
             )
             ( \writerAsync ->
-                let probe =
-                      ReadyProbe
-                        { writerAlive = isNothing <$> poll writerAsync,
-                          pgmqReachable = pgmqReady pool queueName
-                        }
-                    app = kansokuApp cfg probe pool queueName queryPool
-                 in race_
-                      (wait writerAsync)
-                      (runApp cfg (startServer app))
+                withAsync
+                  ( runQueueDepthPoller
+                      pool
+                      queueName
+                      metrics
+                      queueDepth
+                      (cfg ^. #queuePollIntervalSec)
+                  )
+                  ( \pollerAsync ->
+                      let probe =
+                            ReadyProbe
+                              { writerAlive = isNothing <$> poll writerAsync,
+                                pgmqReachable = pgmqReady pool queueName
+                              }
+                          app = kansokuApp cfg probe pool queueName queryPool
+                       in race_
+                            (wait writerAsync)
+                            ( race_
+                                (wait pollerAsync)
+                                (runApp cfg (startServer app))
+                            )
+                  )
             )

@@ -7,6 +7,7 @@ module Kansoku.Server
     envelopeFormatters,
     healthApp,
     ingestCors,
+    internalMetrics,
     kansokuApp,
     kansokuServer,
     pgmqReady,
@@ -41,6 +42,7 @@ import Network.Wai.Middleware.Cors qualified as Cors
 import Network.Wai.Middleware.RequestSizeLimit qualified as SizeLimit
 import Pgmq.Effectful (QueueName, queueMetrics, runPgmq)
 import Pgmq.Effectful.Interpreter (PgmqRuntimeError)
+import Prometheus qualified
 import Servant
   ( Context (..),
     Handler,
@@ -79,17 +81,39 @@ kansokuApp :: Config -> ReadyProbe -> Pool.Pool -> QueueName -> QueryPool -> App
 kansokuApp config probe pool queueName queryPool =
   waiWrapper
     probe
-    ( ingestCors
-        (config ^. #corsAllowedOrigins)
-        ( bodySizeLimit
-            (config ^. #ingestMaxBodyBytes)
-            ( serveWithContext
-                kansokuAPI
-                (envelopeFormatters :. EmptyContext)
-                (kansokuServer (config ^. #ingestMaxBatchLength) pool queueName queryPool)
+    ( internalMetrics
+        (config ^. #internalMetricsEnabled)
+        ( ingestCors
+            (config ^. #corsAllowedOrigins)
+            ( bodySizeLimit
+                (config ^. #ingestMaxBodyBytes)
+                ( serveWithContext
+                    kansokuAPI
+                    (envelopeFormatters :. EmptyContext)
+                    (kansokuServer (config ^. #ingestMaxBatchLength) pool queueName queryPool)
+                )
             )
         )
     )
+
+-- | Serve the operational Prometheus scrape without adding it to the public
+-- Servant API or OpenAPI document. This middleware sits outside the EP-14
+-- ingest stack, so CORS and body limits remain scoped to ingestion.
+internalMetrics :: Bool -> Middleware
+internalMetrics enabled inner req respond =
+  case pathInfo req of
+    ["internal", "metrics"]
+      | enabled -> do
+          body <- Prometheus.exportMetricsAsText
+          respond
+            ( responseLBS
+                status200
+                [(hContentType, "text/plain; version=0.0.4")]
+                body
+            )
+      | otherwise ->
+          respond (responseLBS status404 [(hContentType, "text/plain")] "Not Found")
+    _ -> inner req respond
 
 -- | Apply browser CORS policy only to the ingestion route family. Metrics and
 -- operational endpoints remain same-origin. Auth headers are pre-authorized
@@ -211,5 +235,5 @@ pgmqReady pool queueName = do
 startServer :: (IOE :> es, Reader Config :> es, Log :> es) => Application -> Eff es ()
 startServer app = do
   port <- asks @Config (^. #serverPort)
-  logInfo ("kansoku-server listening on port " <> Text.pack (show port) <> " (GET /health, GET /ready, GET /openapi.json, POST /v1/events, POST /v1/batch, GET /metrics/*)")
+  logInfo ("kansoku-server listening on port " <> Text.pack (show port) <> " (GET /health, GET /ready, GET /internal/metrics, GET /openapi.json, POST /v1/events, POST /v1/batch, GET /metrics/*)")
   liftIO (Warp.run port app)

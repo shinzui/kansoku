@@ -183,6 +183,9 @@
             pgmq-hasql = callHackageNoCheck "pgmq-hasql" "0.4.0.1" "0gkj8a56r10xkhqgwn07bpkg8x4gqb0v2px7anh3ghwjycc7kw66";
             pgmq-effectful = callHackageNoCheck "pgmq-effectful" "0.4.0.1" "1a3vkm5v52j0id1b8xf7fdpi9cv4s6jj7xg53dfccnj3x9rihxzz";
             pgmq-migration = callHackageNoCheck "pgmq-migration" "0.4.0.1" "01dq48chyx2fpqk740gz5z8f934az1ljfh5cb3319c44azqamr2y";
+            data-sketches = callHackageNoCheck "data-sketches" "0.4.0.1" "0h6qkfrri6imlx8bdlpdy6927zwdr7ak4rv8lx1glifra7zgy6ab";
+            data-sketches-core = callHackageNoCheck "data-sketches-core" "0.3.0.0" "1v9pn62qxphfhg3353jqqg6y8sh0k68m7d761c28pci2m2m398rg";
+            prometheus-client = callHackageNoCheck "prometheus-client" "1.1.2" "1q8x24n7qy7s9sdiqvzzldgj52i36hzgq7wm4amzy3hv76p6vgfk";
 
             shibuya-core = callHackageNoCheck "shibuya-core" "0.8.0.1" "1ks1pc9yz7xg18c3p719ad5608409s1gjd0qqaj0fp2qc2yjbc3s";
             shibuya-pgmq-adapter = callHackageNoCheck "shibuya-pgmq-adapter" "0.12.0.0" "15zgpvfdx4ab75ap95zmkyhlsqk3jj017vcd8j2p18jjwbpffh9f";

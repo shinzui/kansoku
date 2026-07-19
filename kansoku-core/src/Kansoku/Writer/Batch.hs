@@ -11,10 +11,17 @@ import Data.Foldable (toList)
 import Data.Generics.Labels ()
 import Data.Text qualified as Text
 import Effectful (IOE, type (:>))
+import GHC.Clock (getMonotonicTime)
 import Kansoku.ClickHouse (insertEvents)
 import Kansoku.Event (AnalyticsEvent)
 import Kansoku.Ingest.Queue (decodeEvent)
+import Kansoku.Observability
+  ( PipelineMetrics,
+    WriterHeartbeat,
+    beatWriter,
+  )
 import Kansoku.Prelude
+import Prometheus qualified
 import Shibuya.Batch
   ( BatchHandler,
     ackExcept,
@@ -28,19 +35,47 @@ import Shibuya.Core.Ack
 import Shibuya.Core.Ingested (Message (..))
 import Shibuya.Core.Types (Envelope (..), MessageId)
 
-writerBatchHandler :: (IOE :> es) => Connection -> BatchHandler es Value
-writerBatchHandler conn _info messages = do
+writerBatchHandler ::
+  (IOE :> es) =>
+  PipelineMetrics ->
+  WriterHeartbeat ->
+  Connection ->
+  BatchHandler es Value
+writerBatchHandler metrics heartbeat conn _info messages = do
   let decoded = decodeMessage <$> toList messages
       bad = [(messageId, AckDeadLetter reason) | Left (messageId, reason) <- decoded]
       good = [event | Right event <- decoded]
+  liftIO $ do
+    Prometheus.incCounter (metrics ^. #writerBatchesTotal)
+    unless (null bad) $
+      void $
+        Prometheus.addCounter
+          (metrics ^. #writerDeadLettersTotal)
+          (fromIntegral (length bad))
   if null good
-    then pure (ackExcept bad)
+    then do
+      liftIO (beatWriter heartbeat)
+      pure (ackExcept bad)
     else do
-      result <- liftIO (try (insertEvents conn good))
+      result <- liftIO $ do
+        startedAt <- getMonotonicTime
+        inserted <- try (insertEvents conn good)
+        finishedAt <- getMonotonicTime
+        Prometheus.observe
+          (metrics ^. #writerBatchFlushSeconds)
+          (finishedAt - startedAt)
+        pure inserted
       case result of
-        Right () ->
+        Right () -> do
+          liftIO $ do
+            void $
+              Prometheus.addCounter
+                (metrics ^. #writerEventsWrittenTotal)
+                (fromIntegral (length good))
+            beatWriter heartbeat
           pure (ackExcept bad)
-        Left (err :: SomeException) ->
+        Left (err :: SomeException) -> do
+          liftIO $ Prometheus.incCounter (metrics ^. #writerInsertFailuresTotal)
           pure
             ( withFallback
                 (AckRetry (RetryDelay 5))

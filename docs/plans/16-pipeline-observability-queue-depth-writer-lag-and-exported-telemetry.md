@@ -61,13 +61,13 @@ This section must always reflect the actual current state of the work.
 - [x] M1: rewrite Kansoku.Telemetry (makeTelemetry with env-gated real initialization, console factory, shutdown handle)
 - [x] M1: wire the telemetry bracket into kansoku-server/app/Main.hs shutdown path
 - [x] M1: transcript captured — spans printed with OTEL_TRACES_EXPORTER=console; zero-change run without env vars
-- [ ] M2: add prometheus-client to kansoku-core.cabal (and nix override if the pinned nixpkgs needs one)
-- [ ] M2: new module Kansoku.Observability (PipelineMetrics, WriterHeartbeat, QueueDepthCell, registerPipelineMetrics)
-- [ ] M2: thread PipelineMetrics + WriterHeartbeat through Kansoku.Writer.Run into Kansoku.Writer.Batch and instrument the handler
-- [ ] M2: queue-depth poller (runQueueDepthPoller) supervised beside the writer in Main.hs
-- [ ] M2: GET /internal/metrics route in Kansoku.Server (respecting KANSOKU_INTERNAL_METRICS_ENABLED)
-- [ ] M2: config fields KANSOKU_QUEUE_POLL_INTERVAL_SEC, KANSOKU_INTERNAL_METRICS_ENABLED with defaults
-- [ ] M2: transcript captured — scrape before/during/after a /v1/batch load showing queue spike and drain
+- [x] M2: add prometheus-client to kansoku-core.cabal (and nix override if the pinned nixpkgs needs one)
+- [x] M2: new module Kansoku.Observability (PipelineMetrics, WriterHeartbeat, QueueDepthCell, registerPipelineMetrics)
+- [x] M2: thread PipelineMetrics + WriterHeartbeat through Kansoku.Writer.Run into Kansoku.Writer.Batch and instrument the handler
+- [x] M2: queue-depth poller (runQueueDepthPoller) supervised beside the writer in Main.hs
+- [x] M2: GET /internal/metrics route in Kansoku.Server (respecting KANSOKU_INTERNAL_METRICS_ENABLED)
+- [x] M2: config fields KANSOKU_QUEUE_POLL_INTERVAL_SEC, KANSOKU_INTERNAL_METRICS_ENABLED with defaults
+- [x] M2: transcript captured — scrape before/during/after a /v1/batch load showing queue spike and drain
 - [ ] M3: new module Kansoku.Readiness (pure evaluatePipelineReadiness + threshold types)
 - [ ] M3: extend EP-10's /ready handler with the two pipeline checks and the named-check JSON body
 - [ ] M3: config fields KANSOKU_READY_MAX_QUEUE_DEPTH, KANSOKU_READY_MAX_FLUSH_AGE_SEC
@@ -84,6 +84,13 @@ This section must always reflect the actual current state of the work.
       and the no-variable run emitted no exporter traffic or diagnostics. `cabal build all`,
       `cabal test all`, and `nix build` passed; the Nix build uses the same released TLS
       dependency family as the Cabal solver.
+- [x] Milestone 2 (completed 2026-07-19): registered and exported all seven Prometheus
+      instruments, supervised the one-second-configurable queue poller, instrumented writer
+      batches, and kept `/internal/metrics` outside Servant/OpenAPI and EP-14 middleware.
+      A healthy 500-event batch advanced the success counter by exactly 500; a controlled
+      dependency pause produced queue length 500 and a nonzero oldest-age/failure signal,
+      recovery returned depth to 0, and the disabled toggle returned 404. Cabal tests pass
+      with 67 core examples and the full Nix package build passes.
 
 
 ## Surprises & Discoveries
@@ -173,6 +180,20 @@ shaped the design and a future implementer must not re-derive them:
   those versions; pinning that coherent set made the full `nix build` pass without marking a
   broken package usable or removing OTLP support.
 
+- Milestone 2 discovery (2026-07-19): nixpkgs' `data-sketches 0.3.1.0` is incompatible with
+  prometheus-client 1.1.2 under GHC 9.12 because the removed `setCriterionLE` symbol is still
+  referenced. Cabal already resolves `data-sketches 0.4.0.1` and
+  `data-sketches-core 0.3.0.0`; Hackage and the coordinated upstream release tags confirm
+  both versions. Pinning that pair made prometheus-client and the full flake build pass.
+
+- Milestone 2 discovery (2026-07-19): pausing and restarting ClickHouse made queue telemetry
+  behave correctly (`kansoku_queue_length 500`, oldest age increasing), but the writer's
+  process-lifetime ClickHaskell connection did not recover and its graceful drain also hung.
+  Restarting only the Kansoku server against healthy ClickHouse drained the durable backlog.
+  This does not block the M2 metric contract, but it blocks M3's required in-process recovery
+  proof; M3 must make writer inserts reacquire or replace a failed connection before its
+  failure-injection acceptance can be checked off.
+
 
 ## Decision Log
 
@@ -252,6 +273,13 @@ Record every decision made while working on the plan.
   fixes the Nix build at the dependency boundary instead of allowing a known-broken package.
   Date: 2026-07-19
 
+- Decision: pin prometheus-client 1.1.2 with the current coordinated data-sketches releases
+  rather than retaining nixpkgs' incompatible older transitive package.
+  Rationale: the Cabal build and direct source inspection already validate this exact API and
+  version family, while the older Nix package fails at compile time. The pins match Hackage and
+  upstream tags and keep Cabal/Nix dependency behavior coherent.
+  Date: 2026-07-19
+
 
 ## Outcomes & Retrospective
 
@@ -264,6 +292,14 @@ Compare the result against the original purpose.
   behavior; `OTEL_TRACES_EXPORTER=console` emitted `receive kansoku_events`,
   `kansoku-writer process`, and pgmq delete/visibility spans, including buffered spans after
   Ctrl-C. Both Cabal and Nix builds resolve hs-opentelemetry 1.0.0.0 and pass.
+
+- Milestone 2: `Kansoku.Observability` now owns the seven application-specific instruments,
+  the sole writer heartbeat, and a sampled queue-depth cell. The writer records successful
+  events, insert attempts/failures, dead letters, durations, and flush beats; a supervised
+  poller owns pgmq queue gauges. The exact-path WAI scrape is toggleable and excluded from
+  public OpenAPI. Unit/integration tests cover registration, scrape routing, config, counters,
+  and heartbeat semantics; live scrapes proved a 0 -> 500 -> 0 queue-depth lifecycle and
+  exact healthy success counting.
 
 
 ## Context and Orientation
@@ -1238,3 +1274,9 @@ console export, and provider shutdown in the server lifetime bracket. Validation
 unchanged no-export path, live console spans, shutdown flush, Cabal build/tests, and the full
 Nix package build. The Nix overlay records the released TLS dependency alignment needed by
 the SDK's mandatory OTLP exporter.
+
+Revision note (2026-07-19): Milestone 2 added Prometheus pipeline metrics, the queue sampler,
+the single writer heartbeat, exact-path scrape middleware, configuration, supervision, tests,
+and live scrape evidence. Nix pins the verified prometheus-client/data-sketches release family.
+Failure injection exposed a stale ClickHaskell connection after dependency restart; that
+recovery defect is now an explicit prerequisite for Milestone 3's acceptance transcript.

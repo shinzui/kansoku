@@ -43,6 +43,7 @@ library
     Kansoku.Metrics.Query.Validate
     Kansoku.Metrics.Registry
     Kansoku.Migrations
+    Kansoku.Observability
     Kansoku.Postgres
     Kansoku.Runtime
     Kansoku.Server
@@ -72,6 +73,7 @@ library
     , pgmq-effectful
     , pgmq-hasql
     , pgmq-migration
+    , prometheus-client
     , resource-pool
     , servant
     , servant-server
@@ -103,6 +105,7 @@ test-suite kansoku-core-test
     Kansoku.Metrics.HandlerSpec
     Kansoku.Metrics.RoutingSpec
     Kansoku.MigrationsSpec
+    Kansoku.ObservabilitySpec
     Kansoku.OpenApiSpec
     Kansoku.Query.ValidateSpec
     Kansoku.QueryIntegrationSpec
@@ -129,6 +132,7 @@ test-suite kansoku-core-test
     , pg-migrate-test-support
     , pgmq-core
     , pgmq-hasql
+    , prometheus-client
     , servant-server
     , shibuya-core
     , text

@@ -49,6 +49,8 @@ data Config = Config
     corsAllowedOrigins :: !(Maybe [Text]),
     ingestMaxBodyBytes :: !Int,
     ingestMaxBatchLength :: !Int,
+    queuePollIntervalSec :: !Int,
+    internalMetricsEnabled :: !Bool,
     serverPort :: !Int
   }
   deriving stock (Generic, Eq, Show)
@@ -77,6 +79,8 @@ loadConfig = do
   corsOrigins <- lookupEnv "KANSOKU_CORS_ORIGINS"
   ingestBodyBytes <- lookupEnv "KANSOKU_INGEST_MAX_BODY_BYTES"
   ingestBatchLength <- lookupEnv "KANSOKU_INGEST_MAX_BATCH_LENGTH"
+  queuePollInterval <- lookupEnv "KANSOKU_QUEUE_POLL_INTERVAL_SEC"
+  metricsEnabled <- lookupEnv "KANSOKU_INTERNAL_METRICS_ENABLED"
   srv <- lookupEnv "KANSOKU_SERVER_PORT"
   pure $ do
     tcp <- parsePort "CLICKHOUSE_TCP_PORT" 9000 chTcp
@@ -88,6 +92,8 @@ loadConfig = do
     queryPoolSize <- parsePositiveInt "KANSOKU_CH_QUERY_POOL_SIZE" 4 chQueryPoolSize
     maxBodyBytes <- parsePositiveInt "KANSOKU_INGEST_MAX_BODY_BYTES" defaultIngestMaxBodyBytes ingestBodyBytes
     maxBatchLength <- parsePositiveInt "KANSOKU_INGEST_MAX_BATCH_LENGTH" defaultIngestMaxBatchLength ingestBatchLength
+    pollInterval <- parsePositiveInt "KANSOKU_QUEUE_POLL_INTERVAL_SEC" 15 queuePollInterval
+    enableMetrics <- parseBool "KANSOKU_INTERNAL_METRICS_ENABLED" True metricsEnabled
     port <- parsePort "KANSOKU_SERVER_PORT" defaultServerPort srv
     Right
       Config
@@ -107,6 +113,8 @@ loadConfig = do
           corsAllowedOrigins = parseCorsOrigins corsOrigins,
           ingestMaxBodyBytes = maxBodyBytes,
           ingestMaxBatchLength = maxBatchLength,
+          queuePollIntervalSec = pollInterval,
+          internalMetricsEnabled = enableMetrics,
           serverPort = port
         }
   where
@@ -129,6 +137,16 @@ parsePositiveInt name def raw = do
   if value >= 1
     then Right value
     else Left (ConfigError (name <> ": must be at least 1"))
+
+parseBool :: Text -> Bool -> Maybe String -> Either ConfigError Bool
+parseBool _ def Nothing = Right def
+parseBool name _ (Just raw) =
+  case raw of
+    "true" -> Right True
+    "1" -> Right True
+    "false" -> Right False
+    "0" -> Right False
+    _ -> Left (ConfigError (name <> ": expected true, false, 1, or 0"))
 
 parseCorsOrigins :: Maybe String -> Maybe [Text]
 parseCorsOrigins Nothing = Nothing

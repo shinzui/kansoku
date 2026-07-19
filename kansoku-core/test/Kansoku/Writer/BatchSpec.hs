@@ -19,8 +19,14 @@ import Kansoku.Event
     EventSource (..),
     baseEvent,
   )
+import Kansoku.Observability
+  ( PipelineMetrics,
+    lastWriterBeat,
+    newWriterHeartbeat,
+  )
 import Kansoku.Prelude
 import Kansoku.Writer.Batch (writerBatchHandler)
+import Prometheus qualified
 import Shibuya.Batch
   ( BatchInfo (..),
     BatchTrigger (..),
@@ -30,15 +36,41 @@ import Shibuya.Core.Ingested (Message (..))
 import Shibuya.Core.Types (Envelope (..), MessageId (..))
 import Test.Hspec
 
-spec :: Spec
-spec = describe "Kansoku.Writer.Batch" $ do
+spec :: PipelineMetrics -> Spec
+spec metrics = describe "Kansoku.Writer.Batch" $ do
   it "decodes a pgmq payload and inserts it into ClickHouse" $
     withClickHouse $ \conn -> do
       command conn "TRUNCATE TABLE analytics.events_raw"
       countBefore <- countEvents conn
-      _ <- runEff (writerBatchHandler conn batchInfo (handlerMessage :| []))
+      batchesBefore <- Prometheus.getCounter (metrics ^. #writerBatchesTotal)
+      eventsBefore <- Prometheus.getCounter (metrics ^. #writerEventsWrittenTotal)
+      heartbeat <- newWriterHeartbeat
+      _ <- runEff (writerBatchHandler metrics heartbeat conn batchInfo (handlerMessage :| []))
       countAfter <- countEvents conn
       countAfter `shouldBe` countBefore + 1
+      Prometheus.getCounter (metrics ^. #writerBatchesTotal)
+        `shouldReturn` (batchesBefore + 1)
+      Prometheus.getCounter (metrics ^. #writerEventsWrittenTotal)
+        `shouldReturn` (eventsBefore + 1)
+      latest <- lastWriterBeat heartbeat
+      latest `shouldSatisfy` isJust
+
+  it "counts decode failures as dead letters and still beats" $ do
+    deadLettersBefore <- Prometheus.getCounter (metrics ^. #writerDeadLettersTotal)
+    heartbeat <- newWriterHeartbeat
+    _ <-
+      runEff
+        ( writerBatchHandler
+            metrics
+            heartbeat
+            (error "ClickHouse must not be forced for an all-invalid batch")
+            batchInfo
+            (invalidHandlerMessage :| [])
+        )
+    Prometheus.getCounter (metrics ^. #writerDeadLettersTotal)
+      `shouldReturn` (deadLettersBefore + 1)
+    latest <- lastWriterBeat heartbeat
+    latest `shouldSatisfy` isJust
 
 withClickHouse :: (Connection -> Expectation) -> Expectation
 withClickHouse action = do
@@ -83,6 +115,19 @@ handlerMessage =
           },
       lease = Nothing
     }
+
+invalidHandlerMessage :: Message '[IOE] Value
+invalidHandlerMessage =
+  case handlerMessage of
+    Message {envelope = originalEnvelope, lease} ->
+      Message
+        { envelope =
+            originalEnvelope
+              { messageId = MessageId "writer-spec-invalid",
+                payload = Aeson.String "not an event"
+              },
+          lease
+        }
 
 sampleEvent :: AnalyticsEvent
 sampleEvent =

@@ -5,6 +5,7 @@ module Kansoku.OpenApiSpec (spec) where
 import Data.Aeson qualified as Aeson
 import Data.Aeson.Key qualified as Key
 import Data.Aeson.KeyMap qualified as KeyMap
+import Data.ByteString.Char8 qualified as BS8
 import Data.ByteString.Lazy qualified as BSL
 import Data.Foldable (traverse_)
 import Data.Foldable qualified as Foldable
@@ -20,7 +21,7 @@ import Kansoku.Ingest.Api qualified as Ingest
 import Kansoku.Metrics.Api qualified as Metrics
 import Kansoku.Metrics.RoutingSpec (sentinelKansokuServer)
 import Kansoku.Prelude
-import Kansoku.Server (ReadyProbe (..), envelopeFormatters, waiWrapper)
+import Kansoku.Server (ReadyProbe (..), envelopeFormatters, internalMetrics, waiWrapper)
 import Network.HTTP.Client qualified as HTTP
 import Network.HTTP.Types
   ( Status,
@@ -104,9 +105,9 @@ spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
       envelope <- decodeBody @ErrorEnvelopeWire (HTTP.responseBody missing)
       code envelope `shouldBe` "not_found"
 
-  it "pins health, readiness, and OpenAPI as the only WAI-level allowlist" $ do
+  it "pins health, readiness, internal metrics, and OpenAPI as the WAI-level allowlist" $ do
     traverse_ (\path -> path `shouldNotSatisfy` (`elem` documentedPaths)) operationalPaths
-    Warp.testWithApplication (pure (waiWrapper alwaysReadyProbe sentinelApplication)) $ \port -> do
+    Warp.testWithApplication (pure (waiWrapper alwaysReadyProbe (internalMetrics True sentinelApplication))) $ \port -> do
       manager <- HTTP.newManager HTTP.defaultManagerSettings
       health <- get manager port "/health"
       HTTP.responseStatus health `shouldBe` status200
@@ -120,6 +121,11 @@ spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
       openapi <- get manager port "/openapi.json"
       HTTP.responseStatus openapi `shouldBe` status200
       decodeBody @Aeson.Value (HTTP.responseBody openapi) `shouldReturn` documentValue
+
+      metrics <- get manager port "/internal/metrics"
+      HTTP.responseStatus metrics `shouldBe` status200
+      BSL.toStrict (HTTP.responseBody metrics)
+        `shouldSatisfy` BS8.isInfixOf "kansoku_queue_length"
 
 expectedServedPaths :: [Text]
 expectedServedPaths =
@@ -140,7 +146,7 @@ expectedServedPaths =
     ]
 
 operationalPaths :: [Text]
-operationalPaths = ["/health", "/ready", "/openapi.json"]
+operationalPaths = ["/health", "/ready", "/internal/metrics", "/openapi.json"]
 
 expectedOperationIds :: [(Text, Text, Text)]
 expectedOperationIds =
