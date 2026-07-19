@@ -33,6 +33,7 @@ import Data.Aeson.KeyMap qualified as KeyMap
 import Data.Aeson.Types (Pair)
 import Data.Foldable (traverse_)
 import Data.Generics.Labels ()
+import Data.Map.Strict (Map)
 import Data.Text qualified as Text
 import Data.UUID qualified as UUID
 import Data.UUID.V4 qualified as UUID
@@ -82,6 +83,7 @@ defaultClientConfig baseUrl credential =
 data EventIds = EventIds
   { userId :: !(Maybe Text),
     anonymousId :: !(Maybe Text),
+    identifiers :: !(Maybe (Map Text Text)),
     organizationId :: !(Maybe Text),
     accountId :: !(Maybe Text),
     sessionId :: !(Maybe Text)
@@ -93,6 +95,7 @@ emptyIds =
   EventIds
     { userId = Nothing,
       anonymousId = Nothing,
+      identifiers = Nothing,
       organizationId = Nothing,
       accountId = Nothing,
       sessionId = Nothing
@@ -201,6 +204,8 @@ buildEvent cfg ids name pairs = do
       .~ (AnonymousId <$> ids ^. #anonymousId)
       & #userId
       .~ (UserId <$> ids ^. #userId)
+      & #identifiers
+      .~ (ids ^. #identifiers)
       & #organizationId
       .~ (OrganizationId <$> ids ^. #organizationId)
       & #accountId

@@ -1,11 +1,12 @@
 module Kansoku.ClickHouseSpec (spec) where
 
-import ClickHaskell (ClickHaskell, ClientError (UnmatchedResult), Column, Float64, Select, UInt8, command, select, unsafeMkSelect)
+import ClickHaskell (ChString, ClickHaskell, ClientError (UnmatchedResult), Column, Float64, Select, UInt8, command, select, unsafeMkSelect)
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (wait, withAsync)
 import Data.Aeson.KeyMap qualified as KeyMap
 import Data.ByteString (ByteString)
 import Data.Generics.Labels ()
+import Data.Map.Strict qualified as Map
 import Data.Time.Clock (diffUTCTime)
 import Data.Word (Word8)
 import Kansoku.ClickHouse
@@ -42,6 +43,17 @@ spec = describe "Kansoku.ClickHouse" $ do
       insertEvents conn [sampleEvent "evt_tab_1" "signup\tstep"]
       rows <- selectEventProjections conn
       rows `shouldContain` [expectedProjection "evt_tab_1" "signup\tstep"]
+
+  it "persists identifier maps as JSON-object strings" $
+    withClickHouse $ \conn -> do
+      resetTable conn
+      let event =
+            sampleEvent "evt_storage_identifiers" "page_view"
+              & #identifiers
+              ?~ Map.fromList [("device", "dev-1"), ("fingerprint", "fp-1")]
+      insertEvents conn [event]
+      (concat <$> select identifiersSelect conn pure)
+        `shouldReturn` [IdentifierRow "{\"device\":\"dev-1\",\"fingerprint\":\"fp-1\"}"]
 
   it "raises on a column type mismatch instead of fabricating values" $
     withClickHouse $ \conn ->
@@ -80,6 +92,16 @@ newtype MistypedRow = MistypedRow {value :: Double}
 
 mistypedSelect :: Select MistypedColumns MistypedRow
 mistypedSelect = unsafeMkSelect (const "SELECT 'oops' AS value")
+
+type IdentifierColumns = '[Column "identifiers" ChString]
+
+newtype IdentifierRow = IdentifierRow {identifiers :: ByteString}
+  deriving stock (Generic, Eq, Show)
+  deriving anyclass (ClickHaskell IdentifierColumns)
+
+identifiersSelect :: Select IdentifierColumns IdentifierRow
+identifiersSelect =
+  unsafeMkSelect (const "SELECT identifiers FROM analytics.events_raw WHERE event_id = 'evt_storage_identifiers'")
 
 sampleEvent :: Text -> Text -> AnalyticsEvent
 sampleEvent eid name =

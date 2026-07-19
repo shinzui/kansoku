@@ -75,6 +75,14 @@ spec = describe "Kansoku.Ingest.Handler" $ do
     renderValidationError EmptyEventName `shouldBe` "eventName must not be empty"
     renderValidationError (ReceivedBeforeOccurred occurred received)
       `shouldBe` "receivedAt (2026-07-19T09:00:00Z) precedes occurredAt (2026-07-19T10:00:00Z); occurredAt is in the future relative to the server clock"
+    renderValidationError (UnknownIdentifierKind "mac_address" allowedIdentifierKindNames)
+      `shouldBe` "identifier kind 'mac_address' is not supported; allowed kinds: cookie, device, fingerprint, email_sha256"
+    renderValidationError (EmptyIdentifierValue "fingerprint")
+      `shouldBe` "identifier 'fingerprint' must not be empty"
+    renderValidationError (IdentifierValueTooLong "device" 257 256)
+      `shouldBe` "identifier 'device' is 257 characters; maximum is 256"
+    renderValidationError (IdentifierValueBadCharset "email_sha256")
+      `shouldBe` "identifier 'email_sha256' must contain only printable non-space ASCII characters"
     renderValidationError (MissingRequiredProperty (EventName "page_view") "url")
       `shouldBe` "event 'page_view': missing required property 'url'"
     renderValidationError (WrongPropertyType (EventName "page_view") "url" PTString)

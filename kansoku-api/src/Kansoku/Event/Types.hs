@@ -6,6 +6,7 @@ module Kansoku.Event.Types
     CausationId (..),
     CorrelationId (..),
     EventId (..),
+    IdentifierKind (..),
     EventName (..),
     EventSource (..),
     OrganizationId (..),
@@ -13,13 +14,17 @@ module Kansoku.Event.Types
     SourceEventId (..),
     UserId (..),
     analyticsEventOptions,
+    allowedIdentifierKindNames,
     eventSourceToText,
+    identifierKindFromText,
+    identifierKindToText,
   )
 where
 
 import Data.Aeson (Object, Value (String), withText)
 import Data.Aeson.Types (Options (..))
 import Data.Int (Int64)
+import Data.Map.Strict (Map)
 import Kansoku.Prelude
 
 -- | The origin category of an event. Exactly the six values the spec allows.
@@ -35,6 +40,30 @@ eventSourceToText s = case s of
   Worker -> "worker"
   Email -> "email"
   Agent -> "agent"
+
+-- | Closed set of identifier-signal kinds accepted in an event's
+-- @identifiers@ object. Adding a constructor also requires a confidence and
+-- retention policy in the ClickHouse identity migrations.
+data IdentifierKind = Cookie | Device | Fingerprint | EmailSha256
+  deriving stock (Generic, Eq, Ord, Show, Enum, Bounded)
+
+identifierKindToText :: IdentifierKind -> Text
+identifierKindToText kind = case kind of
+  Cookie -> "cookie"
+  Device -> "device"
+  Fingerprint -> "fingerprint"
+  EmailSha256 -> "email_sha256"
+
+identifierKindFromText :: Text -> Maybe IdentifierKind
+identifierKindFromText name = case name of
+  "cookie" -> Just Cookie
+  "device" -> Just Device
+  "fingerprint" -> Just Fingerprint
+  "email_sha256" -> Just EmailSha256
+  _ -> Nothing
+
+allowedIdentifierKindNames :: [Text]
+allowedIdentifierKindNames = identifierKindToText <$> [minBound .. maxBound]
 
 instance ToJSON EventSource where
   toJSON = String . eventSourceToText
@@ -105,6 +134,7 @@ data AnalyticsEvent = AnalyticsEvent
     receivedAt :: !UTCTime,
     anonymousId :: !(Maybe AnonymousId),
     userId :: !(Maybe UserId),
+    identifiers :: !(Maybe (Map Text Text)),
     organizationId :: !(Maybe OrganizationId),
     accountId :: !(Maybe AccountId),
     sessionId :: !(Maybe SessionId),

@@ -16,6 +16,7 @@ import Data.ByteString (ByteString)
 import Data.ByteString.Lazy qualified as LBS
 import Data.Generics.Labels ()
 import Data.Int (Int64)
+import Data.Map.Strict (Map)
 import Data.Text.Encoding qualified as Text
 import Data.Word (Word64)
 import Kansoku.Event
@@ -45,7 +46,8 @@ type EventColumns =
      Column "source_event_id" ChString,
      Column "source_global_position" (Maybe UInt64),
      Column "properties" ChString,
-     Column "context" ChString
+     Column "context" ChString,
+     Column "identifiers" ChString
    ]
 
 data EventRow = EventRow
@@ -72,7 +74,8 @@ data EventRow = EventRow
     source_event_id :: !ByteString,
     source_global_position :: !(Maybe Word64),
     properties :: !ByteString,
-    context :: !ByteString
+    context :: !ByteString,
+    identifiers :: !ByteString
   }
   deriving stock (Generic, Eq, Show)
   deriving anyclass (ClickHaskell EventColumns)
@@ -127,7 +130,8 @@ eventRowFromEvent event =
       source_event_id = maybe "" (textBytes . unSourceEventId) (event ^. #sourceEventId),
       source_global_position = nonNegativeWord64 =<< event ^. #sourceGlobalPosition,
       properties = objectBytes (event ^. #properties),
-      context = objectBytes (event ^. #context)
+      context = objectBytes (event ^. #context),
+      identifiers = maybe "{}" identifiersBytes (event ^. #identifiers)
     }
 
 textBytes :: Text -> ByteString
@@ -135,6 +139,9 @@ textBytes = Text.encodeUtf8
 
 objectBytes :: Aeson.Object -> ByteString
 objectBytes = LBS.toStrict . Aeson.encode . Aeson.Object
+
+identifiersBytes :: Map Text Text -> ByteString
+identifiersBytes = LBS.toStrict . Aeson.encode
 
 nonNegativeWord64 :: Int64 -> Maybe Word64
 nonNegativeWord64 n

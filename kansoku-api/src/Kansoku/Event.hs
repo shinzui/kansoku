@@ -86,6 +86,7 @@ baseEvent eid name src occ recv =
       receivedAt = recv,
       anonymousId = Nothing,
       userId = Nothing,
+      identifiers = Nothing,
       organizationId = Nothing,
       accountId = Nothing,
       sessionId = Nothing,

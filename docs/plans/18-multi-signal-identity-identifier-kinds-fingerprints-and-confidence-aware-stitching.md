@@ -63,15 +63,15 @@ Use a checklist to summarize granular steps. Every stopping point must be docume
 even if it requires splitting a partially completed task into two ("done" vs. "remaining").
 This section must always reflect the actual current state of the work.
 
-- [ ] M1: `identifiers :: Maybe (Map Text Text)` field on `AnalyticsEvent` with JSON
+- [x] (2026-07-19 13:14 PDT) M1: `identifiers :: Maybe (Map Text Text)` field on `AnalyticsEvent` with JSON
       roundtrip (omitted field still parses; existing payloads unaffected)
-- [ ] M1: `IdentifierKind` closed set and validation errors (unknown kind rejected with the
+- [x] (2026-07-19 13:14 PDT) M1: `IdentifierKind` closed set and validation errors (unknown kind rejected with the
       allowed list; empty/oversized/bad-charset values rejected)
-- [ ] M1: `events_raw` gains an `identifiers` column (migration) and
+- [x] (2026-07-19 13:14 PDT) M1: `events_raw` gains an `identifiers` column (migration) and
       `Kansoku.ClickHouse.EventRow` persists it
-- [ ] M1: `kansoku-client` (`EventIds`, `buildEvent`) and the OpenAPI document updated in
+- [x] (2026-07-19 13:14 PDT) M1: `kansoku-client` (`EventIds`, `buildEvent`) and the OpenAPI document updated in
       the same commit as the wire type
-- [ ] M1: `just build` and `just test` green; curl ingest transcript captured
+- [x] (2026-07-19 13:14 PDT) M1: `just build` and `just test` green; authenticated curl ingest transcript captured
 - [ ] M2: `analytics.identity_signals` table + `mv_identity_signals` + backfill migration
       applied
 - [ ] M2: `analytics.identity_bindings` (confidence policy) and confidence-aware
@@ -104,6 +104,12 @@ implementation. Provide concise evidence.
   ADR 0004, so every M2/M3 shape-stability check in this plan now includes that column.
   The migration ledger is occupied through `0010`; EP-18 therefore claims `0011` through
   `0013`.
+
+- 2026-07-19: The default local PostgreSQL database contained an untracked pre-existing
+  PGMQ schema, so the strict migration runner refused to replay `message_record`. The M1
+  HTTP proof used a fresh `kansoku_ep18` development database instead; all three
+  application migrations applied there without weakening migration verification or
+  altering the stale database.
 
 
 ## Decision Log
@@ -241,7 +247,11 @@ Record every decision made while working on the plan.
 Summarize outcomes, gaps, and lessons learned at major milestones or at completion.
 Compare the result against the original purpose.
 
-(To be filled during and after implementation.)
+Milestone 1 completed on 2026-07-19. The API, client, OpenAPI document, writer, and
+ClickHouse storage now carry the optional identifier map as one compatible wire change.
+The test suites passed with 109 core examples and 10 client examples (one opt-in live
+client test pending), and the authenticated HTTP proof accepted a fingerprint/device
+event while rejecting an unknown kind with the complete allowed vocabulary.
 
 
 ## Context and Orientation
@@ -1058,6 +1068,26 @@ POST with `"identifiers": {"mac_address": "aa:bb"}` and a fresh `eventId`. Expec
 `cookie, device, fingerprint, email_sha256` — and no row appears in `events_raw`. Also
 verify compatibility: the same POST with the `identifiers` key removed entirely is
 accepted (existing producers unaffected).
+
+Implementation transcript (2026-07-19, isolated `kansoku_ep18` PostgreSQL database and
+port 18080 because process-compose's control server occupied localhost:8080):
+
+```text
+POST identifiers={device:dev-m1,fingerprint:fp-m1}
+{"accepted":1,"eventId":"ep18-m1-1"}
+HTTP 202
+
+SELECT event_id, identifiers ...
+ep18-m1-1    {"device":"dev-m1","fingerprint":"fp-m1"}
+
+POST identifiers={mac_address:aa:bb}
+{"code":"validation_failed","message":"validation failed: identifier kind 'mac_address' is not supported; allowed kinds: cookie, device, fingerprint, email_sha256","retryable":false}
+HTTP 400
+
+POST with identifiers omitted
+{"accepted":1,"eventId":"ep18-m1-compatible"}
+HTTP 202
+```
 
 ### M2: the fixture story
 

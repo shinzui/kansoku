@@ -10,6 +10,7 @@ where
 import Data.Aeson (Value (..))
 import Data.Aeson.Key qualified as Key
 import Data.Aeson.KeyMap qualified as KeyMap
+import Data.Map.Strict qualified as Map
 import Data.Text qualified as Text
 import Data.Time.Format (defaultTimeLocale, formatTime)
 import Kansoku.Event.Registry
@@ -20,6 +21,10 @@ data ValidationError
   = EmptyEventId
   | EmptyEventName
   | ReceivedBeforeOccurred UTCTime UTCTime
+  | UnknownIdentifierKind Text [Text]
+  | EmptyIdentifierValue Text
+  | IdentifierValueTooLong Text Int Int
+  | IdentifierValueBadCharset Text
   | MissingRequiredProperty EventName Text
   | WrongPropertyType EventName Text PropertyType
   deriving stock (Generic, Eq, Show)
@@ -28,7 +33,7 @@ data ValidationError
 -- registry adds stricter property checks for names it knows.
 validateEventWith :: EventRegistry -> AnalyticsEvent -> Either [ValidationError] AnalyticsEvent
 validateEventWith registry event =
-  case structuralErrors <> schemaErrors of
+  case structuralErrors <> identifierErrors <> schemaErrors of
     [] -> Right event
     errs -> Left errs
   where
@@ -37,6 +42,23 @@ validateEventWith registry event =
         <> [EmptyEventName | unEventName (eventName event) == ""]
         <> [ ReceivedBeforeOccurred (occurredAt event) (receivedAt event)
            | receivedAt event < occurredAt event
+           ]
+
+    identifierErrors =
+      case identifiers event of
+        Nothing -> []
+        Just ids -> concatMap identifierError (Map.toList ids)
+
+    identifierError (kind, value) =
+      [ UnknownIdentifierKind kind allowedIdentifierKindNames
+      | isNothing (identifierKindFromText kind)
+      ]
+        <> [EmptyIdentifierValue kind | Text.null value]
+        <> [ IdentifierValueTooLong kind (Text.length value) maxIdentifierValueLength
+           | Text.length value > maxIdentifierValueLength
+           ]
+        <> [ IdentifierValueBadCharset kind
+           | not (Text.all isIdentifierValueChar value)
            ]
 
     schemaErrors =
@@ -72,6 +94,24 @@ renderValidationError = \case
       <> ") precedes occurredAt ("
       <> renderTimestamp occurred
       <> "); occurredAt is in the future relative to the server clock"
+  UnknownIdentifierKind kind allowed ->
+    "identifier kind '"
+      <> kind
+      <> "' is not supported; allowed kinds: "
+      <> Text.intercalate ", " allowed
+  EmptyIdentifierValue kind ->
+    "identifier '" <> kind <> "' must not be empty"
+  IdentifierValueTooLong kind actual maxAllowed ->
+    "identifier '"
+      <> kind
+      <> "' is "
+      <> Text.pack (show actual)
+      <> " characters; maximum is "
+      <> Text.pack (show maxAllowed)
+  IdentifierValueBadCharset kind ->
+    "identifier '"
+      <> kind
+      <> "' must contain only printable non-space ASCII characters"
   MissingRequiredProperty name propertyName ->
     "event '"
       <> unEventName name
@@ -87,6 +127,12 @@ renderValidationError = \case
       <> renderPropertyType expected
   where
     renderTimestamp = Text.pack . formatTime defaultTimeLocale "%FT%T%QZ"
+
+maxIdentifierValueLength :: Int
+maxIdentifierValueLength = 256
+
+isIdentifierValueChar :: Char -> Bool
+isIdentifierValueChar char = char > ' ' && char <= '~'
 
 renderPropertyType :: PropertyType -> Text
 renderPropertyType = \case

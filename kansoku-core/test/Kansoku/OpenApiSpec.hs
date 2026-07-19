@@ -111,6 +111,14 @@ spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
     List.sort (Key.toText <$> KeyMap.keys (objectAt ["components", "schemas", "RejectedEvent", "properties"] documentValue))
       `shouldBe` ["errors", "eventId", "index"]
 
+  it "documents identifiers as an optional string-valued object" $ do
+    lookupText ["components", "schemas", "AnalyticsEvent", "properties", "identifiers", "type"] documentValue
+      `shouldBe` Just "object"
+    lookupText ["components", "schemas", "AnalyticsEvent", "properties", "identifiers", "additionalProperties", "type"] documentValue
+      `shouldBe` Just "string"
+    lookupTextArray ["components", "schemas", "AnalyticsEvent", "required"] documentValue
+      `shouldSatisfy` maybe True (notElem "identifiers")
+
   it "keeps the Servant-routed and documented path sets equal" $
     Warp.testWithApplication (pure sentinelApplication) $ \port -> do
       manager <- HTTP.newManager HTTP.defaultManagerSettings

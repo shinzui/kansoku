@@ -27,6 +27,12 @@
           "eventName": {
             "$ref": "#/components/schemas/EventName"
           },
+          "identifiers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
           "occurredAt": {
             "$ref": "#/components/schemas/UTCTime"
           },

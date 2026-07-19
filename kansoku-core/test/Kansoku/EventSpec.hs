@@ -5,6 +5,8 @@ import Data.Aeson.KeyMap qualified as KeyMap
 import Data.ByteString.Lazy.Char8 qualified as LBS8
 import Data.Generics.Labels ()
 import Data.List (isInfixOf)
+import Data.Map.Strict qualified as Map
+import Data.Text qualified as Text
 import Kansoku.Event
 import Kansoku.Prelude
 import Test.Hspec
@@ -22,6 +24,17 @@ spec = describe "Kansoku.Event" $ do
     it "rejects an unknown source value" $ do
       (eitherDecode badSourceJson :: Either String AnalyticsEvent)
         `shouldSatisfy` isLeftContaining "unknown event source"
+
+    it "round-trips identifier maps and keeps the field optional" $ do
+      let withIdentifiers =
+            expectedSample
+              & #identifiers
+              ?~ Map.fromList
+                [ ("fingerprint", "fp-1"),
+                  ("email_sha256", "ab12")
+                ]
+      decode (encode withIdentifiers) `shouldBe` Just withIdentifiers
+      expectedSample ^. #identifiers `shouldBe` Nothing
 
   describe "schema registry" $ do
     it "finds a seeded schema" $
@@ -44,6 +57,29 @@ spec = describe "Kansoku.Event" $ do
     it "flags a missing required property for a registered event" $
       validateEvent (expectedSample & #properties .~ KeyMap.empty)
         `shouldSatisfy` hasError (MissingRequiredProperty (EventName "page_view") "url")
+
+    it "accepts every declared identifier kind" $ do
+      let ids = Map.fromList [(name, "opaque-value") | name <- allowedIdentifierKindNames]
+          event = expectedSample & #identifiers ?~ ids
+      validateEvent event `shouldBe` Right event
+
+    it "rejects unknown identifier kinds with the allowed vocabulary" $
+      validateEvent (expectedSample & #identifiers ?~ Map.singleton "mac_address" "aa:bb")
+        `shouldSatisfy` hasError (UnknownIdentifierKind "mac_address" allowedIdentifierKindNames)
+
+    it "rejects empty, oversized, whitespace, and non-ASCII identifier values" $ do
+      let ids =
+            Map.fromList
+              [ ("cookie", ""),
+                ("device", Text.replicate 257 "x"),
+                ("fingerprint", "contains space"),
+                ("email_sha256", "café")
+              ]
+          result = validateEvent (expectedSample & #identifiers ?~ ids)
+      result `shouldSatisfy` hasError (EmptyIdentifierValue "cookie")
+      result `shouldSatisfy` hasError (IdentifierValueTooLong "device" 257 256)
+      result `shouldSatisfy` hasError (IdentifierValueBadCharset "fingerprint")
+      result `shouldSatisfy` hasError (IdentifierValueBadCharset "email_sha256")
 
 sampleJson :: LBS8.ByteString
 sampleJson =
@@ -101,6 +137,7 @@ expectedSample =
       receivedAt = read "2026-07-01 12:00:01 UTC",
       anonymousId = Just (AnonymousId "anon_abc123"),
       userId = Just (UserId "user_42"),
+      identifiers = Nothing,
       organizationId = Just (OrganizationId "org_7"),
       accountId = Just (AccountId "acct_9"),
       sessionId = Just (SessionId "sess_xyz"),
