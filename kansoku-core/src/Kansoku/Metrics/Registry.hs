@@ -55,7 +55,7 @@ sessions =
 
 activeUsers :: MetricDefinition
 activeUsers =
-  metric "active_users" "Approximate distinct raw active identities." [] UniqueCount [] (Just Day)
+  metric "active_users" "Distinct raw active identities (approximate; uniqCombined sketch, ~0.8% relative error)." [] UniqueCount [] (Just Day)
 
 newUsers :: MetricDefinition
 newUsers =

@@ -94,9 +94,7 @@ runSQL pool name groupName =
 runSQLWith :: QueryPool -> Text -> (AggRow -> MetricPoint) -> [QueryParameter] -> Text -> IO MetricResult
 runSQLWith pool metric toPoint parameters sql = do
   rows <- withQueryConnection pool $ \conn -> concat <$> select (aggSelect parameters sql) conn (pure . repairAggRows)
-  pure MetricResult {metric, points = toPoint <$> List.sortOn sortKey rows}
-  where
-    sortKey AggRow {bucket, group_key} = (bucket, group_key)
+  pure MetricResult {metric, points = toPoint <$> rows}
 
 -- ClickHaskell 1.1.0 reverses the first field of a three-field generic record
 -- relative to the other fields. Repair each result block before it escapes the
@@ -183,6 +181,28 @@ buildSimpleSQL def req
   | otherwise =
       countEventsSQL def req
 
+-- Metric source and accuracy map:
+--
+
+-- * active_users at day/week grain is an approximate pre-aggregated raw-
+
+--   identity count from dau/wau (uniqCombined, about 0.8% relative error at
+--   high cardinality).
+
+-- * page_views at day grain is an exact inserted-row countMerge rollup, but is
+
+--   replay-sensitive because count states cannot retract a replay later
+--   collapsed by events_raw.
+
+-- * unique-user, ratio, retention, and funnel metrics read events_resolved for
+
+--   exact, query-time identity stitching. Its FINAL-free view is safe because
+--   these queries use distinct/min/ordered per-user aggregation, not row count.
+
+-- * events, property aggregates, and sessions read events_raw directly;
+
+--   events remains replay-proof via count(DISTINCT event_id).
+
 buildRatioSQL :: RatioMetric -> QueryRequest -> Text
 buildRatioSQL RatioMetric {numerator, denominator} req =
   Text.unlines
@@ -202,7 +222,8 @@ buildRatioSQL RatioMetric {numerator, denominator} req =
       "          AND " <> eventNamePredicate "denominator_event_name" (validatedEventNames denominator),
       "          AND " <> timestampPredicate req,
       "      ) AS denominator",
-      "  )"
+      "  )",
+      "ORDER BY bucket, group_key"
     ]
 
 countEventsSQL :: MetricDefinition -> QueryRequest -> Text
@@ -285,15 +306,18 @@ pageViewsDaySQL req =
 
 buildSessionsSQL :: QueryRequest -> Text
 buildSessionsSQL req =
-  Text.unlines
-    [ "SELECT " <> bucketExpr (req ^. #timeGrain <|> Just Day) <> " AS bucket, '' AS group_key,",
-      "       toFloat64(uniqExact(session_id)) AS value",
-      "FROM analytics.events_raw",
-      "WHERE " <> timestampPredicate req,
-      "  AND session_id != ''",
-      "GROUP BY bucket, group_key",
-      "ORDER BY bucket, group_key"
-    ]
+  "SELECT "
+    <> bucketExpr (req ^. #timeGrain <|> Just Day)
+    <> """ AS bucket, '' AS group_key,
+              toFloat64(uniqExact(session_id)) AS value
+       FROM analytics.events_raw
+       WHERE """
+    <> timestampPredicate req
+    <> """
+
+         AND session_id != ''
+       GROUP BY bucket, group_key
+       ORDER BY bucket, group_key"""
 
 buildRetentionSQL :: QueryRequest -> [Int] -> Text
 buildRetentionSQL req offsets =

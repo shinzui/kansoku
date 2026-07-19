@@ -10,7 +10,7 @@ import Kansoku.Metrics.Handler (metricsServer)
 import Kansoku.Metrics.RoutingSpec (sentinelIngestServer)
 import Kansoku.Server (envelopeFormatters)
 import Network.HTTP.Client qualified as HTTP
-import Network.HTTP.Types (status400)
+import Network.HTTP.Types (status400, status503)
 import Network.Wai (Application)
 import Network.Wai.Handler.Warp qualified as Warp
 import Servant (Context (..), serveWithContext)
@@ -53,6 +53,24 @@ spec = describe "Kansoku.Metrics.Handler" $ do
           Left err -> expectationFailure ("JSON decode failed: " <> err) >> fail err
       Response.code envelope `shouldBe` "invalid_funnel_window"
       Response.message envelope `shouldSatisfy` Text.isInfixOf "0"
+
+  it "surfaces a query exception as HTTP 503 instead of a plausible result" $
+    Warp.testWithApplication (pure validationApplication) $ \port -> do
+      manager <- HTTP.newManager HTTP.defaultManagerSettings
+      request <-
+        HTTP.parseRequest
+          ( "http://127.0.0.1:"
+              <> show port
+              <> "/metrics/sessions?from=2026-06-01&to=2026-06-08"
+          )
+      response <- HTTP.httpLbs request manager
+      HTTP.responseStatus response `shouldBe` status503
+      envelope <-
+        case eitherDecode (HTTP.responseBody response) of
+          Right value -> pure value
+          Left err -> expectationFailure ("JSON decode failed: " <> err) >> fail err
+      Response.code envelope `shouldBe` "clickhouse_unavailable"
+      Response.retryable envelope `shouldBe` True
 
 validationApplication :: Application
 validationApplication =

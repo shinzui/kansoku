@@ -71,10 +71,10 @@ This section must always reflect the actual current state of the work.
 - [x] (2026-07-18 21:47Z) M2: `buildFunnelSQL` rewritten to single-pass `windowFunnel` with MultilineStrings
 - [x] (2026-07-18 21:47Z) M2: QuerySpec shape tests for the new funnel SQL
 - [x] (2026-07-18 21:47Z) M2: out-of-order fixture user added; curl transcript proves ordered semantics
-- [ ] M3: decode fallbacks throw instead of yielding zeros (state which EP-11 branch applied)
-- [ ] M3: Haskell-side re-sort removed from `runSQLWith`
-- [ ] M3: `buildSessionsSQL` predicate updated for v2 non-Nullable `session_id`
-- [ ] M3: rollup readers reconciled with EP-12 merge functions; goldens updated
+- [x] (2026-07-18 21:53Z) M3: decode fallbacks throw instead of yielding zeros (post-EP-11 typed branch applied)
+- [x] (2026-07-18 21:53Z) M3: Haskell-side re-sort removed from `runSQLWith`
+- [x] (2026-07-18 21:53Z) M3: `buildSessionsSQL` predicate updated for v2 non-Nullable `session_id`
+- [x] (2026-07-18 21:53Z) M3: rollup readers reconciled with EP-12 merge functions; goldens updated
 - [ ] M4: retention route documented as "new-in-window cohorts" via servant `Description`
 - [ ] M4: `normalizeOffsets` offset-0 injection documented as intended
 - [ ] M4: full `cabal test` + end-to-end curl pass recorded in Validation section
@@ -147,6 +147,18 @@ implementation. Provide concise evidence.
 - 2026-07-18, M2: `kansoku-client` contains no metrics/funnel client generation, so the
   additive `window` wire change affects only `kansoku-api`, the server handler, and the
   generated OpenAPI artifact, as the plan predicted.
+
+- 2026-07-18, M3: the post-EP-11 branch is fully typed: `AggLine`, `parseAggLine`,
+  `readMaybe`, and `fromMaybe 0` are absent from the query/handler path. The existing
+  mistyped `Float64` integration guard throws `UnmatchedResult`; a new real-handler guard
+  forces a query exception and observes retryable HTTP 503 `clickhouse_unavailable`, not a
+  metric result.
+
+- 2026-07-18, M3: EP-12's landed schema matches this plan without deviation:
+  `session_id` is non-Nullable and filtered solely by `session_id != ''`; dau/wau readers
+  use `uniqCombinedMerge(users)`; both page-view branches use `countMerge(views)`. The
+  canonical fixture returned non-zero, SQL-ordered sessions (2/2/2), active users (2/2/2),
+  and page views (4/1) after the Haskell sort was removed.
 
 
 ## Decision Log
@@ -225,6 +237,15 @@ Record every decision made while working on the plan.
   the documented 7,776,000-second cap.
   Date: 2026-07-18
 
+- Decision: Apply M3's post-EP-11 typed-decoding branch and retain
+  `repairAggRows`; do not introduce `QueryDecodeError` or any string parser.
+  Rationale: the driver validates result headers/counts/types and throws on mismatch, while
+  M1 proved upstream v1.1.0 still needs the narrow per-block generic-product association
+  repair. Honest failure means preserving those type errors and removing fallback values,
+  not deleting a compatibility transform that keeps already-validated columns paired with
+  their rows.
+  Date: 2026-07-18
+
 
 ## Outcomes & Retrospective
 
@@ -249,6 +270,15 @@ The public result shape is unchanged. Fresh v2 fixtures plus the real HTTP serve
 step counts 3/1 for the default window, 3/0 for 60 seconds, HTTP 400 for both hostile input
 and `window=0`, and a served OpenAPI operation containing the description and all four
 parameters. The live core suite passed 47/47 examples.
+
+Milestone 3 is complete. The query path has no value-fabricating decoder branch, and its
+typed mismatch plus handler tests permanently pin exception-to-503 behavior. `runSQLWith`
+now preserves ClickHouse's emitted order, and representative tests require `ORDER BY` from
+every builder (the one-row ratio builder gained an explicit clause). Sessions use a
+MultilineStrings query and only the v2 `session_id != ''` predicate. Rollup readers and
+public active-user accuracy wording now match EP-12's `uniqCombined`/`count` states and
+raw-identity semantics. The live suite passed 49/49 core examples, and fixture-backed HTTP
+responses stayed ordered and non-zero.
 
 
 ## Context and Orientation
@@ -915,6 +945,17 @@ window=0: HTTP 400
 window=60: step 1 = 3, step 2 = 0
 OpenAPI funnel parameters: from, to, steps, window
 Live core suite: 47 examples, 0 failures
+```
+
+Observed for M3 on 2026-07-18 after removing the Haskell sort:
+
+```text
+mistyped Float64 result: ClickHaskell UnmatchedResult exception
+forced query exception: HTTP 503, clickhouse_unavailable, retryable=true
+sessions by day: 2, 2, 2
+active_users by day: 2, 2, 2
+page_views by day: 4, 1
+Live core suite: 49 examples, 0 failures
 ```
 
 Test-level acceptance: `cabal test` green; `ValidateSpec` covers accept/reject cases

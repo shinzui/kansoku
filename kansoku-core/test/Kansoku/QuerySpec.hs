@@ -1,5 +1,6 @@
 module Kansoku.QuerySpec (spec) where
 
+import Data.Foldable (traverse_)
 import Data.Text qualified as Text
 import Data.Time (fromGregorian)
 import Kansoku.Metrics.Api (TimeGrain (..))
@@ -57,15 +58,14 @@ spec = describe "Kansoku.Query.buildSQL" $ do
 
   it "counts sessions by distinct non-empty session ids" $
     buildSessionsSQL dayRequest
-      `shouldBe` Text.unlines
-        [ "SELECT toString(toDate(occurred_at)) AS bucket, '' AS group_key,",
-          "       toFloat64(uniqExact(session_id)) AS value",
-          "FROM analytics.events_raw",
-          "WHERE occurred_at >= '2026-06-01 00:00:00' AND occurred_at < '2026-06-08 00:00:00'",
-          "  AND session_id != ''",
-          "GROUP BY bucket, group_key",
-          "ORDER BY bucket, group_key"
-        ]
+      `shouldBe` """
+                 SELECT toString(toDate(occurred_at)) AS bucket, '' AS group_key,
+                        toFloat64(uniqExact(session_id)) AS value
+                 FROM analytics.events_raw
+                 WHERE occurred_at >= '2026-06-01 00:00:00' AND occurred_at < '2026-06-08 00:00:00'
+                   AND session_id != ''
+                 GROUP BY bucket, group_key
+                 ORDER BY bucket, group_key"""
 
   it "builds retention SQL with default offsets plus cohort size" $
     buildRetentionSQL dayRequest [1, 7, 14, 30]
@@ -83,6 +83,20 @@ spec = describe "Kansoku.Query.buildSQL" $ do
   it "renders three funnel step indices in caller order" $
     buildFunnelSQL dayRequest 3600 (sqlName <$> ["one", "two", "three"])
       `shouldContainText` "ARRAY JOIN [(1, {funnel_step_1:String}), (2, {funnel_step_2:String}), (3, {funnel_step_3:String})] AS step"
+
+  it "keeps ClickHouse ORDER BY as the sole ordering authority for every builder" $
+    traverse_
+      (`shouldContainText` "ORDER BY")
+      [ buildSQL (Simple activeUsers) dayRequest,
+        buildSQL (Simple pageViews) dayRequest,
+        buildSQL (Simple events) dayRequest,
+        buildSQL (requiredMetric "new_users") dayRequest,
+        buildSQL (requiredMetric "revenue") dayRequest,
+        buildSQL (Ratioed conversionRate) dayRequest,
+        buildSessionsSQL dayRequest,
+        buildRetentionSQL dayRequest [1, 7],
+        buildFunnelSQL dayRequest 604800 (sqlName <$> ["signup_started", "signup_completed"])
+      ]
 
 dayRequest :: QueryRequest
 dayRequest =
@@ -106,3 +120,9 @@ sqlName value =
   case mkSqlName value of
     Right name -> name
     Left invalid -> error ("invalid SQL name fixture: " <> Text.unpack invalid)
+
+requiredMetric :: Text -> BuiltinMetric
+requiredMetric name =
+  case builtinMetric name of
+    Just metric -> metric
+    Nothing -> error ("missing built-in metric fixture: " <> Text.unpack name)
