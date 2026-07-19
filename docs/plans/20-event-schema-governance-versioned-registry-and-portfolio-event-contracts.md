@@ -81,16 +81,16 @@ This section must always reflect the actual current state of the work.
       regenerated in the same commit as the wire change
 - [x] (2026-07-19 14:58 PDT) M1: unit tests in `kansoku-core/test/Kansoku/EventSpec.hs` cover the new validation
       paths and JSON round-trip; `cabal test` green; M1 committed
-- [ ] M2: `Kansoku.Event.Contract` module (`SchemaCatalog` DTOs, `schemaCatalog`
+- [x] (2026-07-19 15:12 PDT) M2: `Kansoku.Event.Contract` module (`SchemaCatalog` DTOs, `schemaCatalog`
       derivation, JSON instances)
-- [ ] M2: `GET /v1/schemas` served (public, `application/json`); route in the NamedRoutes
+- [x] (2026-07-19 15:12 PDT) M2: `GET /v1/schemas` served (public, `application/json`); route in the NamedRoutes
       record; OpenAPI document regenerated
-- [ ] M2: `kansoku-contracts` executable writes `docs/contracts/events.json`; artifact
+- [x] (2026-07-19 15:12 PDT) M2: `kansoku-contracts` executable writes `docs/contracts/events.json`; artifact
       committed; justfile `contracts` recipe added
-- [ ] M2: golden test `kansoku-core/test/Kansoku/ContractSpec.hs` (served catalog equals
+- [x] (2026-07-19 15:12 PDT) M2: golden test `kansoku-core/test/Kansoku/ContractSpec.hs` (served catalog equals
       committed artifact; registry version invariants; JSON round-trip); drift demo
       performed; M2 committed
-- [ ] M2: `kansoku-client` exposes `fetchSchemaCatalog`; committed with M2's wire change
+- [x] (2026-07-19 15:12 PDT) M2: `kansoku-client` exposes `fetchSchemaCatalog`; committed with M2's wire change
 - [ ] M3: `docs/event-schema-governance.md` authored for kikan service authors
 - [ ] M3: full validation pass (transcripts captured into this plan), MasterPlan 3
       progress checkboxes updated, portfolio-publication hook recorded as future scope;
@@ -133,6 +133,16 @@ implementation. Provide concise evidence.
   `ErrorEnvelopeWire`, so the unknown-version response places the rendered validation text
   in `message` rather than a `details` array. The observed HTTP 400 body was
   `{"code":"validation_failed","message":"validation failed: event 'page_view': schemaVersion 2 is unknown; known versions: [1]","retryable":false}`.
+
+- 2026-07-19: The planned catalog property shape omitted EP-19's landed
+  `SqlNamePattern`, even though the milestone promises the full registry. The public DTO now
+  includes a fixed nullable `pattern` key and publishes `[a-z0-9_.:-]{1,128}` for both
+  `experiment_viewed` identifiers; a contract test pins that propagation.
+
+- 2026-07-19: `/v1/schemas` shares the existing `/v1` CORS middleware with ingestion. Its
+  policy originally allowed only POST preflights, so M2 added GET while preserving the
+  existing origins and auth-header policy. Live acceptance returned
+  `Access-Control-Allow-Origin: *` for an Origin-bearing catalog request.
 
 
 ## Decision Log
@@ -254,6 +264,14 @@ Record every decision made while working on the plan.
   ADR 0003's auth boundaries around only ingest and metrics.
   Date: 2026-07-19
 
+- Decision: Publish a nullable `pattern` field on every contract property and render
+  `SqlNamePattern` as `[a-z0-9_.:-]{1,128}`.
+  Rationale: EP-19 made the pattern part of validation before EP-20 started. Omitting it from
+  a catalog described as the full event contract would cause producer tooling to accept
+  values the service rejects. A fixed nullable field keeps the document shape predictable
+  and leaves room for additional typed patterns in future catalog versions.
+  Date: 2026-07-19
+
 
 ## Outcomes & Retrospective
 
@@ -270,6 +288,16 @@ Compare the result against the original purpose.
   12 client examples with the one opt-in live test pending), and two OpenAPI generations
   produced the same SHA-256
   `bf7a00fb8b22d2a69d73d315f538ba3a1143fbefb261e2e4e1d61f738c2a0c6a`.
+
+- M2 (2026-07-19): The public catalog is served from the same pure `schemaCatalog` value
+  used by the deterministic artifact generator and SDK decoder. Live acceptance returned
+  HTTP 200, JSON content type, browser CORS, all eight events, version-1 `page_view`, and
+  both experiment patterns without credentials. The golden guard failed with its exact
+  remediation message after a temporary in-place `page_view` edit and passed after that edit
+  was reversed. The full suites passed (133 core examples; 13 client examples with one
+  opt-in live test pending). Repeated generation preserved SHA-256
+  `f930d8ad022ca281994a8adbbb840f4fa55eae29a5766804be3faf9c08337eff` for the contract and
+  `dc40604e6611d7683cf7800193526940db90856f358f6fbf3710f88df8f96680` for OpenAPI.
 
 
 ## Context and Orientation
@@ -634,9 +662,10 @@ shape of this document itself, starting at 1 — bump it if this plan's successo
 document structure, not when event schemas change), `service` (always `"kansoku"`), and
 `events`, an object keyed by event name. Each event value has one key, `versions`, an array
 ordered ascending by version. Each version has `version` (int), `note` (string, the
-changelog line), and `properties`, an array of `{name, type, required, description}` where
+changelog line), and `properties`, an array of `{name, type, required, pattern, description}` where
 `type` is one of `"string"`, `"number"`, `"bool"`, `"object"`, `"array"`, `"any"` (the
-lowercase rendering of `PropertyType`) and `description` is a string or `null`. Excerpt of
+lowercase rendering of `PropertyType`), `pattern` is the validation expression or `null`,
+and `description` is a string or `null`. Excerpt of
 the version-1 catalog (two of the five events; key order shown alphabetically as the
 regenerator writes it, but consumers and the golden test must not depend on key order):
 
@@ -652,6 +681,7 @@ regenerator writes it, but consumers and the golden test must not depend on key 
             {
               "description": "Full URL of the viewed page.",
               "name": "url",
+              "pattern": null,
               "required": true,
               "type": "string"
             }
@@ -666,16 +696,18 @@ regenerator writes it, but consumers and the golden test must not depend on key 
           "note": "Initial schema (kansoku MVP).",
           "properties": [
             {
-              "description": "Monetary amount of the subscription, in the account's currency.",
-              "name": "amount",
-              "required": false,
-              "type": "number"
-            },
-            {
               "description": "Plan identifier the subscription started on.",
               "name": "plan",
+              "pattern": null,
               "required": true,
               "type": "string"
+            },
+            {
+              "description": "Monetary amount of the subscription, in the account's currency.",
+              "name": "amount",
+              "pattern": null,
+              "required": false,
+              "type": "number"
             }
           ],
           "version": 1
@@ -688,10 +720,9 @@ regenerator writes it, but consumers and the golden test must not depend on key 
 ```
 
 (One caution about the excerpt: `properties` is an array and its order is the declaration
-order in the registry, which the regenerator preserves — the alphabetical `amount`-before-
-`plan` above merely reflects that a pretty-printer sorts object keys, not array elements.
-Declare properties in whatever order reads best; the golden test compares values, and arrays
-compare in order, so the committed artifact always matches declaration order.)
+order in the registry, which the regenerator preserves. Declare properties in whatever order
+reads best; the golden test compares values, and arrays compare in order, so the committed
+artifact always matches declaration order.)
 
 Create `kansoku-api/src/Kansoku/Event/Contract.hs` (add it to `exposed-modules` in
 `kansoku-api/kansoku-api.cabal`) with the DTOs and the pure derivation:
@@ -701,6 +732,7 @@ data ContractProperty = ContractProperty
   { name :: !Text,
     propertyType :: !Text,
     required :: !Bool,
+    validationPattern :: !(Maybe Text),
     description :: !(Maybe Text)
   }
 
@@ -729,9 +761,9 @@ All four types derive `Generic, Eq, Show` (strict fields, per the repo's code st
 (field names are already the wire keys; `Map Text` renders as a JSON object;
 aeson provides `NonEmpty` instances). `ContractProperty` needs hand-written instances (or
 generic ones with a `fieldLabelModifier`) because its wire key `"type"` is a Haskell keyword:
-encode as the four keys `name`/`type`/`required`/`description`, always emitting
-`description` (as `null` when `Nothing`) so consumers see a fixed shape, and decode
-tolerating a missing `description`. `propertyTypeText` maps `PTString -> "string"` and so on;
+encode as the five keys `name`/`type`/`required`/`pattern`/`description`, always emitting
+both nullable fields so consumers see a fixed shape, and decode tolerating either when
+missing. `propertyTypeText` maps `PTString -> "string"` and so on;
 `schemaCatalog` sets `catalogVersion = 1`, `service = "kansoku"`, and folds the registry into
 the map (`Map EventName (NonEmpty EventSchema)` to `Map Text EventVersions`, unwrapping
 `EventName` and converting each `EventSchema` — the lists are already version-ascending by
@@ -1181,7 +1213,8 @@ At the end of Milestone 2, additionally:
 -- kansoku-api/src/Kansoku/Event/Contract.hs
 data ContractProperty = ContractProperty
   { name :: !Text, propertyType :: !Text,
-    required :: !Bool, description :: !(Maybe Text) }   -- wire key for propertyType: "type"
+    required :: !Bool, validationPattern :: !(Maybe Text),
+    description :: !(Maybe Text) } -- wire keys: propertyType -> "type", validationPattern -> "pattern"
 data VersionedEventSchema = VersionedEventSchema
   { version :: !Int, note :: !Text, properties :: ![ContractProperty] }
 newtype EventVersions = EventVersions { versions :: NonEmpty VersionedEventSchema }

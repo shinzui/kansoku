@@ -20,7 +20,7 @@ import Kansoku.Event
 import Kansoku.Metrics.Api (MetricResult (..), TimeGrain (Day))
 import Kansoku.Prelude
 import Network.HTTP.Client qualified as HTTP
-import Network.HTTP.Types (Status, status200, status202, status400, status401, status413, status503)
+import Network.HTTP.Types (Status, status200, status202, status400, status401, status404, status413, status503)
 import Network.HTTP.Types.Header (hAuthorization)
 import Network.Wai (Application, Request, pathInfo, queryString, requestHeaders, requestMethod, responseLBS, strictRequestBody)
 import Network.Wai.Handler.Warp qualified as Warp
@@ -180,6 +180,11 @@ spec = describe "Kansoku.Client" $ do
         Right (KansokuOk result) -> metric result `shouldBe` "experiment_funnel"
         other -> expectationFailure ("unexpected funnel client result: " <> show other)
 
+  it "fetches the public schema catalog through the shared route type" $
+    Warp.testWithApplication (pure schemaRecorderApp) $ \port ->
+      withClient (testConfig port) $ \client ->
+        fetchSchemaCatalog client `shouldReturn` Right (schemaCatalog defaultRegistry)
+
   it "skips the live integration test unless KANSOKU_SERVER_URL is set" $ do
     server <- lookupEnv "KANSOKU_SERVER_URL"
     credential <- lookupEnv "KANSOKU_API_KEY"
@@ -277,6 +282,19 @@ metricsRecorderApp request respond =
             [("content-type", "application/json")]
             (Aeson.encode MetricResult {metric = name, points = []})
         )
+
+schemaRecorderApp :: Application
+schemaRecorderApp request respond
+  | requestMethod request == "GET",
+    pathInfo request == ["v1", "schemas"] =
+      respond
+        ( responseLBS
+            status200
+            [("content-type", "application/json")]
+            (Aeson.encode (schemaCatalog defaultRegistry))
+        )
+  | otherwise =
+      respond (responseLBS status404 [("content-type", "application/json")] "{}")
 
 queryValue :: ByteString -> Request -> Maybe ByteString
 queryValue name request =

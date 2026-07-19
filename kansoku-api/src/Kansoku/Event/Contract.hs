@@ -1,0 +1,102 @@
+-- | Stable, serializable publication of the in-source event registry.
+module Kansoku.Event.Contract
+  ( ContractProperty (..),
+    EventVersions (..),
+    SchemaCatalog (..),
+    VersionedEventSchema (..),
+    propertyTypeText,
+    schemaCatalog,
+  )
+where
+
+import Data.Aeson.Types (Options (..))
+import Data.Map.Strict (Map)
+import Data.Map.Strict qualified as Map
+import Kansoku.Event.Registry
+import Kansoku.Event.Types (EventName (..))
+import Kansoku.Prelude
+
+data ContractProperty = ContractProperty
+  { name :: !Text,
+    propertyType :: !Text,
+    required :: !Bool,
+    validationPattern :: !(Maybe Text),
+    description :: !(Maybe Text)
+  }
+  deriving stock (Generic, Eq, Show)
+
+data VersionedEventSchema = VersionedEventSchema
+  { version :: !Int,
+    note :: !Text,
+    properties :: ![ContractProperty]
+  }
+  deriving stock (Generic, Eq, Show)
+  deriving anyclass (FromJSON, ToJSON)
+
+newtype EventVersions = EventVersions
+  { versions :: NonEmpty VersionedEventSchema
+  }
+  deriving stock (Generic, Eq, Show)
+  deriving anyclass (FromJSON, ToJSON)
+
+data SchemaCatalog = SchemaCatalog
+  { catalogVersion :: !Int,
+    service :: !Text,
+    events :: !(Map Text EventVersions)
+  }
+  deriving stock (Generic, Eq, Show)
+  deriving anyclass (FromJSON, ToJSON)
+
+contractPropertyOptions :: Options
+contractPropertyOptions =
+  defaultOptions
+    { fieldLabelModifier = \case
+        "propertyType" -> "type"
+        "validationPattern" -> "pattern"
+        field -> field
+    }
+
+instance ToJSON ContractProperty where
+  toJSON = genericToJSON contractPropertyOptions
+
+instance FromJSON ContractProperty where
+  parseJSON = genericParseJSON contractPropertyOptions
+
+propertyTypeText :: PropertyType -> Text
+propertyTypeText = \case
+  PTString -> "string"
+  PTNumber -> "number"
+  PTBool -> "bool"
+  PTObject -> "object"
+  PTArray -> "array"
+  PTAny -> "any"
+
+schemaCatalog :: EventRegistry -> SchemaCatalog
+schemaCatalog (EventRegistry registry) =
+  SchemaCatalog
+    { catalogVersion = 1,
+      service = "kansoku",
+      events =
+        Map.fromList
+          [ (unEventName eventName, EventVersions (toContractSchema <$> schemas))
+          | (eventName, schemas) <- Map.toAscList registry
+          ]
+    }
+
+toContractSchema :: EventSchema -> VersionedEventSchema
+toContractSchema EventSchema {schemaVersion, schemaNote, schemaProperties} =
+  VersionedEventSchema
+    { version = schemaVersion,
+      note = schemaNote,
+      properties = toContractProperty <$> schemaProperties
+    }
+
+toContractProperty :: PropertySpec -> ContractProperty
+toContractProperty PropertySpec {propName, propType, propRequired, propPattern, propDescription} =
+  ContractProperty
+    { name = propName,
+      propertyType = propertyTypeText propType,
+      required = propRequired,
+      validationPattern = propertyPatternText <$> propPattern,
+      description = propDescription
+    }

@@ -26,6 +26,15 @@ openapi-check:
     cabal run kansoku-openapi
     git diff --exit-code docs/api/openapi.json
 
+# Regenerate the committed event contract artifact from the registry.
+contracts:
+    cabal run kansoku-contracts
+
+# Fail if the committed event contract artifact is stale.
+contracts-check:
+    cabal run kansoku-contracts
+    git diff --exit-code docs/contracts/events.json
+
 # Apply unapplied ClickHouse migrations in filename order, recording each in
 # analytics.schema_migrations. Migration files are immutable once applied.
 ch-migrate:

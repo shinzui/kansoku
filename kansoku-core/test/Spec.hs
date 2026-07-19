@@ -4,6 +4,7 @@ import Kansoku.Auth.HandlerSpec qualified
 import Kansoku.Auth.TokenSpec qualified
 import Kansoku.ClickHouseSpec qualified
 import Kansoku.ConfigSpec qualified
+import Kansoku.ContractSpec qualified
 import Kansoku.CorsSpec qualified
 import Kansoku.EventSpec qualified
 import Kansoku.HttpIntegrationSpec qualified
@@ -28,6 +29,7 @@ main = hspec $ do
   Kansoku.Auth.HandlerSpec.spec
   Kansoku.Auth.TokenSpec.spec
   Kansoku.ConfigSpec.spec
+  Kansoku.ContractSpec.spec
   Kansoku.CorsSpec.spec
   Kansoku.ClickHouseSpec.spec
   Kansoku.EventSpec.spec

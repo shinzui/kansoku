@@ -8,6 +8,7 @@ import Data.Text qualified as Text
 import Kansoku.Api qualified as Api
 import Kansoku.Api.Response qualified as Response
 import Kansoku.Auth.Types (IngestPrincipal, MetricsPrincipal)
+import Kansoku.Event (defaultRegistry, schemaCatalog)
 import Kansoku.Metrics.Handler (metricsServer)
 import Kansoku.Metrics.RoutingSpec (sentinelContext, sentinelIngestServer, sentinelPrincipal)
 import Network.HTTP.Client qualified as HTTP
@@ -149,5 +150,6 @@ validationApplication =
     sentinelContext
     Api.KansokuAPI
       { Api.ingest = \(_principal :: IngestPrincipal) -> sentinelIngestServer,
-        Api.metrics = \(_principal :: MetricsPrincipal) -> metricsServer sentinelPrincipal (error "query pool must not be forced by validation")
+        Api.metrics = \(_principal :: MetricsPrincipal) -> metricsServer sentinelPrincipal (error "query pool must not be forced by validation"),
+        Api.schemas = pure (schemaCatalog defaultRegistry)
       }

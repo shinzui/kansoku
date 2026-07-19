@@ -1,0 +1,155 @@
+{
+  "catalogVersion": 1,
+  "events": {
+    "experiment_viewed": {
+      "versions": [
+        {
+          "note": "Initial schema (kansoku MVP).",
+          "properties": [
+            {
+              "description": "Stable identifier of the experiment.",
+              "name": "experiment",
+              "pattern": "[a-z0-9_.:-]{1,128}",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "description": "Variant shown to the user.",
+              "name": "variant",
+              "pattern": "[a-z0-9_.:-]{1,128}",
+              "required": true,
+              "type": "string"
+            }
+          ],
+          "version": 1
+        }
+      ]
+    },
+    "feature_used": {
+      "versions": [
+        {
+          "note": "Initial schema (kansoku MVP).",
+          "properties": [
+            {
+              "description": "Stable identifier of the feature used.",
+              "name": "feature",
+              "pattern": null,
+              "required": true,
+              "type": "string"
+            }
+          ],
+          "version": 1
+        }
+      ]
+    },
+    "identify": {
+      "versions": [
+        {
+          "note": "Initial schema (kansoku MVP).",
+          "properties": [],
+          "version": 1
+        }
+      ]
+    },
+    "page_view": {
+      "versions": [
+        {
+          "note": "Initial schema (kansoku MVP).",
+          "properties": [
+            {
+              "description": "Full URL of the viewed page.",
+              "name": "url",
+              "pattern": null,
+              "required": true,
+              "type": "string"
+            }
+          ],
+          "version": 1
+        }
+      ]
+    },
+    "payment_completed": {
+      "versions": [
+        {
+          "note": "Initial schema (kansoku MVP).",
+          "properties": [
+            {
+              "description": "Monetary amount of the completed payment, in the account's currency.",
+              "name": "amount",
+              "pattern": null,
+              "required": true,
+              "type": "number"
+            },
+            {
+              "description": "Plan associated with the completed payment.",
+              "name": "plan",
+              "pattern": null,
+              "required": false,
+              "type": "string"
+            }
+          ],
+          "version": 1
+        }
+      ]
+    },
+    "session_start": {
+      "versions": [
+        {
+          "note": "Initial schema (kansoku MVP).",
+          "properties": [
+            {
+              "description": "Client-generated session identifier.",
+              "name": "sessionId",
+              "pattern": null,
+              "required": true,
+              "type": "string"
+            }
+          ],
+          "version": 1
+        }
+      ]
+    },
+    "subscription_started": {
+      "versions": [
+        {
+          "note": "Initial schema (kansoku MVP).",
+          "properties": [
+            {
+              "description": "Plan identifier the subscription started on.",
+              "name": "plan",
+              "pattern": null,
+              "required": true,
+              "type": "string"
+            },
+            {
+              "description": "Monetary amount of the subscription, in the account's currency.",
+              "name": "amount",
+              "pattern": null,
+              "required": false,
+              "type": "number"
+            }
+          ],
+          "version": 1
+        }
+      ]
+    },
+    "user_registered": {
+      "versions": [
+        {
+          "note": "Initial schema (kansoku MVP).",
+          "properties": [
+            {
+              "description": "Identifier of the newly registered user.",
+              "name": "userId",
+              "pattern": null,
+              "required": true,
+              "type": "string"
+            }
+          ],
+          "version": 1
+        }
+      ]
+    }
+  },
+  "service": "kansoku"
+}

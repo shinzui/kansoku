@@ -52,7 +52,7 @@ spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
     lookupText ["components", "securitySchemes", "serviceToken", "scheme"] documentValue `shouldBe` Just "bearer"
     traverse_ assertSecurity operationValues
 
-  it "documents exactly the seventeen analytics paths with stable operation IDs" $ do
+  it "documents exactly the eighteen analytics paths with stable operation IDs" $ do
     documentedPaths `shouldBe` expectedServedPaths
     fmap operationIdentity operationValues `shouldMatchList` expectedOperationIds
 
@@ -108,6 +108,7 @@ spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
     conforms "MetricResult" Metrics.MetricResult {Metrics.metric = "events", Metrics.points = [sampleMetricPoint]}
     conforms "TimeGrain" Metrics.Hour
     conforms "ErrorEnvelopeWire" ErrorEnvelopeWire {code = "not_found", message = "no such endpoint", retryable = False}
+    conforms "SchemaCatalog" (schemaCatalog defaultRegistry)
     conforms "EventId" (EventId "evt_openapi")
     conforms "EventName" (EventName "page_view")
     conforms "AnonymousId" (AnonymousId "anon_openapi")
@@ -203,7 +204,8 @@ expectedServedPaths =
       "/metrics/sessions",
       "/metrics/users",
       "/v1/batch",
-      "/v1/events"
+      "/v1/events",
+      "/v1/schemas"
     ]
 
 operationalPaths :: [Text]
@@ -227,7 +229,8 @@ expectedOperationIds =
     ("/metrics/sessions", "get", "getMetricsSessions"),
     ("/metrics/users", "get", "getMetricsUsers"),
     ("/v1/batch", "post", "postV1Batch"),
-    ("/v1/events", "post", "postV1Events")
+    ("/v1/events", "post", "postV1Events"),
+    ("/v1/schemas", "get", "getV1Schemas")
   ]
 
 type OperationValue = (Text, Text, Aeson.Value)
@@ -260,18 +263,26 @@ assertStatuses (path, method, operation) = do
       authStatuses
         | "/metrics/" `Text.isPrefixOf` path = ["401", "403"]
         | otherwise = ["401"]
-  actual `shouldBe` List.sort ([success, "400", "404", "413", "503"] <> authStatuses)
+      expected
+        | path == "/v1/schemas" = ["200"]
+        | otherwise = [success, "400", "404", "413", "503"] <> authStatuses
+  actual `shouldBe` List.sort expected
   path `shouldSatisfy` (`elem` expectedServedPaths)
 
 assertSecurity :: OperationValue -> Expectation
 assertSecurity (path, _method, operation) =
-  case valueAt ["security"] operation of
-    Just (Aeson.Array requirements)
+  case (path, valueAt ["security"] operation) of
+    ("/v1/schemas", Nothing) -> pure ()
+    ("/v1/schemas", Just (Aeson.Array requirements))
+      | null requirements -> pure ()
+    ("/v1/schemas", securityValue) ->
+      expectationFailure ("public schema operation unexpectedly secured: " <> show securityValue)
+    (_, Just (Aeson.Array requirements))
       | "/metrics/" `Text.isPrefixOf` path ->
           requirements `shouldSatisfy` any (containsObjectKey "serviceToken")
       | otherwise ->
           requirements `shouldSatisfy` any (containsObjectKey "writeKey")
-    securityValue -> expectationFailure ("missing operation security for " <> Text.unpack path <> ": " <> show securityValue)
+    (_, securityValue) -> expectationFailure ("missing operation security for " <> Text.unpack path <> ": " <> show securityValue)
 
 containsObjectKey :: Text -> Aeson.Value -> Bool
 containsObjectKey key = \case

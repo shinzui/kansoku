@@ -41,6 +41,8 @@ import Kansoku.Event
     EventName (..),
     EventSource (..),
     baseEvent,
+    defaultRegistry,
+    schemaCatalog,
   )
 import Kansoku.Ingest.Api qualified as Ingest
 import Kansoku.Metrics.Api qualified as Metrics
@@ -68,11 +70,15 @@ import Test.Hspec
 
 spec :: Spec
 spec = describe "Kansoku analytics route dispatch" $ do
-  it "routes all fifteen metrics and both ingest operations to their own handlers" $
+  it "routes all fifteen metrics, both ingest operations, and the public schema catalog" $
     Warp.testWithApplication (pure sentinelApplication) $ \port -> do
       manager <- HTTP.newManager HTTP.defaultManagerSettings
       traverse_ (assertMetricRoute manager port) metricRoutes
       assertIngestRoutes manager port
+      schemaRequest <- HTTP.parseRequest (baseUrl port <> "/v1/schemas")
+      schemaResponse <- HTTP.httpLbs schemaRequest manager
+      HTTP.responseStatus schemaResponse `shouldBe` status200
+      decodeBody (HTTP.responseBody schemaResponse) `shouldReturn` schemaCatalog defaultRegistry
 
   it "wraps malformed bodies and unknown paths in the shared error envelope" $
     Warp.testWithApplication (pure sentinelApplication) $ \port -> do
@@ -208,7 +214,8 @@ sentinelKansokuServer :: Api.KansokuAPI (AsServerT Handler)
 sentinelKansokuServer =
   Api.KansokuAPI
     { Api.ingest = const sentinelIngestServer,
-      Api.metrics = const sentinelMetricsServer
+      Api.metrics = const sentinelMetricsServer,
+      Api.schemas = pure (schemaCatalog defaultRegistry)
     }
 
 sentinelIngestServer :: Ingest.IngestRoutes (AsServerT Handler)

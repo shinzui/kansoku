@@ -12,6 +12,7 @@ module Kansoku.Client
     defaultClientConfig,
     droppedCount,
     emptyIds,
+    fetchSchemaCatalog,
     flush,
     group,
     identify,
@@ -32,15 +33,18 @@ import Data.Aeson (Object)
 import Data.Aeson qualified as Aeson
 import Data.Aeson.KeyMap qualified as KeyMap
 import Data.Aeson.Types (Pair)
+import Data.Bifunctor (first)
 import Data.Foldable (traverse_)
 import Data.Generics.Labels ()
 import Data.Map.Strict (Map)
 import Data.Text qualified as Text
 import Data.UUID qualified as UUID
 import Data.UUID.V4 qualified as UUID
+import Kansoku.Api (SchemaAPI)
 import Kansoku.Api.Response (ErrorEnvelopeWire, KansokuResult (..))
 import Kansoku.Auth.Api (IngestAuth)
 import Kansoku.Event (AccountId (..), AnalyticsEvent (..), AnonymousId (..), EventId (..), EventName (..), EventSource (..), OrganizationId (..), SessionId (..), UserId (..), baseEvent)
+import Kansoku.Event.Contract (SchemaCatalog)
 import Kansoku.Ingest.Api (BatchAck, IngestRoutes)
 import Kansoku.Ingest.Api qualified as Ingest
 import Kansoku.Prelude
@@ -128,6 +132,9 @@ kansokuCredential token =
 ingestClient :: AuthenticatedRequest IngestAuth -> IngestRoutes (AsClientT ClientM)
 ingestClient = ServantClient.client (Proxy @(IngestAuth :> NamedRoutes IngestRoutes))
 
+schemaClient :: ClientM SchemaCatalog
+schemaClient = ServantClient.client (Proxy @SchemaAPI)
+
 newClient :: ClientConfig -> IO Client
 newClient cfg = do
   parsed <- parseConfiguredBaseUrl cfg
@@ -159,6 +166,11 @@ flush clientHandle = do
 droppedCount :: Client -> IO Int
 droppedCount clientHandle =
   readTVarIO (clientHandle ^. #dropped)
+
+-- | Fetch the public, versioned event schema catalog.
+fetchSchemaCatalog :: Client -> IO (Either ClientError SchemaCatalog)
+fetchSchemaCatalog clientHandle =
+  first DeliveryFailed <$> runClientM schemaClient (clientHandle ^. #env)
 
 track :: Client -> AnalyticsEvent -> IO ()
 track clientHandle event = do

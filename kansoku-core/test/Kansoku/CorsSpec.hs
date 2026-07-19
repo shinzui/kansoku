@@ -19,8 +19,17 @@ spec = describe "Kansoku.Server.ingestCors" $ do
       HTTP.responseStatus response `shouldBe` status200
       header "Access-Control-Allow-Origin" response `shouldBe` Just "*"
       header "Access-Control-Allow-Methods" response `shouldSatisfy` maybe False (ByteString.isInfixOf "POST")
+      header "Access-Control-Allow-Methods" response `shouldSatisfy` maybe False (ByteString.isInfixOf "GET")
       header "Access-Control-Allow-Headers" response `shouldSatisfy` containsAll ["Content-Type", "X-Api-Key", "Authorization"]
       header "Access-Control-Max-Age" response `shouldBe` Just "3600"
+
+  it "makes the public schema catalog readable by browser clients" $
+    Warp.testWithApplication (pure (ingestCors Nothing sentinelApp)) $ \port -> do
+      manager <- HTTP.newManager HTTP.defaultManagerSettings
+      request <- HTTP.parseRequest (baseUrl port <> "/v1/schemas")
+      response <- HTTP.httpLbs request {HTTP.requestHeaders = [("Origin", "https://sdk.example.com")]} manager
+      HTTP.responseStatus response `shouldBe` status200
+      header "Access-Control-Allow-Origin" response `shouldBe` Just "*"
 
   it "does not add CORS headers to the metrics surface" $
     Warp.testWithApplication (pure (ingestCors Nothing sentinelApp)) $ \port -> do

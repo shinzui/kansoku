@@ -130,6 +130,31 @@
       "CausationId": {
         "type": "string"
       },
+      "ContractProperty": {
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "pattern": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "required"
+        ],
+        "type": "object"
+      },
       "CorrelationId": {
         "type": "string"
       },
@@ -168,6 +193,21 @@
           "agent"
         ],
         "type": "string"
+      },
+      "EventVersions": {
+        "properties": {
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/VersionedEventSchema"
+            },
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "versions"
+        ],
+        "type": "object"
       },
       "IngestAck": {
         "properties": {
@@ -257,6 +297,30 @@
         ],
         "type": "object"
       },
+      "SchemaCatalog": {
+        "properties": {
+          "catalogVersion": {
+            "maximum": 9223372036854775807,
+            "minimum": -9223372036854775808,
+            "type": "integer"
+          },
+          "events": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/EventVersions"
+            },
+            "type": "object"
+          },
+          "service": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "catalogVersion",
+          "service",
+          "events"
+        ],
+        "type": "object"
+      },
       "SessionId": {
         "type": "string"
       },
@@ -270,6 +334,30 @@
       },
       "UserId": {
         "type": "string"
+      },
+      "VersionedEventSchema": {
+        "properties": {
+          "note": {
+            "type": "string"
+          },
+          "properties": {
+            "items": {
+              "$ref": "#/components/schemas/ContractProperty"
+            },
+            "type": "array"
+          },
+          "version": {
+            "maximum": 9223372036854775807,
+            "minimum": -9223372036854775808,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "note",
+          "properties"
+        ],
+        "type": "object"
       }
     },
     "securitySchemes": {
@@ -287,7 +375,7 @@
     }
   },
   "info": {
-    "description": "HTTP ingestion and typed metrics query API for the Kansoku analytics service.",
+    "description": "HTTP ingestion, public event schemas, and typed metrics query API for the Kansoku analytics service.",
     "title": "Kansoku Analytics API",
     "version": "1.0.0"
   },
@@ -429,7 +517,8 @@
         ],
         "tags": [
           "ingestion",
-          "metrics"
+          "metrics",
+          "schemas"
         ]
       }
     },
@@ -569,7 +658,8 @@
         ],
         "tags": [
           "ingestion",
-          "metrics"
+          "metrics",
+          "schemas"
         ]
       }
     },
@@ -709,7 +799,8 @@
         ],
         "tags": [
           "ingestion",
-          "metrics"
+          "metrics",
+          "schemas"
         ]
       }
     },
@@ -849,7 +940,8 @@
         ],
         "tags": [
           "ingestion",
-          "metrics"
+          "metrics",
+          "schemas"
         ]
       }
     },
@@ -989,7 +1081,8 @@
         ],
         "tags": [
           "ingestion",
-          "metrics"
+          "metrics",
+          "schemas"
         ]
       }
     },
@@ -1123,7 +1216,8 @@
         ],
         "tags": [
           "ingestion",
-          "metrics"
+          "metrics",
+          "schemas"
         ]
       }
     },
@@ -1267,7 +1361,8 @@
         ],
         "tags": [
           "ingestion",
-          "metrics"
+          "metrics",
+          "schemas"
         ]
       }
     },
@@ -1407,7 +1502,8 @@
         ],
         "tags": [
           "ingestion",
-          "metrics"
+          "metrics",
+          "schemas"
         ]
       }
     },
@@ -1543,7 +1639,8 @@
         ],
         "tags": [
           "ingestion",
-          "metrics"
+          "metrics",
+          "schemas"
         ]
       }
     },
@@ -1683,7 +1780,8 @@
         ],
         "tags": [
           "ingestion",
-          "metrics"
+          "metrics",
+          "schemas"
         ]
       }
     },
@@ -1823,7 +1921,8 @@
         ],
         "tags": [
           "ingestion",
-          "metrics"
+          "metrics",
+          "schemas"
         ]
       }
     },
@@ -1949,7 +2048,8 @@
         ],
         "tags": [
           "ingestion",
-          "metrics"
+          "metrics",
+          "schemas"
         ]
       }
     },
@@ -2089,7 +2189,8 @@
         ],
         "tags": [
           "ingestion",
-          "metrics"
+          "metrics",
+          "schemas"
         ]
       }
     },
@@ -2229,7 +2330,8 @@
         ],
         "tags": [
           "ingestion",
-          "metrics"
+          "metrics",
+          "schemas"
         ]
       }
     },
@@ -2369,7 +2471,8 @@
         ],
         "tags": [
           "ingestion",
-          "metrics"
+          "metrics",
+          "schemas"
         ]
       }
     },
@@ -2475,7 +2578,8 @@
         ],
         "tags": [
           "ingestion",
-          "metrics"
+          "metrics",
+          "schemas"
         ]
       }
     },
@@ -2578,7 +2682,31 @@
         ],
         "tags": [
           "ingestion",
-          "metrics"
+          "metrics",
+          "schemas"
+        ]
+      }
+    },
+    "/v1/schemas": {
+      "get": {
+        "description": "Public event schema catalog. The same contract is committed at docs/contracts/events.json.",
+        "operationId": "getV1Schemas",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchemaCatalog"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "tags": [
+          "ingestion",
+          "metrics",
+          "schemas"
         ]
       }
     }
@@ -2591,6 +2719,10 @@
     {
       "description": "Typed metric query endpoints",
       "name": "metrics"
+    },
+    {
+      "description": "Published event schema contracts",
+      "name": "schemas"
     }
   ]
 }

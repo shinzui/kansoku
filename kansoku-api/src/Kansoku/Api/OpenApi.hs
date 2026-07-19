@@ -18,14 +18,18 @@ import Kansoku.Event
     AnalyticsEvent,
     AnonymousId,
     CausationId,
+    ContractProperty,
     CorrelationId,
     EventId,
     EventName,
     EventSource,
+    EventVersions,
     OrganizationId,
+    SchemaCatalog,
     SessionId,
     SourceEventId,
     UserId,
+    VersionedEventSchema,
   )
 import Kansoku.Ingest.Api (BatchAck, IngestAck, RejectedEvent)
 import Kansoku.Metrics.Api (MetricPoint, MetricResult, TimeGrain)
@@ -64,6 +68,10 @@ instance O.ToSchema CausationId where
   declareNamedSchema =
     O.genericDeclareNamedSchema textNewtypeOptions
 
+instance O.ToSchema ContractProperty where
+  declareNamedSchema =
+    O.genericDeclareNamedSchema contractPropertySchemaOptions
+
 instance O.ToSchema CorrelationId where
   declareNamedSchema =
     O.genericDeclareNamedSchema textNewtypeOptions
@@ -80,6 +88,8 @@ instance O.ToSchema EventSource where
   declareNamedSchema =
     O.genericDeclareNamedSchema lowerEnumOptions
 
+instance O.ToSchema EventVersions
+
 instance O.ToSchema ErrorEnvelopeWire
 
 instance O.ToSchema IngestAck
@@ -93,6 +103,8 @@ instance O.ToSchema MetricResult
 instance O.ToSchema OrganizationId where
   declareNamedSchema =
     O.genericDeclareNamedSchema textNewtypeOptions
+
+instance O.ToSchema SchemaCatalog
 
 instance O.ToSchema SessionId where
   declareNamedSchema =
@@ -114,6 +126,8 @@ instance O.ToSchema UserId where
   declareNamedSchema =
     O.genericDeclareNamedSchema textNewtypeOptions
 
+instance O.ToSchema VersionedEventSchema
+
 textNewtypeOptions :: O.SchemaOptions
 textNewtypeOptions =
   O.defaultSchemaOptions
@@ -124,6 +138,15 @@ lowerEnumOptions :: O.SchemaOptions
 lowerEnumOptions =
   O.defaultSchemaOptions
     { O.constructorTagModifier = map toLower
+    }
+
+contractPropertySchemaOptions :: O.SchemaOptions
+contractPropertySchemaOptions =
+  O.defaultSchemaOptions
+    { O.fieldLabelModifier = \case
+        "propertyType" -> "type"
+        "validationPattern" -> "pattern"
+        field -> field
     }
 
 kansokuOpenApi :: O.OpenApi
@@ -137,13 +160,14 @@ kansokuOpenApi =
     .~ "1.0.0"
     & O.info
     . O.description
-    ?~ "HTTP ingestion and typed metrics query API for the Kansoku analytics service."
+    ?~ "HTTP ingestion, public event schemas, and typed metrics query API for the Kansoku analytics service."
     & O.components
     . O.securitySchemes
     .~ authSecuritySchemes
     & O.applyTags
       [ O.Tag "ingestion" (Just "Event ingestion endpoints") Nothing,
-        O.Tag "metrics" (Just "Typed metric query endpoints") Nothing
+        O.Tag "metrics" (Just "Typed metric query endpoints") Nothing,
+        O.Tag "schemas" (Just "Published event schema contracts") Nothing
       ]
     & withOperationIds
 

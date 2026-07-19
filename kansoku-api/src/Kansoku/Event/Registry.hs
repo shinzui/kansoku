@@ -11,6 +11,7 @@ module Kansoku.Event.Registry
     latestSchema,
     lookupSchemaVersion,
     lookupVersions,
+    propertyPatternText,
     registerSchema,
   )
 where
@@ -29,6 +30,10 @@ data PropertyType = PTString | PTNumber | PTBool | PTObject | PTArray | PTAny
 -- | A syntactic constraint applied after a property's JSON type is validated.
 data PropertyPattern = SqlNamePattern
   deriving stock (Generic, Eq, Show)
+
+propertyPatternText :: PropertyPattern -> Text
+propertyPatternText = \case
+  SqlNamePattern -> "[a-z0-9_.:-]{1,128}"
 
 data PropertySpec = PropertySpec
   { propName :: !Text,

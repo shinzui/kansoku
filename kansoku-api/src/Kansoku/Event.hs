@@ -4,7 +4,8 @@
 -- and @group@. The smart constructors here reserve those names and fill the
 -- rest of the event with empty optional fields.
 module Kansoku.Event
-  ( module Kansoku.Event.Registry,
+  ( module Kansoku.Event.Contract,
+    module Kansoku.Event.Registry,
     module Kansoku.Event.Types,
     module Kansoku.Event.Validation,
     aliasEvent,
@@ -16,6 +17,7 @@ where
 
 import Data.Aeson (Object)
 import Data.Generics.Labels ()
+import Kansoku.Event.Contract
 import Kansoku.Event.Registry
 import Kansoku.Event.Types
 import Kansoku.Event.Validation

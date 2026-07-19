@@ -34,6 +34,8 @@ import Kansoku.Auth.Handler (ingestAuthHandler, metricsAuthHandler)
 import Kansoku.Auth.Types (IngestPrincipal (..), MetricsPrincipal (..))
 import Kansoku.ClickHouse (QueryPool)
 import Kansoku.Config (Config)
+import Kansoku.Event.Contract (schemaCatalog)
+import Kansoku.Event.Registry (defaultRegistry)
 import Kansoku.Ingest.Handler (ingestServer)
 import Kansoku.Logging (Log, logInfo)
 import Kansoku.Metrics.Handler (metricsServer)
@@ -80,7 +82,8 @@ kansokuServer :: Int -> Pool.Pool -> QueueName -> QueryPool -> KansokuAPI (AsSer
 kansokuServer maxBatchLength pool queueName queryPool =
   KansokuAPI
     { ingest = \(IngestPrincipal principal) -> ingestServer maxBatchLength principal pool queueName,
-      metrics = \(MetricsPrincipal principal) -> metricsServer principal queryPool
+      metrics = \(MetricsPrincipal principal) -> metricsServer principal queryPool,
+      schemas = pure (schemaCatalog defaultRegistry)
     }
 
 kansokuApp :: Config -> ReadyProbe -> Pool.Pool -> QueueName -> QueryPool -> Application
@@ -125,9 +128,9 @@ internalMetrics enabled inner req respond =
           respond (responseLBS status404 [(hContentType, "text/plain")] "Not Found")
     _ -> inner req respond
 
--- | Apply browser CORS policy only to the ingestion route family. Metrics and
--- operational endpoints remain same-origin. Auth headers are pre-authorized
--- for EP-15 so browser SDKs do not need another contract change.
+-- | Apply browser CORS policy to the /v1 ingestion and public-schema family.
+-- Metrics and operational endpoints remain same-origin. Auth headers are
+-- pre-authorized for EP-15 so browser SDKs do not need another contract change.
 ingestCors :: Maybe [Text] -> Middleware
 ingestCors allowedOrigins inner req respond =
   case pathInfo req of
@@ -138,7 +141,7 @@ ingestCors allowedOrigins inner req respond =
       Cors.simpleCorsResourcePolicy
         { Cors.corsOrigins =
             (\origins -> (Text.Encoding.encodeUtf8 <$> origins, False)) <$> allowedOrigins,
-          Cors.corsMethods = ["POST"],
+          Cors.corsMethods = ["GET", "POST"],
           Cors.corsRequestHeaders = ["Content-Type", "X-Api-Key", "Authorization"],
           Cors.corsMaxAge = Just 3600
         }
@@ -286,5 +289,5 @@ pgmqReady pool queueName = do
 startServer :: (IOE :> es, Reader Config :> es, Log :> es) => Application -> Eff es ()
 startServer app = do
   port <- asks @Config (^. #serverPort)
-  logInfo ("kansoku-server listening on port " <> Text.pack (show port) <> " (GET /health, GET /ready, GET /internal/metrics, GET /openapi.json, POST /v1/events, POST /v1/batch, GET /metrics/*)")
+  logInfo ("kansoku-server listening on port " <> Text.pack (show port) <> " (GET /health, GET /ready, GET /internal/metrics, GET /openapi.json, GET /v1/schemas, POST /v1/events, POST /v1/batch, GET /metrics/*)")
   liftIO (Warp.run port app)

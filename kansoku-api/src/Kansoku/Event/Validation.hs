@@ -208,7 +208,7 @@ propertyPatternMatches (Just SqlNamePattern) (String value) = isSqlSafeName valu
 propertyPatternMatches (Just SqlNamePattern) _ = False
 
 sqlNamePatternRule :: Text
-sqlNamePatternRule = "expected [a-z0-9_.:-]{1,128}"
+sqlNamePatternRule = "expected " <> propertyPatternText SqlNamePattern
 
 -- Keep this predicate aligned with Kansoku.Metrics.Query.Validate.mkSqlName.
 -- It lives in kansoku-api because this package cannot depend on kansoku-core.

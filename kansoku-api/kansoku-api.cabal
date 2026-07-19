@@ -31,6 +31,7 @@ library
     Kansoku.Api.Response
     Kansoku.Auth.Api
     Kansoku.Event
+    Kansoku.Event.Contract
     Kansoku.Event.Registry
     Kansoku.Event.Types
     Kansoku.Event.Validation
@@ -57,6 +58,18 @@ library
 executable kansoku-openapi
   import:         common
   main-is:        OpenApi.hs
+  hs-source-dirs: app
+  build-depends:
+    , aeson-pretty
+    , base          >=4.21 && <5
+    , bytestring
+    , directory
+    , kansoku-api
+
+-- Writes docs/contracts/events.json deterministically from the event registry.
+executable kansoku-contracts
+  import:         common
+  main-is:        Contracts.hs
   hs-source-dirs: app
   build-depends:
     , aeson-pretty
