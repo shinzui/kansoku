@@ -105,7 +105,7 @@ waves.
 | 13 | Safe and correct metric SQL: validated inputs, ordered funnels, honest failures | docs/plans/13-safe-and-correct-metric-sql-validated-inputs-ordered-funnels-honest-failures.md | EP-12 | EP-11, EP-9 | Complete |
 | 14 | SDK-grade ingest contract: partial batch acceptance, CORS, and payload limits | docs/plans/14-sdk-grade-ingest-contract-partial-batch-acceptance-cors-and-payload-limits.md | EP-9 | None | Complete |
 | 16 | Pipeline observability: queue depth, writer lag, and exported telemetry | docs/plans/16-pipeline-observability-queue-depth-writer-lag-and-exported-telemetry.md | EP-10 | EP-11 | Complete |
-| 15 | API keys, service auth, and account-scoped queries | docs/plans/15-api-keys-service-auth-and-account-scoped-queries.md | EP-9 | EP-12, EP-13, EP-14 | Not Started |
+| 15 | API keys, service auth, and account-scoped queries | docs/plans/15-api-keys-service-auth-and-account-scoped-queries.md | EP-9 | EP-12, EP-13, EP-14 | In Progress |
 
 Status values: Not Started, In Progress, Complete, Cancelled.
 Hard Deps and Soft Deps reference other rows by their # prefix (e.g., EP-10).
@@ -644,3 +644,9 @@ recovery with 500 events written and queue/archive counts 0/0. Cross-plan discov
 ClickHaskell connection-lock failure and Shibuya retry-budget boundary; outcomes close Phase 3,
 and `docs/adr/0002-pipeline-observability-readiness-and-writer-recovery.md` holds the durable
 operational decisions.
+
+Revision note (2026-07-19, fifth revision): EP-15 started after its hard dependency EP-9 and
+soft dependencies EP-12, EP-13, and EP-14 completed. Implementation reuses the MasterPlan
+intention and reconciles the authored auth plan with EP-21's explicit `pg-migrate` ownership,
+the landed schema-v2 rollup state types, EP-13's native ClickHouse parameters, EP-14's final
+ingest contract, and EP-16's WAI assembly.

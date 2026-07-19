@@ -5,6 +5,7 @@ title: "API keys, service auth, and account-scoped queries"
 kind: exec-plan
 created_at: 2026-07-15T21:30:34Z
 master_plan: "docs/masterplans/2-kansoku-production-hardening-review-fixes-and-portfolio-service-readiness.md"
+intention: intention_01kxr5jt2heyvt0n768ym9dwqd
 ---
 
 # API keys, service auth, and account-scoped queries
@@ -62,8 +63,9 @@ Use a checklist to summarize granular steps. Every stopping point must be docume
 even if it requires splitting a partially completed task into two ("done" vs. "remaining").
 This section must always reflect the actual current state of the work.
 
-- [ ] M1: `Kansoku.Postgres.Migration` module (hasql-migration runner, `kansoku` schema, embedded DDL) exists and runs at startup
-- [ ] M1: `kansoku.api_keys` table created by migration; re-running startup is a no-op
+- [x] M0: reconciled this authored plan with the landed EP-9/12/13/14/16 and EP-21 architecture; implementation reuses the MasterPlan intention
+- [ ] M1: the existing `Kansoku.Migrations` pg-migrate plan includes an application-owned `api_keys` component after PGMQ; normal server startup remains migration-free
+- [ ] M1: `kansoku.api_keys` table is created by `kansoku-migrate up`; strict verification and a second application are clean
 - [ ] M1: `Kansoku.Auth.Types`, `Kansoku.Auth.Token`, `Kansoku.Auth.Store`, `Kansoku.Auth.Issue` modules compile with unit tests green
 - [ ] M1: `kansoku-server issue-key` subcommand issues both kinds; transcript captured; `psql` shows a hash, not the token
 - [ ] M1: `just issue-key` and `just dev-keys` recipes added
@@ -95,10 +97,18 @@ implementation. Provide concise evidence.
   and per-operation 401/403 responses. Upstreaming a generic instance into `servant-openapi-hs`
   is desirable but out of scope; record the outcome here when the instances land.
 
-- (Placeholder) Record here whether EP-12's landed `events_resolved` v2 already carries
-  `account_id` (making this plan's view migration a no-op) and what EP-12's final rollup /
-  canonical-user expressions were, since Milestone 3's SQL must be rebased onto them.
+- Discovery (implementation reconciliation, 2026-07-19): EP-21 superseded the provisional
+  `hasql-migration`/startup-migration design. The checked-in `Kansoku.Migrations` plan composes
+  released `pg-migrate` components, `kansoku-migrate` is the only migration entry point, and
+  `kansoku-server` intentionally provisions only the already-migrated queue. EP-15 therefore
+  adds a `kansoku` application component after PGMQ and keeps key issuance and server startup
+  free of implicit DDL. A fresh environment runs `kansoku-migrate up` before `issue-key`.
 
+- Discovery (implementation reconciliation, 2026-07-19): EP-12 landed
+  `events_resolved` without `account_id`, and its v2 rollups use `uniqCombined` for DAU/WAU
+  and `count` states for event/page-view counts. EP-15 must append migration `0008` and rebuild
+  those exact landed shapes with `account_id` leading every rollup key; it must not restore the
+  authored plan's older `uniqExact` state definitions.
 
 ## Decision Log
 
@@ -228,6 +238,15 @@ Record every decision made while working on the plan.
   adding dispatch is additive. A thin `just issue-key` recipe wraps the subcommand for
   ergonomics. No admin HTTP API in this plan — issuance is an operator action.
   Date: 2026-07-15
+
+- Decision: Replace the authored `hasql-migration` startup path with an application-owned
+  component in EP-21's existing `pg-migrate` plan, ordered after PGMQ; neither normal server
+  startup nor key issuance applies migrations implicitly.
+  Rationale: PostgreSQL migration ownership is now a repository-wide invariant, not an open
+  choice. One explicit administrative artifact gives operators one lock, ledger, plan, and
+  verification surface. `just issue-key` depends on the explicit `migrate` recipe for local
+  ergonomics, while direct production issuance fails loudly if deployment omitted migration.
+  Date: 2026-07-19
 
 
 ## Outcomes & Retrospective
