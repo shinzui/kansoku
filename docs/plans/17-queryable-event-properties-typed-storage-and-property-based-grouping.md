@@ -65,12 +65,17 @@ This section must always reflect the actual current state of the work.
 - [x] (2026-07-19 18:37Z) M2: `MetricDefinition.aggregationProperty` added; `revenue`
       declares `"amount"`; builtin-registry unit test asserts every Sum/Average declares a
       numeric property
-- [ ] M2: Sum/Average compiler uses `aggregationProperty` instead of a hardcoded `amount`
-- [ ] M2: property group-by (`prop:<name>`) parsing + registry validation + SQL rendering
-- [ ] M2: `MetricDefinition.filters` wired into compiled WHERE clauses
-- [ ] M2: `feature_adoption` definition groupBy honored as default grouping; endpoint
-      un-stubbed
-- [ ] M2: `QuerySpec` golden SQL tests for all new shapes; `cabal test` green
+- [x] (2026-07-19 18:55Z) M2: Sum/Average compiler uses `aggregationProperty` instead
+      of a hardcoded `amount`
+- [x] (2026-07-19 18:55Z) M2: property group-by (`prop:<name>`) parsing + registry
+      validation + SQL rendering
+- [x] (2026-07-19 18:55Z) M2: `MetricDefinition.filters` wired into compiled WHERE
+      clauses
+- [x] (2026-07-19 18:55Z) M2: `feature_adoption` definition groupBy honored as default
+      grouping; endpoint un-stubbed
+- [x] (2026-07-19 18:55Z) M2: `QuerySpec` golden SQL tests for all new shapes; core
+      suite green with 101 examples and 0 failures, including live ClickHouse property
+      grouping
 - [ ] M3: `groupBy` query-param documentation extended in the metrics route record;
       OpenAPI document regenerated and client compiles in the same commit
 - [ ] M3: account scoping verified present in every new SQL shape
@@ -151,6 +156,16 @@ Implementation findings (2026-07-19, Milestone 1):
   `toString(properties_json.plan)` and `CAST(properties_json.amount, 'Float64')`; the
   ledger contained exactly one row and `EXISTS TABLE analytics.prop_bench_raw` returned 0
   after cleanup.
+- The landed `analytics.events_resolved` view exposed only the six MP-2 columns and could
+  not evaluate the default `feature_adoption` expression
+  `toString(properties_json.feature)`. Migration `0010_resolved_event_properties.sql`
+  extends the view with `properties_json` rather than reading unique-user metrics from raw
+  identities. MasterPlan 3's shared contract and ADR 0004 now require EP-18 to preserve the
+  seventh column.
+- The completed compiler test run included 101 examples with 0 failures while local
+  ClickHouse was live. The integration cases observed revenue groups `{free: 9, pro: 98}`
+  and canonical feature-user groups `{export: 1, search: 2}`. Handler validation returned
+  HTTP 400 `unknown_property` without forcing the query pool.
 
 
 ## Decision Log
@@ -236,6 +251,16 @@ Record every decision made while working on the plan.
   Rationale: native JSON gives declared properties typed, subcolumn-readable storage while
   allowing EP-20 to add declarations without ClickHouse schema churn. The materialized
   column remains server-side and never crosses ClickHaskell's wire.
+  Date: 2026-07-19
+
+- Decision: Extend `analytics.events_resolved` with `properties_json` as a seventh column.
+  Rationale: `feature_adoption` and future experiment metrics group unique canonical users
+  by properties. Querying `events_raw` would silently change the metric to raw user or
+  anonymous identifiers, while a second resolved view would duplicate stitching logic.
+  The existing consumers select named columns, so the additive server-side column does not
+  change ClickHaskell result types. This durable contract is recorded in
+  `docs/adr/0004-queryable-event-properties-and-identity-resolved-projection.md` and the
+  MasterPlan Integration Points section.
   Date: 2026-07-19
 
 

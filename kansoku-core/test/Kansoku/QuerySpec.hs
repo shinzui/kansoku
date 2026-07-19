@@ -1,5 +1,6 @@
 module Kansoku.QuerySpec (spec) where
 
+import Data.Aeson qualified as Aeson
 import Data.Foldable (traverse_)
 import Data.Map.Strict qualified as Map
 import Data.Text qualified as Text
@@ -14,8 +15,10 @@ import Kansoku.Event
     lookupSchema,
   )
 import Kansoku.Metrics.Api (TimeGrain (..))
-import Kansoku.Metrics.Definition (Aggregation (Average, Sum))
-import Kansoku.Metrics.Query
+import Kansoku.Metrics.Definition (Aggregation (Average, Sum), MetricDefinition)
+import Kansoku.Metrics.Query hiding (buildSQL)
+import Kansoku.Metrics.Query qualified as Query
+import Kansoku.Metrics.Query.Property (PropertyError (..))
 import Kansoku.Metrics.Query.Validate (SqlName, mkSqlName)
 import Kansoku.Metrics.Registry
 import Kansoku.Prelude
@@ -133,6 +136,52 @@ spec = describe "Kansoku.Query.buildSQL" $ do
   it "requires every Sum or Average builtin to declare a numeric aggregation property" $
     traverse_ assertAggregationProperty (Map.elems builtinMetrics)
 
+  it "groups revenue by a declared property through native JSON storage" $
+    Query.buildSQL defaultRegistry (Simple revenueDefinition) planRequest
+      `shouldBe` Right
+        ( Text.unlines
+            [ "SELECT toString(toDate(occurred_at)) AS bucket, toString(properties_json.plan) AS group_key,",
+              "       toFloat64(sum(CAST(properties_json.amount, 'Float64'))) AS value",
+              "FROM analytics.events_raw",
+              "WHERE account_id = {account_id:String}",
+              "  AND occurred_at >= '2026-06-01 00:00:00' AND occurred_at < '2026-06-08 00:00:00'",
+              "  AND event_name IN ({event_name_1:String})",
+              "GROUP BY bucket, group_key",
+              "ORDER BY bucket, group_key"
+            ]
+        )
+
+  it "honors feature_adoption's declared property grouping by default" $
+    buildSQL (requiredMetric "feature_adoption") dayRequest
+      `shouldContainText` "toString(properties_json.feature) AS group_key"
+
+  it "compiles declared metric filters through typed property expressions" $ do
+    let filteredMetric =
+          revenueDefinition
+            & #filters
+            .~ Map.fromList [("plan", Aeson.String "pro")]
+    buildSQL (Simple filteredMetric) dayRequest
+      `shouldContainText` "AND toString(properties_json.plan) = 'pro'"
+
+  it "rejects undeclared, cross-event, hostile, and multi-dimension property groups" $ do
+    Query.buildSQL defaultRegistry (Simple revenueDefinition) (dayRequest {groupBy = Just ["prop:nope"]})
+      `shouldBe` Left (QueryCompilePropertyError (PropertyErrorUndeclared "nope" (EventName "payment_completed")))
+    let crossEvent = revenueDefinition & #eventNames .~ ["payment_completed", "feature_used"]
+    Query.buildSQL defaultRegistry (Simple crossEvent) planRequest
+      `shouldBe` Left (QueryCompilePropertyError (PropertyErrorUndeclared "plan" (EventName "feature_used")))
+    traverse_
+      ( \property ->
+          Query.buildSQL defaultRegistry (Simple revenueDefinition) (dayRequest {groupBy = Just ["prop:" <> property]})
+            `shouldBe` Left (QueryCompilePropertyError (PropertyErrorBadName property))
+      )
+      ["pl'an", "a b", Text.replicate 65 "a"]
+    Query.buildSQL defaultRegistry (Simple revenueDefinition) (dayRequest {groupBy = Just ["prop:plan", "event_name"]})
+      `shouldBe` Left (QueryCompileMultipleGroupBy ["prop:plan", "event_name"])
+
+  it "rejects Sum metrics without an aggregation property" $
+    Query.buildSQL defaultRegistry (Simple (revenueDefinition & #aggregationProperty .~ Nothing)) dayRequest
+      `shouldBe` Left (QueryCompileMissingAggregationProperty "revenue")
+
 dayRequest :: QueryRequest
 dayRequest =
   QueryRequest
@@ -148,6 +197,9 @@ weekRequest = dayRequest {timeGrain = Just Week}
 
 routeRequest :: QueryRequest
 routeRequest = dayRequest {groupBy = Just ["route"]}
+
+planRequest :: QueryRequest
+planRequest = dayRequest {groupBy = Just ["prop:plan"]}
 
 shouldContainText :: Text -> Text -> Expectation
 shouldContainText haystack needle =
@@ -168,6 +220,18 @@ requiredMetric name =
   case builtinMetric name of
     Just metric -> metric
     Nothing -> error ("missing built-in metric fixture: " <> Text.unpack name)
+
+revenueDefinition :: MetricDefinition
+revenueDefinition =
+  case requiredMetric "revenue" of
+    Simple def -> def
+    Ratioed _ -> error "revenue fixture must be a simple metric"
+
+buildSQL :: BuiltinMetric -> QueryRequest -> Text
+buildSQL metric request =
+  case Query.buildSQL defaultRegistry metric request of
+    Right sql -> sql
+    Left err -> error ("unexpected query compile error: " <> show err)
 
 assertAggregationProperty :: BuiltinMetric -> Expectation
 assertAggregationProperty = \case

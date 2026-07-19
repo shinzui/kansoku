@@ -2,6 +2,8 @@ module Kansoku.QueryIntegrationSpec (spec) where
 
 import ClickHaskell (ClickHaskell, Column, Select, UInt8, select, unsafeMkSelect)
 import Control.Concurrent.Async (mapConcurrently)
+import Data.Aeson qualified as Aeson
+import Data.Aeson.Key (Key)
 import Data.Aeson.KeyMap qualified as KeyMap
 import Data.Generics.Labels ()
 import Data.Map.Strict qualified as Map
@@ -40,9 +42,10 @@ spec = describe "Kansoku.Query integration" $ do
       insertEvents conn [sampleEvent "evt_q_1" "signup\tstep", sampleEvent "evt_q_2" "page_view"]
       queryPool <- (`newQueryPool` 2) . clickHouseConfigFromConfig =<< requireConfig
       metric <- requireBuiltinMetric "events"
-      result <-
+      compiled <-
         runEff $
           Query.run
+            defaultRegistry
             queryPool
             metric
             Query.QueryRequest
@@ -52,6 +55,7 @@ spec = describe "Kansoku.Query integration" $ do
                 groupBy = Just ["event_name"],
                 timeGrain = Just Day
               }
+      result <- expectCompiled compiled
       let keys =
             [ groupValue
             | point <- result ^. #points,
@@ -65,9 +69,10 @@ spec = describe "Kansoku.Query integration" $ do
       insertEvents conn [sampleEvent "evt_parameter_1" "user_registered"]
       queryPool <- (`newQueryPool` 2) . clickHouseConfigFromConfig =<< requireConfig
       metric <- requireBuiltinMetric "new_users"
-      result <-
+      compiled <-
         runEff $
           Query.run
+            defaultRegistry
             queryPool
             metric
             Query.QueryRequest
@@ -77,6 +82,7 @@ spec = describe "Kansoku.Query integration" $ do
                 groupBy = Nothing,
                 timeGrain = Just Day
               }
+      result <- expectCompiled compiled
       sum (fmap (^. #value) (result ^. #points)) `shouldBe` 1
 
   it "passes opaque account ids through native query parameters" $
@@ -87,9 +93,10 @@ spec = describe "Kansoku.Query integration" $ do
       insertEvents conn [event]
       queryPool <- (`newQueryPool` 2) . clickHouseConfigFromConfig =<< requireConfig
       metric <- requireBuiltinMetric "events"
-      result <-
+      compiled <-
         runEff $
           Query.run
+            defaultRegistry
             queryPool
             metric
             Query.QueryRequest
@@ -99,7 +106,72 @@ spec = describe "Kansoku.Query integration" $ do
                 groupBy = Nothing,
                 timeGrain = Just Day
               }
+      result <- expectCompiled compiled
       sum (fmap (^. #value) (result ^. #points)) `shouldBe` 1
+
+  it "groups revenue by a declared property through the native JSON projection" $
+    withClickHouse $ \conn -> do
+      resetTable conn
+      insertEvents
+        conn
+        [ propertyEvent "evt_revenue_1" "payment_completed" "user-1" [("amount", Aeson.Number 49), ("plan", Aeson.String "pro")],
+          propertyEvent "evt_revenue_2" "payment_completed" "user-2" [("amount", Aeson.Number 49), ("plan", Aeson.String "pro")],
+          propertyEvent "evt_revenue_3" "payment_completed" "user-3" [("amount", Aeson.Number 9), ("plan", Aeson.String "free")]
+        ]
+      queryPool <- (`newQueryPool` 2) . clickHouseConfigFromConfig =<< requireConfig
+      metric <- requireBuiltinMetric "revenue"
+      compiled <-
+        runEff $
+          Query.run
+            defaultRegistry
+            queryPool
+            metric
+            Query.QueryRequest
+              { accountId = AccountId "acct_query",
+                from = fromGregorian 2026 7 1,
+                to = fromGregorian 2026 7 2,
+                groupBy = Just ["prop:plan"],
+                timeGrain = Just Day
+              }
+      result <- expectCompiled compiled
+      Map.fromList
+        [ (groupValue, point ^. #value)
+        | point <- result ^. #points,
+          Just groupValue <- [Map.lookup "plan" (point ^. #group)]
+        ]
+        `shouldBe` Map.fromList [("free", 9), ("pro", 98)]
+
+  it "groups canonical feature users by the definition's default property" $
+    withClickHouse $ \conn -> do
+      resetTable conn
+      insertEvents
+        conn
+        [ propertyEvent "evt_feature_1" "feature_used" "user-1" [("feature", Aeson.String "search")],
+          propertyEvent "evt_feature_2" "feature_used" "user-2" [("feature", Aeson.String "search")],
+          propertyEvent "evt_feature_3" "feature_used" "user-3" [("feature", Aeson.String "export")]
+        ]
+      queryPool <- (`newQueryPool` 2) . clickHouseConfigFromConfig =<< requireConfig
+      metric <- requireBuiltinMetric "feature_adoption"
+      compiled <-
+        runEff $
+          Query.run
+            defaultRegistry
+            queryPool
+            metric
+            Query.QueryRequest
+              { accountId = AccountId "acct_query",
+                from = fromGregorian 2026 7 1,
+                to = fromGregorian 2026 7 2,
+                groupBy = Nothing,
+                timeGrain = Just Day
+              }
+      result <- expectCompiled compiled
+      Map.fromList
+        [ (groupValue, point ^. #value)
+        | point <- result ^. #points,
+          Just groupValue <- [Map.lookup "feature" (point ^. #group)]
+        ]
+        `shouldBe` Map.fromList [("export", 1), ("search", 2)]
 
   it "excludes a user whose funnel events occurred out of order" $
     withClickHouse $ \conn -> do
@@ -167,6 +239,16 @@ sampleEvent eid name =
     & #context
     .~ KeyMap.fromList [("userAgent", "hspec")]
 
+propertyEvent :: Text -> Text -> Text -> [(Key, Aeson.Value)] -> AnalyticsEvent
+propertyEvent eid name user properties =
+  baseEvent (EventId eid) (EventName name) Web (read "2026-07-01 12:00:00 UTC") (read "2026-07-01 12:00:01 UTC")
+    & #accountId
+    .~ Just (AccountId "acct_query")
+    & #userId
+    .~ Just (UserId user)
+    & #properties
+    .~ KeyMap.fromList properties
+
 funnelEvent :: Text -> Text -> Text -> String -> AnalyticsEvent
 funnelEvent eid name user timestamp =
   baseEvent (EventId eid) (EventName name) Web (read timestamp) (read timestamp)
@@ -180,3 +262,8 @@ validSqlName value =
   case mkSqlName value of
     Right name -> pure name
     Left invalid -> expectationFailure ("invalid SQL name fixture: " <> Text.unpack invalid) >> fail "invalid SQL name fixture"
+
+expectCompiled :: Either Query.QueryCompileError a -> IO a
+expectCompiled = \case
+  Right value -> pure value
+  Left err -> expectationFailure ("unexpected query compile error: " <> show err) >> fail "query compile failed"

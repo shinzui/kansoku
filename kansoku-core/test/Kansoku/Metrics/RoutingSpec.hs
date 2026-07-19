@@ -129,7 +129,7 @@ assertMetricRoute manager port (path, expected) = do
       Metrics.metric result `shouldBe` expected
 
 stubPaths :: [String]
-stubPaths = ["acquisition", "feature-adoption", "organizations", "custom"]
+stubPaths = ["acquisition", "organizations", "custom"]
 
 assertIngestRoutes :: HTTP.Manager -> Warp.Port -> Expectation
 assertIngestRoutes manager port = do
@@ -221,7 +221,7 @@ sentinelMetricsServer =
       Metrics.funnel = funnelSentinel,
       Metrics.retention = retentionSentinel,
       Metrics.acquisition = stubSentinel "acquisition",
-      Metrics.featureAdoption = stubSentinel "feature-adoption",
+      Metrics.featureAdoption = metricSentinel "feature-adoption",
       Metrics.conversion = metricSentinel "conversion",
       Metrics.users = metricSentinel "users",
       Metrics.organizations = stubSentinel "organizations",

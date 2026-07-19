@@ -18,7 +18,7 @@ import Kansoku.Api.Response
   )
 import Kansoku.Auth.Types (AuthenticatedPrincipal)
 import Kansoku.ClickHouse (QueryPool)
-import Kansoku.Event (AccountId)
+import Kansoku.Event (AccountId, defaultRegistry)
 import Kansoku.Logging (logError, runLogStderr)
 import Kansoku.Metrics.Api (MetricResult, MetricsRoutes (..), TimeGrain)
 import Kansoku.Metrics.Query qualified as Query
@@ -37,7 +37,7 @@ metricsServer principal pool =
       funnel = funnelHandler,
       retention = retentionHandler,
       acquisition = notImplemented "acquisition",
-      featureAdoption = notImplemented "feature_adoption",
+      featureAdoption = metricHandler "feature_adoption",
       conversion = metricHandler "conversion_rate",
       users = metricHandler "active_users",
       organizations = notImplemented "organizations",
@@ -48,7 +48,9 @@ metricsServer principal pool =
     metricHandler key fromDay toDay groupBy timeGrain =
       case builtinMetric key of
         Nothing -> pure (KansokuNotFound (notFound "metric_not_found" ("no such metric: " <> key)))
-        Just metric -> effToHandler (Query.run pool metric (queryRequest account fromDay toDay groupBy timeGrain))
+        Just metric ->
+          metricEffToHandler
+            (Query.run defaultRegistry pool metric (queryRequest account fromDay toDay groupBy timeGrain))
 
     sessionsHandler :: Day -> Day -> Maybe Text -> Maybe TimeGrain -> Handler (KansokuResult MetricResult)
     sessionsHandler fromDay toDay groupBy timeGrain =
@@ -143,3 +145,21 @@ effToHandler action = do
       pure (KansokuUnavailable (unavailable "clickhouse_unavailable" "analytics storage is unavailable"))
     Right value ->
       pure (KansokuOk value)
+
+metricEffToHandler :: Eff '[IOE] (Either Query.QueryCompileError MetricResult) -> Handler (KansokuResult MetricResult)
+metricEffToHandler action = do
+  result <- liftIO (try @SomeException (runEff action))
+  case result of
+    Left err -> do
+      liftIO . runEff . runLogStderr $
+        logError ("clickhouse query failed: " <> Text.pack (show err))
+      pure (KansokuUnavailable (unavailable "clickhouse_unavailable" "analytics storage is unavailable"))
+    Right (Left compileError) ->
+      pure
+        ( KansokuBadRequest
+            ( badRequest
+                (Query.queryCompileErrorCode compileError)
+                (Query.queryCompileErrorMessage compileError)
+            )
+        )
+    Right (Right value) -> pure (KansokuOk value)

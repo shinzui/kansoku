@@ -45,6 +45,7 @@ library
     Kansoku.Metrics.Definition
     Kansoku.Metrics.Handler
     Kansoku.Metrics.Query
+    Kansoku.Metrics.Query.Property
     Kansoku.Metrics.Query.Validate
     Kansoku.Metrics.Registry
     Kansoku.Migrations

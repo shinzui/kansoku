@@ -2,11 +2,15 @@
 
 -- | Query compiler and executor for semantic metrics.
 module Kansoku.Metrics.Query
-  ( QueryRequest (..),
+  ( GroupDimension (..),
+    QueryCompileError (..),
+    QueryRequest (..),
     buildFunnelSQL,
     buildRetentionSQL,
     buildSQL,
     buildSessionsSQL,
+    queryCompileErrorCode,
+    queryCompileErrorMessage,
     run,
     runFunnel,
     runRetention,
@@ -26,6 +30,7 @@ import ClickHaskell
     select,
     unsafeMkSelect,
   )
+import Data.Bifunctor (first)
 import Data.ByteString (ByteString)
 import Data.Generics.Labels ()
 import Data.List qualified as List
@@ -36,9 +41,23 @@ import Data.Time (Day)
 import Data.Time.Format (defaultTimeLocale, formatTime)
 import Effectful (Eff, IOE, type (:>))
 import Kansoku.ClickHouse (QueryPool, withQueryConnection)
-import Kansoku.Event (AccountId (..))
+import Kansoku.Event
+  ( AccountId (..),
+    EventName (..),
+    EventRegistry,
+  )
 import Kansoku.Metrics.Api (MetricPoint (..), MetricResult (..), TimeGrain (..))
 import Kansoku.Metrics.Definition (Aggregation (..), MetricDefinition (..), RatioMetric (..))
+import Kansoku.Metrics.Query.Property
+  ( PropertyError (..),
+    PropertyName,
+    propertyEqualsPredicate,
+    propertyFloatExpr,
+    propertyGroupExpr,
+    propertyNameText,
+    resolveNumericProperty,
+    resolveProperty,
+  )
 import Kansoku.Metrics.Query.Validate (SqlName, mkSqlName, renderSqlName)
 import Kansoku.Metrics.Registry (BuiltinMetric (..))
 import Kansoku.Prelude
@@ -51,6 +70,27 @@ data QueryRequest = QueryRequest
     timeGrain :: !(Maybe TimeGrain)
   }
   deriving stock (Generic, Eq, Show)
+
+data GroupDimension
+  = GroupByEventName
+  | GroupBySource
+  | GroupByRoute
+  | GroupByProperty !PropertyName
+  deriving stock (Generic, Eq, Show)
+
+data QueryCompileError
+  = QueryCompilePropertyError !PropertyError
+  | QueryCompileInvalidGroupBy !Text
+  | QueryCompileMultipleGroupBy ![Text]
+  | QueryCompileMissingAggregationProperty !Text
+  | QueryCompileUnsupportedPropertyGrouping !Text
+  deriving stock (Generic, Eq, Show)
+
+data CompiledMetric = CompiledMetric
+  { sql :: !Text,
+    groupLabel :: !(Maybe Text)
+  }
+  deriving stock (Generic)
 
 type AggColumns =
   '[ Column "bucket" ChString,
@@ -66,14 +106,23 @@ data AggRow = AggRow
   deriving stock (Generic, Eq, Show)
   deriving anyclass (ClickHaskell AggColumns)
 
-buildSQL :: BuiltinMetric -> QueryRequest -> Text
-buildSQL = \case
-  Simple def -> buildSimpleSQL def
-  Ratioed ratio -> buildRatioSQL ratio
+buildSQL :: EventRegistry -> BuiltinMetric -> QueryRequest -> Either QueryCompileError Text
+buildSQL registry metric req = (^. #sql) <$> compileMetric registry metric req
 
-run :: (IOE :> es) => QueryPool -> BuiltinMetric -> QueryRequest -> Eff es MetricResult
-run pool metric req =
-  liftIO (runSQL pool (metricName metric) (groupLabel req) (accountParameter req <> metricParameters metric req) (buildSQL metric req))
+run :: (IOE :> es) => EventRegistry -> QueryPool -> BuiltinMetric -> QueryRequest -> Eff es (Either QueryCompileError MetricResult)
+run registry pool metric req =
+  case compileMetric registry metric req of
+    Left err -> pure (Left err)
+    Right compiled ->
+      Right
+        <$> liftIO
+          ( runSQL
+              pool
+              (metricName metric)
+              (compiled ^. #groupLabel)
+              (accountParameter req <> metricParameters metric req)
+              (compiled ^. #sql)
+          )
 
 runSessions :: (IOE :> es) => QueryPool -> QueryRequest -> Eff es MetricResult
 runSessions pool req =
@@ -163,25 +212,61 @@ nonEmpty value
 decodeUtf8 :: ByteString -> Text
 decodeUtf8 = Text.decodeUtf8
 
-buildSimpleSQL :: MetricDefinition -> QueryRequest -> Text
-buildSimpleSQL def req
+compileMetric :: EventRegistry -> BuiltinMetric -> QueryRequest -> Either QueryCompileError CompiledMetric
+compileMetric registry metric req =
+  case metric of
+    Simple def -> compileSimpleMetric registry def req
+    Ratioed ratio -> do
+      validateRatioGrouping ratio req
+      pure CompiledMetric {sql = buildRatioSQL ratio req, groupLabel = Nothing}
+
+compileSimpleMetric :: EventRegistry -> MetricDefinition -> QueryRequest -> Either QueryCompileError CompiledMetric
+compileSimpleMetric registry def req = do
+  grouping <- effectiveGrouping registry def req
+  predicates <- compileFilters registry def
+  compiledSQL <- buildSimpleSQL registry grouping predicates def req
+  pure
+    CompiledMetric
+      { sql = compiledSQL,
+        groupLabel = dimensionLabel <$> grouping
+      }
+
+buildSimpleSQL :: EventRegistry -> Maybe GroupDimension -> [Text] -> MetricDefinition -> QueryRequest -> Either QueryCompileError Text
+buildSimpleSQL registry grouping predicates def req
   | def ^. #name == "active_users",
+    null predicates,
+    not (isPropertyGrouping grouping),
     Just Day <- effectiveGrain def req =
-      activeUsersDaySQL req
+      Right (activeUsersDaySQL req)
   | def ^. #name == "active_users",
+    null predicates,
+    not (isPropertyGrouping grouping),
     Just Week <- effectiveGrain def req =
-      activeUsersWeekSQL req
+      Right (activeUsersWeekSQL req)
   | def ^. #name == "page_views",
+    null predicates,
+    not (isPropertyGrouping grouping),
     Just Day <- effectiveGrain def req =
-      pageViewsDaySQL req
+      Right (pageViewsDaySQL grouping req)
   | aggregation def == UniqueCount =
-      uniqueUsersSQL def req
+      Right (uniqueUsersSQL grouping predicates def req)
   | aggregation def == Sum =
-      propertyAggregateSQL "sum" def req
+      aggregate "sum"
   | aggregation def == Average =
-      propertyAggregateSQL "avg" def req
+      aggregate "avg"
   | otherwise =
-      countEventsSQL def req
+      Right (countEventsSQL grouping predicates def req)
+  where
+    aggregate functionName = do
+      propertyText <-
+        maybe
+          (Left (QueryCompileMissingAggregationProperty (def ^. #name)))
+          Right
+          (def ^. #aggregationProperty)
+      property <-
+        first QueryCompilePropertyError $
+          resolveNumericProperty registry (definitionEvents def) propertyText
+      pure (propertyAggregateSQL functionName property grouping predicates def req)
 
 -- Metric source and accuracy map:
 --
@@ -230,39 +315,39 @@ buildRatioSQL RatioMetric {numerator, denominator} req =
       "ORDER BY bucket, group_key"
     ]
 
-countEventsSQL :: MetricDefinition -> QueryRequest -> Text
-countEventsSQL def req =
+countEventsSQL :: Maybe GroupDimension -> [Text] -> MetricDefinition -> QueryRequest -> Text
+countEventsSQL grouping predicates def req =
   Text.unlines
-    [ "SELECT " <> bucketExpr (effectiveGrain def req) <> " AS bucket, " <> groupExpr req <> " AS group_key,",
+    [ "SELECT " <> bucketExpr (effectiveGrain def req) <> " AS bucket, " <> groupExpr grouping <> " AS group_key,",
       "       toFloat64(count(DISTINCT event_id)) AS value",
       "FROM analytics.events_raw",
       "WHERE " <> accountPredicate,
-      "  AND " <> timestampPredicate req <> eventNameClause "event_name" (validatedEventNames def),
+      "  AND " <> timestampPredicate req <> eventNameClause "event_name" (validatedEventNames def) <> propertyFilterClause predicates,
       "GROUP BY bucket, group_key",
       "ORDER BY bucket, group_key"
     ]
 
-uniqueUsersSQL :: MetricDefinition -> QueryRequest -> Text
-uniqueUsersSQL def req =
+uniqueUsersSQL :: Maybe GroupDimension -> [Text] -> MetricDefinition -> QueryRequest -> Text
+uniqueUsersSQL grouping predicates def req =
   Text.unlines
-    [ "SELECT " <> bucketExpr (effectiveGrain def req) <> " AS bucket, " <> groupExpr req <> " AS group_key,",
+    [ "SELECT " <> bucketExpr (effectiveGrain def req) <> " AS bucket, " <> groupExpr grouping <> " AS group_key,",
       "       toFloat64(uniqExact(canonical_user)) AS value",
       "FROM analytics.events_resolved",
       "WHERE " <> accountPredicate,
       "  AND canonical_user != ''",
-      "  AND " <> timestampPredicate req <> eventNameClause "event_name" (validatedEventNames def),
+      "  AND " <> timestampPredicate req <> eventNameClause "event_name" (validatedEventNames def) <> propertyFilterClause predicates,
       "GROUP BY bucket, group_key",
       "ORDER BY bucket, group_key"
     ]
 
-propertyAggregateSQL :: Text -> MetricDefinition -> QueryRequest -> Text
-propertyAggregateSQL fn def req =
+propertyAggregateSQL :: Text -> PropertyName -> Maybe GroupDimension -> [Text] -> MetricDefinition -> QueryRequest -> Text
+propertyAggregateSQL fn property grouping predicates def req =
   Text.unlines
-    [ "SELECT " <> bucketExpr (effectiveGrain def req) <> " AS bucket, " <> groupExpr req <> " AS group_key,",
-      "       toFloat64(" <> fn <> "(JSONExtractFloat(properties, 'amount'))) AS value",
+    [ "SELECT " <> bucketExpr (effectiveGrain def req) <> " AS bucket, " <> groupExpr grouping <> " AS group_key,",
+      "       toFloat64(" <> fn <> "(" <> propertyFloatExpr property <> ")) AS value",
       "FROM analytics.events_raw",
       "WHERE " <> accountPredicate,
-      "  AND " <> timestampPredicate req <> eventNameClause "event_name" (validatedEventNames def),
+      "  AND " <> timestampPredicate req <> eventNameClause "event_name" (validatedEventNames def) <> propertyFilterClause predicates,
       "GROUP BY bucket, group_key",
       "ORDER BY bucket, group_key"
     ]
@@ -291,10 +376,10 @@ activeUsersWeekSQL req =
       "ORDER BY week"
     ]
 
-pageViewsDaySQL :: QueryRequest -> Text
-pageViewsDaySQL req =
-  case groupLabel req of
-    Just "route" ->
+pageViewsDaySQL :: Maybe GroupDimension -> QueryRequest -> Text
+pageViewsDaySQL grouping req =
+  case grouping of
+    Just GroupByRoute ->
       Text.unlines
         [ "SELECT toString(day) AS bucket, route AS group_key,",
           "       toFloat64(countMerge(views)) AS value",
@@ -440,17 +525,119 @@ bucketExpr = \case
   Just Month -> "toString(toStartOfMonth(occurred_at))"
   _ -> "toString(toDate(occurred_at))"
 
-groupExpr :: QueryRequest -> Text
-groupExpr req =
-  case groupLabel req of
-    Just "event_name" -> "toString(event_name)"
-    Just "source" -> "toString(source)"
-    Just "route" -> "path(coalesce(url, ''))"
-    _ -> "''"
+groupExpr :: Maybe GroupDimension -> Text
+groupExpr = \case
+  Just GroupByEventName -> "toString(event_name)"
+  Just GroupBySource -> "toString(source)"
+  Just GroupByRoute -> "path(coalesce(url, ''))"
+  Just (GroupByProperty property) -> propertyGroupExpr property
+  Nothing -> "''"
 
-groupLabel :: QueryRequest -> Maybe Text
-groupLabel QueryRequest {groupBy = Just (label : _)} = Just label
-groupLabel _ = Nothing
+dimensionLabel :: GroupDimension -> Text
+dimensionLabel = \case
+  GroupByEventName -> "event_name"
+  GroupBySource -> "source"
+  GroupByRoute -> "route"
+  GroupByProperty property -> propertyNameText property
+
+effectiveGrouping :: EventRegistry -> MetricDefinition -> QueryRequest -> Either QueryCompileError (Maybe GroupDimension)
+effectiveGrouping registry def QueryRequest {groupBy = requested} =
+  case requested of
+    Just dimensions -> oneGrouping (parseWireGrouping registry def) dimensions
+    Nothing -> oneGrouping (parseDefinitionGrouping registry def) (def ^. #groupBy)
+
+oneGrouping :: (Text -> Either QueryCompileError GroupDimension) -> [Text] -> Either QueryCompileError (Maybe GroupDimension)
+oneGrouping _ [] = Right Nothing
+oneGrouping parse [value] = Just <$> parse value
+oneGrouping _ values = Left (QueryCompileMultipleGroupBy values)
+
+parseWireGrouping :: EventRegistry -> MetricDefinition -> Text -> Either QueryCompileError GroupDimension
+parseWireGrouping registry def value =
+  case value of
+    "event_name" -> Right GroupByEventName
+    "source" -> Right GroupBySource
+    "route" -> Right GroupByRoute
+    _ ->
+      case Text.stripPrefix "prop:" value of
+        Just property ->
+          GroupByProperty
+            <$> first
+              QueryCompilePropertyError
+              (resolveProperty registry (definitionEvents def) property)
+        Nothing -> Left (QueryCompileInvalidGroupBy value)
+
+parseDefinitionGrouping :: EventRegistry -> MetricDefinition -> Text -> Either QueryCompileError GroupDimension
+parseDefinitionGrouping registry def property =
+  GroupByProperty
+    <$> first
+      QueryCompilePropertyError
+      (resolveProperty registry (definitionEvents def) property)
+
+validateRatioGrouping :: RatioMetric -> QueryRequest -> Either QueryCompileError ()
+validateRatioGrouping ratio QueryRequest {groupBy = requested} =
+  case requested of
+    Nothing -> Right ()
+    Just [] -> Right ()
+    Just ["event_name"] -> Right ()
+    Just ["source"] -> Right ()
+    Just ["route"] -> Right ()
+    Just [value]
+      | isJust (Text.stripPrefix "prop:" value) ->
+          Left (QueryCompileUnsupportedPropertyGrouping (ratio ^. #name))
+      | otherwise -> Left (QueryCompileInvalidGroupBy value)
+    Just values -> Left (QueryCompileMultipleGroupBy values)
+
+compileFilters :: EventRegistry -> MetricDefinition -> Either QueryCompileError [Text]
+compileFilters registry def =
+  traverse compileOne (Map.toList (def ^. #filters))
+  where
+    compileOne (name, value) = do
+      property <-
+        first QueryCompilePropertyError $
+          resolveProperty registry (definitionEvents def) name
+      first QueryCompilePropertyError (propertyEqualsPredicate property value)
+
+definitionEvents :: MetricDefinition -> [EventName]
+definitionEvents def = EventName <$> def ^. #eventNames
+
+isPropertyGrouping :: Maybe GroupDimension -> Bool
+isPropertyGrouping = \case
+  Just GroupByProperty {} -> True
+  _ -> False
+
+propertyFilterClause :: [Text] -> Text
+propertyFilterClause = foldMap ("\n  AND " <>)
+
+queryCompileErrorCode :: QueryCompileError -> Text
+queryCompileErrorCode = \case
+  QueryCompilePropertyError PropertyErrorUndeclared {} -> "unknown_property"
+  QueryCompilePropertyError PropertyErrorUnsupportedFilterValue {} -> "invalid_property_filter"
+  QueryCompilePropertyError {} -> "invalid_property"
+  QueryCompileInvalidGroupBy {} -> "invalid_group_by"
+  QueryCompileMultipleGroupBy {} -> "invalid_group_by"
+  QueryCompileMissingAggregationProperty {} -> "invalid_metric_definition"
+  QueryCompileUnsupportedPropertyGrouping {} -> "invalid_group_by"
+
+queryCompileErrorMessage :: QueryCompileError -> Text
+queryCompileErrorMessage = \case
+  QueryCompilePropertyError (PropertyErrorBadName property) ->
+    "invalid property name: " <> property
+  QueryCompilePropertyError (PropertyErrorUnscopedMetric property) ->
+    "property requires a metric with declared event names: " <> property
+  QueryCompilePropertyError (PropertyErrorUndeclared property event) ->
+    "unknown property " <> property <> " for event " <> unEventName event
+  QueryCompilePropertyError (PropertyErrorNotNumeric property event) ->
+    "property is not numeric: " <> unEventName event <> "." <> property
+  QueryCompilePropertyError (PropertyErrorUnsupportedFilterValue property value) ->
+    "unsupported filter value for property " <> property <> ": " <> Text.pack (show value)
+  QueryCompileInvalidGroupBy value ->
+    "invalid groupBy value: " <> value
+  QueryCompileMultipleGroupBy values ->
+    "exactly one groupBy dimension is supported; received: " <> Text.intercalate "," values
+  QueryCompileMissingAggregationProperty metric ->
+    "metric is missing aggregationProperty: " <> metric
+  QueryCompileUnsupportedPropertyGrouping metric ->
+    "property grouping is not supported for ratio metric: " <> metric
 
 timestampPredicate :: QueryRequest -> Text
 timestampPredicate req =

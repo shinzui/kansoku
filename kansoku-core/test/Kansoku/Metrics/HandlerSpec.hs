@@ -54,6 +54,24 @@ spec = describe "Kansoku.Metrics.Handler" $ do
       Response.code envelope `shouldBe` "invalid_funnel_window"
       Response.message envelope `shouldSatisfy` Text.isInfixOf "0"
 
+  it "rejects an undeclared property before forcing the query pool" $
+    Warp.testWithApplication (pure validationApplication) $ \port -> do
+      manager <- HTTP.newManager HTTP.defaultManagerSettings
+      request <-
+        HTTP.parseRequest
+          ( "http://127.0.0.1:"
+              <> show port
+              <> "/metrics/feature-adoption?from=2026-06-01&to=2026-06-08&groupBy=prop:nope"
+          )
+      response <- HTTP.httpLbs request manager
+      HTTP.responseStatus response `shouldBe` status400
+      envelope <-
+        case eitherDecode (HTTP.responseBody response) of
+          Right value -> pure value
+          Left err -> expectationFailure ("JSON decode failed: " <> err) >> fail err
+      Response.code envelope `shouldBe` "unknown_property"
+      Response.message envelope `shouldSatisfy` Text.isInfixOf "nope"
+
   it "surfaces a query exception as HTTP 503 instead of a plausible result" $
     Warp.testWithApplication (pure validationApplication) $ \port -> do
       manager <- HTTP.newManager HTTP.defaultManagerSettings

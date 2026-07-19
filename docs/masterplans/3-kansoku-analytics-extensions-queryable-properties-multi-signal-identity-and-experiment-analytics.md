@@ -175,12 +175,14 @@ unclaimed number in the ledger, and the first plan to land renumbers nothing. MP
 owns the ledger mechanics; MP-2's EP-15 also appends migrations before this MasterPlan
 starts.
 
-`analytics.events_resolved` column contract — the frozen output shape is `event_id,
-event_name, occurred_at, url, account_id, canonical_user` (six columns; `account_id`
-arrives with MP-2 EP-15). EP-18 replaces the view's internals under exactly this contract
-and re-runs an MP-2-era query battery to prove it; EP-19 consumes `canonical_user` and
-`account_id` opaquely and carries a contingency view-recreate if the landed MP-2 view
-differs. Any plan needing more columns from the view extends the contract HERE first.
+`analytics.events_resolved` column contract — EP-17 extended the frozen output shape to
+`event_id, event_name, occurred_at, url, account_id, canonical_user, properties_json`
+(seven columns). The server-only native JSON column is required so property-grouped
+unique-user metrics retain canonical identity stitching. EP-18 replaces the view's
+internals under exactly this contract and re-runs an MP-2-era query battery to prove it;
+EP-19 consumes `canonical_user`, `account_id`, and the documented property expressions.
+Any plan needing more columns from the view extends the contract HERE first. ADR 0004
+records the durable rationale.
 
 Wire-field name claims on `AnalyticsEvent` — EP-18 claims `identifiers` (kind→value map),
 EP-20 claims `schemaVersion` (optional Int, absent = 1). Both are recorded in the
@@ -199,7 +201,7 @@ Track milestone-level progress across all child plans. Each entry names the chil
 and the milestone. This section provides an at-a-glance view of the entire initiative.
 
 - [x] EP-17: property storage representation decided, prototyped, and migrated
-- [ ] EP-17: query builders support declared-property grouping and filtering
+- [x] EP-17: query builders support declared-property grouping and filtering
 - [ ] EP-17: metrics API groupBy/filter contract extended; client + OpenAPI regenerated
 - [ ] EP-18: identity-signals model (wire field, storage, ingestion) live
 - [ ] EP-18: confidence-aware resolution replaces latest-wins; merge conflicts representable
@@ -231,6 +233,12 @@ interactions between child plans. Provide concise evidence.
     dependency cohort before MP-2 implementation; by the time this MasterPlan runs, plans
     here must treat MP-2's landed tree — not the code quoted in their Context sections —
     as ground truth. Every child plan carries a reconcile-at-start step.
+
+- 2026-07-19, during EP-17 implementation:
+  - Property-grouped unique-user metrics require the typed property projection on
+    `analytics.events_resolved`; its shared contract now has a seventh `properties_json`
+    column. ADR 0004 records the decision, and EP-18 must preserve it when replacing the
+    view's identity-resolution internals.
 
 
 ## Decision Log
