@@ -100,7 +100,7 @@ waves.
 | 9 | Convert kansoku to NamedRoutes, vertical slices, and MultiVerb | docs/plans/9-convert-kansoku-to-namedroutes-vertical-slices-and-multiverb.md | EP-10 | None | Complete |
 | 13 | Safe and correct metric SQL: validated inputs, ordered funnels, honest failures | docs/plans/13-safe-and-correct-metric-sql-validated-inputs-ordered-funnels-honest-failures.md | EP-12 | EP-11, EP-9 | Complete |
 | 14 | SDK-grade ingest contract: partial batch acceptance, CORS, and payload limits | docs/plans/14-sdk-grade-ingest-contract-partial-batch-acceptance-cors-and-payload-limits.md | EP-9 | None | Complete |
-| 16 | Pipeline observability: queue depth, writer lag, and exported telemetry | docs/plans/16-pipeline-observability-queue-depth-writer-lag-and-exported-telemetry.md | EP-10 | EP-11 | Not Started |
+| 16 | Pipeline observability: queue depth, writer lag, and exported telemetry | docs/plans/16-pipeline-observability-queue-depth-writer-lag-and-exported-telemetry.md | EP-10 | EP-11 | In Progress |
 | 15 | API keys, service auth, and account-scoped queries | docs/plans/15-api-keys-service-auth-and-account-scoped-queries.md | EP-9 | EP-12, EP-13, EP-14 | Not Started |
 
 Status values: Not Started, In Progress, Complete, Cancelled.
@@ -590,3 +590,8 @@ now record partial batch acceptance, SDK rejection accounting, ingest-only CORS,
 batch caps, the shared 413 response, and live boundary evidence. Cross-plan discoveries constrain
 EP-15 authentication and EP-16 middleware assembly, outcomes summarize the verified contract, and
 `docs/adr/0001-sdk-grade-ingest-contract-boundaries.md` holds the durable project decisions.
+
+Revision note (2026-07-19, third revision): EP-16 started after its hard dependency EP-10 and soft
+dependency EP-11 completed. Implementation reuses the MasterPlan intention and targets EP-10's
+`Async`-supervised writer/readiness probe, EP-11's query pool, and EP-14's CORS-outside-body-limit
+WAI assembly.

@@ -5,6 +5,7 @@ title: "Pipeline observability: queue depth, writer lag, and exported telemetry"
 kind: exec-plan
 created_at: 2026-07-15T21:30:34Z
 master_plan: "docs/masterplans/2-kansoku-production-hardening-review-fixes-and-portfolio-service-readiness.md"
+intention: intention_01kxr5jt2heyvt0n768ym9dwqd
 ---
 
 # Pipeline observability: queue depth, writer lag, and exported telemetry
@@ -73,6 +74,11 @@ This section must always reflect the actual current state of the work.
 - [ ] M3: hspec unit tests for threshold logic (Kansoku.ReadinessSpec) and metrics registration smoke test
 - [ ] M3: failure-injection transcript — ClickHouse stopped, insert failures counted, /ready 503 with named check, recovery to 200
 - [ ] Living sections updated; MasterPlan Progress rows for EP-16 ticked
+- [x] Milestone 0 (completed 2026-07-19T16:02Z): reconciled the plan with EP-10, EP-11,
+      EP-14, current dependency source, and ADR 0001; marked EP-16 In Progress and attached
+      the MasterPlan intention. Baseline `cabal build all` and `cabal test all` passed with
+      live dependencies (62 core examples, 0 failures; 10 client examples, 1 opt-in live
+      pending).
 
 
 ## Surprises & Discoveries
@@ -120,6 +126,37 @@ shaped the design and a future implementer must not re-derive them:
   Prometheus scrape endpoint therefore must live elsewhere; we use `/internal/metrics`.
 
 (Nothing further yet; add implementation-time discoveries below this line.)
+
+- Reconciliation discovery (2026-07-19): EP-10 landed writer liveness as an `Async` observed
+  by `ReadyProbe.writerAlive`; there is no existing heartbeat cell. EP-16 therefore introduces
+  the only `WriterHeartbeat` and preserves the two-level `StopAllOnFailure` plus `waitApp`
+  supervision inside `runWriter`.
+
+- Reconciliation discovery (2026-07-19): EP-9/EP-14 landed one Servant analytics app inside
+  WAI-level `/health`, `/ready`, and `/openapi.json` dispatch. Ingest CORS wraps the body-size
+  limit, while the operational wrapper is outside both. `/internal/metrics` must join the WAI
+  operational layer without entering OpenAPI, CORS, or body-limit handling, and the operational
+  allowlist conformance test must expand deliberately.
+
+- Reconciliation discovery (2026-07-19): Mori-located hs-opentelemetry source and current
+  upstream tags agree on the repository's existing `46a42cdf...` pin: the API, SDK, OTLP and
+  handle exporters are the coordinated 1.0.0.0 release. The SDK still defaults an absent
+  `OTEL_TRACES_EXPORTER` to `otlp`, supports registry-provided exporters, and its provider
+  shutdown flushes processors. The plan's environment gate and registered `console` exporter
+  remain necessary and match the exact source API.
+
+- Reconciliation discovery (2026-07-19): Mori has no registered `prometheus-client` project.
+  The authoritative Hackage index and upstream tag identify 1.1.2 as current. Its acquired
+  source confirms the planned registry/gauge/histogram/text-export API, with two specifics:
+  `addCounter` returns `Bool` (negative increments are rejected) and `exportMetricsAsText`
+  returns a lazy `ByteString`. Instrumentation uses `void (addCounter ...)` and the WAI response
+  accepts that lazy body directly.
+
+- Reconciliation discovery (2026-07-19): current Shibuya ships `shibuya-metrics`, but its
+  Prometheus view covers generic processor receive/process/failure/state/in-flight facts. It
+  does not own Kansoku's pgmq queue age, ClickHouse insert duration/failure, dead-letter cause,
+  or successful-event semantics. The application-specific seven-instrument surface remains the
+  correct boundary instead of coupling `/internal/metrics` to Shibuya's separate server.
 
 
 ## Decision Log
@@ -181,6 +218,17 @@ Record every decision made while working on the plan.
   where the port is internet-exposed before EP-15 (auth) lands.
   Date: 2026-07-15
 
+- Decision: preserve `waiWrapper :: ReadyProbe -> Application -> Application` and add a small
+  exact-path `internalMetrics` middleware inside that operational wrapper but outside EP-14's
+  ingest CORS/body-limit/Servant stack; extend `ReadyProbe` with one pipeline-check action rather
+  than introducing the authored positional `ServerEnv` sketch.
+  Rationale: the landed `Config` already reaches `kansokuApp`, so the scrape toggle needs no new
+  parameter bundle. A closure in `ReadyProbe` keeps state acquisition in `Main.hs`, keeps pure
+  threshold evaluation in `Kansoku.Readiness`, and lets `readyApp` extend EP-10's response without
+  learning about pools or mutable cells. The nesting preserves ADR 0001's middleware order and
+  keeps the scrape endpoint out of public OpenAPI.
+  Date: 2026-07-19
+
 
 ## Outcomes & Retrospective
 
@@ -194,7 +242,7 @@ Compare the result against the original purpose.
 
 This repository is a Haskell service built with GHC 9.12.4 via a nix flake. Enter the dev
 environment with `nix develop` at the repo root; `just build` runs `cabal build all`,
-`just test` runs `cabal test`, and `process-compose up` (or `just up`) starts local
+`just test` runs `cabal test all`, and `process-compose up` (or `just up`) starts local
 Postgres and ClickHouse. The server runs with `cabal run kansoku-server` and listens on
 `KANSOKU_SERVER_PORT` (default 8080).
 
@@ -207,7 +255,7 @@ the WAI application (`src/Kansoku/Server.hs`), ingest handlers, the ClickHouse c
 `kansoku-client` is the Haskell SDK (untouched by this plan).
 
 The write path: `POST /v1/events` and `POST /v1/batch` (servant routes in
-`kansoku-api/src/Kansoku/Api/Ingest.hs`) validate `AnalyticsEvent` records and enqueue them
+`kansoku-api/src/Kansoku/Ingest/Api.hs`) validate `AnalyticsEvent` records and enqueue them
 into a pgmq queue. pgmq is a Postgres extension-style message queue (plain SQL functions and
 tables inside Postgres); the Haskell bindings live in the local `pgmq-*` packages referenced
 by `cabal.project`. The queue name defaults to `kansoku_events`. The writer is a shibuya
@@ -247,17 +295,20 @@ The resolved version is 1.0.0.0 from Hackage; the nix overlay in `nix/haskell.ni
 rev `46a42cd...`) via the local helper `otelPackage name subdir`. The SDK and exporters are
 *not* yet dependencies; Milestone 1 adds them.
 
-EP-10 (`docs/plans/10-restore-the-build-and-supervise-the-writer.md`) is a hard dependency.
-Its contract, per the MasterPlan: the repository compiles again (`Writer/Batch.hs` migrated
-from shibuya's removed `Ingested` type to `Message`); writer death exits the process (writer
-and server lifetimes linked in `Main.hs`); and a `GET /ready` endpoint exists that reports
-writer liveness and pgmq reachability (200 when healthy, 503 otherwise). This plan is
-written against that contract, not against EP-10's exact code, because EP-10 may still be
-in flight: wherever this plan says "EP-10's /ready handler", find the handler EP-10 added
-(it will be reachable from `kansokuApp` in `kansoku-core/src/Kansoku/Server.hs`) and extend
-it in place. EP-11 (connection split) is a soft dependency only in the sense that
+EP-10 (`docs/plans/10-restore-the-build-and-supervise-the-writer.md`) is complete. The landed
+`Main.hs` holds the writer in an `Async`, races its `wait` against Warp, and supplies
+`ReadyProbe.writerAlive`; `runWriter` uses `StopAllOnFailure`, races shutdown against
+`waitApp`, and drains gracefully. `GET /ready` reports writer liveness and pgmq reachability
+with 200/503 JSON. EP-16 extends those exact mechanisms and must preserve both supervision
+boundaries. EP-11 (connection split) is complete and remains a soft dependency only in the sense that
 ClickHouse-side gauges would be cleaner against its pool; ClickHouse-side gauges are out of
 scope here, so nothing in this plan actually needs EP-11.
+
+The relevant durable record is `docs/adr/0001-sdk-grade-ingest-contract-boundaries.md`.
+It requires ingest CORS to remain outside the body-size limit so browser callers can read 413
+responses, and it keeps operational routes at WAI level. EP-16 therefore adds its scrape route
+beside `/health`, `/ready`, and `/openapi.json`, not inside the Servant/OpenAPI contract and not
+between the two ingest middlewares.
 
 Term definitions used below. A *counter* is a monotonically increasing number (only ever
 goes up; rate-of-change is what you graph). A *gauge* is a point-in-time value that can go
@@ -673,20 +724,10 @@ construct metrics via `registerPipelineMetrics` (registration in the global regi
 in tests; do it once in a top-level `beforeAll` or via `unsafePerformIO`-free hspec hooks)
 and a fresh heartbeat.
 
-Serve the scrape. In `kansoku-core/src/Kansoku/Server.hs`, `kansokuApp` gains access to the
-toggle and, in M3, the readiness inputs; rather than growing positional parameters, bundle
-them:
-
-```haskell
-data ServerEnv = ServerEnv
-  { internalMetricsEnabled :: !Bool
-    -- M3 adds: readyThresholds, queueDepthCell, writerHeartbeat, startedAt,
-    -- plus whatever EP-10's /ready handler already consumes.
-  }
-  deriving stock (Generic)
-```
-
-and the router gains, before the catch-all ingest case:
+Serve the scrape. `kansokuApp` already receives the complete `Config`; use the
+`internalMetricsEnabled` field there and wrap the EP-14 middleware stack with an exact-path
+`internalMetrics` middleware. `waiWrapper` remains outermost and retains its current signature,
+so `/internal/metrics` joins the operational WAI allowlist without entering Servant or OpenAPI:
 
 ```haskell
 ["internal", "metrics"]
@@ -727,7 +768,8 @@ metrics cell (cfg ^. #queuePollIntervalSec)` as a sibling of the writer under th
 supervision structure EP-10 established (with EP-10's `withAsync`/`concurrently_` shape, add
 one more `withAsync` layer for the poller; the poller never returns, and if it somehow dies
 the `withAsync` scope exit is harmless because it is linked to the same lifetime as the
-server). Pass the `ServerEnv` into `kansokuApp`.
+server). Extend `ReadyProbe` in M3 with a closure that reads the heartbeat/cell and runs the pure
+threshold evaluator; no positional `ServerEnv` is needed.
 
 Acceptance for M2: `just build` and `just test` green; with services up and the server
 running, `curl -s localhost:8080/internal/metrics` shows all seven metric names; posting a
@@ -932,11 +974,11 @@ now = datetime.datetime.now(datetime.timezone.utc).isoformat()
 events = [
     {
         "eventId": f"ep16-{run}-{i:04d}",
-        "eventName": "page_viewed",
+        "eventName": "page_view",
         "source": "web",
         "occurredAt": now,
         "receivedAt": now,
-        "properties": {},
+        "properties": {"url": "/ep16"},
         "context": {},
     }
     for i in range(500)
@@ -951,7 +993,7 @@ curl -s -X POST localhost:8080/v1/batch \
 Expected response:
 
 ```json
-{"accepted":500}
+{"accepted":500,"rejected":[]}
 ```
 
 M1 trace transcript (restart the server with the console exporter; no collector needed):
@@ -1154,3 +1196,11 @@ Services: local Postgres (with pgmq objects bootstrapped by the existing
 `bootstrapQueue`) and ClickHouse via `process-compose up`; optionally any OTLP-over-HTTP
 collector on port 4318 for the non-console trace validation. No new ClickHouse objects, so
 EP-12's migration mechanism is not exercised by this plan.
+
+---
+
+Revision note (2026-07-19): Milestone 0 reconciled the authored plan with completed EP-10,
+EP-11, EP-14, ADR 0001, and current dependency releases/source. The plan now preserves the landed
+Async/readiness and WAI middleware architecture, records the sole new heartbeat, corrects the
+ingest route path and schema-valid load fixture/BatchAck response, and pins the verified
+hs-opentelemetry 1.0.0.0 and prometheus-client 1.1.2 API facts.
