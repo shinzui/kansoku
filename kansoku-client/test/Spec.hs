@@ -5,6 +5,7 @@ import Control.Concurrent.STM (TVar, atomically, modifyTVar', newTVarIO, readTVa
 import Data.Aeson qualified as Aeson
 import Data.Aeson.Key qualified as Key
 import Data.Aeson.KeyMap qualified as KeyMap
+import Data.ByteString (ByteString)
 import Data.ByteString.Lazy qualified as LBS
 import Data.Char (isAlphaNum)
 import Data.Foldable (traverse_)
@@ -12,14 +13,18 @@ import Data.Generics.Labels ()
 import Data.Map.Strict qualified as Map
 import Data.Text qualified as Text
 import Data.Time.Format (defaultTimeLocale, formatTime)
-import Kansoku.Api.Response (ErrorEnvelopeWire (..))
+import Kansoku.Api.Response (ErrorEnvelopeWire (..), KansokuResult (..))
 import Kansoku.Client
+import Kansoku.Client.Metrics
 import Kansoku.Event
+import Kansoku.Metrics.Api (MetricResult (..), TimeGrain (Day))
 import Kansoku.Prelude
-import Network.HTTP.Types (Status, status202, status400, status401, status413, status503)
+import Network.HTTP.Client qualified as HTTP
+import Network.HTTP.Types (Status, status200, status202, status400, status401, status413, status503)
 import Network.HTTP.Types.Header (hAuthorization)
-import Network.Wai (Application, Request, pathInfo, requestHeaders, requestMethod, responseLBS, strictRequestBody)
+import Network.Wai (Application, Request, pathInfo, queryString, requestHeaders, requestMethod, responseLBS, strictRequestBody)
 import Network.Wai.Handler.Warp qualified as Warp
+import Servant.Client (mkClientEnv, parseBaseUrl, runClientM)
 import System.Environment (lookupEnv)
 import System.Process (readProcess)
 import Test.Hspec
@@ -137,6 +142,29 @@ spec = describe "Kansoku.Client" $ do
       droppedCount client `shouldReturn` 1
       close client
 
+  it "derives authenticated experiment metrics clients from the shared route record" $
+    Warp.testWithApplication (pure metricsRecorderApp) $ \port -> do
+      manager <- HTTP.newManager HTTP.defaultManagerSettings
+      base <- parseBaseUrl ("http://127.0.0.1:" <> show port)
+      let env = mkClientEnv manager base
+          credential = kansokuMetricsCredential "test-service-token"
+          fromDay = read "2026-08-01"
+          toDay = read "2026-08-08"
+      exposureResult <-
+        runClientM
+          (experimentsClient credential fromDay toDay (Just "checkout_v2") (Just Day))
+          env
+      case exposureResult of
+        Right (KansokuOk result) -> metric result `shouldBe` "experiment_exposures"
+        other -> expectationFailure ("unexpected exposure client result: " <> show other)
+      conversionResult <-
+        runClientM
+          (experimentConversionClient credential "checkout_v2" "purchase_completed" fromDay toDay)
+          env
+      case conversionResult of
+        Right (KansokuOk result) -> metric result `shouldBe` "experiment_conversion"
+        other -> expectationFailure ("unexpected conversion client result: " <> show other)
+
   it "skips the live integration test unless KANSOKU_SERVER_URL is set" $ do
     server <- lookupEnv "KANSOKU_SERVER_URL"
     credential <- lookupEnv "KANSOKU_API_KEY"
@@ -206,6 +234,33 @@ responseBodyFor _status request body
                 )
           | otherwise -> Aeson.encode (Aeson.object ["accepted" Aeson..= length events, "rejected" Aeson..= ([] :: [Aeson.Value])])
         Nothing -> "{\"accepted\":0,\"rejected\":[]}"
+
+metricsRecorderApp :: Application
+metricsRecorderApp request respond =
+  if lookup hAuthorization (requestHeaders request) /= Just "Bearer test-service-token"
+    then respond (responseLBS status401 [("content-type", "application/json")] "{}")
+    else case pathInfo request of
+      ["metrics", "experiments"]
+        | queryValue "experiment" request == Just "checkout_v2",
+          queryValue "timeGrain" request == Just "day" ->
+            ok "experiment_exposures"
+      ["metrics", "experiments", "conversion"]
+        | queryValue "experiment" request == Just "checkout_v2",
+          queryValue "event" request == Just "purchase_completed" ->
+            ok "experiment_conversion"
+      _ -> respond (responseLBS status400 [("content-type", "application/json")] (Aeson.encode ErrorEnvelopeWire {code = "bad_request", message = "unexpected metrics request", retryable = False}))
+  where
+    ok name =
+      respond
+        ( responseLBS
+            status200
+            [("content-type", "application/json")]
+            (Aeson.encode MetricResult {metric = name, points = []})
+        )
+
+queryValue :: ByteString -> Request -> Maybe ByteString
+queryValue name request =
+  lookup name (queryString request) >>= id
 
 failNTimes :: Int -> TVar Int -> IO Status
 failNTimes n attempts = do

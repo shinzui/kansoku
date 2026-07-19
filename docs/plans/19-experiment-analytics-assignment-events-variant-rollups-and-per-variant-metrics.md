@@ -75,13 +75,13 @@ This section must always reflect the actual current state of the work.
       applied; fixture file `db/clickhouse/fixtures/ep19_fixtures.sql` + `just` recipe added
 - [x] (2026-07-19 13:59 PDT) M1: clickhouse-client and HTTP rejection transcripts captured — fixture rows appear in
       `analytics.experiment_exposures` with expected unique-user counts
-- [ ] M2: `buildExperimentExposuresSQL` + `buildExperimentConversionSQL` builders and
+- [x] (2026-07-19 14:14 PDT) M2: `buildExperimentExposuresSQL` + `buildExperimentConversionSQL` builders and
       runners in the query module; point functions; QuerySpec shape tests
-- [ ] M2: `experiments` and `experimentConversion` route fields added to `MetricsRoutes`;
+- [x] (2026-07-19 14:14 PDT) M2: `experiments` and `experimentConversion` route fields added to `MetricsRoutes`;
       handlers wired; 400 paths (bad names, bad grain, event == exposure event) tested
-- [ ] M2: kansoku-client and `docs/api/openapi.json` regenerated in the same commit as the
+- [x] (2026-07-19 14:14 PDT) M2: kansoku-client and `docs/api/openapi.json` regenerated in the same commit as the
       route change
-- [ ] M2: transcripts captured — exposures per day, conversion with the before-exposure
+- [x] (2026-07-19 14:14 PDT) M2: transcripts captured — exposures per day, conversion with the before-exposure
       user excluded, two-account isolation
 - [ ] M3: `buildExperimentFunnelSQL` builder, runner, point function; QuerySpec shape tests
 - [ ] M3: `experimentFunnel` route field, handler, client + OpenAPI regenerated same commit
@@ -121,6 +121,19 @@ implementation. Provide concise evidence.
   The isolated HTTP validation transcript used 2026-07-19 timestamps so it pins only the
   intended bad-pattern and missing-property failures; the direct ClickHouse fixture retains
   the plan's August dates for stable analytics queries.
+
+- 2026-07-19: The M2 live integration pass found an insert-block-specific ClickHouse 26
+  behavior that the mixed direct fixture had hidden. When a Haskell insert block contains
+  no experiment property paths, `toString(getSubcolumn(...))` can remain `Dynamic` while
+  the materialized view analyzes its `GROUP BY`, causing error 44 before the event-name
+  filter discards the rows. Migration `0015_experiment_exposure_string_casts.sql` preserves
+  immutable, already-applied `0014` and recreates only the MV with an explicit outer
+  `CAST(..., 'String')`. A fresh migration replay plus all ordinary insert tests then passed.
+
+- 2026-07-19: Deriving a metrics client for the full `MetricsRoutes` record revealed that
+  `TimeGrain` had server-side `FromHttpApiData` but no client-side `ToHttpApiData` instance.
+  Adding the inverse instance made the shared query type bidirectional; the client test
+  observed the derived `timeGrain=day` request over a real Warp listener.
 
 
 ## Decision Log
@@ -226,6 +239,23 @@ Record every decision made while working on the plan.
   keeps the plan restartable from the actual tree.
   Date: 2026-07-19
 
+- Decision: Bind `experiment` and conversion `event` through native ClickHouse parameters,
+  even after `mkSqlName` validation, and derive a small `Kansoku.Client.Metrics` module from
+  the complete shared `MetricsRoutes` record.
+  Rationale: Native parameters preserve the query/value boundary already established for
+  accounts and built-in events. No metrics client existed, and Servant derives a record as
+  a unit, so the module supplies one credential constructor plus typed exposure and
+  conversion selectors now; M3 extends it with the funnel selector.
+  Date: 2026-07-19
+
+- Decision: Repair the exposure MV in additive migration `0015` rather than editing applied
+  migration `0014`.
+  Rationale: EP-12 makes applied migration files immutable. The correction is narrowly
+  scoped to replacing the plan-owned MV with explicit String casts; the rollup table and
+  its aggregate states remain intact, and fresh migration runs apply `0014` then `0015`
+  before application traffic resumes.
+  Date: 2026-07-19
+
 
 ## Outcomes & Retrospective
 
@@ -242,6 +272,17 @@ and authenticated HTTP batches rejected both a bad variant and a missing variant
 returning the established partial-batch HTTP 202 envelope. `just build` and `just test`
 passed (111 core examples, 10 client examples, one opt-in client example pending), and the
 OpenAPI artifact remained unchanged as required for this non-wire milestone.
+
+Milestone 2 completed on 2026-07-19. The authenticated API now serves daily/weekly/monthly
+or whole-range exposure sketches and exact, identity-stitched per-variant conversion
+counts/rates. All user-supplied names are validated and bound as native parameters; stored
+group values remain guarded. The live HTTP result for account A was control/treatment
+exposures `5/5`, conversions `1/3`, and rates `0.2/0.6`, proving the pre-exposure `c2`
+purchase is excluded. Account B saw only two control exposures and zero conversions;
+an unknown valid experiment returned 200/empty, bad name/hour/same-event requests returned
+400, and missing credentials returned 401. The new typed client selectors made the same
+route shapes, OpenAPI documented both operations, and the complete pass reached 118 core
+examples plus 11 client examples with zero failures (one opt-in client example pending).
 
 
 ## Context and Orientation
@@ -286,7 +327,8 @@ pinning the contract.
   filename order by `db/clickhouse/migrate.sh` (via `just ch-migrate`), which records each
   applied file in the ledger table `analytics.schema_migrations` and skips recorded files.
   `just ch-reset` drops the `analytics` database and replays everything. This plan adds
-  exactly one migration file. EP-12 also established the v2 schema this plan reads:
+  the exposure migration plus the additive `0015` MV cast correction recorded during M2.
+  EP-12 also established the v2 schema this plan reads:
   `analytics.events_raw` has sort key `(account_id, event_name, occurred_at, event_id)`,
   engine `ReplacingMergeTree(received_at)` (dedup on replayed inserts), string columns are
   non-Nullable with `''` meaning absent, `occurred_at` is `DateTime64(3, 'UTC')`; the v2
@@ -363,6 +405,8 @@ The files this plan owns or edits:
   `kansoku-api`/`kansoku-core` test suites — gain shape tests.
 - `db/clickhouse/migrations/0014_experiment_exposures.sql` — new; the landed ledger is
   occupied through EP-18's `0013_retire_identity_map.sql`.
+- `db/clickhouse/migrations/0015_experiment_exposure_string_casts.sql` — additive MV-only
+  correction for ClickHouse input blocks whose JSON paths remain `Dynamic`.
 - `db/clickhouse/fixtures/ep19_fixtures.sql` and a `just ch-fixtures-ep19` recipe — new.
 - `kansoku-client/src/Kansoku/Client.hs` (or a new module) and `docs/api/openapi.json` —
   regenerated/extended with each wire change.
@@ -608,6 +652,12 @@ merges a contiguous key range per variant. Events between the backfill INSERT an
 creation are missed — acceptable in dev (re-run `just ch-reset` or the backfill), and this
 plan lands before any production experiment traffic exists; note it in the file.
 
+Implementation note (2026-07-19): `0014` is immutable after its first application. The M2
+ordinary-event insert battery exposed ClickHouse's input-block `Dynamic` behavior, so
+`0015_experiment_exposure_string_casts.sql` drops and recreates only the MV with
+`CAST(toString(getSubcolumn(...)), 'String')` around both path reads. The target table and
+the backfilled aggregate states are preserved.
+
 **Fixtures.** Create `db/clickhouse/fixtures/ep19_fixtures.sql` inserting directly into
 `analytics.events_raw` the same logical data as the curl story (exact rows are listed in
 Validation and Acceptance): experiment `checkout_v2` under account `acct_a` — users
@@ -683,11 +733,10 @@ own 400s; nothing to hand-roll there.
 **Builders.** In `kansoku-core/src/Kansoku/Metrics/Query.hs`, follow
 the repo code standards (GHC2024, `Kansoku.Prelude`, postpositive qualified imports,
 generic-lens `#labels`, strict fields, explicit deriving, MultilineStrings `"""` literals
-for the SQL — see `/Users/shinzui/Keikaku/bokuno/haskell-jitsurei/core/`). Every dynamic
-fragment spliced into the literals is machine-generated (`renderDay` of a `Day`,
-`toString` of an `Int`) or a `renderSqlName`-rendered `SqlName` wrapped in `sqlString` —
-the EP-13 discipline. Bind the authenticated account through `QueryRequest.accountId` and
-render `account_id = {account_id:String}`.
+for the SQL — see `/Users/shinzui/Keikaku/bokuno/haskell-jitsurei/core/`). Machine-generated
+date/index fragments may be rendered into SQL; every validated user-supplied name is bound
+through a native ClickHouse parameter. Bind the authenticated account through
+`QueryRequest.accountId` and render `account_id = {account_id:String}`.
 
 *Exposures* — `buildExperimentExposuresSQL` reads the rollup. With `timeGrain=day`,
 optional filter `experiment=checkout_v2`:
@@ -702,7 +751,7 @@ WHERE account_id = {account_id:String}
   AND day >= '2026-08-01' AND day < '2026-08-08'
   AND match(experiment, '^[a-z0-9_.:-]{1,128}$')
   AND match(variant, '^[a-z0-9_.:-]{1,128}$')
-  AND experiment = 'checkout_v2'
+  AND experiment = {experiment:String}
 GROUP BY day, experiment, variant
 ORDER BY bucket, group_key
 ```
@@ -725,14 +774,15 @@ WITH exposures AS
 (
     SELECT
         canonical_user,
-        toString(getSubcolumn(properties_json, 'variant')) AS variant,
+        CAST(toString(getSubcolumn(properties_json, 'variant')), 'String') AS variant,
         min(occurred_at) AS first_exposure
     FROM analytics.events_resolved
     WHERE canonical_user != ''
       AND account_id = {account_id:String}
       AND event_name = 'experiment_viewed'
-      AND toString(getSubcolumn(properties_json, 'experiment')) = 'checkout_v2'
-      AND match(toString(getSubcolumn(properties_json, 'variant')), '^[a-z0-9_.:-]{1,128}$')
+      AND CAST(toString(getSubcolumn(properties_json, 'experiment')), 'String') = {experiment:String}
+      AND match(CAST(toString(getSubcolumn(properties_json, 'experiment')), 'String'), '^[a-z0-9_.:-]{1,128}$')
+      AND match(CAST(toString(getSubcolumn(properties_json, 'variant')), 'String'), '^[a-z0-9_.:-]{1,128}$')
       AND occurred_at >= '2026-08-01 00:00:00' AND occurred_at < '2026-08-08 00:00:00'
     GROUP BY canonical_user, variant
 ),
@@ -744,7 +794,7 @@ conversions AS
     FROM analytics.events_resolved
     WHERE canonical_user != ''
       AND account_id = {account_id:String}
-      AND event_name = 'purchase_completed'
+      AND event_name = {conversion_event:String}
       AND occurred_at >= '2026-08-01 00:00:00' AND occurred_at < '2026-08-08 00:00:00'
     GROUP BY canonical_user
 )
@@ -995,9 +1045,10 @@ just ch-migrate
 skipping 0001_events_raw.sql (already applied)
 ...
 applying 0014_experiment_exposures.sql
+applying 0015_experiment_exposure_string_casts.sql
 ```
 
-and a second run prints `skipping 0014_experiment_exposures.sql (already applied)`.
+and a second run prints both `0014` and `0015` as skipped/already applied.
 
 Rollup inspection while developing (fastest feedback — also the M1 acceptance query):
 
@@ -1235,7 +1286,19 @@ curl -s -H "Authorization: Bearer $TOKEN_B" \
 ```
 
 None of acct_a's users or counts appear. An unauthenticated request returns EP-15's
-401/403 (capture the exact status per its contract).
+401/403.
+
+Implementation transcript (2026-07-19, isolated `kansoku_ep19_m2` PostgreSQL database,
+real server on port 18080, direct EP-19 ClickHouse fixtures): the exact JSON documents
+above were observed with HTTP 200. Account A returned daily exposure rows `5,5,1`,
+whole-range control/treatment `5,5`, and conversion `0.2/0.6`, `1/3`, `5/5`. Account B
+returned control exposure `2`, conversion rate `0`, converted `0`, exposed `2`. A valid
+unknown experiment returned `{"metric":"experiment_exposures","points":[]}` with HTTP
+200; hour grain, `bad'name`, and conversion event `experiment_viewed` returned the named
+400 envelopes; a missing credential returned
+`{"code":"unauthorized","message":"missing or unknown credential","retryable":false}`
+with HTTP 401. The temporary database contained only acceptance credentials/queue state
+and was dropped afterward.
 
 **6. Per-variant funnel** (M3) — `t4` started checkout but never purchased; `c2` appears
 at no step (her only purchase predates exposure and she never started checkout):
@@ -1293,7 +1356,7 @@ splits; `docs/api/openapi.json` contains the three operations and is regeneratio
 ## Idempotence and Recovery
 
 Everything here is safe to repeat. Re-running `just ch-migrate` skips the applied
-migration (ledger). Re-running the migration file itself after a mid-file failure is safe:
+migrations (ledger). Re-running migration `0014` itself after a mid-file failure is safe:
 `CREATE ... IF NOT EXISTS` no-ops, and re-running the backfill INSERT merges duplicate
 `uniqCombined` sketches, which is a set union and cannot change any unique count. Re-posting
 the curl batches is safe: `analytics.events_raw` is a `ReplacingMergeTree` keyed on the v2
@@ -1309,8 +1372,8 @@ If the writer pipeline is not flushing (step 1's count query stays at 0), check 
 process-compose writer logs and the `/ready` endpoint (queue depth, writer liveness) from
 MP-2's EP-10/EP-16 before suspecting this plan's code.
 
-All Haskell changes revert with git. The one risky class of step is the migration: it is
-additive (a new table and MV; no existing object is altered), so the rollback is
+All Haskell changes revert with git. The one risky class of step is the migrations: they
+are additive overall (`0015` replaces only the plan-owned MV), so the rollback is
 `DROP TABLE analytics.mv_experiment_exposures` then
 `DROP TABLE analytics.experiment_exposures` issued manually — but prefer roll-forward with
 a new migration file, since the applied file is immutable under EP-12's rule. Step 0
@@ -1373,7 +1436,8 @@ minimal `Kansoku.Client.Metrics` derivation), and `docs/api/openapi.json` docume
 both regenerated in the same commit as each route change.
 
 ClickHouse objects: this plan owns `analytics.experiment_exposures` and
-`analytics.mv_experiment_exposures` (migration `0014_experiment_exposures.sql`). It reads
+`analytics.mv_experiment_exposures` (migration `0014_experiment_exposures.sql`, corrected
+additively by `0015_experiment_exposure_string_casts.sql`). It reads
 `analytics.events_resolved` (owned by EP-12/EP-18) and, through EP-17's representation,
 the property columns of `analytics.events_raw` — it owns neither and must not alter them
 because step 0 verified the shared projection already satisfies the contract.

@@ -204,6 +204,54 @@ spec = describe "Kansoku.Query integration" $ do
         ]
         `shouldBe` [(Just "1", 3), (Just "2", 1)]
 
+  it "serves account-scoped exposures and excludes pre-exposure conversions" $
+    withClickHouse $ \conn -> do
+      resetTable conn
+      insertEvents
+        conn
+        [ experimentEvent "evt_exp_c1" "acct_experiment_spec" "experiment_viewed" "c1" "2026-08-01 10:00:00 UTC" (Just "control"),
+          experimentEvent "evt_exp_c2" "acct_experiment_spec" "experiment_viewed" "c2" "2026-08-01 10:00:00 UTC" (Just "control"),
+          experimentEvent "evt_exp_t1" "acct_experiment_spec" "experiment_viewed" "t1" "2026-08-01 10:00:00 UTC" (Just "treatment"),
+          experimentEvent "evt_exp_t2" "acct_experiment_spec" "experiment_viewed" "t2" "2026-08-01 10:00:00 UTC" (Just "treatment"),
+          experimentEvent "evt_exp_c1_again" "acct_experiment_spec" "experiment_viewed" "c1" "2026-08-02 10:00:00 UTC" (Just "control"),
+          experimentEvent "evt_conv_c2_before" "acct_experiment_spec" "purchase_completed" "c2" "2026-08-01 09:00:00 UTC" Nothing,
+          experimentEvent "evt_conv_c1" "acct_experiment_spec" "purchase_completed" "c1" "2026-08-01 12:00:00 UTC" Nothing,
+          experimentEvent "evt_conv_t1" "acct_experiment_spec" "purchase_completed" "t1" "2026-08-01 12:00:00 UTC" Nothing,
+          experimentEvent "evt_other_account" "acct_experiment_other" "experiment_viewed" "other" "2026-08-01 10:00:00 UTC" (Just "control")
+        ]
+      queryPool <- (`newQueryPool` 2) . clickHouseConfigFromConfig =<< requireConfig
+      experiment <- validSqlName "checkout_v2"
+      conversionEvent <- validSqlName "purchase_completed"
+      let request =
+            Query.QueryRequest
+              { accountId = AccountId "acct_experiment_spec",
+                from = fromGregorian 2026 8 1,
+                to = fromGregorian 2026 8 3,
+                groupBy = Nothing,
+                timeGrain = Nothing
+              }
+      exposures <- runEff (Query.runExperimentExposures queryPool request (Just experiment))
+      Map.fromList
+        [ (Map.lookup "variant" (point ^. #group), point ^. #value)
+        | point <- exposures ^. #points
+        ]
+        `shouldBe` Map.fromList [(Just "control", 2), (Just "treatment", 2)]
+      conversion <- runEff (Query.runExperimentConversion queryPool request experiment conversionEvent)
+      Map.fromList
+        [ ( (Map.lookup "measure" (point ^. #group), Map.lookup "variant" (point ^. #group)),
+            point ^. #value
+          )
+        | point <- conversion ^. #points
+        ]
+        `shouldBe` Map.fromList
+          [ ((Just "converted", Just "control"), 1),
+            ((Just "converted", Just "treatment"), 1),
+            ((Just "conversion_rate", Just "control"), 0.5),
+            ((Just "conversion_rate", Just "treatment"), 0.5),
+            ((Just "exposed", Just "control"), 2),
+            ((Just "exposed", Just "treatment"), 2)
+          ]
+
 type SleepColumns = '[Column "s" UInt8]
 
 newtype SleepRow = SleepRow {s :: Word8}
@@ -256,6 +304,22 @@ funnelEvent eid name user timestamp =
     .~ Just (AccountId "acct_funnel")
     & #userId
     .~ Just (UserId user)
+
+experimentEvent :: Text -> Text -> Text -> Text -> String -> Maybe Text -> AnalyticsEvent
+experimentEvent eid account name user timestamp variant =
+  baseEvent (EventId eid) (EventName name) Web (read timestamp) (read timestamp)
+    & #accountId
+    .~ Just (AccountId account)
+    & #userId
+    .~ Just (UserId user)
+    & #properties
+    .~ case variant of
+      Nothing -> KeyMap.empty
+      Just variantName ->
+        KeyMap.fromList
+          [ ("experiment", Aeson.String "checkout_v2"),
+            ("variant", Aeson.String variantName)
+          ]
 
 validSqlName :: Text -> IO SqlName
 validSqlName value =

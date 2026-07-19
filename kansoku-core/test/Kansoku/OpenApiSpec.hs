@@ -52,7 +52,7 @@ spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
     lookupText ["components", "securitySchemes", "serviceToken", "scheme"] documentValue `shouldBe` Just "bearer"
     traverse_ assertSecurity operationValues
 
-  it "documents exactly the fourteen analytics paths with stable operation IDs" $ do
+  it "documents exactly the sixteen analytics paths with stable operation IDs" $ do
     documentedPaths `shouldBe` expectedServedPaths
     fmap operationIdentity operationValues `shouldMatchList` expectedOperationIds
 
@@ -78,6 +78,16 @@ spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
       `shouldSatisfy` maybe False (Text.isInfixOf "prop:<name>")
     lookupText ["description"] revenueOperation
       `shouldSatisfy` maybe False (Text.isInfixOf "exactly one dimension")
+
+  it "documents exposure accuracy and post-exposure conversion semantics" $ do
+    let exposuresOperation = fromMaybe Aeson.Null (valueAt ["paths", "/metrics/experiments", "get"] documentValue)
+        conversionOperation = fromMaybe Aeson.Null (valueAt ["paths", "/metrics/experiments/conversion", "get"] documentValue)
+    lookupText ["description"] exposuresOperation
+      `shouldSatisfy` maybe False (Text.isInfixOf "uniqCombined sketch")
+    lookupText ["description"] conversionOperation
+      `shouldSatisfy` maybe False (Text.isInfixOf "at or after their first exposure")
+    lookupText ["description"] conversionOperation
+      `shouldSatisfy` maybe False (Text.isInfixOf "no significance testing")
 
   it "keeps every wire DTO's ToJSON representation within its ToSchema" $ do
     conforms "AnalyticsEvent" sampleEvent
@@ -171,6 +181,8 @@ expectedServedPaths =
       "/metrics/conversion",
       "/metrics/custom",
       "/metrics/events",
+      "/metrics/experiments",
+      "/metrics/experiments/conversion",
       "/metrics/feature-adoption",
       "/metrics/funnel",
       "/metrics/organizations",
@@ -192,6 +204,8 @@ expectedOperationIds =
     ("/metrics/conversion", "get", "getMetricsConversion"),
     ("/metrics/custom", "get", "getMetricsCustom"),
     ("/metrics/events", "get", "getMetricsEvents"),
+    ("/metrics/experiments", "get", "getMetricsExperiments"),
+    ("/metrics/experiments/conversion", "get", "getMetricsExperimentsConversion"),
     ("/metrics/feature-adoption", "get", "getMetricsFeatureAdoption"),
     ("/metrics/funnel", "get", "getMetricsFunnel"),
     ("/metrics/organizations", "get", "getMetricsOrganizations"),
@@ -321,6 +335,7 @@ metricQuery :: Text -> Text
 metricQuery path
   | path == "/metrics/funnel" = base <> "&steps=signup_started,signup_completed"
   | path == "/metrics/retention" = base <> "&days=1,7"
+  | path == "/metrics/experiments/conversion" = base <> "&experiment=checkout_v2&event=purchase_completed"
   | otherwise = base
   where
     base = "?from=2026-06-01&to=2026-06-02"

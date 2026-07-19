@@ -20,9 +20,9 @@ import Kansoku.Auth.Types (AuthenticatedPrincipal)
 import Kansoku.ClickHouse (QueryPool)
 import Kansoku.Event (AccountId, defaultRegistry)
 import Kansoku.Logging (logError, runLogStderr)
-import Kansoku.Metrics.Api (MetricResult, MetricsRoutes (..), TimeGrain)
+import Kansoku.Metrics.Api (MetricResult, MetricsRoutes (..), TimeGrain (..))
 import Kansoku.Metrics.Query qualified as Query
-import Kansoku.Metrics.Query.Validate (mkSqlName)
+import Kansoku.Metrics.Query.Validate (mkSqlName, renderSqlName)
 import Kansoku.Metrics.Registry (builtinMetric)
 import Kansoku.Prelude
 import Servant (Handler)
@@ -42,7 +42,9 @@ metricsServer principal pool =
       users = metricHandler "active_users",
       revenue = metricHandler "revenue",
       organizations = notImplemented "organizations",
-      custom = notImplemented "custom"
+      custom = notImplemented "custom",
+      experiments = experimentsHandler,
+      experimentConversion = experimentConversionHandler
     }
   where
     metricHandler :: Text -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> Handler (KansokuResult MetricResult)
@@ -84,6 +86,59 @@ metricsServer principal pool =
         Left message -> pure (KansokuBadRequest (badRequest "invalid_retention_days" message))
         Right offsets -> effToHandler (Query.runRetention pool (queryRequest account fromDay toDay Nothing Nothing) offsets)
 
+    experimentsHandler :: Day -> Day -> Maybe Text -> Maybe TimeGrain -> Handler (KansokuResult MetricResult)
+    experimentsHandler fromDay toDay experimentParam timeGrain =
+      case timeGrain of
+        Just Hour ->
+          pure
+            ( KansokuBadRequest
+                (badRequest "invalid_experiment_time_grain" "timeGrain hour not supported for experiments (rollup is daily)")
+            )
+        _ ->
+          case traverse mkSqlName experimentParam of
+            Left invalid ->
+              pure
+                ( KansokuBadRequest
+                    (badRequest "invalid_experiment_name" ("invalid experiment name: " <> invalid))
+                )
+            Right experiment ->
+              effToHandler
+                ( Query.runExperimentExposures
+                    pool
+                    (queryRequest account fromDay toDay Nothing timeGrain)
+                    experiment
+                )
+
+    experimentConversionHandler :: Text -> Text -> Day -> Day -> Handler (KansokuResult MetricResult)
+    experimentConversionHandler experimentParam eventParam fromDay toDay =
+      case mkSqlName experimentParam of
+        Left invalid ->
+          pure
+            ( KansokuBadRequest
+                (badRequest "invalid_experiment_name" ("invalid experiment name: " <> invalid))
+            )
+        Right experiment ->
+          case mkSqlName eventParam of
+            Left invalid ->
+              pure
+                ( KansokuBadRequest
+                    (badRequest "invalid_event_name" ("invalid event name: " <> invalid))
+                )
+            Right conversionEvent
+              | renderSqlName conversionEvent == "experiment_viewed" ->
+                  pure
+                    ( KansokuBadRequest
+                        (badRequest "invalid_conversion_event" "conversion event must differ from the exposure event")
+                    )
+              | otherwise ->
+                  effToHandler
+                    ( Query.runExperimentConversion
+                        pool
+                        (queryRequest account fromDay toDay Nothing Nothing)
+                        experiment
+                        conversionEvent
+                    )
+
     notImplemented :: Text -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> Handler (KansokuResult MetricResult)
     notImplemented name _ _ _ _ =
       pure
@@ -105,7 +160,8 @@ queryRequest accountId fromDay toDay groupBy timeGrain =
 
 -- SQL safety audit: groupBy selects from a closed expression whitelist;
 -- TimeGrain and Day are parsed types; retention offsets are Int values. Funnel
--- steps are the sole raw Text-to-SQL path and are validated above.
+-- steps, experiment names, and conversion events are validated as SqlName and
+-- passed as native ClickHouse parameters.
 
 nonEmptyCsv :: Text -> [Text]
 nonEmptyCsv =

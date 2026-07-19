@@ -25,7 +25,10 @@ common common
 library
   import:          common
   hs-source-dirs:  src
-  exposed-modules: Kansoku.Client
+  exposed-modules:
+    Kansoku.Client
+    Kansoku.Client.Metrics
+
   build-depends:
     , aeson
     , async
@@ -70,10 +73,12 @@ test-suite kansoku-client-test
     , containers
     , generic-lens
     , hspec
+    , http-client
     , http-types
     , kansoku-api
     , kansoku-client
     , process
+    , servant-client
     , stm
     , text
     , time

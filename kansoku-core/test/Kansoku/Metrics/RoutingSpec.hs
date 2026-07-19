@@ -68,7 +68,7 @@ import Test.Hspec
 
 spec :: Spec
 spec = describe "Kansoku analytics route dispatch" $ do
-  it "routes all twelve metrics and both ingest operations to their own handlers" $
+  it "routes all fourteen metrics and both ingest operations to their own handlers" $
     Warp.testWithApplication (pure sentinelApplication) $ \port -> do
       manager <- HTTP.newManager HTTP.defaultManagerSettings
       traverse_ (assertMetricRoute manager port) metricRoutes
@@ -101,7 +101,9 @@ metricRoutes =
     ("users", "users"),
     ("revenue", "revenue"),
     ("organizations", "organizations"),
-    ("custom", "custom")
+    ("custom", "custom"),
+    ("experiments", "experiments"),
+    ("experiments/conversion", "experiment-conversion")
   ]
 
 assertMetricRoute :: HTTP.Manager -> Warp.Port -> (String, Text) -> Expectation
@@ -109,6 +111,7 @@ assertMetricRoute manager port (path, expected) = do
   let extraQuery
         | path == "funnel" = "&steps=signup_started,signup_completed"
         | path == "retention" = "&days=1,7"
+        | path == "experiments/conversion" = "&experiment=checkout_v2&event=purchase_completed"
         | otherwise = ""
       url =
         baseUrl port
@@ -227,7 +230,9 @@ sentinelMetricsServer =
       Metrics.users = metricSentinel "users",
       Metrics.revenue = metricSentinel "revenue",
       Metrics.organizations = stubSentinel "organizations",
-      Metrics.custom = stubSentinel "custom"
+      Metrics.custom = stubSentinel "custom",
+      Metrics.experiments = metricSentinel "experiments",
+      Metrics.experimentConversion = experimentConversionSentinel
     }
   where
     metricSentinel :: Text -> Day -> Day -> Maybe Text -> Maybe Metrics.TimeGrain -> Handler (Response.KansokuResult Metrics.MetricResult)
@@ -242,6 +247,10 @@ sentinelMetricsServer =
 
     retentionSentinel :: Day -> Day -> Maybe Text -> Handler (Response.KansokuResult Metrics.MetricResult)
     retentionSentinel _fromDay _toDay _days = pure (Response.KansokuOk (sentinelResult "retention"))
+
+    experimentConversionSentinel :: Text -> Text -> Day -> Day -> Handler (Response.KansokuResult Metrics.MetricResult)
+    experimentConversionSentinel _experiment _event _fromDay _toDay =
+      pure (Response.KansokuOk (sentinelResult "experiment-conversion"))
 
 sentinelResult :: Text -> Metrics.MetricResult
 sentinelResult name = Metrics.MetricResult {Metrics.metric = name, Metrics.points = []}

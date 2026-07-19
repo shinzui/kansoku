@@ -26,7 +26,7 @@ import Servant.API
 import Servant.API.Generic (type (:-))
 import Servant.API.MultiVerb (MultiVerb)
 import Servant.API.Verbs qualified as Servant
-import Web.HttpApiData (FromHttpApiData (..))
+import Web.HttpApiData (FromHttpApiData (..), ToHttpApiData (..))
 
 data TimeGrain = Hour | Day | Week | Month
   deriving stock (Generic, Eq, Ord, Show)
@@ -57,6 +57,9 @@ instance FromJSON TimeGrain where
 instance FromHttpApiData TimeGrain where
   parseUrlPiece value =
     maybe (Left ("unknown time grain: " <> value)) Right (parseTimeGrainText value)
+
+instance ToHttpApiData TimeGrain where
+  toUrlPiece = timeGrainText
 
 data MetricPoint = MetricPoint
   { bucket :: !(Maybe Text),
@@ -113,6 +116,27 @@ data MetricsRoutes mode = MetricsRoutes
     users :: mode :- "metrics" :> "users" :> MetricQuery,
     revenue :: mode :- "metrics" :> "revenue" :> MetricQuery,
     organizations :: mode :- "metrics" :> "organizations" :> MetricQuery,
-    custom :: mode :- "metrics" :> "custom" :> MetricQuery
+    custom :: mode :- "metrics" :> "custom" :> MetricQuery,
+    experiments ::
+      mode
+        :- "metrics"
+          :> "experiments"
+          :> Description "Unique users exposed per experiment and variant, from the experiment_exposures rollup. Counts raw identities (user_id, else anonymous_id) with a uniqCombined sketch (~0.8% error at scale; exact for small sets); identity-stitched exact numbers are served by the conversion and funnel endpoints. timeGrain: day, week, or month (hour is rejected; the rollup is daily); omitted = one bucket for the whole range. Re-exposures never double-count."
+          :> QueryParam' '[Required] "from" Day
+          :> QueryParam' '[Required] "to" Day
+          :> QueryParam "experiment" Text
+          :> QueryParam "timeGrain" TimeGrain
+          :> MultiVerb 'Servant.GET '[JSON] (OkResponses "Metric result" MetricResult) (KansokuResult MetricResult),
+    experimentConversion ::
+      mode
+        :- "metrics"
+          :> "experiments"
+          :> "conversion"
+          :> Description "Per-variant conversion for one experiment: exposed unique users, users with a conversion event at or after their first exposure (earlier conversions do not count), and the rate. Users exposed to multiple variants count in each. Counts and rates only; no significance testing."
+          :> QueryParam' '[Required] "experiment" Text
+          :> QueryParam' '[Required] "event" Text
+          :> QueryParam' '[Required] "from" Day
+          :> QueryParam' '[Required] "to" Day
+          :> MultiVerb 'Servant.GET '[JSON] (OkResponses "Metric result" MetricResult) (KansokuResult MetricResult)
   }
   deriving stock (Generic)

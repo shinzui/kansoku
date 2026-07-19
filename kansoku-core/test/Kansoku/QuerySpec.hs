@@ -14,7 +14,7 @@ import Kansoku.Event
     defaultRegistry,
     lookupSchema,
   )
-import Kansoku.Metrics.Api (TimeGrain (..))
+import Kansoku.Metrics.Api (MetricPoint (..), TimeGrain (..))
 import Kansoku.Metrics.Definition (Aggregation (Average, Sum), MetricDefinition)
 import Kansoku.Metrics.Query hiding (buildSQL)
 import Kansoku.Metrics.Query qualified as Query
@@ -102,6 +102,56 @@ spec = describe "Kansoku.Query.buildSQL" $ do
     buildFunnelSQL dayRequest 3600 (sqlName <$> ["one", "two", "three"])
       `shouldContainText` "ARRAY JOIN [(1, {funnel_step_1:String}), (2, {funnel_step_2:String}), (3, {funnel_step_3:String})] AS step"
 
+  it "builds guarded experiment exposure rollup queries at daily and whole-range grains" $ do
+    let experiment = sqlName "checkout_v2"
+        daily = buildExperimentExposuresSQL dayRequest (Just experiment)
+        wholeRange = buildExperimentExposuresSQL wholeRangeRequest Nothing
+    daily `shouldContainText` "toFloat64(uniqCombinedMerge(users)) AS value"
+    daily `shouldContainText` "FROM analytics.experiment_exposures"
+    daily `shouldContainText` "match(experiment, '^[a-z0-9_.:-]{1,128}$')"
+    daily `shouldContainText` "match(variant, '^[a-z0-9_.:-]{1,128}$')"
+    daily `shouldContainText` "experiment = {experiment:String}"
+    daily `shouldNotContainText` "checkout_v2"
+    wholeRange `shouldContainText` "'' AS bucket"
+    wholeRange `shouldContainText` "GROUP BY experiment, variant"
+    wholeRange `shouldNotContainText` "GROUP BY day, experiment, variant"
+
+  it "builds exact conversion SQL with an explicit post-exposure ordering predicate" $ do
+    let sql = buildExperimentConversionSQL dayRequest (sqlName "checkout_v2") (sqlName "purchase_completed")
+    sql `shouldContainText` "min(occurred_at) AS first_exposure"
+    sql `shouldContainText` "max(occurred_at) AS last_conversion"
+    sql `shouldContainText` "c.last_conversion >= e.first_exposure"
+    sql `shouldContainText` "uniqExactIf"
+    sql `shouldContainText` "LEFT JOIN conversions"
+    sql `shouldContainText` "ARRAY JOIN"
+    sql `shouldContainText` "('conversion_rate', if(exposed = 0, 0., converted / exposed))"
+    sql `shouldContainText` "{experiment:String}"
+    sql `shouldContainText` "{conversion_event:String}"
+    sql `shouldNotContainText` "checkout_v2"
+    sql `shouldNotContainText` "purchase_completed"
+    sql `shouldNotContainText` "UNION ALL"
+
+  it "decodes experiment group keys into the public metric-point vocabulary" $ do
+    experimentExposuresPoint (Just "2026-08-01") "checkout_v2|control" 5
+      `shouldBe` MetricPoint
+        { bucket = Just "2026-08-01",
+          group = Map.fromList [("experiment", "checkout_v2"), ("variant", "control")],
+          value = 5
+        }
+    experimentConversionPoint (sqlName "checkout_v2") "conversion_rate|treatment" 0.6
+      `shouldBe` MetricPoint
+        { bucket = Nothing,
+          group = Map.fromList [("experiment", "checkout_v2"), ("variant", "treatment"), ("measure", "conversion_rate")],
+          value = 0.6
+        }
+
+  it "uses the native JSON projection for every experiment query" $
+    traverse_
+      (`shouldNotContainText` "JSONExtract")
+      [ buildExperimentExposuresSQL dayRequest (Just (sqlName "checkout_v2")),
+        buildExperimentConversionSQL dayRequest (sqlName "checkout_v2") (sqlName "purchase_completed")
+      ]
+
   it "scopes every SQL builder with a native account parameter" $ do
     let sqlBuilders =
           [ buildSQL (Simple activeUsers) dayRequest,
@@ -114,7 +164,9 @@ spec = describe "Kansoku.Query.buildSQL" $ do
             buildSQL (Ratioed conversionRate) dayRequest,
             buildSessionsSQL dayRequest,
             buildRetentionSQL dayRequest [1, 7],
-            buildFunnelSQL dayRequest 604800 (sqlName <$> ["signup_started", "signup_completed"])
+            buildFunnelSQL dayRequest 604800 (sqlName <$> ["signup_started", "signup_completed"]),
+            buildExperimentExposuresSQL dayRequest (Just (sqlName "checkout_v2")),
+            buildExperimentConversionSQL dayRequest (sqlName "checkout_v2") (sqlName "purchase_completed")
           ]
     traverse_ (`shouldContainText` "account_id = {account_id:String}") sqlBuilders
     traverse_ (`shouldNotContainText` "acct_query") sqlBuilders
@@ -130,7 +182,9 @@ spec = describe "Kansoku.Query.buildSQL" $ do
         buildSQL (Ratioed conversionRate) dayRequest,
         buildSessionsSQL dayRequest,
         buildRetentionSQL dayRequest [1, 7],
-        buildFunnelSQL dayRequest 604800 (sqlName <$> ["signup_started", "signup_completed"])
+        buildFunnelSQL dayRequest 604800 (sqlName <$> ["signup_started", "signup_completed"]),
+        buildExperimentExposuresSQL dayRequest (Just (sqlName "checkout_v2")),
+        buildExperimentConversionSQL dayRequest (sqlName "checkout_v2") (sqlName "purchase_completed")
       ]
 
   it "requires every Sum or Average builtin to declare a numeric aggregation property" $
@@ -194,6 +248,9 @@ dayRequest =
 
 weekRequest :: QueryRequest
 weekRequest = dayRequest {timeGrain = Just Week}
+
+wholeRangeRequest :: QueryRequest
+wholeRangeRequest = dayRequest {timeGrain = Nothing}
 
 routeRequest :: QueryRequest
 routeRequest = dayRequest {groupBy = Just ["route"]}

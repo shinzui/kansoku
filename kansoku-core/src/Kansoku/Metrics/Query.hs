@@ -5,13 +5,19 @@ module Kansoku.Metrics.Query
   ( GroupDimension (..),
     QueryCompileError (..),
     QueryRequest (..),
+    buildExperimentConversionSQL,
+    buildExperimentExposuresSQL,
     buildFunnelSQL,
     buildRetentionSQL,
     buildSQL,
     buildSessionsSQL,
+    experimentConversionPoint,
+    experimentExposuresPoint,
     queryCompileErrorCode,
     queryCompileErrorMessage,
     run,
+    runExperimentConversion,
+    runExperimentExposures,
     runFunnel,
     runRetention,
     runSessions,
@@ -136,6 +142,28 @@ runFunnel :: (IOE :> es) => QueryPool -> QueryRequest -> Int -> [SqlName] -> Eff
 runFunnel pool req window steps =
   liftIO (runSQLWith pool "funnel" funnelPoint (accountParameter req <> namedParameters "funnel_step" steps) (buildFunnelSQL req window steps))
 
+runExperimentExposures :: (IOE :> es) => QueryPool -> QueryRequest -> Maybe SqlName -> Eff es MetricResult
+runExperimentExposures pool req experiment =
+  liftIO
+    ( runSQLWith
+        pool
+        "experiment_exposures"
+        experimentExposuresAggPoint
+        (accountParameter req <> maybe [] (pure . experimentParameter) experiment)
+        (buildExperimentExposuresSQL req experiment)
+    )
+
+runExperimentConversion :: (IOE :> es) => QueryPool -> QueryRequest -> SqlName -> SqlName -> Eff es MetricResult
+runExperimentConversion pool req experiment conversionEvent =
+  liftIO
+    ( runSQLWith
+        pool
+        "experiment_conversion"
+        (experimentConversionAggPoint experiment)
+        (accountParameter req <> [experimentParameter experiment, conversionEventParameter conversionEvent])
+        (buildExperimentConversionSQL req experiment conversionEvent)
+    )
+
 type QueryParameter = (String, Text)
 
 runSQL :: QueryPool -> Text -> Maybe Text -> [QueryParameter] -> Text -> IO MetricResult
@@ -203,6 +231,48 @@ funnelPoint AggRow {group_key, value} =
       MetricPoint {bucket = Nothing, group = Map.fromList [("step", step), ("index", stepIndex)], value}
     _ ->
       MetricPoint {bucket = Nothing, group = Map.empty, value}
+
+experimentExposuresAggPoint :: AggRow -> MetricPoint
+experimentExposuresAggPoint AggRow {bucket, group_key, value} =
+  experimentExposuresPoint (nonEmpty (decodeUtf8 bucket)) (decodeUtf8 group_key) value
+
+experimentConversionAggPoint :: SqlName -> AggRow -> MetricPoint
+experimentConversionAggPoint experiment AggRow {group_key, value} =
+  experimentConversionPoint experiment (decodeUtf8 group_key) value
+
+experimentExposuresPoint :: Maybe Text -> Text -> Double -> MetricPoint
+experimentExposuresPoint bucketValue groupKey value =
+  case splitGroupKey groupKey of
+    Just (experiment, variant) ->
+      MetricPoint
+        { bucket = bucketValue,
+          group = Map.fromList [("experiment", experiment), ("variant", variant)],
+          value
+        }
+    Nothing -> MetricPoint {bucket = bucketValue, group = Map.empty, value}
+
+experimentConversionPoint :: SqlName -> Text -> Double -> MetricPoint
+experimentConversionPoint experiment groupKey value =
+  case splitGroupKey groupKey of
+    Just (measure, variant) ->
+      MetricPoint
+        { bucket = Nothing,
+          group =
+            Map.fromList
+              [ ("experiment", renderSqlName experiment),
+                ("variant", variant),
+                ("measure", measure)
+              ],
+          value
+        }
+    Nothing -> MetricPoint {bucket = Nothing, group = Map.empty, value}
+
+splitGroupKey :: Text -> Maybe (Text, Text)
+splitGroupKey value = do
+  let (firstPart, suffix) = Text.breakOn "|" value
+  secondPart <- Text.stripPrefix "|" suffix
+  guard (not (Text.null firstPart) && not (Text.null secondPart))
+  pure (firstPart, secondPart)
 
 nonEmpty :: Text -> Maybe Text
 nonEmpty value
@@ -514,6 +584,103 @@ buildFunnelSQL req window steps =
         | (position, _step) <- indexedSteps
         ]
 
+-- | Exposure sketches are daily, but merging them across days computes a set
+-- union. With no grain, a user exposed on several days therefore still counts
+-- once for the whole requested range.
+buildExperimentExposuresSQL :: QueryRequest -> Maybe SqlName -> Text
+buildExperimentExposuresSQL req experiment =
+  Text.unlines
+    [ "SELECT",
+      "    " <> experimentBucketExpr (req ^. #timeGrain) <> " AS bucket,",
+      "    concat(experiment, '|', variant) AS group_key,",
+      "    toFloat64(uniqCombinedMerge(users)) AS value",
+      "FROM analytics.experiment_exposures",
+      "WHERE " <> accountPredicate,
+      "  AND day >= " <> sqlString (renderDay (req ^. #from)) <> " AND day < " <> sqlString (renderDay (req ^. #to)),
+      "  AND match(experiment, '^[a-z0-9_.:-]{1,128}$')",
+      "  AND match(variant, '^[a-z0-9_.:-]{1,128}$')" <> experimentFilterClause experiment,
+      experimentGroupBy (req ^. #timeGrain),
+      "ORDER BY bucket, group_key"
+    ]
+
+-- | Exact identity-stitched conversion by variant. A conversion counts only
+-- when the user's latest conversion is at or after their first exposure for
+-- that variant. With ClickHouse's default join_use_nulls = 0, a LEFT JOIN miss
+-- supplies the zero DateTime64, which correctly fails that comparison.
+buildExperimentConversionSQL :: QueryRequest -> SqlName -> SqlName -> Text
+buildExperimentConversionSQL req _experiment _conversionEvent =
+  Text.unlines
+    [ "WITH exposures AS",
+      "(",
+      "    SELECT",
+      "        canonical_user,",
+      "        CAST(toString(getSubcolumn(properties_json, 'variant')), 'String') AS variant,",
+      "        min(occurred_at) AS first_exposure",
+      "    FROM analytics.events_resolved",
+      "    WHERE canonical_user != ''",
+      "      AND " <> accountPredicate,
+      "      AND event_name = 'experiment_viewed'",
+      "      AND CAST(toString(getSubcolumn(properties_json, 'experiment')), 'String') = {experiment:String}",
+      "      AND match(CAST(toString(getSubcolumn(properties_json, 'experiment')), 'String'), '^[a-z0-9_.:-]{1,128}$')",
+      "      AND match(CAST(toString(getSubcolumn(properties_json, 'variant')), 'String'), '^[a-z0-9_.:-]{1,128}$')",
+      "      AND " <> timestampPredicate req,
+      "    GROUP BY canonical_user, variant",
+      "),",
+      "conversions AS",
+      "(",
+      "    SELECT",
+      "        canonical_user,",
+      "        max(occurred_at) AS last_conversion",
+      "    FROM analytics.events_resolved",
+      "    WHERE canonical_user != ''",
+      "      AND " <> accountPredicate,
+      "      AND event_name = {conversion_event:String}",
+      "      AND " <> timestampPredicate req,
+      "    GROUP BY canonical_user",
+      ")",
+      "SELECT",
+      "    '' AS bucket,",
+      "    concat(m.1, '|', variant) AS group_key,",
+      "    m.2 AS value",
+      "FROM",
+      "(",
+      "    SELECT",
+      "        e.variant AS variant,",
+      "        toFloat64(uniqExact(e.canonical_user)) AS exposed,",
+      "        toFloat64(uniqExactIf(e.canonical_user, c.last_conversion >= e.first_exposure)) AS converted",
+      "    FROM exposures AS e",
+      "    LEFT JOIN conversions AS c ON c.canonical_user = e.canonical_user",
+      "    GROUP BY variant",
+      ")",
+      "ARRAY JOIN",
+      "    [('exposed', exposed),",
+      "     ('converted', converted),",
+      "     ('conversion_rate', if(exposed = 0, 0., converted / exposed))] AS m",
+      "ORDER BY group_key"
+    ]
+
+experimentBucketExpr :: Maybe TimeGrain -> Text
+experimentBucketExpr = \case
+  Nothing -> "''"
+  Just Day -> "toString(day)"
+  Just Week -> "toString(toMonday(day))"
+  Just Month -> "toString(toStartOfMonth(day))"
+  -- The HTTP handler rejects Hour because the rollup has daily resolution.
+  Just Hour -> "toString(day)"
+
+experimentGroupBy :: Maybe TimeGrain -> Text
+experimentGroupBy = \case
+  Nothing -> "GROUP BY experiment, variant"
+  Just Day -> "GROUP BY day, experiment, variant"
+  Just Week -> "GROUP BY toMonday(day), experiment, variant"
+  Just Month -> "GROUP BY toStartOfMonth(day), experiment, variant"
+  Just Hour -> "GROUP BY day, experiment, variant"
+
+experimentFilterClause :: Maybe SqlName -> Text
+experimentFilterClause = \case
+  Nothing -> ""
+  Just _ -> "\n  AND experiment = {experiment:String}"
+
 effectiveGrain :: MetricDefinition -> QueryRequest -> Maybe TimeGrain
 effectiveGrain MetricDefinition {timeGrain = defaultGrain} QueryRequest {timeGrain = requestedGrain} =
   requestedGrain <|> defaultGrain <|> Just Day
@@ -670,6 +837,12 @@ namedParameters prefix =
 
 accountParameter :: QueryRequest -> [QueryParameter]
 accountParameter req = [("account_id", unAccountId (req ^. #accountId))]
+
+experimentParameter :: SqlName -> QueryParameter
+experimentParameter experiment = ("experiment", renderSqlName experiment)
+
+conversionEventParameter :: SqlName -> QueryParameter
+conversionEventParameter conversionEvent = ("conversion_event", renderSqlName conversionEvent)
 
 accountPredicate :: Text
 accountPredicate = "account_id = {account_id:String}"
