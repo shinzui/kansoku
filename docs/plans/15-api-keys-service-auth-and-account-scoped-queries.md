@@ -64,11 +64,11 @@ even if it requires splitting a partially completed task into two ("done" vs. "r
 This section must always reflect the actual current state of the work.
 
 - [x] M0: reconciled this authored plan with the landed EP-9/12/13/14/16 and EP-21 architecture; implementation reuses the MasterPlan intention
-- [ ] M1: the existing `Kansoku.Migrations` pg-migrate plan includes an application-owned `api_keys` component after PGMQ; normal server startup remains migration-free
-- [ ] M1: `kansoku.api_keys` table is created by `kansoku-migrate up`; strict verification and a second application are clean
-- [ ] M1: `Kansoku.Auth.Types`, `Kansoku.Auth.Token`, `Kansoku.Auth.Store`, `Kansoku.Auth.Issue` modules compile with unit tests green
-- [ ] M1: `kansoku-server issue-key` subcommand issues both kinds; transcript captured; `psql` shows a hash, not the token
-- [ ] M1: `just issue-key` and `just dev-keys` recipes added
+- [x] M1: the existing `Kansoku.Migrations` pg-migrate plan includes an application-owned `api_keys` component after PGMQ; normal server startup remains migration-free
+- [x] M1: `kansoku.api_keys` table is created by `kansoku-migrate up`; strict verification and a second application are clean
+- [x] M1: `Kansoku.Auth.Types`, `Kansoku.Auth.Token`, `Kansoku.Auth.Store`, `Kansoku.Auth.Issue` modules compile with unit tests green
+- [x] M1: `kansoku-server issue-key` subcommand issues both kinds; transcript captured; `psql` shows a hash, not the token
+- [x] M1: `just issue-key` and `just dev-keys` recipes added
 - [ ] M2: `AuthProtect` combinators + `HasOpenApi` instances in `kansoku-api`; OpenAPI document regenerated with securitySchemes and 401/403 responses
 - [ ] M2: ingest route family authenticated (write key or service token, both headers); 401 and 202 transcripts captured
 - [ ] M2: ingested events are server-stamped with the key's account; stamped `account_id` observed in ClickHouse
@@ -254,7 +254,15 @@ Record every decision made while working on the plan.
 Summarize outcomes, gaps, and lessons learned at major milestones or at completion.
 Compare the result against the original purpose.
 
-(To be filled during and after implementation.)
+Milestone 1 (2026-07-19): the complete pg-migrate plan now applies
+`pgmq/0001`, `pgmq/0002`, then `kansoku/0001-api-keys`. The ephemeral PostgreSQL
+test proves fresh application, strict verification, an all-`AlreadyApplied` second run, table
+existence, and queue provisioning. Against a clean local validation database, a second CLI
+application likewise reported all three migrations already applied. Issuance printed a 49-byte
+`ksk_w_…` credential exactly once; SQL inspection showed only a 64-character lowercase SHA-256
+value with no `ksk_` plaintext. The store returns a typed `AuthStoreError` instead of throwing,
+which gives the HTTP layer an explicit way to distinguish key-store failure (503) from an
+unknown/revoked key (401).
 
 
 ## Context and Orientation

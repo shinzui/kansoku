@@ -1,5 +1,6 @@
 module Main (main) where
 
+import Kansoku.Auth.TokenSpec qualified
 import Kansoku.ClickHouseSpec qualified
 import Kansoku.ConfigSpec qualified
 import Kansoku.CorsSpec qualified
@@ -22,6 +23,7 @@ import Test.Hspec (hspec, runIO)
 main :: IO ()
 main = hspec $ do
   metrics <- runIO registerPipelineMetrics
+  Kansoku.Auth.TokenSpec.spec
   Kansoku.ConfigSpec.spec
   Kansoku.CorsSpec.spec
   Kansoku.ClickHouseSpec.spec

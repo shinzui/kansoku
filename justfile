@@ -53,6 +53,15 @@ run: migrate
 migrate:
     cabal run kansoku-migrate -- up
 
+# Issue an API key after applying the explicit PostgreSQL migration plan.
+issue-key kind account description="": migrate
+    cabal run kansoku-server:exe:kansoku-server -- issue-key --kind {{kind}} --account {{account}} --description "{{description}}"
+
+# Bootstrap one browser write key and one service token for local development.
+dev-keys: migrate
+    cabal run kansoku-server:exe:kansoku-server -- issue-key --kind write --account dev --description "local dev write key"
+    cabal run kansoku-server:exe:kansoku-server -- issue-key --kind service --account dev --description "local dev service token"
+
 # Start the local services (postgres, clickhouse, create_schema) via process-compose.
 up:
     process-compose up

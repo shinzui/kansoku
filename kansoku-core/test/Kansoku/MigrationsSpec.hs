@@ -14,6 +14,10 @@ import Database.PostgreSQL.Migrate
   )
 import Database.PostgreSQL.Migrate.Test (withMigratedDatabase)
 import Hasql.Connection qualified as Connection
+import Hasql.Decoders qualified as Decoders
+import Hasql.Encoders qualified as Encoders
+import Hasql.Session qualified as Session
+import Hasql.Statement qualified as Statement
 import Kansoku.Ingest.Queue (eventsQueueName)
 import Kansoku.Migrations (kansokuMigrationPlan)
 import Pgmq qualified
@@ -21,7 +25,7 @@ import Test.Hspec
 
 spec :: Spec
 spec = describe "Kansoku.Migrations" $ do
-  it "constructs the PGMQ-only application plan" $
+  it "constructs the PGMQ plus Kansoku application plan" $
     kansokuMigrationPlan `shouldSatisfy` isRight
 
   it "applies, strictly verifies, reapplies without work, and provisions the queue" $ do
@@ -32,6 +36,9 @@ spec = describe "Kansoku.Migrations" $ do
     migrated <-
       withMigratedDatabase plan $ \connection -> do
         let provider = connectionProvider (\action -> Right <$> action connection)
+
+        schemaResult <- Connection.use connection (Session.statement () apiKeysTableExists)
+        schemaResult `shouldBe` Right True
 
         verified <- verifyMigrationPlanWith defaultRunOptions provider plan
         case verified of
@@ -55,3 +62,10 @@ spec = describe "Kansoku.Migrations" $ do
     case migrated of
       Left err -> expectationFailure ("ephemeral migrated database failed: " <> show err)
       Right () -> pure ()
+
+apiKeysTableExists :: Statement.Statement () Bool
+apiKeysTableExists =
+  Statement.preparable
+    "SELECT to_regclass('kansoku.api_keys') IS NOT NULL"
+    Encoders.noParams
+    (Decoders.singleRow (Decoders.column (Decoders.nonNullable Decoders.bool)))

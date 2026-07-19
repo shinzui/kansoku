@@ -30,6 +30,10 @@ library
   hs-source-dirs:  src
   exposed-modules:
     Kansoku
+    Kansoku.Auth.Issue
+    Kansoku.Auth.Store
+    Kansoku.Auth.Token
+    Kansoku.Auth.Types
     Kansoku.ClickHouse
     Kansoku.ClickHouse.EventRow
     Kansoku.Config
@@ -56,9 +60,11 @@ library
     , aeson
     , async
     , base                              >=4.21 && <5
+    , base64-bytestring
     , bytestring
     , ClickHaskell
     , containers
+    , crypton
     , effectful
     , effectful-core
     , generic-lens                      >=2.2  && <2.4
@@ -83,6 +89,7 @@ library
     , text
     , time
     , unordered-containers
+    , uuid
     , wai
     , wai-cors
     , wai-extra
@@ -95,6 +102,7 @@ test-suite kansoku-core-test
   hs-source-dirs: test
   main-is:        Spec.hs
   other-modules:
+    Kansoku.Auth.TokenSpec
     Kansoku.ClickHouseSpec
     Kansoku.ClickHouseTestSupport
     Kansoku.ConfigSpec
@@ -140,5 +148,6 @@ test-suite kansoku-core-test
     , text
     , time
     , unordered-containers
+    , uuid
     , wai
     , warp

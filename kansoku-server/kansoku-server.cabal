@@ -33,6 +33,7 @@ executable kansoku-server
     , hasql-pool
     , kansoku-api
     , kansoku-core
+    , text
     , unix
 
 executable kansoku-migrate
