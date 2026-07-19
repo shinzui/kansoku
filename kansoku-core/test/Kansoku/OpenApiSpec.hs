@@ -56,6 +56,13 @@ spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
       `shouldSatisfy` maybe False (Text.isInfixOf "performed steps 1..N in order")
     operationParameterNames funnelOperation `shouldContain` ["window"]
 
+  it "labels retention as new-in-window cohorts with offset zero included" $ do
+    let retentionOperation = fromMaybe Aeson.Null (valueAt ["paths", "/metrics/retention", "get"] documentValue)
+    lookupText ["description"] retentionOperation
+      `shouldSatisfy` maybe False (Text.isInfixOf "new-in-window cohorts")
+    lookupText ["description"] retentionOperation
+      `shouldSatisfy` maybe False (Text.isInfixOf "Offset 0")
+
   it "keeps every wire DTO's ToJSON representation within its ToSchema" $ do
     conforms "AnalyticsEvent" sampleEvent
     conforms "IngestAck" Ingest.IngestAck {Ingest.accepted = 1, Ingest.eventId = "evt_openapi"}

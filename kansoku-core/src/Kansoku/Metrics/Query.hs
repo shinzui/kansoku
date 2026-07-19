@@ -319,6 +319,9 @@ buildSessionsSQL req =
        GROUP BY bucket, group_key
        ORDER BY bucket, group_key"""
 
+-- | Retention over new-in-window cohorts. first_seen deliberately computes
+-- min(day) inside the requested window; lifetime cohorts require a first-seen
+-- rollup and are outside the MVP contract.
 buildRetentionSQL :: QueryRequest -> [Int] -> Text
 buildRetentionSQL req offsets =
   Text.unlines
@@ -501,6 +504,8 @@ sqlString value =
 renderDay :: Day -> Text
 renderDay = Text.pack . formatTime defaultTimeLocale "%F"
 
+-- | Always include offset 0 so every cohort has its denominator row, discard
+-- negative offsets, and avoid duplicate result groups.
 normalizeOffsets :: [Int] -> [Int]
 normalizeOffsets offsets =
   List.nub (0 : filter (>= 0) offsets)

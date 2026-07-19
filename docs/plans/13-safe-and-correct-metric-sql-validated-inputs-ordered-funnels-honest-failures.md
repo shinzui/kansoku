@@ -75,9 +75,9 @@ This section must always reflect the actual current state of the work.
 - [x] (2026-07-18 21:53Z) M3: Haskell-side re-sort removed from `runSQLWith`
 - [x] (2026-07-18 21:53Z) M3: `buildSessionsSQL` predicate updated for v2 non-Nullable `session_id`
 - [x] (2026-07-18 21:53Z) M3: rollup readers reconciled with EP-12 merge functions; goldens updated
-- [ ] M4: retention route documented as "new-in-window cohorts" via servant `Description`
-- [ ] M4: `normalizeOffsets` offset-0 injection documented as intended
-- [ ] M4: full `cabal test` + end-to-end curl pass recorded in Validation section
+- [x] (2026-07-18 21:58Z) M4: retention route documented as "new-in-window cohorts" via servant `Description`
+- [x] (2026-07-18 21:58Z) M4: `normalizeOffsets` offset-0 injection documented as intended
+- [x] (2026-07-18 21:58Z) M4: full `cabal test all` + end-to-end curl pass recorded in Validation section
 
 ## Surprises & Discoveries
 
@@ -279,6 +279,17 @@ MultilineStrings query and only the v2 `session_id != ''` predicate. Rollup read
 public active-user accuracy wording now match EP-12's `uniqCombined`/`count` states and
 raw-identity semantics. The live suite passed 49/49 core examples, and fixture-backed HTTP
 responses stayed ordered and non-zero.
+
+Milestone 4 and EP-13 are complete. Retention's served OpenAPI description now states that
+cohorts are new-in-window and offset 0 is unconditional; matching code comments pin both
+choices. A fresh replay of all seven ClickHouse migrations plus the updated EP-6 fixture
+passed the full HTTP matrix: hostile step and zero window return 400; default and 60-second
+funnels return 3/1 and 3/0; retention begins with cohort 2026-06-01 offset 0; sessions,
+active users, and page views remain ordered and non-zero; and the served document contains
+both descriptions plus the window parameter. `cabal build all` and `cabal test all` pass
+(50 core examples, 8 client examples, zero failures; the opt-in external client case is the
+only pending example). The original four defects are resolved without changing the
+`MetricResult` wire shape or adding storage objects.
 
 
 ## Context and Orientation
@@ -958,6 +969,25 @@ page_views by day: 4, 1
 Live core suite: 49 examples, 0 failures
 ```
 
+Final M4 pass on 2026-07-18 used a fresh seven-migration replay and fixture load:
+
+```text
+cabal build all: PASS
+cabal test all: core 50 examples, 0 failures; client 8 examples, 0 failures, 1 opt-in pending
+just openapi-check: PASS
+nix build .#packages.aarch64-darwin.default --no-link: PASS
+docs/api/openapi.json SHA-256: 4817f5bcbdb2034359ccf7e5db8108321155a50f42c2814c3d181d97030e40fb
+invalid hostile step: HTTP 400
+invalid window=0: HTTP 400
+funnel default: step 1 = 3, step 2 = 1
+funnel window=60: step 1 = 3, step 2 = 0
+retention first group: cohort=2026-06-01, offset=0 (value=2)
+sessions: 2, 2, 2
+active_users: 2, 2, 2
+page_views: 4, 1
+served OpenAPI: funnel description present; retention new-in-window/offset-0 description present; window parameter present
+```
+
 Test-level acceptance: `cabal test` green; `ValidateSpec` covers accept/reject cases
 including the injection payloads; `QuerySpec` asserts the `windowFunnel` shape, absence of
 `UNION ALL` in funnel SQL, the `session_id != ''` predicate, the v2 merge functions, and
@@ -1002,21 +1032,20 @@ Module contracts at end of plan (post-EP-11 signatures may replace `Connection` 
 pool/handle type — accept whatever exists and note it in the Decision Log):
 
 ```haskell
-module Kansoku.Query.Validate
+module Kansoku.Metrics.Query.Validate
   ( SqlName,            -- opaque; constructor NOT exported
     mkSqlName,          -- :: Text -> Either Text SqlName
     renderSqlName,      -- :: SqlName -> Text
   )
 
-module Kansoku.Query
+module Kansoku.Metrics.Query
   ( QueryRequest (..),
-    QueryDecodeError (..),  -- only if the pre-EP-11 decode path still exists
     buildSQL,               -- :: BuiltinMetric -> QueryRequest -> Text
     buildFunnelSQL,         -- :: QueryRequest -> Int -> [SqlName] -> Text
     buildRetentionSQL,      -- :: QueryRequest -> [Int] -> Text
     buildSessionsSQL,       -- :: QueryRequest -> Text
     run, runSessions, runRetention,
-    runFunnel,              -- :: (IOE :> es) => Connection -> QueryRequest -> Int -> [SqlName] -> Eff es MetricResult
+    runFunnel,              -- :: (IOE :> es) => QueryPool -> QueryRequest -> Int -> [SqlName] -> Eff es MetricResult
   )
 ```
 
@@ -1030,7 +1059,7 @@ field) ends the plan as:
   :> QueryParam' '[Required] "to" Day
   :> QueryParam' '[Required] "steps" Text
   :> QueryParam "window" Int
-  :> Get '[JSON] MetricResult
+  :> MultiVerb 'GET '[JSON] (OkResponses "Metric result" MetricResult) (KansokuResult MetricResult)
 ```
 
 Services: ClickHouse and Postgres via `process-compose up`; the schema and rollups are
@@ -1050,3 +1079,10 @@ feature), native parameters become the primary injection defense with charset va
 retained as defense-in-depth, and the Progress checklist, Decision Log, and Surprises &
 Discoveries were updated accordingly. The validation-only outcome remains documented as the
 fallback if the pin bump proves impractical.
+
+Revision note (2026-07-18): implemented all four milestones against the landed EP-12,
+EP-11, and EP-9 architecture. ClickHaskell is pinned coherently to upstream v1.1.0;
+validation and native parameters protect metric names; funnels are ordered single-pass
+queries with a bounded window; typed failures surface as 503 without a Haskell re-sort;
+retention and rollup semantics are documented; and the full live, OpenAPI, Cabal, and Nix
+validation evidence is recorded above.

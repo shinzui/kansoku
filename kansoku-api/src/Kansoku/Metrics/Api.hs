@@ -101,6 +101,7 @@ data MetricsRoutes mode = MetricsRoutes
       mode
         :- "metrics"
           :> "retention"
+          :> Description "Retention over new-in-window cohorts: a user's cohort day is their first activity within the requested from/to window (users active before the window re-appear as new). Offset 0 (the cohort day itself) is always included."
           :> QueryParam' '[Required] "from" Day
           :> QueryParam' '[Required] "to" Day
           :> QueryParam "days" Text
