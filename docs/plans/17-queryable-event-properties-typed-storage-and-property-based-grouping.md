@@ -50,15 +50,16 @@ This section must always reflect the actual current state of the work.
 
 - [x] (2026-07-19 18:17Z) M0: reconciled this plan against the post-MasterPlan-2 tree (see
       "Reconcile at start" in Context and Orientation); recorded deltas in the Decision Log
-- [ ] M1: benchmark fixture table `analytics.prop_bench_raw` created and populated (10M rows)
-- [ ] M1: candidate expressions validated on the pinned server (exact working SQL for
+- [x] (2026-07-19 18:24Z) M1: benchmark fixture table `analytics.prop_bench_raw` created
+      and populated (10M rows)
+- [x] (2026-07-19 18:24Z) M1: candidate expressions validated on the pinned server (exact working SQL for
       string group, float aggregate, equality filter per candidate recorded in Decision Log)
-- [ ] M1: benchmark protocol run; latency/read-bytes/storage numbers captured in
+- [x] (2026-07-19 18:24Z) M1: benchmark protocol run; latency/read-bytes/storage numbers captured in
       Surprises & Discoveries
-- [ ] M1: storage representation decided; Decision Log entry written here AND MasterPlan 3
+- [x] (2026-07-19 18:24Z) M1: storage representation decided; Decision Log entry written here AND MasterPlan 3
       Integration Points ("Properties storage representation") updated
-- [ ] M1: versioned migration for the chosen representation written, applied via
-      `just ch-migrate`, ledger-recorded; bench table dropped
+- [x] (2026-07-19 18:29Z) M1: versioned migration for the chosen representation written,
+      applied via `just ch-migrate`, ledger-recorded; bench table dropped
 - [ ] M2: `feature_used` and `payment_completed` schemas added to `defaultRegistry`
 - [ ] M2: `MetricDefinition.aggregationProperty` added; `revenue` declares `"amount"`;
       compiler uses it; builtin-registry unit test asserts every Sum/Average declares one
@@ -108,7 +109,45 @@ Pre-implementation research findings (2026-07-15, plan authoring):
   registry the gate for property grouping, both schemas must be added (Milestone 2) or the
   two flagship examples would 400 on their own properties.
 
-(Nothing else yet — add entries as implementation proceeds.)
+Implementation findings (2026-07-19, Milestone 1):
+
+- The local ClickHouse server does not create `system.query_log`, so the planned query-log
+  read-byte capture was unavailable. ClickHouse's `FORMAT JSON` statistics reported the
+  same `rows_read` and `bytes_read` fields without changing the four-row aggregate result;
+  those values are captured below. This changes only the evidence source, not the queries.
+- Repeated grouped aggregates with ClickHouse expression compilation enabled eventually
+  failed with `std::bad_alloc` in the constrained local process. Kansoku's production
+  `aggSelect` already sets `compile_expressions = 0`, `compile_aggregate_expressions = 0`,
+  and `compile_sort_description = 0`; rerunning every candidate with those exact settings
+  completed five times without error. The medians below therefore model the shipped query
+  path and use the same settings for every candidate.
+- Five-run median seconds, followed by one representative JSON-statistics read measurement:
+
+  ```text
+                         raw JSONExtract   native JSON   typed columns   Map(String,String)
+  grouped sum(amount)          0.272          0.043          0.011            0.105
+  filter plan = pro            0.046          0.011          0.003            0.015
+  group/count by plan          0.148          0.024          0.011            0.037
+
+  aggregate bytes read       350.3 MB       392.5 MB        90.0 MB          170.3 MB
+  group-only bytes read      350.3 MB       222.5 MB        10.0 MB           82.5 MB
+
+  compressed storage:
+    properties raw String       4.38 MiB
+    properties_json JSON        1.49 MiB (34% of raw)
+    prop_plan + prop_amount     0.63 MiB (14% of raw)
+    props_map Map               5.65 MiB (129% of raw)
+  ```
+
+  Native JSON and typed columns both pass the grouped-latency threshold (at most one third
+  of 0.272 seconds) and storage threshold (at most 60% of 4.38 MiB). The map candidate
+  fails both. Native JSON wins by the plan's declared preference order because it avoids a
+  new migration whenever the registry gains a property.
+- Migration `0009_typed_properties.sql` applied once and skipped on the second runner pass.
+  A fresh `payment_completed` storage probe returned `plan = pro` and `amount = 49` through
+  `toString(properties_json.plan)` and `CAST(properties_json.amount, 'Float64')`; the
+  ledger contained exactly one row and `EXISTS TABLE analytics.prop_bench_raw` returned 0
+  after cleanup.
 
 
 ## Decision Log
@@ -181,10 +220,20 @@ Record every decision made while working on the plan.
   post-MasterPlan-2 working tree before implementation begins.
   Date: 2026-07-19
 
-- Decision: (placeholder — to be filled by Milestone 1) Chosen storage representation:
-  TBD. Record the winning candidate, the measured numbers, and the exact SQL expressions
-  the query compiler will emit; copy the decision into MasterPlan 3's Integration Points.
-  Date: TBD
+- Decision: Choose candidate (a), one server-side native `JSON` materialized column:
+  `properties_json JSON MATERIALIZED CAST(properties, 'JSON')`. The compiler emits
+  `toString(properties_json.<name>)` for group keys and string equality,
+  `CAST(properties_json.<name>, 'Float64')` for numeric aggregation, and compares the
+  typed expression directly for numeric and boolean filters. On 10 million rows the
+  five-run median grouped aggregate was 0.043 seconds versus 0.272 seconds for raw
+  `JSONExtract*` (6.3 times faster), and the column added 1.49 MiB versus the raw
+  `properties` column's 4.38 MiB (34%). Registry-driven typed columns were faster at
+  0.011 seconds but would require property-by-property DDL; the native JSON candidate also
+  passes every criterion and therefore wins the plan's declared preference order.
+  Rationale: native JSON gives declared properties typed, subcolumn-readable storage while
+  allowing EP-20 to add declarations without ClickHouse schema churn. The materialized
+  column remains server-side and never crosses ClickHaskell's wire.
+  Date: 2026-07-19
 
 
 ## Outcomes & Retrospective

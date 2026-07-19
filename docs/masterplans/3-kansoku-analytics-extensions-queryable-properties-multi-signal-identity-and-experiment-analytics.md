@@ -124,11 +124,14 @@ fixture events posted via curl or the Haskell client.
 
 ## Integration Points
 
-Properties storage representation — defined by EP-17, consumed by EP-19. EP-17 decides how
-event properties become queryable in ClickHouse (native JSON column vs. registry-driven
-materialized columns vs. both; the decision and rationale live in EP-17's Decision Log and
-must be recorded here when made). EP-19's variant grouping and rollup MVs must use that
-representation, never `JSONExtract*` over the raw string.
+Properties storage representation — defined by EP-17, consumed by EP-19. EP-17 chose one
+server-side `properties_json JSON MATERIALIZED CAST(properties, 'JSON')` column after a
+10-million-row benchmark: the grouped aggregate median was 0.043 seconds versus 0.272
+seconds for raw `JSONExtract*`, and compressed storage was 34% of the raw properties
+column. Group keys use `toString(properties_json.<name>)`; numeric aggregates use
+`CAST(properties_json.<name>, 'Float64')`. EP-19's variant grouping and rollup MVs must use
+those expressions, never `JSONExtract*` over the raw string. Full evidence and alternatives
+are in EP-17's Decision Log.
 
 Event registry (`kansoku-api/src/Kansoku/Event/Registry.hs`) — EP-17 reads it to know which
 properties are declared (and, if it chooses materialized columns, to drive them); EP-19 adds
@@ -195,7 +198,7 @@ version 1 when it versions the registry.
 Track milestone-level progress across all child plans. Each entry names the child plan
 and the milestone. This section provides an at-a-glance view of the entire initiative.
 
-- [ ] EP-17: property storage representation decided, prototyped, and migrated
+- [x] EP-17: property storage representation decided, prototyped, and migrated
 - [ ] EP-17: query builders support declared-property grouping and filtering
 - [ ] EP-17: metrics API groupBy/filter contract extended; client + OpenAPI regenerated
 - [ ] EP-18: identity-signals model (wire field, storage, ingestion) live
