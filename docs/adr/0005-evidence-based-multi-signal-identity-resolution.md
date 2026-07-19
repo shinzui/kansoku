@@ -43,7 +43,11 @@ ranked by confidence and then observation recency, with the event's cookie as th
 fallback.
 
 Fingerprint evidence has a 180-day row-level TTL. Raw-event fingerprint scrubbing and
-per-user erasure are operational mutations documented by the identity deletion runbook.
+per-user erasure are operational mutations documented in
+`docs/runbooks/identity-data-deletion.md`. Erasure clears both mapped identifiers and
+the implicit `anonymous_id` cookie before deleting the user's evidence. It does not
+automatically delete anonymous facts reached through probabilistic signals because those
+signals can be shared.
 
 The resolution implementation replaces the internals of
 `analytics.events_resolved` while preserving ADR 0004's ordered seven-column contract.

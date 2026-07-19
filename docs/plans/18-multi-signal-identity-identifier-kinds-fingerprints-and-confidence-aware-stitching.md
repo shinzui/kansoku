@@ -79,15 +79,15 @@ This section must always reflect the actual current state of the work.
 - [x] (2026-07-19 13:20 PDT) M2: `analytics.identity_conflicts` view live; conflict fixture appears in it and
       resolves by the documented ranking
 - [x] (2026-07-19 13:20 PDT) M2: fixture story transcripts captured (with-fingerprints counts 1, without counts 2)
-- [ ] M3: fingerprint TTL on `identity_signals` verified (aged fingerprint row deleted by
+- [x] (2026-07-19 13:31 PDT) M3: fingerprint TTL on `identity_signals` verified (aged fingerprint row deleted by
       TTL, aged cookie row survives)
-- [ ] M3: deletion runbook written at `docs/runbooks/identity-data-deletion.md` and
+- [x] (2026-07-19 13:34 PDT) M3: deletion runbook written at `docs/runbooks/identity-data-deletion.md` and
       exercised once against fixture data
-- [ ] M3: `identity_map`/`mv_identity_map` retired in a follow-up migration after the
+- [x] (2026-07-19 13:40 PDT) M3: `identity_map`/`mv_identity_map` retired in a follow-up migration after the
       stability battery passes
-- [ ] M3: MP-2-era resolution query battery re-run; `canonical_user` output-shape
+- [x] (2026-07-19 13:40 PDT) M3: MP-2-era resolution query battery re-run; `canonical_user` output-shape
       stability recorded (the EP-19 invariant)
-- [ ] MasterPlan 3 Progress and Integration Points updated (field-name claim recorded)
+- [x] (2026-07-19 13:44 PDT) MasterPlan 3 Progress and Integration Points updated (field-name claim recorded)
 - [x] (2026-07-19 13:08 PDT) Reconciled the plan with EP-17's landed native-JSON
       projection, migration ledger through `0010`, and the live seven-column
       `analytics.events_resolved` contract; baseline `just build` and `just test` passed.
@@ -116,6 +116,21 @@ implementation. Provide concise evidence.
   correctly fails with ClickHouse error 117. Both EP-18 fixtures now write explicit
   `'{}'` values for `properties` and `context`; the production Haskell writer already
   always emits valid objects.
+
+- 2026-07-19: ClickHouse 26.5.1 discarded the already-expired fingerprint row during
+  insertion, before the explicit `OPTIMIZE FINAL`; the equally old cookie row remained.
+  The forced merge and normalized `SHOW CREATE TABLE` output still verified the scoped
+  180-day TTL.
+
+- 2026-07-19: `Kansoku.ClickHouseSpec` truncates `events_raw` as part of test isolation.
+  Privacy fixtures therefore must be loaded after `just test`, not before the deletion
+  exercise. The runbook was re-exercised after a clean reset and fresh fixture load.
+
+- 2026-07-19: The legacy EP-5/EP-6 fixtures also omitted valid `properties`/`context` JSON
+  and account identity. They now write `'{}'` plus `acct-legacy`, allowing the MP-2
+  stability battery to run on the EP-17/EP-18 schema. The current DAU state is
+  `uniqCombined`, so the acceptance query uses `uniqCombinedMerge`, not the older
+  `uniqExactMerge` spelling retained in the authored plan.
 
 
 ## Decision Log
@@ -247,6 +262,15 @@ Record every decision made while working on the plan.
   and is the rollback target.
   Date: 2026-07-15
 
+- Decision: Per-user identity erasure clears the implicit `anonymous_id` cookie as well
+  as mapped `identifiers`, both on the user's explicit events and on linked anonymous
+  events. Inferred anonymous facts are not deleted automatically.
+  Rationale: Removing evidence alone would unlink a cookie but leave the personal
+  identifier in raw storage. Clearing it provides real identity erasure, while deleting
+  events reached through a shared probabilistic fingerprint could erase another user's
+  analytics facts.
+  Date: 2026-07-19
+
 
 ## Outcomes & Retrospective
 
@@ -265,6 +289,15 @@ sessions converged to one canonical user, and the cookie-only control remained t
 The conflict fixture retained both users and resolved equal-confidence fingerprint
 bindings by recency. `DESCRIBE analytics.events_resolved` remained identical to the
 pre-milestone seven-column contract.
+
+EP-18 completed on 2026-07-19. Kansoku now accepts four typed identifier kinds, persists
+immutable account-scoped evidence, exposes conflicts, and resolves explicit users before
+confidence/recency-ranked signals and cookie fallback. Fingerprint evidence expires after
+180 days, raw fingerprints have an exercised retention mutation, and the per-user runbook
+scrubs mapped and implicit cookie identifiers before deleting evidence. The old
+`identity_map` objects are retired. Fresh pre- and post-retirement batteries both returned
+`3` stitched users and `4` raw DAU while preserving the seven-column resolved-event
+contract; 109 core tests and 10 client tests remained green.
 
 
 ## Context and Orientation
@@ -866,14 +899,15 @@ BEFORE deleting the evidence rows that let you find them:
 
 ```sql
 -- Step 1 (read-only): enumerate the user's known signal values. Save this
--- output; steps 3 and 4 need it and step 5 destroys the source.
+-- output; later steps need it and evidence deletion destroys the source.
 SELECT DISTINCT signal_kind, signal_value
 FROM analytics.identity_signals
 WHERE account_id = 'ACCOUNT' AND user_id = 'USER';
 
--- Step 2: scrub the identifiers column on the user's own events.
+-- Step 2: scrub mapped identifiers and the implicit cookie on the user's
+-- own explicit events.
 ALTER TABLE analytics.events_raw
-UPDATE identifiers = '{}'
+UPDATE identifiers = '{}', anonymous_id = ''
 WHERE account_id = 'ACCOUNT' AND user_id = 'USER';
 
 -- Step 3: scrub anonymous events carrying any of the user's signal values
@@ -885,16 +919,24 @@ WHERE account_id = 'ACCOUNT'
   AND arrayExists(kv -> kv.2 IN ('VALUE1', 'VALUE2'),
                   JSONExtractKeysAndValues(identifiers, 'String'));
 
--- Step 4 (optional, full-event erasure — the bigger GDPR hammer, listed for
--- completeness; identity scrubbing alone is steps 2-3):
+-- Step 4: scrub anonymous_id values using only the cookie-kind values saved
+-- in step 1. Skip when the discovery returned no cookie rows.
+ALTER TABLE analytics.events_raw
+UPDATE anonymous_id = ''
+WHERE account_id = 'ACCOUNT'
+  AND user_id = ''
+  AND anonymous_id IN ('COOKIE1', 'COOKIE2');
+
+-- Step 5 (optional, full-event erasure — the bigger GDPR hammer, listed for
+-- completeness; identity scrubbing alone is steps 2-4):
 -- ALTER TABLE analytics.events_raw
 -- DELETE WHERE account_id = 'ACCOUNT' AND user_id = 'USER';
 
--- Step 5: delete the evidence rows.
+-- Step 6: delete the evidence rows.
 ALTER TABLE analytics.identity_signals
 DELETE WHERE account_id = 'ACCOUNT' AND user_id = 'USER';
 
--- Step 6: watch the mutations drain (all of the above are asynchronous
+-- Step 7: watch the mutations drain (all of the above are asynchronous
 -- part-rewriting mutations — expensive on large tables; run off-peak, one
 -- account at a time).
 SELECT mutation_id, command, is_done, latest_fail_reason
@@ -924,9 +966,10 @@ WHERE occurred_at < now() - INTERVAL 180 DAY
 ```
 
 Exercise the runbook once against fixture data (transcript in Validation and Acceptance:
-after running steps 1–3 and 5 for `user-U`, the user's evidence rows are gone, their
-events' `identifiers` read `'{}'`, and their previously-stitched anonymous events fall
-back to cookie resolution).
+after running steps 1–4 and 6 for `user-U`, the user's evidence rows are gone, mapped
+identifiers and the known cookie are scrubbed, and previously stitched anonymous events
+fall back to a remaining local cookie or the empty identity when that cookie belonged to
+the erased user).
 
 Stability battery (the EP-19 invariant). On a fresh `just ch-reset` + `just ch-migrate`
 database, load the MP-2-era fixtures (`just ch-fixtures-ep5`, `just ch-fixtures-ep6`) and
@@ -946,7 +989,7 @@ applied ONLY after the battery passes:
 
 ```sql
 -- EP-18 M3: identity_map is superseded by identity_signals + identity_bindings.
--- The backfill in 0009 reproduced its content (identify/alias cookie bindings)
+-- The backfill in 0012 reproduced its content (identify/alias cookie bindings)
 -- and the stability battery verified identical resolution; safe to drop.
 DROP TABLE IF EXISTS analytics.mv_identity_map;
 DROP TABLE IF EXISTS analytics.identity_map;
@@ -1033,7 +1076,7 @@ clickhouse-client --port $CLICKHOUSE_TCP_PORT --query "
   SELECT uniqExact(canonical_user) FROM analytics.events_resolved
   WHERE canonical_user != '' AND toDate(occurred_at) = '2026-06-08'"   # expect 3
 clickhouse-client --port $CLICKHOUSE_TCP_PORT --query "
-  SELECT uniqExactMerge(users) FROM analytics.dau WHERE day = '2026-06-08'"  # expect 4
+  SELECT uniqCombinedMerge(users) FROM analytics.dau WHERE day = '2026-06-08'"  # expect 4
 just test
 ```
 
@@ -1122,18 +1165,18 @@ assumption, Decision Log):
 -- EP-18 fixture: two sessions, one fingerprint, one identify.
 -- Insertion order is irrelevant: resolution is query-time.
 INSERT INTO analytics.events_raw
-    (event_id, event_name, source, occurred_at, received_at, account_id, anonymous_id, user_id, url, identifiers)
+    (event_id, event_name, source, occurred_at, received_at, account_id, anonymous_id, user_id, url, properties, context, identifiers)
 VALUES
-    ('s-a1', 'page_view',    'web', '2026-07-01 09:00:00.000', '2026-07-01 09:00:00.100', 'acct-1', 'anon-A', '',       'https://app.example.com/pricing', '{"fingerprint":"fp-F"}'),
-    ('s-a2', 'page_view',    'web', '2026-07-01 09:05:00.000', '2026-07-01 09:05:00.100', 'acct-1', 'anon-A', '',       'https://app.example.com/signup',  '{"fingerprint":"fp-F"}'),
-    ('s-id', 'identify',     'web', '2026-07-01 09:10:00.000', '2026-07-01 09:10:00.100', 'acct-1', 'anon-A', 'user-U', '',                                '{"fingerprint":"fp-F"}'),
-    ('s-b1', 'page_view',    'web', '2026-07-01 10:00:00.000', '2026-07-01 10:00:00.100', 'acct-1', 'anon-B', '',       'https://app.example.com/docs',    '{"fingerprint":"fp-F"}'),
-    ('s-b2', 'feature_used', 'app', '2026-07-01 10:05:00.000', '2026-07-01 10:05:00.100', 'acct-1', 'anon-B', '',       '',                                '{"fingerprint":"fp-F"}'),
-    ('c-a1', 'page_view',    'web', '2026-07-01 09:00:00.000', '2026-07-01 09:00:00.100', 'acct-ctl', 'anon-CA', '',        'https://app.example.com/pricing', '{}'),
-    ('c-a2', 'page_view',    'web', '2026-07-01 09:05:00.000', '2026-07-01 09:05:00.100', 'acct-ctl', 'anon-CA', '',        'https://app.example.com/signup',  '{}'),
-    ('c-id', 'identify',     'web', '2026-07-01 09:10:00.000', '2026-07-01 09:10:00.100', 'acct-ctl', 'anon-CA', 'user-CU', '',                                '{}'),
-    ('c-b1', 'page_view',    'web', '2026-07-01 10:00:00.000', '2026-07-01 10:00:00.100', 'acct-ctl', 'anon-CB', '',        'https://app.example.com/docs',    '{}'),
-    ('c-b2', 'feature_used', 'app', '2026-07-01 10:05:00.000', '2026-07-01 10:05:00.100', 'acct-ctl', 'anon-CB', '',        '',                                '{}');
+    ('s-a1', 'page_view',    'web', '2026-07-01 09:00:00.000', '2026-07-01 09:00:00.100', 'acct-1', 'anon-A', '',       'https://app.example.com/pricing', '{}', '{}', '{"fingerprint":"fp-F"}'),
+    ('s-a2', 'page_view',    'web', '2026-07-01 09:05:00.000', '2026-07-01 09:05:00.100', 'acct-1', 'anon-A', '',       'https://app.example.com/signup',  '{}', '{}', '{"fingerprint":"fp-F"}'),
+    ('s-id', 'identify',     'web', '2026-07-01 09:10:00.000', '2026-07-01 09:10:00.100', 'acct-1', 'anon-A', 'user-U', '',                                '{}', '{}', '{"fingerprint":"fp-F"}'),
+    ('s-b1', 'page_view',    'web', '2026-07-01 10:00:00.000', '2026-07-01 10:00:00.100', 'acct-1', 'anon-B', '',       'https://app.example.com/docs',    '{}', '{}', '{"fingerprint":"fp-F"}'),
+    ('s-b2', 'feature_used', 'app', '2026-07-01 10:05:00.000', '2026-07-01 10:05:00.100', 'acct-1', 'anon-B', '',       '',                                '{}', '{}', '{"fingerprint":"fp-F"}'),
+    ('c-a1', 'page_view',    'web', '2026-07-01 09:00:00.000', '2026-07-01 09:00:00.100', 'acct-ctl', 'anon-CA', '',        'https://app.example.com/pricing', '{}', '{}', '{}'),
+    ('c-a2', 'page_view',    'web', '2026-07-01 09:05:00.000', '2026-07-01 09:05:00.100', 'acct-ctl', 'anon-CA', '',        'https://app.example.com/signup',  '{}', '{}', '{}'),
+    ('c-id', 'identify',     'web', '2026-07-01 09:10:00.000', '2026-07-01 09:10:00.100', 'acct-ctl', 'anon-CA', 'user-CU', '',                                '{}', '{}', '{}'),
+    ('c-b1', 'page_view',    'web', '2026-07-01 10:00:00.000', '2026-07-01 10:00:00.100', 'acct-ctl', 'anon-CB', '',        'https://app.example.com/docs',    '{}', '{}', '{}'),
+    ('c-b2', 'feature_used', 'app', '2026-07-01 10:05:00.000', '2026-07-01 10:05:00.100', 'acct-ctl', 'anon-CB', '',        '',                                '{}', '{}', '{}');
 ```
 
 Phase 1 assertions (after `just ch-reset && just ch-migrate && just ch-fixtures-ep18`).
@@ -1204,9 +1247,9 @@ later:
 ```sql
 -- EP-18 conflict fixture: fingerprint fp-F now also observed with user-V.
 INSERT INTO analytics.events_raw
-    (event_id, event_name, source, occurred_at, received_at, account_id, anonymous_id, user_id, url, identifiers)
+    (event_id, event_name, source, occurred_at, received_at, account_id, anonymous_id, user_id, url, properties, context, identifiers)
 VALUES
-    ('s-v', 'identify', 'web', '2026-07-01 11:00:00.000', '2026-07-01 11:00:00.100', 'acct-1', 'anon-C', 'user-V', '', '{"fingerprint":"fp-F"}');
+    ('s-v', 'identify', 'web', '2026-07-01 11:00:00.000', '2026-07-01 11:00:00.100', 'acct-1', 'anon-C', 'user-V', '', '{}', '{}', '{"fingerprint":"fp-F"}');
 ```
 
 After `just ch-fixtures-ep18-conflict`, the conflict is queryable, not silently resolved:
@@ -1303,15 +1346,57 @@ cookie	1
 ```
 
 The 200-day-old fingerprint row is gone; the equally old cookie row survives — the TTL's
-`WHERE signal_kind = 'fingerprint'` scoping works. Runbook exercise: with the M2 fixtures
-loaded, run the runbook's steps 1–3 and 5 for `ACCOUNT = 'acct-1'`, `USER = 'user-U'`,
-wait for `system.mutations` to drain, then confirm: `identity_signals` has no `user-U`
-rows; `s-a1`/`s-a2`/`s-id` read `identifiers = '{}'`; and `s-a1`'s `canonical_user` falls
-back to `anon-A` (its evidence is gone — exactly what erasure means).
+`WHERE signal_kind = 'fingerprint'` scoping works. On ClickHouse 26.5.1 the expired
+fingerprint disappeared during insertion before the explicit merge; `OPTIMIZE FINAL`
+kept the same result and `SHOW CREATE TABLE` printed the normalized 180-day clause.
+Runbook exercise: with fresh M2 fixtures loaded, run steps 1–4 and 6 for
+`ACCOUNT = 'acct-1'`, `USER = 'user-U'`, wait for `system.mutations` to drain, then
+confirm: no `user-U` evidence remains; `s-a1`/`s-a2`/`s-id` read `identifiers = '{}'`;
+the implicit `anon-A` cookie is erased; `s-a1` and `s-a2` resolve to the empty identity;
+and the explicit `s-id` event still resolves to `user-U` unless optional full-event
+deletion is selected.
 
 Stability battery: the ep5/ep6 queries and expected numbers are in Milestone 3 and
 Concrete Steps step 3 (`3` stitched, `4` raw dau, empty `DESCRIBE` diff, `just test`
-green before and after the retirement migration). Record all transcripts here when run.
+green before and after the retirement migration).
+
+Implementation transcript (2026-07-19):
+
+```text
+TTL after insertion and OPTIMIZE FINAL
+cookie  1
+SHOW CREATE: TTL toDateTime(observed_at) + toIntervalDay(180)
+             WHERE signal_kind = 'fingerprint'
+
+per-user erasure discovery
+cookie       anon-A
+fingerprint  fp-F
+
+post-erasure user-U evidence rows: 0
+post-erasure pending mutations: 0
+s-a1  anonymous_id=''  user_id=''       identifiers={}  canonical_user=''
+s-a2  anonymous_id=''  user_id=''       identifiers={}  canonical_user=''
+s-id  anonymous_id=''  user_id='user-U' identifiers={}  canonical_user='user-U'
+
+raw retention mutation
+before: {"device":"dev-old","fingerprint":"fp-old"}
+after:  {"device":"dev-old"}
+
+pre-retirement battery
+stitched unique users  3
+raw DAU merge          4
+identity_map exists    1
+
+post-retirement fresh replay
+stitched unique users  3
+raw DAU merge          4
+old map objects        0
+resolved columns       event_id,event_name,occurred_at,url,account_id,canonical_user,properties_json
+final build             up to date
+tests                   109 core passed; 10 client passed; 1 opt-in client test pending
+OpenAPI check           regenerated with no diff
+migration idempotence   0011, 0012, and 0013 skipped as already applied
+```
 
 
 ## Idempotence and Recovery
@@ -1343,7 +1428,7 @@ for a pristine start. The TTL demo rows live under the throwaway account `acct-t
 Mutations (runbook): `ALTER TABLE ... UPDATE/DELETE` are asynchronous and irreversible —
 there is no undo; that is their purpose here (erasure). They are safe to re-issue (the
 predicate matches nothing the second time). Always run step 1's SELECT and save its
-output before step 5.
+output before step 6.
 
 The two Haskell milestone commits each leave `just build`/`just test` green; if a step
 fails midway, `git status` plus this plan's Progress section is enough to resume.
@@ -1407,3 +1492,9 @@ Revision note (2026-07-19, Milestones 1-2): recorded the completed wire, validat
 storage, client, OpenAPI, evidence-store, conflict, and resolution work; added live HTTP
 and ClickHouse transcripts; documented the EP-17 fixture interaction; and linked ADR 0005
 as the durable owner of the identity model and ranking policy.
+
+Revision note (2026-07-19, Milestone 3 and completion): recorded the exercised fingerprint
+TTL and raw-retention mutation, per-user erasure transcript, pre/post-retirement stability
+battery, legacy-fixture compatibility fixes, final validation results, and the completed
+EP-18 outcome; synchronized MasterPlan 3's registry, progress, integration contracts,
+decisions, discoveries, and retrospective.

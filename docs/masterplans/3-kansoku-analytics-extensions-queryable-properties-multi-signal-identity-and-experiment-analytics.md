@@ -78,7 +78,7 @@ it non-trivial; recorded as future scope.
 | # | Title | Path | Hard Deps | Soft Deps | Status |
 |----|-------|------|-----------|-----------|--------|
 | 17 | Queryable event properties: typed storage and property-based grouping | docs/plans/17-queryable-event-properties-typed-storage-and-property-based-grouping.md | None (external: MP-2) | EP-20 | Complete |
-| 18 | Multi-signal identity: identifier kinds, fingerprints, and confidence-aware stitching | docs/plans/18-multi-signal-identity-identifier-kinds-fingerprints-and-confidence-aware-stitching.md | None (external: MP-2) | None | In Progress |
+| 18 | Multi-signal identity: identifier kinds, fingerprints, and confidence-aware stitching | docs/plans/18-multi-signal-identity-identifier-kinds-fingerprints-and-confidence-aware-stitching.md | None (external: MP-2) | None | Complete |
 | 19 | Experiment analytics: assignment events, variant rollups, and per-variant metrics | docs/plans/19-experiment-analytics-assignment-events-variant-rollups-and-per-variant-metrics.md | EP-17 | EP-18, EP-20 | Not Started |
 | 20 | Event schema governance: versioned registry and portfolio event contracts | docs/plans/20-event-schema-governance-versioned-registry-and-portfolio-event-contracts.md | None (external: MP-2) | None | Not Started |
 
@@ -142,19 +142,21 @@ experiment event schemas (`experiment_viewed` / assignment) to it; EP-20 version
 externalizes it. Until EP-20 lands, the in-code registry is the source of truth and EP-17/
 EP-19 write against it; EP-20 must migrate their entries without semantic change.
 
-`AnalyticsEvent` wire type (`kansoku-api/src/Kansoku/Event/Types.hs`) — EP-18 adds an
-optional identifier-signals field; EP-20 adds an optional schema-version field. Both are
+`AnalyticsEvent` wire type (`kansoku-api/src/Kansoku/Event/Types.hs`) — EP-18 shipped the
+optional `identifiers :: Maybe (Map Text Text)` field; EP-20 adds an optional
+schema-version field. Both are
 additive and optional (existing producers keep working); each plan updates `kansoku-client`,
 validation, `EventRow`/ClickHouse columns (through the migration mechanism), and the OpenAPI
 document in the same change. If both plans are in flight simultaneously, coordinate field
 naming here before either merges.
 
-Identity resolution (`analytics.events_resolved` and successors) — EP-18 redefines how
-`canonical_user` is computed (signals table + confidence policy). EP-19's per-variant unique
+Identity resolution (`analytics.events_resolved` and successors) — EP-18 now computes
+`canonical_user` from account-scoped `identity_signals` plus the view-time confidence
+policy recorded in ADR 0005. EP-19's per-variant unique
 users consume `canonical_user` opaquely and must not encode assumptions about how it is
-resolved. If EP-19 lands first, its rollups keyed on the MP-2-era `canonical_user` remain
-correct when EP-18 swaps the resolution underneath — EP-18 must verify that property as part
-of its acceptance.
+resolved. EP-18's pre- and post-retirement batteries preserved the shared projection and
+MP-2-era counts, so EP-19 can consume the resolved value without identity-policy
+assumptions.
 
 ClickHouse migration mechanism (established by MP-2 EP-12) — all four plans create or alter
 ClickHouse objects only through versioned migration files under `db/clickhouse/migrations/`.
@@ -181,13 +183,13 @@ starts.
 `analytics.events_resolved` column contract — EP-17 extended the frozen output shape to
 `event_id, event_name, occurred_at, url, account_id, canonical_user, properties_json`
 (seven columns). The server-only native JSON column is required so property-grouped
-unique-user metrics retain canonical identity stitching. EP-18 replaces the view's
-internals under exactly this contract and re-runs an MP-2-era query battery to prove it;
+unique-user metrics retain canonical identity stitching. EP-18 replaced the view's
+internals under exactly this contract and re-ran the MP-2-era query battery to prove it;
 EP-19 consumes `canonical_user`, `account_id`, and the documented property expressions.
 Any plan needing more columns from the view extends the contract HERE first. ADR 0004
 records the durable rationale.
 
-Wire-field name claims on `AnalyticsEvent` — EP-18 claims `identifiers` (kind→value map),
+Wire-field name claims on `AnalyticsEvent` — EP-18 shipped `identifiers` (kind→value map),
 EP-20 claims `schemaVersion` (optional Int, absent = 1). Both are recorded in the
 respective plans; no collision. Future additive fields are claimed in this paragraph before
 implementation.
@@ -206,9 +208,9 @@ and the milestone. This section provides an at-a-glance view of the entire initi
 - [x] EP-17: property storage representation decided, prototyped, and migrated
 - [x] EP-17: query builders support declared-property grouping and filtering
 - [x] EP-17: metrics API groupBy/filter contract extended; client + OpenAPI regenerated
-- [ ] EP-18: identity-signals model (wire field, storage, ingestion) live
-- [ ] EP-18: confidence-aware resolution replaces latest-wins; merge conflicts representable
-- [ ] EP-18: fingerprint retention/deletion policy implemented and documented
+- [x] EP-18: identity-signals model (wire field, storage, ingestion) live
+- [x] EP-18: confidence-aware resolution replaces latest-wins; merge conflicts representable
+- [x] EP-18: fingerprint retention/deletion policy implemented and documented
 - [ ] EP-19: assignment event schemas registered; variant rollups populated
 - [ ] EP-19: per-variant metrics endpoints (exposure, conversion, funnel) serving
 - [ ] EP-20: events carry schema version; versioned registry established
@@ -251,6 +253,21 @@ interactions between child plans. Provide concise evidence.
     grouped-sum median within the adoption threshold (0.051 seconds versus the original
     raw-JSON baseline of 0.272 seconds).
 
+- 2026-07-19, during EP-18 implementation:
+  - `analytics.events_resolved` retained the ordered seven-column EP-17 projection while
+    moving from the latest-wins cookie map to account-scoped evidence plus view-time
+    confidence. Fresh pre- and post-retirement batteries both returned 3 stitched users
+    and 4 raw DAU; EP-19 can consume `canonical_user` and `properties_json` unchanged.
+  - Identity conflicts are now durable data rather than merge casualties. The shared
+    fingerprint fixture exposed both `user-U` and `user-V`, while equal-confidence
+    resolution selected the more recent observation and the stronger cookie kept session
+    A on `user-U`.
+  - EP-17's materialized native JSON column requires direct SQL fixtures to provide valid
+    `properties` JSON. EP-18 and the legacy EP-5/EP-6 fixtures now write explicit `'{}'`
+    values; production Haskell inserts already did so.
+  - ADR 0005 owns the cross-plan identifier vocabulary, one-hop evidence semantics,
+    ranking policy, conflict visibility, and 180-day fingerprint boundary.
+
 
 ## Decision Log
 
@@ -288,6 +305,15 @@ interactions between child plans. Provide concise evidence.
   numeric inputs.
   Date: 2026-07-19
 
+- Decision: EP-18's cross-plan identity contract is account-scoped immutable signal
+  evidence with view-time confidence (`email_sha256` 0.95, cookie 0.90, device 0.80,
+  fingerprint 0.50), one-hop bindings, queryable conflicts, and a 180-day fingerprint
+  TTL. The old latest-wins map is retired only after compatibility verification.
+  Rationale: preserves conflicts and permits policy revision without rewriting history,
+  while the unchanged resolved-event projection insulates EP-19 and existing metrics.
+  Durable rationale and privacy consequences live in ADR 0005.
+  Date: 2026-07-19
+
 
 ## Outcomes & Retrospective
 
@@ -297,9 +323,16 @@ Compare the result against the original vision.
 EP-17 completed on 2026-07-19. It delivered benchmark-selected native JSON property
 storage, registry-gated grouping/filtering/aggregation, the public revenue route, generated
 client/OpenAPI updates, and a real-network HTTP integration over fresh PostgreSQL plus live
-ClickHouse. Its two downstream contracts are now stable: EP-18 must preserve the seventh
+ClickHouse. Its two downstream contracts are now stable: EP-18 preserved the seventh
 `properties_json` column on `analytics.events_resolved`, and EP-19 must render property
-reads through `getSubcolumn`. EP-18, EP-19, and EP-20 remain to complete the initiative.
+reads through `getSubcolumn`.
+
+EP-18 completed on 2026-07-19. It delivered the optional typed `identifiers` map across
+API, client, OpenAPI, writer, and storage; account-scoped evidence with confidence-ranked
+resolution and queryable conflicts; 180-day fingerprint evidence retention; an exercised
+raw-retention and per-user erasure runbook; and retirement of the latest-wins identity
+map. The seven-column resolved-event contract and MP-2-era counts remained stable. EP-19
+and EP-20 remain to complete the initiative.
 
 ---
 
@@ -309,3 +342,8 @@ no-JSON/Map wire constraint, migration-number claiming, the frozen `events_resol
 contract, `AnalyticsEvent` wire-field name claims, and the undeclared-registry-entries
 handoff), and Surprises & Discoveries records the authoring-time findings including the
 `migrate-keiro-stack` blueprint prerequisite inherited from MasterPlan 2.
+
+Revision note (2026-07-19, EP-18 completion): marked EP-18 complete, recorded its shipped
+wire and resolved-event contracts, captured cross-plan verification evidence, linked ADR
+0005's durable identity policy, and updated the remaining initiative outcome to EP-19 and
+EP-20.

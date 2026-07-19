@@ -5,17 +5,17 @@
 -- join-free DAU/WAU materialized views no longer depend on insertion order.
 -- f7 is a never-identified visitor and must appear in both counts as anon-3.
 INSERT INTO analytics.events_raw
-    (event_id, event_name, source, occurred_at, received_at, anonymous_id, user_id, url)
+    (event_id, event_name, source, occurred_at, received_at, anonymous_id, user_id, url, account_id, properties, context)
 VALUES
-    ('f-id', 'identify', 'app', '2026-06-08 08:00:00.000', '2026-06-08 08:00:00.100', 'anon-2', 'user-10', '');
+    ('f-id', 'identify', 'app', '2026-06-08 08:00:00.000', '2026-06-08 08:00:00.100', 'anon-2', 'user-10', '', 'acct-legacy', '{}', '{}');
 
 INSERT INTO analytics.events_raw
-    (event_id, event_name, source, occurred_at, received_at, anonymous_id, user_id, url)
+    (event_id, event_name, source, occurred_at, received_at, anonymous_id, user_id, url, account_id, properties, context)
 VALUES
-    ('f1', 'page_view', 'web', '2026-06-08 09:00:00.000', '2026-06-08 09:00:00.100', 'anon-2', '', 'https://app.example.com/pricing'),
-    ('f2', 'page_view', 'web', '2026-06-08 09:01:00.000', '2026-06-08 09:01:00.100', 'anon-2', '', 'https://app.example.com/signup?ref=x'),
-    ('f3', 'page_view', 'app', '2026-06-08 09:05:00.000', '2026-06-08 09:05:00.100', 'anon-2', 'user-10', 'https://app.example.com/dashboard'),
-    ('f4', 'feature_used', 'app', '2026-06-08 09:06:00.000', '2026-06-08 09:06:00.100', 'anon-2', 'user-10', ''),
-    ('f5', 'page_view', 'web', '2026-06-08 10:00:00.000', '2026-06-08 10:00:00.100', 'anon-9', 'user-20', 'https://app.example.com/pricing'),
-    ('f6', 'feature_used', 'app', '2026-06-08 10:05:00.000', '2026-06-08 10:05:00.100', '', 'user-20', ''),
-    ('f7', 'page_view', 'web', '2026-06-08 11:00:00.000', '2026-06-08 11:00:00.100', 'anon-3', '', 'https://app.example.com/docs');
+    ('f1', 'page_view', 'web', '2026-06-08 09:00:00.000', '2026-06-08 09:00:00.100', 'anon-2', '', 'https://app.example.com/pricing', 'acct-legacy', '{}', '{}'),
+    ('f2', 'page_view', 'web', '2026-06-08 09:01:00.000', '2026-06-08 09:01:00.100', 'anon-2', '', 'https://app.example.com/signup?ref=x', 'acct-legacy', '{}', '{}'),
+    ('f3', 'page_view', 'app', '2026-06-08 09:05:00.000', '2026-06-08 09:05:00.100', 'anon-2', 'user-10', 'https://app.example.com/dashboard', 'acct-legacy', '{}', '{}'),
+    ('f4', 'feature_used', 'app', '2026-06-08 09:06:00.000', '2026-06-08 09:06:00.100', 'anon-2', 'user-10', '', 'acct-legacy', '{}', '{}'),
+    ('f5', 'page_view', 'web', '2026-06-08 10:00:00.000', '2026-06-08 10:00:00.100', 'anon-9', 'user-20', 'https://app.example.com/pricing', 'acct-legacy', '{}', '{}'),
+    ('f6', 'feature_used', 'app', '2026-06-08 10:05:00.000', '2026-06-08 10:05:00.100', '', 'user-20', '', 'acct-legacy', '{}', '{}'),
+    ('f7', 'page_view', 'web', '2026-06-08 11:00:00.000', '2026-06-08 11:00:00.100', 'anon-3', '', 'https://app.example.com/docs', 'acct-legacy', '{}', '{}');
