@@ -69,10 +69,10 @@ This section must always reflect the actual current state of the work.
 - [x] M1: `Kansoku.Auth.Types`, `Kansoku.Auth.Token`, `Kansoku.Auth.Store`, `Kansoku.Auth.Issue` modules compile with unit tests green
 - [x] M1: `kansoku-server issue-key` subcommand issues both kinds; transcript captured; `psql` shows a hash, not the token
 - [x] M1: `just issue-key` and `just dev-keys` recipes added
-- [ ] M2: `AuthProtect` combinators + `HasOpenApi` instances in `kansoku-api`; OpenAPI document regenerated with securitySchemes and 401/403 responses
-- [ ] M2: ingest route family authenticated (write key or service token, both headers); 401 and 202 transcripts captured
-- [ ] M2: ingested events are server-stamped with the key's account; stamped `account_id` observed in ClickHouse
-- [ ] M2: `kansoku-client` sends credentials; client tests green; plan 9 routing test updated for the auth context
+- [x] M2: `AuthProtect` combinators + `HasOpenApi` instances in `kansoku-api`; OpenAPI document regenerated with securitySchemes and 401/403 responses
+- [x] M2: ingest route family authenticated (write key or service token, both headers); 401 and 202 transcripts captured
+- [x] M2: ingested events are server-stamped with the key's account; stamped `account_id` observed in ClickHouse
+- [x] M2: `kansoku-client` sends credentials; client tests green; plan 9 routing test updated for the auth context
 - [ ] M3: metrics route family requires a service token; 403-for-write-key transcript captured
 - [ ] M3: `QueryRequest.accountId` threaded through every SQL builder; `QuerySpec` asserts the predicate in all of them
 - [ ] M3: `events_resolved` exposes `account_id` (migration through EP-12's mechanism)
@@ -109,6 +109,11 @@ implementation. Provide concise evidence.
   and `count` states for event/page-view counts. EP-15 must append migration `0008` and rebuild
   those exact landed shapes with `account_id` leading every rollup key; it must not restore the
   authored plan's older `uniqExact` state definitions.
+
+- Discovery (implementation, 2026-07-19): the two local `HasOpenApi` instances compose cleanly
+  with the landed `NamedRoutes` API. The regenerated document declares `writeKey` as the
+  `X-Api-Key` API-key scheme and `serviceToken` as HTTP bearer auth, attaches the expected
+  per-operation security requirement, and advertises the implemented 401/403 responses.
 
 ## Decision Log
 
@@ -248,6 +253,14 @@ Record every decision made while working on the plan.
   ergonomics, while direct production issuance fails loudly if deployment omitted migration.
   Date: 2026-07-19
 
+- Decision: Make the credential a required `ClientConfig` field and change
+  `defaultClientConfig` to accept both base URL and credential.
+  Rationale: Authentication is always on, so a credential-free client configuration can only
+  fail at runtime. Requiring it at construction keeps every retry and delivery path on the
+  generated authenticated client and lets the existing fake-server tests verify the actual
+  `Authorization: Bearer` transport rather than merely checking a helper in isolation.
+  Date: 2026-07-19
+
 
 ## Outcomes & Retrospective
 
@@ -263,6 +276,15 @@ application likewise reported all three migrations already applied. Issuance pri
 value with no `ksk_` plaintext. The store returns a typed `AuthStoreError` instead of throwing,
 which gives the HTTP layer an explicit way to distinguish key-store failure (503) from an
 unknown/revoked key (401).
+
+Milestone 2 (2026-07-19): generalized servant authentication now protects both API route
+families with distinct principal types, and the generated OpenAPI contract carries matching
+security schemes and error responses. Live requests returned 401 without a credential, 202
+for the same write key through both `X-Api-Key` and `Authorization: Bearer`, and 403 when that
+write key attempted a metrics request. Two events whose bodies claimed `acct_spoofed` were
+persisted as `acct_alpha`, proving account identity is server-stamped from the credential.
+The core suite passed 90 examples with zero failures; the client suite passed 10 examples
+with zero failures (the explicitly opt-in live test remained pending).
 
 
 ## Context and Orientation

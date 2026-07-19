@@ -30,6 +30,7 @@ library
   hs-source-dirs:  src
   exposed-modules:
     Kansoku
+    Kansoku.Auth.Handler
     Kansoku.Auth.Issue
     Kansoku.Auth.Store
     Kansoku.Auth.Token
@@ -102,6 +103,7 @@ test-suite kansoku-core-test
   hs-source-dirs: test
   main-is:        Spec.hs
   other-modules:
+    Kansoku.Auth.HandlerSpec
     Kansoku.Auth.TokenSpec
     Kansoku.ClickHouseSpec
     Kansoku.ClickHouseTestSupport
@@ -132,6 +134,7 @@ test-suite kansoku-core-test
     , effectful
     , generic-lens
     , hasql
+    , hasql-pool
     , hspec
     , http-client
     , http-types

@@ -30,6 +30,8 @@ import Kansoku.Api (KansokuAPI (..), kansokuAPI)
 import Kansoku.Api.OpenApi (kansokuOpenApi)
 import Kansoku.Api.Response (ErrorEnvelopeWire, badRequest, tooLarge)
 import Kansoku.Api.Response qualified as Response
+import Kansoku.Auth.Handler (ingestAuthHandler, metricsAuthHandler)
+import Kansoku.Auth.Types (IngestPrincipal (..), MetricsPrincipal (..))
 import Kansoku.ClickHouse (QueryPool)
 import Kansoku.Config (Config)
 import Kansoku.Ingest.Handler (ingestServer)
@@ -77,8 +79,8 @@ healthApp req respond =
 kansokuServer :: Int -> Pool.Pool -> QueueName -> QueryPool -> KansokuAPI (AsServerT Handler)
 kansokuServer maxBatchLength pool queueName queryPool =
   KansokuAPI
-    { ingest = ingestServer maxBatchLength pool queueName,
-      metrics = metricsServer queryPool
+    { ingest = \(IngestPrincipal principal) -> ingestServer maxBatchLength principal pool queueName,
+      metrics = \(MetricsPrincipal principal) -> metricsServer principal queryPool
     }
 
 kansokuApp :: Config -> ReadyProbe -> Pool.Pool -> QueueName -> QueryPool -> Application
@@ -93,7 +95,11 @@ kansokuApp config probe pool queueName queryPool =
                 (config ^. #ingestMaxBodyBytes)
                 ( serveWithContext
                     kansokuAPI
-                    (envelopeFormatters :. EmptyContext)
+                    ( envelopeFormatters
+                        :. ingestAuthHandler pool
+                        :. metricsAuthHandler pool
+                        :. EmptyContext
+                    )
                     (kansokuServer (config ^. #ingestMaxBatchLength) pool queueName queryPool)
                 )
             )

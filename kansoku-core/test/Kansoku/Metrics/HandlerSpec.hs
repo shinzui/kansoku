@@ -6,14 +6,14 @@ import Data.Aeson (eitherDecode)
 import Data.Text qualified as Text
 import Kansoku.Api qualified as Api
 import Kansoku.Api.Response qualified as Response
+import Kansoku.Auth.Types (IngestPrincipal, MetricsPrincipal)
 import Kansoku.Metrics.Handler (metricsServer)
-import Kansoku.Metrics.RoutingSpec (sentinelIngestServer)
-import Kansoku.Server (envelopeFormatters)
+import Kansoku.Metrics.RoutingSpec (sentinelContext, sentinelIngestServer, sentinelPrincipal)
 import Network.HTTP.Client qualified as HTTP
 import Network.HTTP.Types (status400, status503)
 import Network.Wai (Application)
 import Network.Wai.Handler.Warp qualified as Warp
-import Servant (Context (..), serveWithContext)
+import Servant (serveWithContext)
 import Test.Hspec
 
 spec :: Spec
@@ -76,8 +76,8 @@ validationApplication :: Application
 validationApplication =
   serveWithContext
     Api.kansokuAPI
-    (envelopeFormatters :. EmptyContext)
+    sentinelContext
     Api.KansokuAPI
-      { Api.ingest = sentinelIngestServer,
-        Api.metrics = metricsServer (error "query pool must not be forced by validation")
+      { Api.ingest = \(_principal :: IngestPrincipal) -> sentinelIngestServer,
+        Api.metrics = \(_principal :: MetricsPrincipal) -> metricsServer sentinelPrincipal (error "query pool must not be forced by validation")
       }

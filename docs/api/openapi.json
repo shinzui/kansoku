@@ -260,6 +260,19 @@
       "UserId": {
         "type": "string"
       }
+    },
+    "securitySchemes": {
+      "serviceToken": {
+        "description": "Kansoku service token (`ksk_s_…`); `X-Api-Key` transport is also accepted.",
+        "scheme": "bearer",
+        "type": "http"
+      },
+      "writeKey": {
+        "description": "Kansoku write key (`ksk_w_…`) or service token; Bearer transport is also accepted.",
+        "in": "header",
+        "name": "X-Api-Key",
+        "type": "apiKey"
+      }
     }
   },
   "info": {
@@ -345,6 +358,12 @@
             },
             "description": "Malformed request or `timeGrain` or `groupBy` or `to` or `from`"
           },
+          "401": {
+            "description": "Missing, malformed, unknown, or revoked credential"
+          },
+          "403": {
+            "description": "A valid credential lacks metrics-read permission"
+          },
           "404": {
             "content": {
               "application/json": {
@@ -391,6 +410,11 @@
             "description": "Storage unavailable"
           }
         },
+        "security": [
+          {
+            "serviceToken": []
+          }
+        ],
         "tags": [
           "ingestion",
           "metrics"
@@ -473,6 +497,12 @@
             },
             "description": "Malformed request or `timeGrain` or `groupBy` or `to` or `from`"
           },
+          "401": {
+            "description": "Missing, malformed, unknown, or revoked credential"
+          },
+          "403": {
+            "description": "A valid credential lacks metrics-read permission"
+          },
           "404": {
             "content": {
               "application/json": {
@@ -519,6 +549,11 @@
             "description": "Storage unavailable"
           }
         },
+        "security": [
+          {
+            "serviceToken": []
+          }
+        ],
         "tags": [
           "ingestion",
           "metrics"
@@ -601,6 +636,12 @@
             },
             "description": "Malformed request or `timeGrain` or `groupBy` or `to` or `from`"
           },
+          "401": {
+            "description": "Missing, malformed, unknown, or revoked credential"
+          },
+          "403": {
+            "description": "A valid credential lacks metrics-read permission"
+          },
           "404": {
             "content": {
               "application/json": {
@@ -647,6 +688,11 @@
             "description": "Storage unavailable"
           }
         },
+        "security": [
+          {
+            "serviceToken": []
+          }
+        ],
         "tags": [
           "ingestion",
           "metrics"
@@ -729,6 +775,12 @@
             },
             "description": "Malformed request or `timeGrain` or `groupBy` or `to` or `from`"
           },
+          "401": {
+            "description": "Missing, malformed, unknown, or revoked credential"
+          },
+          "403": {
+            "description": "A valid credential lacks metrics-read permission"
+          },
           "404": {
             "content": {
               "application/json": {
@@ -775,6 +827,11 @@
             "description": "Storage unavailable"
           }
         },
+        "security": [
+          {
+            "serviceToken": []
+          }
+        ],
         "tags": [
           "ingestion",
           "metrics"
@@ -857,6 +914,12 @@
             },
             "description": "Malformed request or `timeGrain` or `groupBy` or `to` or `from`"
           },
+          "401": {
+            "description": "Missing, malformed, unknown, or revoked credential"
+          },
+          "403": {
+            "description": "A valid credential lacks metrics-read permission"
+          },
           "404": {
             "content": {
               "application/json": {
@@ -903,6 +966,11 @@
             "description": "Storage unavailable"
           }
         },
+        "security": [
+          {
+            "serviceToken": []
+          }
+        ],
         "tags": [
           "ingestion",
           "metrics"
@@ -982,6 +1050,12 @@
             },
             "description": "Malformed request or `window` or `steps` or `to` or `from`"
           },
+          "401": {
+            "description": "Missing, malformed, unknown, or revoked credential"
+          },
+          "403": {
+            "description": "A valid credential lacks metrics-read permission"
+          },
           "404": {
             "content": {
               "application/json": {
@@ -1028,6 +1102,11 @@
             "description": "Storage unavailable"
           }
         },
+        "security": [
+          {
+            "serviceToken": []
+          }
+        ],
         "tags": [
           "ingestion",
           "metrics"
@@ -1110,6 +1189,12 @@
             },
             "description": "Malformed request or `timeGrain` or `groupBy` or `to` or `from`"
           },
+          "401": {
+            "description": "Missing, malformed, unknown, or revoked credential"
+          },
+          "403": {
+            "description": "A valid credential lacks metrics-read permission"
+          },
           "404": {
             "content": {
               "application/json": {
@@ -1156,6 +1241,11 @@
             "description": "Storage unavailable"
           }
         },
+        "security": [
+          {
+            "serviceToken": []
+          }
+        ],
         "tags": [
           "ingestion",
           "metrics"
@@ -1238,6 +1328,12 @@
             },
             "description": "Malformed request or `timeGrain` or `groupBy` or `to` or `from`"
           },
+          "401": {
+            "description": "Missing, malformed, unknown, or revoked credential"
+          },
+          "403": {
+            "description": "A valid credential lacks metrics-read permission"
+          },
           "404": {
             "content": {
               "application/json": {
@@ -1284,6 +1380,11 @@
             "description": "Storage unavailable"
           }
         },
+        "security": [
+          {
+            "serviceToken": []
+          }
+        ],
         "tags": [
           "ingestion",
           "metrics"
@@ -1353,6 +1454,12 @@
             },
             "description": "Malformed request or `days` or `to` or `from`"
           },
+          "401": {
+            "description": "Missing, malformed, unknown, or revoked credential"
+          },
+          "403": {
+            "description": "A valid credential lacks metrics-read permission"
+          },
           "404": {
             "content": {
               "application/json": {
@@ -1399,6 +1506,11 @@
             "description": "Storage unavailable"
           }
         },
+        "security": [
+          {
+            "serviceToken": []
+          }
+        ],
         "tags": [
           "ingestion",
           "metrics"
@@ -1481,6 +1593,12 @@
             },
             "description": "Malformed request or `timeGrain` or `groupBy` or `to` or `from`"
           },
+          "401": {
+            "description": "Missing, malformed, unknown, or revoked credential"
+          },
+          "403": {
+            "description": "A valid credential lacks metrics-read permission"
+          },
           "404": {
             "content": {
               "application/json": {
@@ -1527,6 +1645,11 @@
             "description": "Storage unavailable"
           }
         },
+        "security": [
+          {
+            "serviceToken": []
+          }
+        ],
         "tags": [
           "ingestion",
           "metrics"
@@ -1609,6 +1732,12 @@
             },
             "description": "Malformed request or `timeGrain` or `groupBy` or `to` or `from`"
           },
+          "401": {
+            "description": "Missing, malformed, unknown, or revoked credential"
+          },
+          "403": {
+            "description": "A valid credential lacks metrics-read permission"
+          },
           "404": {
             "content": {
               "application/json": {
@@ -1655,6 +1784,11 @@
             "description": "Storage unavailable"
           }
         },
+        "security": [
+          {
+            "serviceToken": []
+          }
+        ],
         "tags": [
           "ingestion",
           "metrics"
@@ -1707,6 +1841,9 @@
             },
             "description": "Malformed request or `body`"
           },
+          "401": {
+            "description": "Missing, malformed, unknown, or revoked credential"
+          },
           "404": {
             "content": {
               "application/json": {
@@ -1753,6 +1890,11 @@
             "description": "Storage unavailable"
           }
         },
+        "security": [
+          {
+            "writeKey": []
+          }
+        ],
         "tags": [
           "ingestion",
           "metrics"
@@ -1802,6 +1944,9 @@
             },
             "description": "Malformed request or `body`"
           },
+          "401": {
+            "description": "Missing, malformed, unknown, or revoked credential"
+          },
           "404": {
             "content": {
               "application/json": {
@@ -1848,6 +1993,11 @@
             "description": "Storage unavailable"
           }
         },
+        "security": [
+          {
+            "writeKey": []
+          }
+        ],
         "tags": [
           "ingestion",
           "metrics"

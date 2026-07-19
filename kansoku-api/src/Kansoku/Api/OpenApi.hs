@@ -1,3 +1,6 @@
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Kansoku.Api.OpenApi
@@ -27,7 +30,23 @@ import Kansoku.Event
 import Kansoku.Ingest.Api (BatchAck, IngestAck, RejectedEvent)
 import Kansoku.Metrics.Api (MetricPoint, MetricResult, TimeGrain)
 import Kansoku.Prelude
-import Servant.OpenApi (toOpenApi)
+import Servant.API (type (:>))
+import Servant.API.Experimental.Auth (AuthProtect)
+import Servant.OpenApi (HasOpenApi, toOpenApi)
+
+instance (HasOpenApi sub) => HasOpenApi (AuthProtect "kansoku-ingest" :> sub) where
+  toOpenApi _ =
+    toOpenApi (Proxy @sub)
+      & addSecurity "writeKey" [(401, "Missing, malformed, unknown, or revoked credential")]
+
+instance (HasOpenApi sub) => HasOpenApi (AuthProtect "kansoku-metrics" :> sub) where
+  toOpenApi _ =
+    toOpenApi (Proxy @sub)
+      & addSecurity
+        "serviceToken"
+        [ (401, "Missing, malformed, unknown, or revoked credential"),
+          (403, "A valid credential lacks metrics-read permission")
+        ]
 
 instance O.ToSchema AccountId where
   declareNamedSchema =
@@ -119,11 +138,42 @@ kansokuOpenApi =
     & O.info
     . O.description
     ?~ "HTTP ingestion and typed metrics query API for the Kansoku analytics service."
+    & O.components
+    . O.securitySchemes
+    .~ authSecuritySchemes
     & O.applyTags
       [ O.Tag "ingestion" (Just "Event ingestion endpoints") Nothing,
         O.Tag "metrics" (Just "Typed metric query endpoints") Nothing
       ]
     & withOperationIds
+
+authSecuritySchemes :: O.SecurityDefinitions
+authSecuritySchemes =
+  O.SecurityDefinitions
+    ( mempty
+        & at "writeKey"
+        ?~ O.SecurityScheme
+          (O.SecuritySchemeApiKey (O.ApiKeyParams "X-Api-Key" O.ApiKeyHeader))
+          (Just "Kansoku write key (`ksk_w_…`) or service token; Bearer transport is also accepted.")
+        & at "serviceToken"
+        ?~ O.SecurityScheme
+          (O.SecuritySchemeHttp (O.HttpSchemeBearer Nothing))
+          (Just "Kansoku service token (`ksk_s_…`); `X-Api-Key` transport is also accepted.")
+    )
+
+addSecurity :: Text -> [(Int, Text)] -> O.OpenApi -> O.OpenApi
+addSecurity schemeName responses document =
+  foldr addResponse secured responses
+  where
+    secured =
+      document
+        & O.allOperations
+        . O.security
+        .~ [O.SecurityRequirement (mempty & at schemeName ?~ [])]
+    addResponse (status, responseDescription) =
+      O.allOperations
+        . at (fromIntegral status)
+        ?~ O.Inline (mempty & O.description .~ responseDescription)
 
 -- | Assign deterministic operation identifiers from method and path. They are
 -- derived rather than authored, so a path rename intentionally changes the id.

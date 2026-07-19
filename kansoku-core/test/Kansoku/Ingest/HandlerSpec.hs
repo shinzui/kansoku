@@ -7,10 +7,12 @@ import Data.Aeson.Key qualified as Key
 import Data.Aeson.KeyMap qualified as KeyMap
 import Data.Generics.Labels ()
 import Data.List qualified as List
+import Data.UUID qualified as UUID
 import Kansoku.Api.Response (ErrorEnvelopeWire (..))
+import Kansoku.Auth.Types
 import Kansoku.Event
 import Kansoku.Ingest.Api (BatchAck (..), RejectedEvent (..))
-import Kansoku.Ingest.Handler (batchLengthError, partitionBatch)
+import Kansoku.Ingest.Handler (batchLengthError, partitionBatch, stampAuthenticatedEvent)
 import Kansoku.Prelude
 import Test.Hspec
 
@@ -87,6 +89,18 @@ spec = describe "Kansoku.Ingest.Handler" $ do
       `shouldBe` "event 'event': property 'array' must be of type array"
     renderValidationError (WrongPropertyType (EventName "event") "anything" PTAny)
       `shouldBe` "event 'event': property 'anything' must be of type any"
+
+  it "overwrites a client-supplied account with the authenticated account" $ do
+    let raw = event "evt-stamped" "custom-valid" & #accountId ?~ AccountId "acct_spoofed"
+        principal =
+          AuthenticatedPrincipal
+            { keyId = ApiKeyId UUID.nil,
+              kind = WriteKey,
+              accountId = AccountId "acct_authoritative"
+            }
+        stamped = stampAuthenticatedEvent received principal raw
+    stamped ^. #receivedAt `shouldBe` received
+    stamped ^. #accountId `shouldBe` Just (AccountId "acct_authoritative")
   where
     occurred = read "2026-07-19 10:00:00 UTC"
     received = read "2026-07-19 09:00:00 UTC"

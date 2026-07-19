@@ -15,8 +15,9 @@ import Kansoku.Api.Response (ErrorEnvelopeWire (..))
 import Kansoku.Client
 import Kansoku.Event
 import Kansoku.Prelude
-import Network.HTTP.Types (Status, status202, status400, status413, status503)
-import Network.Wai (Application, Request, pathInfo, requestMethod, responseLBS, strictRequestBody)
+import Network.HTTP.Types (Status, status202, status400, status401, status413, status503)
+import Network.HTTP.Types.Header (hAuthorization)
+import Network.Wai (Application, Request, pathInfo, requestHeaders, requestMethod, responseLBS, strictRequestBody)
 import Network.Wai.Handler.Warp qualified as Warp
 import System.Environment (lookupEnv)
 import System.Process (readProcess)
@@ -133,19 +134,21 @@ spec = describe "Kansoku.Client" $ do
 
   it "skips the live integration test unless KANSOKU_SERVER_URL is set" $ do
     server <- lookupEnv "KANSOKU_SERVER_URL"
-    case server of
-      Nothing -> pendingWith "KANSOKU_SERVER_URL is not set"
-      Just url -> do
+    credential <- lookupEnv "KANSOKU_API_KEY"
+    case (server, credential) of
+      (Nothing, _) -> pendingWith "KANSOKU_SERVER_URL is not set"
+      (_, Nothing) -> pendingWith "KANSOKU_API_KEY is not set"
+      (Just url, Just apiKey) -> do
         now <- getCurrentTime
         let eventName = "kansoku_client_integration_" <> Text.pack (filter isAlphaNum (formatTime defaultTimeLocale "%FT%T%QZ" now))
-        withClient ((defaultClientConfig (Text.pack url)) & #batchMaxSize .~ 2) $ \client -> do
+        withClient ((defaultClientConfig (Text.pack url) (Text.pack apiKey)) & #batchMaxSize .~ 2) $ \client -> do
           trackEvent client emptyIds eventName []
           flush client
         pollClickHouseCount eventName `shouldReturn` 1
 
 testConfig :: Int -> ClientConfig
 testConfig port =
-  (defaultClientConfig ("http://127.0.0.1:" <> Text.pack (show port)))
+  (defaultClientConfig ("http://127.0.0.1:" <> Text.pack (show port)) "test-write-key")
     & #batchMaxIntervalMicros
     .~ 1000000
     & #retryBaseDelayMicros
@@ -160,12 +163,15 @@ withRecorder status action = do
 
 recorderApp :: TVar [LBS.ByteString] -> TVar Int -> (TVar Int -> IO Status) -> Application
 recorderApp received attempts nextStatus request respond = do
-  atomically (modifyTVar' attempts (+ 1))
-  body <- strictRequestBody request
-  status <- nextStatus attempts
-  when (requestMethod request == "POST" && pathInfo request == ["v1", "batch"]) $
-    atomically (modifyTVar' received (<> [body]))
-  respond (responseLBS status [("content-type", "application/json")] (responseBodyFor status request body))
+  if lookup hAuthorization (requestHeaders request) /= Just "Bearer test-write-key"
+    then respond (responseLBS status401 [("content-type", "application/json")] "{}")
+    else do
+      atomically (modifyTVar' attempts (+ 1))
+      body <- strictRequestBody request
+      status <- nextStatus attempts
+      when (requestMethod request == "POST" && pathInfo request == ["v1", "batch"]) $
+        atomically (modifyTVar' received (<> [body]))
+      respond (responseLBS status [("content-type", "application/json")] (responseBodyFor status request body))
 
 responseBodyFor :: Status -> Request -> LBS.ByteString -> LBS.ByteString
 responseBodyFor status _request _body

@@ -10,7 +10,9 @@ module Kansoku.Api.Response
     badRequest,
     notFound,
     tooLarge,
+    unauthorized,
     unavailable,
+    forbidden,
   )
 where
 
@@ -113,6 +115,12 @@ notFound code message = ErrorEnvelopeWire {code, message, retryable = False}
 
 tooLarge :: Text -> Text -> ErrorEnvelopeWire
 tooLarge code message = ErrorEnvelopeWire {code, message, retryable = False}
+
+unauthorized :: Text -> Text -> ErrorEnvelopeWire
+unauthorized code message = ErrorEnvelopeWire {code, message, retryable = False}
+
+forbidden :: Text -> Text -> ErrorEnvelopeWire
+forbidden code message = ErrorEnvelopeWire {code, message, retryable = False}
 
 unavailable :: Text -> Text -> ErrorEnvelopeWire
 unavailable code message = ErrorEnvelopeWire {code, message, retryable = True}

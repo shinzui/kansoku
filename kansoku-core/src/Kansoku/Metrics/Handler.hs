@@ -16,6 +16,7 @@ import Kansoku.Api.Response
     notFound,
     unavailable,
   )
+import Kansoku.Auth.Types (AuthenticatedPrincipal)
 import Kansoku.ClickHouse (QueryPool)
 import Kansoku.Logging (logError, runLogStderr)
 import Kansoku.Metrics.Api (MetricResult, MetricsRoutes (..), TimeGrain)
@@ -26,8 +27,8 @@ import Kansoku.Prelude
 import Servant (Handler)
 import Servant.Server.Generic (AsServerT)
 
-metricsServer :: QueryPool -> MetricsRoutes (AsServerT Handler)
-metricsServer pool =
+metricsServer :: AuthenticatedPrincipal -> QueryPool -> MetricsRoutes (AsServerT Handler)
+metricsServer _principal pool =
   MetricsRoutes
     { events = metricHandler "events",
       pageViews = metricHandler "page_views",

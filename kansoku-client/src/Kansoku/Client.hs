@@ -1,3 +1,6 @@
+{-# LANGUAGE TypeFamilies #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
+
 -- | Haskell server SDK for emitting Kansoku analytics events.
 module Kansoku.Client
   ( Client,
@@ -12,6 +15,7 @@ module Kansoku.Client
     flush,
     group,
     identify,
+    kansokuCredential,
     newClient,
     track,
     trackEvent,
@@ -33,18 +37,24 @@ import Data.Text qualified as Text
 import Data.UUID qualified as UUID
 import Data.UUID.V4 qualified as UUID
 import Kansoku.Api.Response (ErrorEnvelopeWire, KansokuResult (..))
+import Kansoku.Auth.Api (IngestAuth)
 import Kansoku.Event (AccountId (..), AnalyticsEvent (..), AnonymousId (..), EventId (..), EventName (..), EventSource (..), OrganizationId (..), SessionId (..), UserId (..), baseEvent)
 import Kansoku.Ingest.Api (BatchAck, IngestRoutes)
 import Kansoku.Ingest.Api qualified as Ingest
 import Kansoku.Prelude
 import Network.HTTP.Client qualified as HTTP
 import Network.HTTP.Client.TLS qualified as HTTP.TLS
+import Servant.API (NamedRoutes, type (:>))
+import Servant.API.Experimental.Auth (AuthProtect)
 import Servant.Client (BaseUrl, ClientEnv, ClientM, mkClientEnv, parseBaseUrl, runClientM)
 import Servant.Client qualified as ServantClient
-import Servant.Client.Generic (AsClientT, genericClient)
+import Servant.Client.Core.Auth (AuthClientData, AuthenticatedRequest, mkAuthenticatedRequest)
+import Servant.Client.Core.Request qualified as ClientRequest
+import Servant.Client.Generic (AsClientT)
 
 data ClientConfig = ClientConfig
   { baseUrl :: !Text,
+    credential :: !Text,
     sourceService :: !(Maybe Text),
     manager :: !(Maybe HTTP.Manager),
     batchMaxSize :: !Int,
@@ -55,10 +65,11 @@ data ClientConfig = ClientConfig
   }
   deriving stock (Generic)
 
-defaultClientConfig :: Text -> ClientConfig
-defaultClientConfig baseUrl =
+defaultClientConfig :: Text -> Text -> ClientConfig
+defaultClientConfig baseUrl credential =
   ClientConfig
     { baseUrl,
+      credential,
       sourceService = Nothing,
       manager = Nothing,
       batchMaxSize = 100,
@@ -103,8 +114,15 @@ data ClientError
 
 -- NamedRoutes fields are type-family applications, so record-dot syntax cannot
 -- see them. Use qualified selector application at call sites.
-ingestClient :: IngestRoutes (AsClientT ClientM)
-ingestClient = genericClient
+type instance AuthClientData (AuthProtect "kansoku-ingest") = Text
+
+kansokuCredential :: Text -> AuthenticatedRequest IngestAuth
+kansokuCredential token =
+  mkAuthenticatedRequest token $ \value ->
+    ClientRequest.addHeader "Authorization" ("Bearer " <> value)
+
+ingestClient :: AuthenticatedRequest IngestAuth -> IngestRoutes (AsClientT ClientM)
+ingestClient = ServantClient.client (Proxy @(IngestAuth :> NamedRoutes IngestRoutes))
 
 newClient :: ClientConfig -> IO Client
 newClient cfg = do
@@ -236,7 +254,10 @@ deliverWithRetry cfg env events =
   go 0
   where
     go attempt = do
-      result <- runClientM (Ingest.postBatch ingestClient events) env
+      result <-
+        runClientM
+          (Ingest.postBatch (ingestClient (kansokuCredential (cfg ^. #credential))) events)
+          env
       case result of
         Right (KansokuOk ack) -> pure (Right ack)
         Right (KansokuUnavailable envelope)

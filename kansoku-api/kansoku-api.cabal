@@ -29,6 +29,7 @@ library
     Kansoku.Api
     Kansoku.Api.OpenApi
     Kansoku.Api.Response
+    Kansoku.Auth.Api
     Kansoku.Event
     Kansoku.Event.Registry
     Kansoku.Event.Types

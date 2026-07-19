@@ -11,6 +11,8 @@ module Kansoku.Metrics.RoutingSpec
   ( sentinelIngestServer,
     sentinelKansokuServer,
     sentinelMetricsServer,
+    sentinelContext,
+    sentinelPrincipal,
     spec,
   )
 where
@@ -21,10 +23,20 @@ import Data.Foldable (traverse_)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Time (Day)
+import Data.UUID qualified as UUID
 import Kansoku.Api qualified as Api
 import Kansoku.Api.Response qualified as Response
+import Kansoku.Auth.Handler ()
+import Kansoku.Auth.Types
+  ( ApiKeyId (..),
+    AuthenticatedPrincipal (..),
+    CredentialKind (..),
+    IngestPrincipal (..),
+    MetricsPrincipal (..),
+  )
 import Kansoku.Event
-  ( AnalyticsEvent,
+  ( AccountId (..),
+    AnalyticsEvent,
     EventId (..),
     EventName (..),
     EventSource (..),
@@ -42,13 +54,15 @@ import Network.HTTP.Types
     status400,
     status404,
   )
-import Network.Wai (Application)
+import Network.Wai (Application, Request)
 import Network.Wai.Handler.Warp qualified as Warp
 import Servant
   ( Context (..),
     Handler,
     serveWithContext,
   )
+import Servant.Server (ErrorFormatters)
+import Servant.Server.Experimental.Auth (AuthHandler, mkAuthHandler)
 import Servant.Server.Generic (AsServerT)
 import Test.Hspec
 
@@ -166,14 +180,29 @@ sentinelApplication :: Application
 sentinelApplication =
   serveWithContext
     Api.kansokuAPI
-    (envelopeFormatters :. EmptyContext)
+    sentinelContext
     sentinelKansokuServer
+
+sentinelContext :: Context '[ErrorFormatters, AuthHandler Request IngestPrincipal, AuthHandler Request MetricsPrincipal]
+sentinelContext =
+  envelopeFormatters
+    :. mkAuthHandler (const (pure (IngestPrincipal sentinelPrincipal)))
+    :. mkAuthHandler (const (pure (MetricsPrincipal sentinelPrincipal)))
+    :. EmptyContext
+
+sentinelPrincipal :: AuthenticatedPrincipal
+sentinelPrincipal =
+  AuthenticatedPrincipal
+    { keyId = ApiKeyId UUID.nil,
+      kind = ServiceToken,
+      accountId = AccountId "acct_sentinel"
+    }
 
 sentinelKansokuServer :: Api.KansokuAPI (AsServerT Handler)
 sentinelKansokuServer =
   Api.KansokuAPI
-    { Api.ingest = sentinelIngestServer,
-      Api.metrics = sentinelMetricsServer
+    { Api.ingest = const sentinelIngestServer,
+      Api.metrics = const sentinelMetricsServer
     }
 
 sentinelIngestServer :: Ingest.IngestRoutes (AsServerT Handler)

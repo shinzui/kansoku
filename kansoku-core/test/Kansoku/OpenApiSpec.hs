@@ -19,10 +19,10 @@ import Kansoku.Api.Response (ErrorEnvelopeWire (..))
 import Kansoku.Event
 import Kansoku.Ingest.Api qualified as Ingest
 import Kansoku.Metrics.Api qualified as Metrics
-import Kansoku.Metrics.RoutingSpec (sentinelKansokuServer)
+import Kansoku.Metrics.RoutingSpec (sentinelContext, sentinelKansokuServer)
 import Kansoku.Prelude
 import Kansoku.Readiness (ReadyCheckFailure (..))
-import Kansoku.Server (ReadyProbe (..), envelopeFormatters, internalMetrics, waiWrapper)
+import Kansoku.Server (ReadyProbe (..), internalMetrics, waiWrapper)
 import Network.HTTP.Client qualified as HTTP
 import Network.HTTP.Types
   ( Status,
@@ -35,7 +35,7 @@ import Network.HTTP.Types
   )
 import Network.Wai (Application)
 import Network.Wai.Handler.Warp qualified as Warp
-import Servant (Context (..), serveWithContext)
+import Servant (serveWithContext)
 import Test.Hspec
 
 spec :: Spec
@@ -45,6 +45,12 @@ spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
     lookupTextArray ["components", "schemas", "EventSource", "enum"] documentValue
       `shouldSatisfy` maybe False (elem "web")
     documentValue `shouldSatisfy` containsEnumValue "hour"
+
+  it "declares write-key and service-token security schemes" $ do
+    lookupText ["components", "securitySchemes", "writeKey", "type"] documentValue `shouldBe` Just "apiKey"
+    lookupText ["components", "securitySchemes", "writeKey", "name"] documentValue `shouldBe` Just "X-Api-Key"
+    lookupText ["components", "securitySchemes", "serviceToken", "scheme"] documentValue `shouldBe` Just "bearer"
+    traverse_ assertSecurity operationValues
 
   it "documents exactly the thirteen analytics paths with stable operation IDs" $ do
     documentedPaths `shouldBe` expectedServedPaths
@@ -208,8 +214,26 @@ assertStatuses :: OperationValue -> Expectation
 assertStatuses (path, method, operation) = do
   let actual = List.sort (Key.toText <$> KeyMap.keys (objectAt ["responses"] operation))
       success = if method == "post" then "202" else "200"
-  actual `shouldBe` List.sort [success, "400", "404", "413", "503"]
+      authStatuses
+        | "/metrics/" `Text.isPrefixOf` path = ["401", "403"]
+        | otherwise = ["401"]
+  actual `shouldBe` List.sort ([success, "400", "404", "413", "503"] <> authStatuses)
   path `shouldSatisfy` (`elem` expectedServedPaths)
+
+assertSecurity :: OperationValue -> Expectation
+assertSecurity (path, _method, operation) =
+  case valueAt ["security"] operation of
+    Just (Aeson.Array requirements)
+      | "/metrics/" `Text.isPrefixOf` path ->
+          requirements `shouldSatisfy` any (containsObjectKey "serviceToken")
+      | otherwise ->
+          requirements `shouldSatisfy` any (containsObjectKey "writeKey")
+    securityValue -> expectationFailure ("missing operation security for " <> Text.unpack path <> ": " <> show securityValue)
+
+containsObjectKey :: Text -> Aeson.Value -> Bool
+containsObjectKey key = \case
+  Aeson.Object object -> KeyMap.member (Key.fromText key) object
+  _ -> False
 
 conforms :: (ToJSON a, ToSchema a) => String -> a -> Expectation
 conforms label value =
@@ -238,7 +262,7 @@ sentinelApplication :: Application
 sentinelApplication =
   serveWithContext
     kansokuAPI
-    (envelopeFormatters :. EmptyContext)
+    sentinelContext
     sentinelKansokuServer
 
 alwaysReadyProbe :: ReadyProbe

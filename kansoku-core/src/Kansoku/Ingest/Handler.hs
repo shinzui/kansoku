@@ -5,6 +5,7 @@ module Kansoku.Ingest.Handler
   ( batchLengthError,
     ingestServer,
     partitionBatch,
+    stampAuthenticatedEvent,
   )
 where
 
@@ -20,6 +21,7 @@ import Kansoku.Api.Response
     tooLarge,
     unavailable,
   )
+import Kansoku.Auth.Types (AuthenticatedPrincipal)
 import Kansoku.Event
   ( AnalyticsEvent,
     EventId (..),
@@ -47,8 +49,8 @@ type HandlerEff =
      IOE
    ]
 
-ingestServer :: Int -> Pool.Pool -> QueueName -> IngestRoutes (AsServerT Handler)
-ingestServer maxBatchLength pool queueName =
+ingestServer :: Int -> AuthenticatedPrincipal -> Pool.Pool -> QueueName -> IngestRoutes (AsServerT Handler)
+ingestServer maxBatchLength principal pool queueName =
   IngestRoutes
     { postEvent = postEventHandler,
       postBatch = postBatchHandler
@@ -57,7 +59,7 @@ ingestServer maxBatchLength pool queueName =
     postEventHandler :: AnalyticsEvent -> Handler (KansokuResult IngestAck)
     postEventHandler raw = do
       now <- liftIO getCurrentTime
-      case validateEvent (raw & #receivedAt .~ now) of
+      case validateEvent (stampAuthenticatedEvent now principal raw) of
         Left errs -> pure (validationFailure errs)
         Right event ->
           effToHandler pool $ do
@@ -74,10 +76,19 @@ ingestServer maxBatchLength pool queueName =
         Just err -> pure (KansokuTooLarge err)
         Nothing -> do
           now <- liftIO getCurrentTime
-          let (events, rejectedEvents) = partitionBatch ((& #receivedAt .~ now) <$> raw)
+          let (events, rejectedEvents) = partitionBatch (stampAuthenticatedEvent now principal <$> raw)
           effToHandler pool $ do
             _ <- enqueueMany queueName events
             pure BatchAck {accepted = length events, rejected = rejectedEvents}
+
+-- | Make the authenticated account authoritative before validation or queueing.
+stampAuthenticatedEvent :: UTCTime -> AuthenticatedPrincipal -> AnalyticsEvent -> AnalyticsEvent
+stampAuthenticatedEvent receivedAt principal event =
+  event
+    & #receivedAt
+    .~ receivedAt
+    & #accountId
+    ?~ (principal ^. #accountId)
 
 -- | Build the non-retryable 413 envelope for an overlong batch.
 batchLengthError :: Int -> Int -> Maybe ErrorEnvelopeWire
