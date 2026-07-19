@@ -56,11 +56,11 @@ Use a checklist to summarize granular steps. Every stopping point must be docume
 even if it requires splitting a partially completed task into two ("done" vs. "remaining").
 This section must always reflect the actual current state of the work.
 
-- [ ] M1: add hs-opentelemetry-sdk and hs-opentelemetry-exporter-handle to kansoku-core.cabal
-- [ ] M1: add the sdk/exporter/propagator packages to the nix overlay in nix/haskell.nix
-- [ ] M1: rewrite Kansoku.Telemetry (makeTelemetry with env-gated real initialization, console factory, shutdown handle)
-- [ ] M1: wire the telemetry bracket into kansoku-server/app/Main.hs shutdown path
-- [ ] M1: transcript captured — spans printed with OTEL_TRACES_EXPORTER=console; zero-change run without env vars
+- [x] M1: add hs-opentelemetry-sdk and hs-opentelemetry-exporter-handle to kansoku-core.cabal
+- [x] M1: add the sdk/exporter/propagator packages to the nix overlay in nix/haskell.nix
+- [x] M1: rewrite Kansoku.Telemetry (makeTelemetry with env-gated real initialization, console factory, shutdown handle)
+- [x] M1: wire the telemetry bracket into kansoku-server/app/Main.hs shutdown path
+- [x] M1: transcript captured — spans printed with OTEL_TRACES_EXPORTER=console; zero-change run without env vars
 - [ ] M2: add prometheus-client to kansoku-core.cabal (and nix override if the pinned nixpkgs needs one)
 - [ ] M2: new module Kansoku.Observability (PipelineMetrics, WriterHeartbeat, QueueDepthCell, registerPipelineMetrics)
 - [ ] M2: thread PipelineMetrics + WriterHeartbeat through Kansoku.Writer.Run into Kansoku.Writer.Batch and instrument the handler
@@ -79,6 +79,11 @@ This section must always reflect the actual current state of the work.
       the MasterPlan intention. Baseline `cabal build all` and `cabal test all` passed with
       live dependencies (62 core examples, 0 failures; 10 client examples, 1 opt-in live
       pending).
+- [x] Milestone 1 (completed 2026-07-19): real SDK initialization remains opt-in, console
+      export emitted the existing pgmq/shibuya spans, Ctrl-C flushed pending writer spans,
+      and the no-variable run emitted no exporter traffic or diagnostics. `cabal build all`,
+      `cabal test all`, and `nix build` passed; the Nix build uses the same released TLS
+      dependency family as the Cabal solver.
 
 
 ## Surprises & Discoveries
@@ -158,6 +163,16 @@ shaped the design and a future implementer must not re-derive them:
   or successful-event semantics. The application-specific seven-instrument surface remains the
   correct boundary instead of coupling `/internal/metrics` to Shibuya's separate server.
 
+- Milestone 1 discovery (2026-07-19): hs-opentelemetry-sdk's library depends on the OTLP
+  exporter even when its optional TLS metadata detector is disabled. That exporter exposed
+  stale Nix pins: `tls 2.3.1` selected the broken `mlkem 0.2.0.0`, and jailbreaking its old
+  `hpke 0.0.0` then failed against the repository's `crypton 1.1.2`. The already-green Cabal
+  plan resolves `tls 2.4.3`, `hpke 0.1.0`, `mlkem 0.2.2.0`, `crypton-connection 0.4.6`,
+  `http-client-tls 0.4.0`, `crypton-x509 1.9.1`, and
+  `crypton-x509-validation 1.9.1`. Hackage metadata and each upstream release tag confirmed
+  those versions; pinning that coherent set made the full `nix build` pass without marking a
+  broken package usable or removing OTLP support.
+
 
 ## Decision Log
 
@@ -229,13 +244,26 @@ Record every decision made while working on the plan.
   keeps the scrape endpoint out of public OpenAPI.
   Date: 2026-07-19
 
+- Decision: generate the Nix SDK expression with `-f-tls-metadata`, and align the transitive
+  TLS/crypto overrides to the current released versions already selected and tested by Cabal.
+  Rationale: the optional cloud metadata detector is not used by Kansoku and needlessly adds a
+  direct TLS dependency, but the required OTLP exporter still needs the HTTP TLS chain. Keeping
+  that exporter while pinning a coherent release family preserves the plan's OTLP contract and
+  fixes the Nix build at the dependency boundary instead of allowing a known-broken package.
+  Date: 2026-07-19
+
 
 ## Outcomes & Retrospective
 
 Summarize outcomes, gaps, and lessons learned at major milestones or at completion.
 Compare the result against the original purpose.
 
-(To be filled during and after implementation.)
+- Milestone 1: `Kansoku.Telemetry` now returns a lifetime-owned tracer/shutdown handle. The
+  server brackets that handle around both writer and HTTP supervision, so normal exit and
+  writer-triggered unwind run SDK shutdown. A no-variable live run preserved the drop-all
+  behavior; `OTEL_TRACES_EXPORTER=console` emitted `receive kansoku_events`,
+  `kansoku-writer process`, and pgmq delete/visibility spans, including buffered spans after
+  Ctrl-C. Both Cabal and Nix builds resolve hs-opentelemetry 1.0.0.0 and pass.
 
 
 ## Context and Orientation
@@ -1204,3 +1232,9 @@ EP-11, EP-14, ADR 0001, and current dependency releases/source. The plan now pre
 Async/readiness and WAI middleware architecture, records the sole new heartbeat, corrects the
 ingest route path and schema-valid load fixture/BatchAck response, and pins the verified
 hs-opentelemetry 1.0.0.0 and prometheus-client 1.1.2 API facts.
+
+Revision note (2026-07-19): Milestone 1 implemented opt-in SDK initialization, registered
+console export, and provider shutdown in the server lifetime bracket. Validation covered the
+unchanged no-export path, live console spans, shutdown flush, Cabal build/tests, and the full
+Nix package build. The Nix overlay records the released TLS dependency alignment needed by
+the SDK's mandatory OTLP exporter.

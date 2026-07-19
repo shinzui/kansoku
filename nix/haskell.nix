@@ -58,6 +58,8 @@
             };
             otelPackage = name: subdir:
               dontCheck (doJailbreak (self.callCabal2nix name (hsOpenTelemetrySrc + subdir) { }));
+            otelPackageWithOptions = name: subdir: options:
+              dontCheck (doJailbreak (self.callCabal2nixWithOptions name (hsOpenTelemetrySrc + subdir) options { }));
             threadUtilsPackage = name: subdir:
               dontCheck (doJailbreak (self.callCabal2nix name (threadUtilsSrc + subdir) { }));
           in
@@ -107,13 +109,7 @@
                 sha256 = "1mwg8gha1y2hvk7yf2kd9411ibqba0r9ach1ypg6yk5mxqrfgcv7";
               }
               { });
-            crypton-x509 = dontCheck (self.callHackageDirect
-              {
-                pkg = "crypton-x509";
-                ver = "1.9.0";
-                sha256 = "179mrn79kyk6srf6k38q5vls894d0bmcvg56n3j45vrqd0r9kwyr";
-              }
-              { });
+            crypton-x509 = callHackageNoCheck "crypton-x509" "1.9.1" "1zh5w1isgzgl5vjb9skhrxidjzilx6fgarp3lgwbi264avh7lmpi";
             crypton-x509-store = dontCheck (self.callHackageDirect
               {
                 pkg = "crypton-x509-store";
@@ -128,20 +124,12 @@
                 sha256 = "1yw0h3k3dxnb35ma5x7qb2hpxf1rvag8c2hjqx2qbidmjfzffykb";
               }
               { });
-            crypton-x509-validation = dontCheck (self.callHackageDirect
-              {
-                pkg = "crypton-x509-validation";
-                ver = "1.9.0";
-                sha256 = "07xmh65ml9r51ijz0sv6rk3s46flmmafcka5ik63pqxhn2za20w0";
-              }
-              { });
-            tls = dontCheck (doJailbreak (self.callHackageDirect
-              {
-                pkg = "tls";
-                ver = "2.3.1";
-                sha256 = "1a7k5fjgh39hy73napwn331wcgfi8q4b3z14qvl7ix19pd2gi8zs";
-              }
-              { }));
+            crypton-x509-validation = callHackageNoCheck "crypton-x509-validation" "1.9.1" "1c5c3jxqmskq6q8rd0ac7ljg0nimqixi776lsbyarwn20mb9zav0";
+            hpke = callHackageNoCheck "hpke" "0.1.0" "07fqz8j2rlf6mq36s9v988q4i9wzhwjd1s9s0rqld79f3xs6zdpd";
+            mlkem = callHackageNoCheck "mlkem" "0.2.2.0" "06k9iffnnbxkdfc204lghzsz3ibz700knarrb4y9lf98810d3934";
+            tls = callHackageNoCheck "tls" "2.4.3" "0rgpgrmlips7r50s1rns8yz278qac0v90z76vpjh7pk4m65lsqhm";
+            crypton-connection = callHackageNoCheck "crypton-connection" "0.4.6" "0q1h8npbka73nkgf7hp24w4yfd12bf91psvayrqi22js830cdrq7";
+            http-client-tls = callHackageNoCheck "http-client-tls" "0.4.0" "1qgwh3zip36pbjn7c5pn1l6zv044d6l77mnariz66bdhwy9hrx1s";
             generic-lens-core = callHackageNoCheck "generic-lens-core" "2.3.0.0" "05im3y27lhjjy6hi0i85rlqsan510fmp63lqfwg18cnlzn0yvf81";
             generic-lens = callHackageNoCheck "generic-lens" "2.3.0.0" "06q0ghaj90hqp0chb3z5qzr3cx8ypanjk24d4wnb1b7b8s13rhsp";
             optparse-applicative = callHackageNoCheck "optparse-applicative" "0.19.0.0" "0cs8fqipakad38lvm75nz98hmvf881mgjhnc7icblxfzh92ay6kn";
@@ -163,7 +151,15 @@
             thread-utils-context = threadUtilsPackage "thread-utils-context" "/thread-utils-context";
             hs-opentelemetry-api-types = otelPackage "hs-opentelemetry-api-types" "/api-types";
             hs-opentelemetry-api = otelPackage "hs-opentelemetry-api" "/api";
+            hs-opentelemetry-otlp = otelPackage "hs-opentelemetry-otlp" "/otlp";
+            hs-opentelemetry-exporter-otlp = otelPackage "hs-opentelemetry-exporter-otlp" "/exporters/otlp";
+            hs-opentelemetry-exporter-handle = otelPackage "hs-opentelemetry-exporter-handle" "/exporters/handle";
+            hs-opentelemetry-propagator-b3 = otelPackage "hs-opentelemetry-propagator-b3" "/propagators/b3";
+            hs-opentelemetry-propagator-datadog = otelPackage "hs-opentelemetry-propagator-datadog" "/propagators/datadog";
+            hs-opentelemetry-propagator-jaeger = otelPackage "hs-opentelemetry-propagator-jaeger" "/propagators/jaeger";
             hs-opentelemetry-propagator-w3c = otelPackage "hs-opentelemetry-propagator-w3c" "/propagators/w3c";
+            hs-opentelemetry-propagator-xray = otelPackage "hs-opentelemetry-propagator-xray" "/propagators/xray";
+            hs-opentelemetry-sdk = otelPackageWithOptions "hs-opentelemetry-sdk" "/sdk" "-f-tls-metadata";
             hs-opentelemetry-semantic-conventions = otelPackage "hs-opentelemetry-semantic-conventions" "/semantic-conventions";
 
             hasql-migration =

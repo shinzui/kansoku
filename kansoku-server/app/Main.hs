@@ -15,7 +15,7 @@ import Kansoku.Postgres (createPool)
 import Kansoku.Prelude
 import Kansoku.Runtime (runApp)
 import Kansoku.Server (ReadyProbe (..), kansokuApp, pgmqReady, startServer)
-import Kansoku.Telemetry (makeTracer)
+import Kansoku.Telemetry (Telemetry (..), makeTelemetry)
 import Kansoku.Writer.Run (runWriter)
 import System.Exit (exitFailure)
 import System.IO (hPutStrLn, stderr)
@@ -37,27 +37,28 @@ main = do
       bracket (createPool (cfg ^. #pgConnectionString)) Pool.release $ \pool -> do
         provisionQueue pool queueName
         queryPool <- newQueryPool (clickHouseConfigFromConfig cfg) (cfg ^. #clickHouseQueryPoolSize)
-        tracer <- makeTracer
-        withAsync
-          ( runWriter
-              pool
-              tracer
-              (clickHouseConfigFromConfig cfg)
-              queueName
-              (cfg ^. #writerVisibilityTimeoutSec)
-              (cfg ^. #writerAdapterBatchSize)
-              (cfg ^. #writerMaxBatchSize)
-              (cfg ^. #writerMaxLatencyMs)
-              (readMVar shutdownVar)
-          )
-          ( \writerAsync ->
-              let probe =
-                    ReadyProbe
-                      { writerAlive = isNothing <$> poll writerAsync,
-                        pgmqReachable = pgmqReady pool queueName
-                      }
-                  app = kansokuApp cfg probe pool queueName queryPool
-               in race_
-                    (wait writerAsync)
-                    (runApp cfg (startServer app))
-          )
+        bracket makeTelemetry shutdownTelemetry $ \telemetry -> do
+          let tracer = telemetry ^. #tracer
+          withAsync
+            ( runWriter
+                pool
+                tracer
+                (clickHouseConfigFromConfig cfg)
+                queueName
+                (cfg ^. #writerVisibilityTimeoutSec)
+                (cfg ^. #writerAdapterBatchSize)
+                (cfg ^. #writerMaxBatchSize)
+                (cfg ^. #writerMaxLatencyMs)
+                (readMVar shutdownVar)
+            )
+            ( \writerAsync ->
+                let probe =
+                      ReadyProbe
+                        { writerAlive = isNothing <$> poll writerAsync,
+                          pgmqReachable = pgmqReady pool queueName
+                        }
+                    app = kansokuApp cfg probe pool queueName queryPool
+                 in race_
+                      (wait writerAsync)
+                      (runApp cfg (startServer app))
+            )

@@ -53,16 +53,18 @@ library
   build-depends:
     , aeson
     , async
-    , base                  >=4.21 && <5
+    , base                              >=4.21 && <5
     , bytestring
     , ClickHaskell
     , containers
     , effectful
     , effectful-core
-    , generic-lens          >=2.2  && <2.4
+    , generic-lens                      >=2.2  && <2.4
     , hasql
     , hasql-pool
     , hs-opentelemetry-api
+    , hs-opentelemetry-exporter-handle
+    , hs-opentelemetry-sdk
     , http-types
     , kansoku-api
     , pg-migrate
