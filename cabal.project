@@ -23,7 +23,7 @@ constraints:
 source-repository-package
     type: git
     location: https://github.com/KovalevDima/ClickHaskell.git
-    tag: 56efc1840d79c89c2a6ade3794932588b65febab
+    tag: 4524fbdd08cd0cf4a3468180323cbf6c4cf5667b
     subdir: library
 
 source-repository-package

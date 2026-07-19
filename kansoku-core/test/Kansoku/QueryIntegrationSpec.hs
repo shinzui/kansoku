@@ -56,6 +56,25 @@ spec = describe "Kansoku.Query integration" $ do
             ]
       keys `shouldContain` ["signup\tstep"]
 
+  it "passes built-in event names through native query parameters" $
+    withClickHouse $ \conn -> do
+      resetTable conn
+      insertEvents conn [sampleEvent "evt_parameter_1" "user_registered"]
+      queryPool <- (`newQueryPool` 2) . clickHouseConfigFromConfig =<< requireConfig
+      metric <- requireBuiltinMetric "new_users"
+      result <-
+        runEff $
+          Query.run
+            queryPool
+            metric
+            Query.QueryRequest
+              { from = fromGregorian 2026 7 1,
+                to = fromGregorian 2026 7 2,
+                groupBy = Nothing,
+                timeGrain = Just Day
+              }
+      sum (fmap (^. #value) (result ^. #points)) `shouldBe` 1
+
 type SleepColumns = '[Column "s" UInt8]
 
 newtype SleepRow = SleepRow {s :: Word8}

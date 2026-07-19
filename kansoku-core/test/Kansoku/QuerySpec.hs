@@ -47,6 +47,13 @@ spec = describe "Kansoku.Query.buildSQL" $ do
     buildSQL (Ratioed conversionRate) dayRequest
       `shouldContainText` "if(denominator = 0, 0, numerator / denominator) AS value"
 
+  it "uses native ClickHouse placeholders for built-in event names" $ do
+    let sql = buildSQL (Ratioed conversionRate) dayRequest
+    sql `shouldContainText` "{numerator_event_name_1:String}"
+    sql `shouldContainText` "{denominator_event_name_1:String}"
+    sql `shouldNotContainText` "'signup_completed'"
+    sql `shouldNotContainText` "'signup_started'"
+
   it "counts sessions by distinct non-empty session ids" $
     buildSessionsSQL dayRequest
       `shouldBe` Text.unlines
@@ -75,3 +82,7 @@ dayRequest =
 shouldContainText :: Text -> Text -> Expectation
 shouldContainText haystack needle =
   Text.isInfixOf needle haystack `shouldBe` True
+
+shouldNotContainText :: Text -> Text -> Expectation
+shouldNotContainText haystack needle =
+  Text.isInfixOf needle haystack `shouldBe` False

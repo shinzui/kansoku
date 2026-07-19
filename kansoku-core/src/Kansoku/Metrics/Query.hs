@@ -20,6 +20,9 @@ import ClickHaskell
     Column,
     Float64,
     Select,
+    ToChType (toChType),
+    addParameter,
+    passParameters,
     select,
     unsafeMkSelect,
   )
@@ -35,6 +38,7 @@ import Effectful (Eff, IOE, type (:>))
 import Kansoku.ClickHouse (QueryPool, withQueryConnection)
 import Kansoku.Metrics.Api (MetricPoint (..), MetricResult (..), TimeGrain (..))
 import Kansoku.Metrics.Definition (Aggregation (..), MetricDefinition (..), RatioMetric (..))
+import Kansoku.Metrics.Query.Validate (SqlName, mkSqlName, renderSqlName)
 import Kansoku.Metrics.Registry (BuiltinMetric (..))
 import Kansoku.Prelude
 
@@ -67,27 +71,29 @@ buildSQL = \case
 
 run :: (IOE :> es) => QueryPool -> BuiltinMetric -> QueryRequest -> Eff es MetricResult
 run pool metric req =
-  liftIO (runSQL pool (metricName metric) (groupLabel req) (buildSQL metric req))
+  liftIO (runSQL pool (metricName metric) (groupLabel req) (metricParameters metric req) (buildSQL metric req))
 
 runSessions :: (IOE :> es) => QueryPool -> QueryRequest -> Eff es MetricResult
 runSessions pool req =
-  liftIO (runSQL pool "sessions" Nothing (buildSessionsSQL req))
+  liftIO (runSQL pool "sessions" Nothing [] (buildSessionsSQL req))
 
 runRetention :: (IOE :> es) => QueryPool -> QueryRequest -> [Int] -> Eff es MetricResult
 runRetention pool req offsets =
-  liftIO (runSQLWith pool "retention" retentionPoint (buildRetentionSQL req offsets))
+  liftIO (runSQLWith pool "retention" retentionPoint [] (buildRetentionSQL req offsets))
 
-runFunnel :: (IOE :> es) => QueryPool -> QueryRequest -> [Text] -> Eff es MetricResult
+runFunnel :: (IOE :> es) => QueryPool -> QueryRequest -> [SqlName] -> Eff es MetricResult
 runFunnel pool req steps =
-  liftIO (runSQLWith pool "funnel" funnelPoint (buildFunnelSQL req steps))
+  liftIO (runSQLWith pool "funnel" funnelPoint (namedParameters "funnel_step" steps) (buildFunnelSQL req steps))
 
-runSQL :: QueryPool -> Text -> Maybe Text -> Text -> IO MetricResult
+type QueryParameter = (String, SqlName)
+
+runSQL :: QueryPool -> Text -> Maybe Text -> [QueryParameter] -> Text -> IO MetricResult
 runSQL pool name groupName =
   runSQLWith pool name (defaultPoint groupName)
 
-runSQLWith :: QueryPool -> Text -> (AggRow -> MetricPoint) -> Text -> IO MetricResult
-runSQLWith pool metric toPoint sql = do
-  rows <- withQueryConnection pool $ \conn -> concat <$> select (aggSelect sql) conn (pure . repairAggRows)
+runSQLWith :: QueryPool -> Text -> (AggRow -> MetricPoint) -> [QueryParameter] -> Text -> IO MetricResult
+runSQLWith pool metric toPoint parameters sql = do
+  rows <- withQueryConnection pool $ \conn -> concat <$> select (aggSelect parameters sql) conn (pure . repairAggRows)
   pure MetricResult {metric, points = toPoint <$> List.sortOn sortKey rows}
   where
     sortKey AggRow {bucket, group_key} = (bucket, group_key)
@@ -101,18 +107,22 @@ repairAggRows rows =
   where
     repair row bucketValue = row & #bucket .~ bucketValue
 
-aggSelect :: Text -> Select AggColumns AggRow
-aggSelect sql =
-  unsafeMkSelect $
-    const $
-      Text.encodeUtf8Builder $
-        Text.unlines
-          [ "SELECT CAST(bucket, 'String') AS bucket, CAST(group_key, 'String') AS group_key, CAST(value, 'Float64') AS value",
-            "FROM (",
-            sql,
-            ")",
-            "SETTINGS compile_expressions = 0, compile_aggregate_expressions = 0, compile_sort_description = 0"
-          ]
+aggSelect :: [QueryParameter] -> Text -> Select AggColumns AggRow
+aggSelect parameters sql =
+  passParameters (foldr addOne id parameters) $
+    unsafeMkSelect $
+      const $
+        Text.encodeUtf8Builder $
+          Text.unlines
+            [ "SELECT CAST(bucket, 'String') AS bucket, CAST(group_key, 'String') AS group_key, CAST(value, 'Float64') AS value",
+              "FROM (",
+              sql,
+              ")",
+              "SETTINGS compile_expressions = 0, compile_aggregate_expressions = 0, compile_sort_description = 0"
+            ]
+  where
+    addOne (name, value) rest =
+      addParameter name (toChType (Text.unpack (renderSqlName value)) :: ChString) . rest
 
 defaultPoint :: Maybe Text -> AggRow -> MetricPoint
 defaultPoint groupName AggRow {bucket, group_key, value} =
@@ -183,13 +193,13 @@ buildRatioSQL RatioMetric {numerator, denominator} req =
       "      ( SELECT toFloat64(uniqExact(canonical_user))",
       "        FROM analytics.events_resolved",
       "        WHERE canonical_user != ''",
-      "          AND " <> eventNamePredicate (eventNames numerator),
+      "          AND " <> eventNamePredicate "numerator_event_name" (validatedEventNames numerator),
       "          AND " <> timestampPredicate req,
       "      ) AS numerator,",
       "      ( SELECT toFloat64(uniqExact(canonical_user))",
       "        FROM analytics.events_resolved",
       "        WHERE canonical_user != ''",
-      "          AND " <> eventNamePredicate (eventNames denominator),
+      "          AND " <> eventNamePredicate "denominator_event_name" (validatedEventNames denominator),
       "          AND " <> timestampPredicate req,
       "      ) AS denominator",
       "  )"
@@ -201,7 +211,7 @@ countEventsSQL def req =
     [ "SELECT " <> bucketExpr (effectiveGrain def req) <> " AS bucket, " <> groupExpr req <> " AS group_key,",
       "       toFloat64(count(DISTINCT event_id)) AS value",
       "FROM analytics.events_raw",
-      "WHERE " <> timestampPredicate req <> eventNameClause (eventNames def),
+      "WHERE " <> timestampPredicate req <> eventNameClause "event_name" (validatedEventNames def),
       "GROUP BY bucket, group_key",
       "ORDER BY bucket, group_key"
     ]
@@ -213,7 +223,7 @@ uniqueUsersSQL def req =
       "       toFloat64(uniqExact(canonical_user)) AS value",
       "FROM analytics.events_resolved",
       "WHERE canonical_user != ''",
-      "  AND " <> timestampPredicate req <> eventNameClause (eventNames def),
+      "  AND " <> timestampPredicate req <> eventNameClause "event_name" (validatedEventNames def),
       "GROUP BY bucket, group_key",
       "ORDER BY bucket, group_key"
     ]
@@ -224,7 +234,7 @@ propertyAggregateSQL fn def req =
     [ "SELECT " <> bucketExpr (effectiveGrain def req) <> " AS bucket, " <> groupExpr req <> " AS group_key,",
       "       toFloat64(" <> fn <> "(JSONExtractFloat(properties, 'amount'))) AS value",
       "FROM analytics.events_raw",
-      "WHERE " <> timestampPredicate req <> eventNameClause (eventNames def),
+      "WHERE " <> timestampPredicate req <> eventNameClause "event_name" (validatedEventNames def),
       "GROUP BY bucket, group_key",
       "ORDER BY bucket, group_key"
     ]
@@ -315,25 +325,25 @@ buildRetentionSQL req offsets =
       "ORDER BY f.cohort_day, dateDiff('day', f.cohort_day, a.active_day)"
     ]
 
-buildFunnelSQL :: QueryRequest -> [Text] -> Text
+buildFunnelSQL :: QueryRequest -> [SqlName] -> Text
 buildFunnelSQL req steps =
   Text.intercalate "\nUNION ALL\n" (stepSQL <$> zip [1 :: Int ..] steps)
   where
-    stepSQL (stepIndex, step) =
+    stepSQL (stepIndex, _step) =
       Text.unlines
-        [ "SELECT '' AS bucket, " <> sqlString (Text.pack (show stepIndex) <> "|" <> step) <> " AS group_key,",
+        [ "SELECT '' AS bucket, concat(" <> sqlString (Text.pack (show stepIndex) <> "|") <> ", " <> parameterPlaceholder "funnel_step" stepIndex <> ") AS group_key,",
           "       toFloat64(uniqExact(canonical_user)) AS value",
           "FROM analytics.events_resolved",
           "WHERE canonical_user != ''",
-          "  AND event_name = " <> sqlString step,
+          "  AND event_name = " <> parameterPlaceholder "funnel_step" stepIndex,
           previousStepPredicates stepIndex,
           "  AND " <> timestampPredicate req
         ]
     previousStepPredicates stepIndex =
-      Text.unlines (previousPredicate <$> take (stepIndex - 1) steps)
-    previousPredicate previous =
+      Text.unlines (previousPredicate <$> take (stepIndex - 1) (zip [1 :: Int ..] steps))
+    previousPredicate (previousIndex, _previous) =
       "  AND canonical_user IN (SELECT canonical_user FROM analytics.events_resolved WHERE canonical_user != '' AND event_name = "
-        <> sqlString previous
+        <> parameterPlaceholder "funnel_step" previousIndex
         <> " AND "
         <> timestampPredicate req
         <> ")"
@@ -368,13 +378,61 @@ timestampPredicate req =
     <> " AND occurred_at < "
     <> sqlString (renderDay (req ^. #to) <> " 00:00:00")
 
-eventNameClause :: [Text] -> Text
-eventNameClause [] = ""
-eventNameClause names = "\n  AND " <> eventNamePredicate names
+eventNameClause :: Text -> [SqlName] -> Text
+eventNameClause _prefix [] = ""
+eventNameClause prefix names = "\n  AND " <> eventNamePredicate prefix names
 
-eventNamePredicate :: [Text] -> Text
-eventNamePredicate [] = "1 = 1"
-eventNamePredicate names = "event_name IN (" <> Text.intercalate ", " (sqlString <$> names) <> ")"
+eventNamePredicate :: Text -> [SqlName] -> Text
+eventNamePredicate _prefix [] = "1 = 1"
+eventNamePredicate prefix names =
+  "event_name IN ("
+    <> Text.intercalate ", " (parameterPlaceholder prefix <$> [1 .. length names])
+    <> ")"
+
+parameterPlaceholder :: Text -> Int -> Text
+parameterPlaceholder prefix position =
+  "{" <> parameterName prefix position <> ":String}"
+
+parameterName :: Text -> Int -> Text
+parameterName prefix position = prefix <> "_" <> Text.pack (show position)
+
+namedParameters :: Text -> [SqlName] -> [QueryParameter]
+namedParameters prefix =
+  zipWith (\position value -> (Text.unpack (parameterName prefix position), value)) [1 :: Int ..]
+
+metricParameters :: BuiltinMetric -> QueryRequest -> [QueryParameter]
+metricParameters metric req =
+  case metric of
+    Simple def -> simpleMetricParameters def req
+    Ratioed RatioMetric {numerator, denominator} ->
+      namedParameters "numerator_event_name" (validatedEventNames numerator)
+        <> namedParameters "denominator_event_name" (validatedEventNames denominator)
+
+simpleMetricParameters :: MetricDefinition -> QueryRequest -> [QueryParameter]
+simpleMetricParameters def req
+  | def ^. #name == "active_users",
+    Just Day <- effectiveGrain def req =
+      []
+  | def ^. #name == "active_users",
+    Just Week <- effectiveGrain def req =
+      []
+  | def ^. #name == "page_views",
+    Just Day <- effectiveGrain def req =
+      []
+  | otherwise =
+      namedParameters "event_name" (validatedEventNames def)
+
+validatedEventNames :: MetricDefinition -> [SqlName]
+validatedEventNames MetricDefinition {name, eventNames} =
+  case traverse mkSqlName eventNames of
+    Right names -> names
+    Left invalid ->
+      error
+        ( "invalid built-in event name for metric "
+            <> Text.unpack name
+            <> ": "
+            <> Text.unpack invalid
+        )
 
 sqlString :: Text -> Text
 sqlString value =

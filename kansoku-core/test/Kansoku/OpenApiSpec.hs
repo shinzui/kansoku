@@ -11,7 +11,6 @@ import Data.Foldable qualified as Foldable
 import Data.List qualified as List
 import Data.Map.Strict qualified as Map
 import Data.OpenApi (ToSchema, validateToJSON)
-import Data.Text (Text)
 import Data.Text qualified as Text
 import Kansoku.Api (kansokuAPI)
 import Kansoku.Api.OpenApi (kansokuOpenApi)

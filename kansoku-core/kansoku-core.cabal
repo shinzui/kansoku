@@ -40,6 +40,7 @@ library
     Kansoku.Metrics.Definition
     Kansoku.Metrics.Handler
     Kansoku.Metrics.Query
+    Kansoku.Metrics.Query.Validate
     Kansoku.Metrics.Registry
     Kansoku.Migrations
     Kansoku.Postgres
@@ -92,9 +93,11 @@ test-suite kansoku-core-test
     Kansoku.ConfigSpec
     Kansoku.EventSpec
     Kansoku.Ingest.QueueSpec
+    Kansoku.Metrics.HandlerSpec
     Kansoku.Metrics.RoutingSpec
     Kansoku.MigrationsSpec
     Kansoku.OpenApiSpec
+    Kansoku.Query.ValidateSpec
     Kansoku.QueryIntegrationSpec
     Kansoku.QuerySpec
     Kansoku.Writer.BatchSpec

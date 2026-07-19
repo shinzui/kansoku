@@ -35,8 +35,8 @@
             clickHaskellSrc = pkgs.fetchFromGitHub {
               owner = "KovalevDima";
               repo = "ClickHaskell";
-              rev = "56efc1840d79c89c2a6ade3794932588b65febab";
-              hash = "sha256-Ysw1QYu1Qma1yjGythDatXTXk+t/qmpzFJu6BGjz8uE=";
+              rev = "4524fbdd08cd0cf4a3468180323cbf6c4cf5667b";
+              hash = "sha256-MKQybR1W/wGAz15J2rtgPAuaHM1CUEtkDVDSShRUjCg=";
             };
             hasqlMigrationSrc = pkgs.fetchFromGitHub {
               owner = "shinzui";

@@ -20,6 +20,7 @@ import Kansoku.ClickHouse (QueryPool)
 import Kansoku.Logging (logError, runLogStderr)
 import Kansoku.Metrics.Api (MetricResult, MetricsRoutes (..), TimeGrain)
 import Kansoku.Metrics.Query qualified as Query
+import Kansoku.Metrics.Query.Validate (mkSqlName)
 import Kansoku.Metrics.Registry (builtinMetric)
 import Kansoku.Prelude
 import Servant (Handler)
@@ -55,7 +56,15 @@ metricsServer pool =
     funnelHandler fromDay toDay stepsParam =
       case nonEmptyCsv stepsParam of
         [] -> pure (KansokuBadRequest (badRequest "invalid_funnel_steps" ("invalid funnel steps: " <> stepsParam)))
-        steps -> effToHandler (Query.runFunnel pool (queryRequest fromDay toDay Nothing Nothing) steps)
+        rawSteps ->
+          case traverse mkSqlName rawSteps of
+            Left invalid ->
+              pure
+                ( KansokuBadRequest
+                    (badRequest "invalid_funnel_step" ("invalid funnel step: " <> invalid))
+                )
+            Right steps ->
+              effToHandler (Query.runFunnel pool (queryRequest fromDay toDay Nothing Nothing) steps)
 
     retentionHandler :: Day -> Day -> Maybe Text -> Handler (KansokuResult MetricResult)
     retentionHandler fromDay toDay daysParam =
@@ -78,6 +87,10 @@ queryRequest fromDay toDay groupBy timeGrain =
       groupBy = nonEmptyCsv <$> groupBy,
       timeGrain
     }
+
+-- SQL safety audit: groupBy selects from a closed expression whitelist;
+-- TimeGrain and Day are parsed types; retention offsets are Int values. Funnel
+-- steps are the sole raw Text-to-SQL path and are validated above.
 
 nonEmptyCsv :: Text -> [Text]
 nonEmptyCsv =

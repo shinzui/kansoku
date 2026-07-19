@@ -58,12 +58,12 @@ This section must always reflect the actual current state of the work.
 - [x] 2026-07-18: implementation started after EP-12, EP-11, and EP-9 completed; reconciled
       target state is schema v2 + typed ClickHaskell decoding + QueryPool + NamedRoutes/MultiVerb
 
-- [ ] M1: `Kansoku.Query.Validate` module with `SqlName` smart constructor and charset rules
-- [ ] M1: funnel handler rejects invalid steps with HTTP 400 JSON naming the value
-- [ ] M1: registry-conformance test (every built-in metric event name passes the validator)
-- [ ] M1: ClickHaskell pin bumped to ≥ upstream `d372918` (query-parameter support);
+- [x] (2026-07-18 21:38Z) M1: `Kansoku.Metrics.Query.Validate` module with `SqlName` smart constructor and charset rules
+- [x] (2026-07-18 21:38Z) M1: funnel handler rejects invalid steps with HTTP 400 JSON naming the value
+- [x] (2026-07-18 21:38Z) M1: registry-conformance test (every built-in metric event name passes the validator)
+- [x] (2026-07-18 21:38Z) M1: ClickHaskell pin bumped to upstream release `v1.1.0` / `4524fbdd` (query-parameter support);
       EP-11 decode/pool behavior re-verified against the new driver
-- [ ] M1: user-derived strings routed through native parameters (`passParameters`/
+- [x] (2026-07-18 21:38Z) M1: user-derived strings routed through native parameters (`passParameters`/
       `addParameter`); charset validation retained as defense-in-depth; outcome recorded in
       Decision Log and Surprises & Discoveries (fallback: validation-only, per Plan of Work
       step 4)
@@ -120,6 +120,24 @@ implementation. Provide concise evidence.
   as `toDateTime(occurred_at)` so the window is in seconds. Verify this against the fixture
   data in Milestone 2 and record the observed behavior here.
 
+- 2026-07-18, M1: the authoritative upstream tag list maps `v1.1.0` to immutable commit
+  `4524fbdd08cd0cf4a3468180323cbf6c4cf5667b`, whose release metadata declares version
+  1.1.0 and contains `d372918`. Cabal and Nix now pin that exact commit; the Nix source hash
+  is `sha256-MKQybR1W/wGAz15J2rtgPAuaHM1CUEtkDVDSShRUjCg=`. A live
+  `user_registered` metric query proved `{event_name_1:String}` plus
+  `passParameters`/`addParameter` works over the negotiated native protocol.
+
+- 2026-07-18, M1: ClickHaskell `v1.1.0` still has EP-11's generic-product row-order defect.
+  All 42 live core examples pass with the per-block repairs; the two-row projection and
+  grouped metric cases would corrupt row associations if the repairs were removed. The
+  compatibility normalization therefore remains in both `Kansoku.ClickHouse` and
+  `Kansoku.Metrics.Query`.
+
+- 2026-07-18, M1: post-EP-9's shared `ErrorEnvelopeWire` intentionally has only `code`,
+  `message`, and `retryable`, not the plan's pre-EP-9 `details` object. The invalid step is
+  named in `message` (`"invalid funnel step: <value>"`), preserving the observable safety
+  requirement without widening the shared response algebra owned by EP-9/EP-14.
+
 
 ## Decision Log
 
@@ -174,13 +192,36 @@ Record every decision made while working on the plan.
   for nothing.
   Date: 2026-07-15
 
+- Decision: Implement against the post-EP-9 vertical-slice state, placing validation at
+  `Kansoku.Metrics.Query.Validate` and testing the real NamedRoutes/MultiVerb handler.
+  Rationale: EP-9 is complete; retaining the obsolete `Kansoku.Query.Validate` module name
+  would split query ownership across namespaces. The handler test serves the umbrella API
+  with a bottom query pool and proves invalid input returns before storage is forced.
+  Date: 2026-07-18
+
+- Decision: Pin ClickHaskell to the exact `v1.1.0` release commit in both Cabal and Nix,
+  keep charset validation, and parameterize all event-name/funnel-step SQL sites.
+  Rationale: Mori located the current source and docs; the authoritative upstream tag maps
+  the release to `4524fbdd`, and a live native-protocol query confirms the exported API.
+  Immutable source parity avoids a Cabal/Nix split, parameters prevent syntax injection,
+  and validation retains early, useful HTTP 400 feedback.
+  Date: 2026-07-18
+
 
 ## Outcomes & Retrospective
 
 Summarize outcomes, gaps, and lessons learned at major milestones or at completion.
 Compare the result against the original purpose.
 
-(To be filled during and after implementation.)
+Milestone 1 is complete. Funnel steps now cross an opaque `SqlName` boundary with the
+`^[a-z0-9_.:-]{1,128}$` invariant; invalid values return a typed HTTP 400 naming the value
+without touching ClickHouse. Every registry event name is covered by a conformance test.
+ClickHaskell is coherently pinned to upstream `v1.1.0`, and execution sends all event names
+and funnel steps out-of-band through native query parameters while generated SQL contains
+only typed placeholders. The live suite passed 42/42 core examples, including the new
+parameter query and EP-11 pool/decoder checks. Upstream still needs the per-block generic
+decoder compatibility repair, so M3 must remove only the Haskell-side result sort, not that
+repair.
 
 
 ## Context and Orientation
