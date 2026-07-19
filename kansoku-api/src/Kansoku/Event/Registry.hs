@@ -7,11 +7,16 @@ module Kansoku.Event.Registry
     PropertyType (..),
     defaultRegistry,
     emptyRegistry,
-    lookupSchema,
+    knownVersions,
+    latestSchema,
+    lookupSchemaVersion,
+    lookupVersions,
     registerSchema,
   )
 where
 
+import Data.List (find, sortOn)
+import Data.List.NonEmpty qualified as NonEmpty
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Kansoku.Event.Types (EventName (..))
@@ -29,27 +34,55 @@ data PropertySpec = PropertySpec
   { propName :: !Text,
     propType :: !PropertyType,
     propRequired :: !Bool,
-    propPattern :: !(Maybe PropertyPattern)
+    propPattern :: !(Maybe PropertyPattern),
+    propDescription :: !(Maybe Text)
   }
   deriving stock (Generic, Eq, Show)
 
 data EventSchema = EventSchema
   { schemaEventName :: !EventName,
+    schemaVersion :: !Int,
+    schemaNote :: !Text,
     schemaProperties :: ![PropertySpec]
   }
   deriving stock (Generic, Eq, Show)
 
-newtype EventRegistry = EventRegistry (Map EventName EventSchema)
+-- | Every version list is ascending and has exactly the versions 1..n. Released
+-- versions are immutable; replacing an existing pair is intended for
+-- idempotent construction, not in-place production schema edits.
+newtype EventRegistry = EventRegistry (Map EventName (NonEmpty EventSchema))
   deriving stock (Generic, Eq, Show)
 
 emptyRegistry :: EventRegistry
 emptyRegistry = EventRegistry Map.empty
 
 registerSchema :: EventSchema -> EventRegistry -> EventRegistry
-registerSchema s (EventRegistry m) = EventRegistry (Map.insert (schemaEventName s) s m)
+registerSchema schema (EventRegistry registry) =
+  EventRegistry (Map.alter upsert (schemaEventName schema) registry)
+  where
+    upsert Nothing = Just (schema :| [])
+    upsert (Just versions) =
+      Just
+        ( NonEmpty.fromList
+            ( sortOn
+                schemaVersion
+                (schema : filter ((/= schemaVersion schema) . schemaVersion) (NonEmpty.toList versions))
+            )
+        )
 
-lookupSchema :: EventName -> EventRegistry -> Maybe EventSchema
-lookupSchema n (EventRegistry m) = Map.lookup n m
+lookupVersions :: EventName -> EventRegistry -> Maybe (NonEmpty EventSchema)
+lookupVersions name (EventRegistry registry) = Map.lookup name registry
+
+lookupSchemaVersion :: EventName -> Int -> EventRegistry -> Maybe EventSchema
+lookupSchemaVersion name version registry =
+  find ((== version) . schemaVersion) . NonEmpty.toList =<< lookupVersions name registry
+
+latestSchema :: EventName -> EventRegistry -> Maybe EventSchema
+latestSchema name registry = NonEmpty.last <$> lookupVersions name registry
+
+knownVersions :: EventName -> EventRegistry -> [Int]
+knownVersions name registry =
+  maybe [] (fmap schemaVersion . NonEmpty.toList) (lookupVersions name registry)
 
 defaultRegistry :: EventRegistry
 defaultRegistry =
@@ -58,42 +91,61 @@ defaultRegistry =
     emptyRegistry
     [ EventSchema
         (EventName "page_view")
-        [plainProperty "url" PTString True],
+        1
+        initialSchemaNote
+        [plainProperty "url" PTString True "Full URL of the viewed page."],
       EventSchema
         (EventName "session_start")
-        [plainProperty "sessionId" PTString True],
+        1
+        initialSchemaNote
+        [plainProperty "sessionId" PTString True "Client-generated session identifier."],
       EventSchema
         (EventName "identify")
+        1
+        initialSchemaNote
         [],
       EventSchema
         (EventName "user_registered")
-        [plainProperty "userId" PTString True],
+        1
+        initialSchemaNote
+        [plainProperty "userId" PTString True "Identifier of the newly registered user."],
       EventSchema
         (EventName "subscription_started")
-        [ plainProperty "plan" PTString True,
-          plainProperty "amount" PTNumber False
+        1
+        initialSchemaNote
+        [ plainProperty "plan" PTString True "Plan identifier the subscription started on.",
+          plainProperty "amount" PTNumber False "Monetary amount of the subscription, in the account's currency."
         ],
       EventSchema
         (EventName "payment_completed")
-        [ plainProperty "amount" PTNumber True,
-          plainProperty "plan" PTString False
+        1
+        initialSchemaNote
+        [ plainProperty "amount" PTNumber True "Monetary amount of the completed payment, in the account's currency.",
+          plainProperty "plan" PTString False "Plan associated with the completed payment."
         ],
       EventSchema
         (EventName "feature_used")
-        [plainProperty "feature" PTString True],
+        1
+        initialSchemaNote
+        [plainProperty "feature" PTString True "Stable identifier of the feature used."],
       -- Emit an exposure when a user is shown a variant, not merely assigned
       -- one. Re-exposures are allowed because analytics count unique users.
       EventSchema
         (EventName "experiment_viewed")
-        [ sqlNameProperty "experiment",
-          sqlNameProperty "variant"
+        1
+        initialSchemaNote
+        [ sqlNameProperty "experiment" "Stable identifier of the experiment.",
+          sqlNameProperty "variant" "Variant shown to the user."
         ]
     ]
 
-plainProperty :: Text -> PropertyType -> Bool -> PropertySpec
-plainProperty name propertyType required =
-  PropertySpec name propertyType required Nothing
+initialSchemaNote :: Text
+initialSchemaNote = "Initial schema (kansoku MVP)."
 
-sqlNameProperty :: Text -> PropertySpec
-sqlNameProperty name =
-  PropertySpec name PTString True (Just SqlNamePattern)
+plainProperty :: Text -> PropertyType -> Bool -> Text -> PropertySpec
+plainProperty name propertyType required description =
+  PropertySpec name propertyType required Nothing (Just description)
+
+sqlNameProperty :: Text -> Text -> PropertySpec
+sqlNameProperty name description =
+  PropertySpec name PTString True (Just SqlNamePattern) (Just description)

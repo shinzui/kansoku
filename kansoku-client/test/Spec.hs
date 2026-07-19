@@ -68,6 +68,14 @@ spec = describe "Kansoku.Client" $ do
       KeyMap.lookup (Key.fromString "plan") (event ^. #properties) `shouldBe` Just (Aeson.String "pro")
       KeyMap.lookup (Key.fromString "userId") (event ^. #properties) `shouldBe` Just (Aeson.String "property-only")
 
+  it "trackEventWithVersion pins the shared wire field" $
+    withRecorder (const (pure status202)) $ \port received _ -> do
+      withClient (testConfig port) $ \client -> do
+        trackEventWithVersion client emptyIds "page_view" 1 ["url" Aeson..= ("https://example.com" :: Text)]
+        flush client
+      [event] <- readEvents received
+      event ^. #schemaVersion `shouldBe` Just 1
+
   it "round-trips a helper-built event through the shared AnalyticsEvent JSON type" $
     withRecorder (const (pure status202)) $ \port received _ -> do
       withClient (testConfig port) $ \client -> do

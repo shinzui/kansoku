@@ -19,6 +19,7 @@ module Kansoku.Client
     newClient,
     track,
     trackEvent,
+    trackEventWithVersion,
     withClient,
   )
 where
@@ -172,6 +173,13 @@ track clientHandle event = do
 trackEvent :: Client -> EventIds -> Text -> [Pair] -> IO ()
 trackEvent clientHandle ids name pairs =
   buildEvent (clientHandle ^. #config) ids name pairs >>= track clientHandle
+
+-- | Track an event pinned to an explicit published schema version.
+trackEventWithVersion :: Client -> EventIds -> Text -> Int -> [Pair] -> IO ()
+trackEventWithVersion clientHandle ids name version pairs =
+  buildEvent (clientHandle ^. #config) ids name pairs
+    <&> (#schemaVersion ?~ version)
+    >>= track clientHandle
 
 identify :: Client -> Text -> Maybe Text -> [Pair] -> IO ()
 identify clientHandle user anonId traits =

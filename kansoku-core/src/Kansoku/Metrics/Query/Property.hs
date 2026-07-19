@@ -22,7 +22,7 @@ import Kansoku.Event
     EventSchema (..),
     PropertySpec (..),
     PropertyType (..),
-    lookupSchema,
+    latestSchema,
   )
 import Kansoku.Prelude
 
@@ -87,13 +87,13 @@ validPropertyName value =
 
 declaredProperty :: EventRegistry -> Text -> EventName -> Either PropertyError ()
 declaredProperty registry property event =
-  case lookupSchema event registry >>= findProperty property of
+  case latestSchema event registry >>= findProperty property of
     Just _ -> Right ()
     Nothing -> Left (PropertyErrorUndeclared property event)
 
 numericProperty :: EventRegistry -> Text -> EventName -> Either PropertyError ()
 numericProperty registry property event =
-  case lookupSchema event registry >>= findProperty property of
+  case latestSchema event registry >>= findProperty property of
     Just PropertySpec {propType = PTNumber} -> Right ()
     Just PropertySpec {propType = PTAny} -> Right ()
     _ -> Left (PropertyErrorNotNumeric property event)

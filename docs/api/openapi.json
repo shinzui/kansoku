@@ -48,6 +48,11 @@
           "referrer": {
             "type": "string"
           },
+          "schemaVersion": {
+            "maximum": 9223372036854775807,
+            "minimum": -9223372036854775808,
+            "type": "integer"
+          },
           "sessionId": {
             "$ref": "#/components/schemas/SessionId"
           },

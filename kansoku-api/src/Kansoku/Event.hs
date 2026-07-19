@@ -101,6 +101,7 @@ baseEvent eid name src occ recv =
       causationId = Nothing,
       sourceEventId = Nothing,
       sourceGlobalPosition = Nothing,
+      schemaVersion = Nothing,
       properties = mempty,
       context = mempty
     }

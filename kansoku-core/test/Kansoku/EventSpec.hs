@@ -10,6 +10,7 @@ import Data.Generics.Labels ()
 import Data.List (isInfixOf)
 import Data.Map.Strict qualified as Map
 import Data.Text qualified as Text
+import Kansoku.ClickHouse.EventRow (eventRowFromEvent)
 import Kansoku.Event
 import Kansoku.Metrics.Query.Validate (mkSqlName)
 import Kansoku.Prelude
@@ -40,16 +41,59 @@ spec = describe "Kansoku.Event" $ do
       decode (encode withIdentifiers) `shouldBe` Just withIdentifiers
       expectedSample ^. #identifiers `shouldBe` Nothing
 
+    it "omits a versionless schemaVersion and round-trips an explicit version" $ do
+      case Aeson.toJSON expectedSample of
+        Aeson.Object object -> KeyMap.member "schemaVersion" object `shouldBe` False
+        _ -> expectationFailure "AnalyticsEvent did not encode as an object"
+      let pinned = expectedSample & #schemaVersion ?~ 1
+      decode (encode pinned) `shouldBe` Just pinned
+
   describe "schema registry" $ do
-    it "finds a seeded schema" $
-      lookupSchema (EventName "page_view") defaultRegistry `shouldSatisfy` isJust
+    it "finds seeded versions and reports them in ascending order" $ do
+      lookupSchemaVersion (EventName "page_view") 1 defaultRegistry `shouldSatisfy` isJust
+      latestSchema (EventName "page_view") defaultRegistry
+        `shouldBe` lookupSchemaVersion (EventName "page_view") 1 defaultRegistry
+      knownVersions (EventName "page_view") defaultRegistry `shouldBe` [1]
 
     it "returns Nothing for an unregistered name" $
-      lookupSchema (EventName "no_such_event") defaultRegistry `shouldBe` Nothing
+      lookupVersions (EventName "no_such_event") defaultRegistry `shouldBe` Nothing
+
+    it "sorts versions and replaces a duplicate name/version idempotently" $ do
+      let name = EventName "versioned_test"
+          version1 = EventSchema name 1 "v1" []
+          version2 = EventSchema name 2 "v2" []
+          replacement = EventSchema name 1 "v1 replacement" []
+          registry = foldr registerSchema emptyRegistry [replacement, version2, version1]
+      knownVersions name registry `shouldBe` [1, 2]
+      lookupSchemaVersion name 1 registry `shouldBe` Just replacement
 
   describe "validation" $ do
     it "accepts a well-formed registered event" $
       validateEvent expectedSample `shouldBe` Right expectedSample
+
+    it "accepts an event pinned to the known version 1" $ do
+      let pinned = expectedSample & #schemaVersion ?~ 1
+      validateEvent pinned `shouldBe` Right pinned
+
+    it "rejects an unknown version of a registered event and names known versions" $
+      validateEvent (expectedSample & #schemaVersion ?~ 2)
+        `shouldSatisfy` hasError (UnknownSchemaVersion (EventName "page_view") 2 [1])
+
+    it "rejects schema versions outside the UInt16 persistence range" $ do
+      validateEvent (expectedSample & #schemaVersion ?~ 0)
+        `shouldSatisfy` hasError (InvalidSchemaVersion 0)
+      validateEvent (expectedSample & #schemaVersion ?~ 65536)
+        `shouldSatisfy` hasError (InvalidSchemaVersion 65536)
+
+    it "keeps unknown event names permissive when their version is in range" $ do
+      let unknown = expectedSample & #eventName .~ EventName "future_event" & #schemaVersion ?~ 7
+      validateEvent unknown `shouldBe` Right unknown
+
+    it "defaults persistence to version 1 and preserves an explicit version" $ do
+      eventRowFromEvent expectedSample ^. #schema_version `shouldBe` 1
+      eventRowFromEvent (expectedSample & #schemaVersion ?~ 7) ^. #schema_version `shouldBe` 7
+      eventRowFromEvent (expectedSample & #schemaVersion ?~ 0) ^. #schema_version `shouldBe` 1
+      eventRowFromEvent (expectedSample & #schemaVersion ?~ 65536) ^. #schema_version `shouldBe` 65535
 
     it "rejects an empty eventId" $
       validateEvent (expectedSample & #eventId .~ EventId "")
@@ -174,6 +218,7 @@ expectedSample =
       causationId = Just (CausationId "cause_1"),
       sourceEventId = Just (SourceEventId "src_evt_1"),
       sourceGlobalPosition = Just 12345,
+      schemaVersion = Nothing,
       properties =
         KeyMap.fromList
           [ ("url", "https://example.com/pricing"),

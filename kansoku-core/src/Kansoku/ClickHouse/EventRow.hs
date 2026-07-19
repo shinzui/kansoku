@@ -10,7 +10,7 @@ module Kansoku.ClickHouse.EventRow
   )
 where
 
-import ClickHaskell (ChString, ClickHaskell, Column, DateTime64, UInt64)
+import ClickHaskell (ChString, ClickHaskell, Column, DateTime64, UInt16, UInt64)
 import Data.Aeson qualified as Aeson
 import Data.ByteString (ByteString)
 import Data.ByteString.Lazy qualified as LBS
@@ -18,7 +18,7 @@ import Data.Generics.Labels ()
 import Data.Int (Int64)
 import Data.Map.Strict (Map)
 import Data.Text.Encoding qualified as Text
-import Data.Word (Word64)
+import Data.Word (Word16, Word64)
 import Kansoku.Event
 import Kansoku.Prelude
 
@@ -47,7 +47,8 @@ type EventColumns =
      Column "source_global_position" (Maybe UInt64),
      Column "properties" ChString,
      Column "context" ChString,
-     Column "identifiers" ChString
+     Column "identifiers" ChString,
+     Column "schema_version" UInt16
    ]
 
 data EventRow = EventRow
@@ -75,7 +76,8 @@ data EventRow = EventRow
     source_global_position :: !(Maybe Word64),
     properties :: !ByteString,
     context :: !ByteString,
-    identifiers :: !ByteString
+    identifiers :: !ByteString,
+    schema_version :: !Word16
   }
   deriving stock (Generic, Eq, Show)
   deriving anyclass (ClickHaskell EventColumns)
@@ -131,8 +133,13 @@ eventRowFromEvent event =
       source_global_position = nonNegativeWord64 =<< event ^. #sourceGlobalPosition,
       properties = objectBytes (event ^. #properties),
       context = objectBytes (event ^. #context),
-      identifiers = maybe "{}" identifiersBytes (event ^. #identifiers)
+      identifiers = maybe "{}" identifiersBytes (event ^. #identifiers),
+      schema_version = boundedSchemaVersion (event ^. #schemaVersion)
     }
+
+boundedSchemaVersion :: Maybe Int -> Word16
+boundedSchemaVersion =
+  fromIntegral . max 1 . min 65535 . fromMaybe 1
 
 textBytes :: Text -> ByteString
 textBytes = Text.encodeUtf8

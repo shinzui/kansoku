@@ -149,6 +149,7 @@ data AnalyticsEvent = AnalyticsEvent
     causationId :: !(Maybe CausationId),
     sourceEventId :: !(Maybe SourceEventId),
     sourceGlobalPosition :: !(Maybe Int64),
+    schemaVersion :: !(Maybe Int),
     properties :: !Object,
     context :: !Object
   }

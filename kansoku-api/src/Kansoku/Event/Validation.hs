@@ -11,6 +11,7 @@ import Data.Aeson (Value (..))
 import Data.Aeson.Key qualified as Key
 import Data.Aeson.KeyMap qualified as KeyMap
 import Data.Char (isAsciiLower, isDigit)
+import Data.Generics.Labels ()
 import Data.Map.Strict qualified as Map
 import Data.Text qualified as Text
 import Data.Time.Format (defaultTimeLocale, formatTime)
@@ -22,6 +23,8 @@ data ValidationError
   = EmptyEventId
   | EmptyEventName
   | ReceivedBeforeOccurred UTCTime UTCTime
+  | InvalidSchemaVersion Int
+  | UnknownSchemaVersion EventName Int [Int]
   | UnknownIdentifierKind Text [Text]
   | EmptyIdentifierValue Text
   | IdentifierValueTooLong Text Int Int
@@ -45,6 +48,10 @@ validateEventWith registry event =
         <> [ ReceivedBeforeOccurred (occurredAt event) (receivedAt event)
            | receivedAt event < occurredAt event
            ]
+        <> [ InvalidSchemaVersion version
+           | Just version <- [event ^. #schemaVersion],
+             not (validSchemaVersion version)
+           ]
 
     identifierErrors =
       case identifiers event of
@@ -64,9 +71,15 @@ validateEventWith registry event =
            ]
 
     schemaErrors =
-      case lookupSchema (eventName event) registry of
+      case lookupVersions (eventName event) registry of
         Nothing -> []
-        Just schema -> concatMap validateProperty (schemaProperties schema)
+        Just _
+          | not (maybe True validSchemaVersion (event ^. #schemaVersion)) -> []
+          | otherwise ->
+              let requested = fromMaybe 1 (event ^. #schemaVersion)
+               in case lookupSchemaVersion (eventName event) requested registry of
+                    Nothing -> [UnknownSchemaVersion (eventName event) requested (knownVersions (eventName event) registry)]
+                    Just schema -> concatMap validateProperty (schemaProperties schema)
 
     validateProperty :: PropertySpec -> [ValidationError]
     validateProperty spec =
@@ -99,6 +112,17 @@ renderValidationError = \case
       <> ") precedes occurredAt ("
       <> renderTimestamp occurred
       <> "); occurredAt is in the future relative to the server clock"
+  InvalidSchemaVersion version ->
+    "schemaVersion "
+      <> Text.pack (show version)
+      <> " is outside the supported range 1..65535"
+  UnknownSchemaVersion name requested known ->
+    "event '"
+      <> unEventName name
+      <> "': schemaVersion "
+      <> Text.pack (show requested)
+      <> " is unknown; known versions: "
+      <> Text.pack (show known)
   UnknownIdentifierKind kind allowed ->
     "identifier kind '"
       <> kind
@@ -142,6 +166,9 @@ renderValidationError = \case
 
 maxIdentifierValueLength :: Int
 maxIdentifierValueLength = 256
+
+validSchemaVersion :: Int -> Bool
+validSchemaVersion version = version >= 1 && version <= 65535
 
 isIdentifierValueChar :: Char -> Bool
 isIdentifierValueChar char = char > ' ' && char <= '~'

@@ -12,7 +12,7 @@ import Kansoku.Event
     PropertySpec (..),
     PropertyType (..),
     defaultRegistry,
-    lookupSchema,
+    latestSchema,
   )
 import Kansoku.Metrics.Api (MetricPoint (..), TimeGrain (..))
 import Kansoku.Metrics.Definition (Aggregation (Average, Sum), MetricDefinition)
@@ -333,7 +333,7 @@ assertAggregationProperty = \case
 
 assertNumericDeclaration :: Text -> Text -> Expectation
 assertNumericDeclaration property event =
-  case lookupSchema (EventName event) defaultRegistry of
+  case latestSchema (EventName event) defaultRegistry of
     Nothing -> expectationFailure ("missing event schema for " <> Text.unpack event)
     Just EventSchema {schemaProperties} ->
       case [propType | PropertySpec {propName, propType} <- schemaProperties, propName == property] of

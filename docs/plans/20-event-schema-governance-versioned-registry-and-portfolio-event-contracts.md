@@ -65,21 +65,21 @@ This section must always reflect the actual current state of the work.
 - [x] (2026-07-19 14:43 PDT) M0: verified the post-MasterPlan-2 baseline (NamedRoutes
       record, migration runner, auth, committed `docs/api/openapi.json`) and recorded the
       landed EP-17/EP-18/EP-19 deviations below
-- [ ] M1: `EventRegistry` remodeled as `Map EventName (NonEmpty EventSchema)`;
+- [x] (2026-07-19 14:58 PDT) M1: `EventRegistry` remodeled as `Map EventName (NonEmpty EventSchema)`;
       `EventSchema` gains `schemaVersion :: Int` and `schemaNote :: Text`; `PropertySpec`
       gains `propDescription :: Maybe Text`; lookup helpers added
-- [ ] M1: `defaultRegistry` entries migrated as version 1 with no semantic change
+- [x] (2026-07-19 14:58 PDT) M1: `defaultRegistry` entries migrated as version 1 with no semantic change
       (including any EP-17 / EP-19 additions that landed first)
-- [ ] M1: `AnalyticsEvent` gains `schemaVersion :: Maybe Int`; `baseEvent` defaults it to
+- [x] (2026-07-19 14:58 PDT) M1: `AnalyticsEvent` gains `schemaVersion :: Maybe Int`; `baseEvent` defaults it to
       `Nothing`
-- [ ] M1: validation resolves the requested version, rejects unknown versions of known
+- [x] (2026-07-19 14:58 PDT) M1: validation resolves the requested version, rejects unknown versions of known
       events (`UnknownSchemaVersion`), rejects out-of-range versions
       (`InvalidSchemaVersion`), keeps unknown event names permissive
-- [ ] M1: ClickHouse migration adds `schema_version UInt16 DEFAULT 1` to
+- [x] (2026-07-19 14:58 PDT) M1: ClickHouse migration adds `schema_version UInt16 DEFAULT 1` to
       `analytics.events_raw`; `EventRow` maps it
-- [ ] M1: `kansoku-client` helper `trackEventWithVersion`; client and OpenAPI document
+- [x] (2026-07-19 14:58 PDT) M1: `kansoku-client` helper `trackEventWithVersion`; client and OpenAPI document
       regenerated in the same commit as the wire change
-- [ ] M1: unit tests in `kansoku-core/test/Kansoku/EventSpec.hs` cover the new validation
+- [x] (2026-07-19 14:58 PDT) M1: unit tests in `kansoku-core/test/Kansoku/EventSpec.hs` cover the new validation
       paths and JSON round-trip; `cabal test` green; M1 committed
 - [ ] M2: `Kansoku.Event.Contract` module (`SchemaCatalog` DTOs, `schemaCatalog`
       derivation, JSON instances)
@@ -123,6 +123,16 @@ implementation. Provide concise evidence.
 - 2026-07-19: The fully live baseline is green: `just build`, deterministic
   `just openapi-check`, 120 core examples, and 11 client examples passed with zero failures;
   the one client test requiring `KANSOKU_SERVER_URL` remains intentionally pending.
+
+- 2026-07-19: The process-compose UI already owns port 8080, and the shared local `kansoku`
+  Postgres database contains a partial PGMQ install. M1 live acceptance therefore used a
+  fresh `kansoku_ep20_m1` database, isolated queue, and port 18080; the server and temporary
+  database were stopped and removed afterwards.
+
+- 2026-07-19: The landed EP-14 single-ingest rejection format is the shared
+  `ErrorEnvelopeWire`, so the unknown-version response places the rendered validation text
+  in `message` rather than a `details` array. The observed HTTP 400 body was
+  `{"code":"validation_failed","message":"validation failed: event 'page_view': schemaVersion 2 is unknown; known versions: [1]","retryable":false}`.
 
 
 ## Decision Log
@@ -250,7 +260,16 @@ Record every decision made while working on the plan.
 Summarize outcomes, gaps, and lessons learned at major milestones or at completion.
 Compare the result against the original purpose.
 
-(To be filled during and after implementation.)
+- M1 (2026-07-19): The registry now carries ordered immutable versions for all eight landed
+  schemas, `schemaVersion` is optional on the wire and defaults to 1 for validation and
+  persistence, known-name/unknown-version requests fail with a readable 400, and unknown
+  names remain permissive. Migration 0016 applied once and skipped on replay. Live HTTP
+  acceptance returned 400 for `page_view` version 2, 202 for versionless and pinned-v1
+  `page_view` events, and 202 for an unknown event at version 7. ClickHouse then showed
+  versions 1, 1, and 7 respectively. `just build` and the suites passed (128 core examples;
+  12 client examples with the one opt-in live test pending), and two OpenAPI generations
+  produced the same SHA-256
+  `bf7a00fb8b22d2a69d73d315f538ba3a1143fbefb261e2e4e1d61f738c2a0c6a`.
 
 
 ## Context and Orientation
@@ -323,8 +342,8 @@ the event name, each declared property is checked against the event's `propertie
 (`MissingRequiredProperty`, `WrongPropertyType`, `InvalidPropertyValue`); if the name is
 unknown, no schema errors are produced — unknown event names pass. The ingest handler
 (`kansoku-core/src/Kansoku/Ingest/Handler.hs`) calls `validateEvent` and turns a `Left` into
-HTTP 400 with body `{"error":"validation failed","details":[...]}` where each detail is the
-stable human-readable output of `renderValidationError`.
+HTTP 400 with the shared `ErrorEnvelopeWire`; its message includes the stable human-readable
+output of `renderValidationError`.
 
 ### The wire type today
 
@@ -996,13 +1015,12 @@ $ curl -s -w '\nHTTP %{http_code}\n' -X POST localhost:8080/v1/events \
   "properties": {"url": "https://example.test/pricing"},
   "context": {}
 }'
-{"details":["UnknownSchemaVersion (EventName \"page_view\") 2 [1]"],"error":"validation failed"}
+{"code":"validation_failed","message":"validation failed: event 'page_view': schemaVersion 2 is unknown; known versions: [1]","retryable":false}
 HTTP 400
 ```
 
-(The `details` strings come from `renderValidationError`; exact spacing may differ.
-The load-bearing assertions: status 400, the detail names the event, the requested version 2,
-and the known-version list `[1]`.)
+(The message comes from `renderValidationError`. The load-bearing assertions are status 400,
+the event name, requested version 2, and known-version list `[1]`.)
 
 Versionless ingest is accepted as version 1, and a valid pinned version is accepted. Expect
 HTTP 202 for both:

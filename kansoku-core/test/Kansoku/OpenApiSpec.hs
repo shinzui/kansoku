@@ -133,6 +133,12 @@ spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
     lookupTextArray ["components", "schemas", "AnalyticsEvent", "required"] documentValue
       `shouldSatisfy` maybe True (notElem "identifiers")
 
+  it "documents schemaVersion as an optional integer" $ do
+    lookupText ["components", "schemas", "AnalyticsEvent", "properties", "schemaVersion", "type"] documentValue
+      `shouldBe` Just "integer"
+    lookupTextArray ["components", "schemas", "AnalyticsEvent", "required"] documentValue
+      `shouldSatisfy` maybe True (notElem "schemaVersion")
+
   it "keeps the Servant-routed and documented path sets equal" $
     Warp.testWithApplication (pure sentinelApplication) $ \port -> do
       manager <- HTTP.newManager HTTP.defaultManagerSettings
