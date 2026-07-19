@@ -29,6 +29,8 @@ clearEnv =
       "KANSOKU_INGEST_MAX_BATCH_LENGTH",
       "KANSOKU_QUEUE_POLL_INTERVAL_SEC",
       "KANSOKU_INTERNAL_METRICS_ENABLED",
+      "KANSOKU_READY_MAX_QUEUE_DEPTH",
+      "KANSOKU_READY_MAX_FLUSH_AGE_SEC",
       "KANSOKU_SERVER_PORT"
     ]
 
@@ -57,6 +59,8 @@ spec = describe "Kansoku.Config.loadConfig" $ do
         (cfg ^. #ingestMaxBatchLength) `shouldBe` 500
         (cfg ^. #queuePollIntervalSec) `shouldBe` 15
         (cfg ^. #internalMetricsEnabled) `shouldBe` True
+        (cfg ^. #readyMaxQueueDepth) `shouldBe` 100000
+        (cfg ^. #readyMaxFlushAgeSec) `shouldBe` 120
         (cfg ^. #serverPort) `shouldBe` 8080
 
   it "parses values from the environment" $ do
@@ -78,6 +82,8 @@ spec = describe "Kansoku.Config.loadConfig" $ do
     setEnv "KANSOKU_INGEST_MAX_BATCH_LENGTH" "250"
     setEnv "KANSOKU_QUEUE_POLL_INTERVAL_SEC" "5"
     setEnv "KANSOKU_INTERNAL_METRICS_ENABLED" "false"
+    setEnv "KANSOKU_READY_MAX_QUEUE_DEPTH" "250000"
+    setEnv "KANSOKU_READY_MAX_FLUSH_AGE_SEC" "45"
     setEnv "KANSOKU_SERVER_PORT" "9999"
     result <- loadConfig
     clearEnv
@@ -102,6 +108,8 @@ spec = describe "Kansoku.Config.loadConfig" $ do
         (cfg ^. #ingestMaxBatchLength) `shouldBe` 250
         (cfg ^. #queuePollIntervalSec) `shouldBe` 5
         (cfg ^. #internalMetricsEnabled) `shouldBe` False
+        (cfg ^. #readyMaxQueueDepth) `shouldBe` 250000
+        (cfg ^. #readyMaxFlushAgeSec) `shouldBe` 45
         (cfg ^. #serverPort) `shouldBe` 9999
 
   it "treats an explicit wildcard CORS origin as unrestricted" $ do
@@ -147,6 +155,25 @@ spec = describe "Kansoku.Config.loadConfig" $ do
     result
       `shouldBe` Left
         (ConfigError "KANSOKU_INTERNAL_METRICS_ENABLED: expected true, false, 1, or 0")
+
+  it "accepts a zero queue-depth threshold but rejects negative values" $ do
+    clearEnv
+    setEnv "KANSOKU_READY_MAX_QUEUE_DEPTH" "0"
+    zeroResult <- loadConfig
+    (zeroResult <&> (^. #readyMaxQueueDepth)) `shouldBe` Right 0
+    setEnv "KANSOKU_READY_MAX_QUEUE_DEPTH" "-1"
+    negativeResult <- loadConfig
+    clearEnv
+    negativeResult
+      `shouldBe` Left (ConfigError "KANSOKU_READY_MAX_QUEUE_DEPTH: must be at least 0")
+
+  it "rejects a non-positive writer flush-age threshold" $ do
+    clearEnv
+    setEnv "KANSOKU_READY_MAX_FLUSH_AGE_SEC" "0"
+    result <- loadConfig
+    clearEnv
+    result
+      `shouldBe` Left (ConfigError "KANSOKU_READY_MAX_FLUSH_AGE_SEC: must be at least 1")
   where
     isLeft (Left _) = True
     isLeft _ = False

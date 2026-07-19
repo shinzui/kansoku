@@ -4,15 +4,20 @@ module Kansoku.Writer.Batch
   )
 where
 
-import ClickHaskell (Connection)
-import Control.Exception (SomeException, displayException, try)
+import Control.Exception
+  ( AsyncException,
+    SomeException,
+    displayException,
+    fromException,
+    throwIO,
+    try,
+  )
 import Data.Aeson (Value)
 import Data.Foldable (toList)
 import Data.Generics.Labels ()
 import Data.Text qualified as Text
 import Effectful (IOE, type (:>))
 import GHC.Clock (getMonotonicTime)
-import Kansoku.ClickHouse (insertEvents)
 import Kansoku.Event (AnalyticsEvent)
 import Kansoku.Ingest.Queue (decodeEvent)
 import Kansoku.Observability
@@ -39,9 +44,9 @@ writerBatchHandler ::
   (IOE :> es) =>
   PipelineMetrics ->
   WriterHeartbeat ->
-  Connection ->
+  ([AnalyticsEvent] -> IO ()) ->
   BatchHandler es Value
-writerBatchHandler metrics heartbeat conn _info messages = do
+writerBatchHandler metrics heartbeat insertBatch _info messages = do
   let decoded = decodeMessage <$> toList messages
       bad = [(messageId, AckDeadLetter reason) | Left (messageId, reason) <- decoded]
       good = [event | Right event <- decoded]
@@ -59,7 +64,7 @@ writerBatchHandler metrics heartbeat conn _info messages = do
     else do
       result <- liftIO $ do
         startedAt <- getMonotonicTime
-        inserted <- try (insertEvents conn good)
+        inserted <- try (insertBatch good)
         finishedAt <- getMonotonicTime
         Prometheus.observe
           (metrics ^. #writerBatchFlushSeconds)
@@ -74,13 +79,16 @@ writerBatchHandler metrics heartbeat conn _info messages = do
                 (fromIntegral (length good))
             beatWriter heartbeat
           pure (ackExcept bad)
-        Left (err :: SomeException) -> do
-          liftIO $ Prometheus.incCounter (metrics ^. #writerInsertFailuresTotal)
-          pure
-            ( withFallback
-                (AckRetry (RetryDelay 5))
-                (annotateInsertFailure err bad)
-            )
+        Left (err :: SomeException) ->
+          case fromException err of
+            Just asyncException -> liftIO (throwIO (asyncException :: AsyncException))
+            Nothing -> do
+              liftIO $ Prometheus.incCounter (metrics ^. #writerInsertFailuresTotal)
+              pure
+                ( withFallback
+                    (AckRetry (RetryDelay 5))
+                    (annotateInsertFailure err bad)
+                )
 
 decodeMessage :: Message es Value -> Either (MessageId, DeadLetterReason) AnalyticsEvent
 decodeMessage Message {envelope = Envelope {messageId, payload}} =

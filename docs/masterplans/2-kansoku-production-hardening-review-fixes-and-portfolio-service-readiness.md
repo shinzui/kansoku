@@ -60,6 +60,10 @@ stay stubbed with typed HTTP 404 `not_implemented` envelopes; new metric familie
   acceptance and SDK retry semantics, ingest-only CORS boundary, positive body/batch limits,
   CORS-outside-limit middleware order, and shared HTTP 413 response algebra. EP-15 and future SDK
   initiatives must preserve this contract unless they supersede the ADR explicitly.
+- `docs/adr/0002-pipeline-observability-readiness-and-writer-recovery.md` records EP-16's
+  OTel/Prometheus split, WAI-level scrape boundary, sampled readiness semantics, and
+  replace-on-failure ClickHouse writer ownership. Operational and future deployment work must
+  preserve those boundaries or supersede the ADR explicitly.
 
 
 ## Decomposition Strategy
@@ -100,7 +104,7 @@ waves.
 | 9 | Convert kansoku to NamedRoutes, vertical slices, and MultiVerb | docs/plans/9-convert-kansoku-to-namedroutes-vertical-slices-and-multiverb.md | EP-10 | None | Complete |
 | 13 | Safe and correct metric SQL: validated inputs, ordered funnels, honest failures | docs/plans/13-safe-and-correct-metric-sql-validated-inputs-ordered-funnels-honest-failures.md | EP-12 | EP-11, EP-9 | Complete |
 | 14 | SDK-grade ingest contract: partial batch acceptance, CORS, and payload limits | docs/plans/14-sdk-grade-ingest-contract-partial-batch-acceptance-cors-and-payload-limits.md | EP-9 | None | Complete |
-| 16 | Pipeline observability: queue depth, writer lag, and exported telemetry | docs/plans/16-pipeline-observability-queue-depth-writer-lag-and-exported-telemetry.md | EP-10 | EP-11 | In Progress |
+| 16 | Pipeline observability: queue depth, writer lag, and exported telemetry | docs/plans/16-pipeline-observability-queue-depth-writer-lag-and-exported-telemetry.md | EP-10 | EP-11 | Complete |
 | 15 | API keys, service auth, and account-scoped queries | docs/plans/15-api-keys-service-auth-and-account-scoped-queries.md | EP-9 | EP-12, EP-13, EP-14 | Not Started |
 
 Status values: Not Started, In Progress, Complete, Cancelled.
@@ -174,8 +178,10 @@ key is unused becomes false once EP-15 lands. `event_id` stays last in the key b
 the ReplacingMergeTree dedup identity. Any plan changing the key must update both the
 migration and `createEventsRawTable` ownership decision recorded in EP-12.
 
-ClickHouse connection ownership — defined by EP-11 (a dedicated writer `Connection` plus a
-query-side pool, replacing the single shared handle created in `kansoku-server/app/Main.hs`).
+ClickHouse connection ownership — defined by EP-11 (a dedicated writer connection plus a
+query-side pool, replacing the single shared handle created in `kansoku-server/app/Main.hs`) and
+refined by EP-16 so the logical writer connection discards a failed physical ClickHaskell handle
+and opens a fresh one on queue retry.
 EP-13's query runner, EP-9's restructured handlers, and EP-16's gauges all consume the pool
 type EP-11 introduces. Plan 9's milestone that wires handlers must accept whatever handle
 type exists at implementation time and note it in its own Decision Log.
@@ -190,7 +196,8 @@ generated OpenAPI document in the same change.
 
 `Kansoku.Config` (kansoku-core/src/Kansoku/Config.hs) — EP-10 adds ClickHouse
 host/user/password environment variables (currently hardcoded to `127.0.0.1` and user
-`default`); EP-15 adds key-storage settings; EP-16 adds telemetry exporter settings. Additive
+`default`); EP-15 adds key-storage settings; EP-16 adds queue polling, scrape toggle, and
+readiness thresholds while standard OTel environment variables configure exporters. Additive
 record fields only; every plan keeps `loadConfig` total with defaults suitable for `nix
 develop` + `process-compose`.
 
@@ -257,9 +264,9 @@ and the milestone. This section provides an at-a-glance view of the entire initi
 - [x] EP-13: decode/parse failures surface as errors, not zeros; redundant re-sort removed
 - [x] EP-14: partial batch acceptance contract live in API, server, and `kansoku-client`
 - [x] EP-14: CORS preflight and payload/batch limits enforced
-- [ ] EP-16: OTel exporter actually exports (current tracer provider has no exporter)
-- [ ] EP-16: queue depth, batch flush latency/size, and insert-failure metrics emitted
-- [ ] EP-16: readiness extended with queue-depth/lag thresholds
+- [x] EP-16: OTel exporter actually exports and flushes on shutdown
+- [x] EP-16: queue depth, batch flush latency/size, and insert-failure metrics emitted
+- [x] EP-16: readiness extended with queue-depth/lag thresholds and writer recovery proven
 - [ ] EP-15: key model, storage, and issuance path
 - [ ] EP-15: ingest authenticated (write keys, service tokens)
 - [ ] EP-15: metrics read-authenticated and account-scoped
@@ -392,6 +399,21 @@ interactions between child plans. Provide concise evidence.
     analytics operation in OpenAPI. Future response-algebra changes must update both `AsUnion`
     instances, the generic client, conformance expectations, and the checked artifact together.
 
+- 2026-07-19, during EP-16 implementation:
+  - ClickHaskell's operation-failure reconnect can leave its opaque connection `MVar` empty when
+    the dependency remains unavailable, blocking all later inserts and graceful shutdown.
+    EP-16 refines EP-11's dedicated-writer boundary into a replace-on-failure logical connection
+    and rethrows asynchronous cancellation; restarting only ClickHouse now drains the queue.
+  - The pinned Shibuya adapter's established `maxRetries = 3` auto-archives before handler
+    invocation on delivery four. A deliberately overlong first transcript produced 500 archived
+    messages with `read_ct = 4`, proving the handler's retry fallback was not at fault. The final
+    recovery proof stays inside the retry budget and verifies 500 ClickHouse rows with queue and
+    archive counts both zero. A future reliability change may expose or revise this budget, but
+    observability work does not silently change delivery policy.
+  - The operational route boundary remains intact: `/internal/metrics` is WAI-level and absent
+    from public OpenAPI, while `/ready` extends EP-10's probe with ordered sampled pipeline checks.
+    ADR 0002 records this placement and the OTel/Prometheus ownership split.
+
 
 ## Decision Log
 
@@ -465,6 +487,15 @@ interactions between child plans. Provide concise evidence.
   accidentally restore `IgnoreFailures` or stop observing the framework handle.
   Date: 2026-07-18
 
+- Decision: Adopt ADR 0002 as the durable pipeline-operations boundary: opt-in OTel traces,
+  directly scraped Prometheus metrics at WAI level, sampled queue state for readiness, and a
+  replace-on-failure physical ClickHouse connection behind the dedicated logical writer.
+  Rationale: EP-16's live dependency tests showed that liveness supervision alone cannot describe
+  a sick writer and that the driver cannot always repair its own connection state. The selected
+  boundaries make sickness visible and recovery local without publishing operational routes in
+  OpenAPI, disturbing EP-14 middleware, or coupling readiness probe frequency to database scans.
+  Date: 2026-07-19
+
 
 ## Outcomes & Retrospective
 
@@ -510,9 +541,19 @@ new-in-window with offset 0, rollup accuracy is user-visible, and the determinis
 artifact carries both descriptions. Final verification passed 50 core and 8 client examples,
 fresh v2 fixture HTTP checks, the artifact freshness gate, and the Nix package build.
 
-The broader coordination lesson remains that Shibuya's internal processor lifetime is a
-separate supervision boundary from the executable's writer thread; EP-16 in particular must
-preserve both while adding heartbeat and telemetry.
+EP-16 completes Phase 3. Configured OTel traces now export and flush, while a toggleable
+WAI-level Prometheus scrape exposes seven pipeline signals without entering public OpenAPI or
+ingest middleware. Readiness uniformly reports writer life, PGMQ reachability, sampled queue
+depth, and last-successful-flush age. The writer replaces a failed ClickHaskell handle and honors
+asynchronous cancellation. On one uninterrupted Kansoku process, a controlled ClickHouse outage
+produced a 500-message backlog, two insert failures, and detailed 503 checks; dependency restart
+wrote all 500 events, left queue/archive counts at 0/0, and returned readiness to 200. Final Cabal
+tests report 78 core and 10 client examples, and the full Nix package build passes. ADR 0002
+captures the durable operational boundaries and the existing three-retry auto-archive limit.
+
+The broader coordination lesson is that Shibuya's internal processor lifetime, the executable's
+writer thread, and downstream connection health are three distinct boundaries. Supervision owns
+death, readiness/metrics own sickness, and the writer's replace-on-failure handle owns recovery.
 
 ---
 
@@ -595,3 +636,11 @@ Revision note (2026-07-19, third revision): EP-16 started after its hard depende
 dependency EP-11 completed. Implementation reuses the MasterPlan intention and targets EP-10's
 `Async`-supervised writer/readiness probe, EP-11's query pool, and EP-14's CORS-outside-body-limit
 WAI assembly.
+
+Revision note (2026-07-19, fourth revision): EP-16 completed. The registry and aggregate progress
+now record exported/flushed traces, seven Prometheus signals, sampled queue and flush-age
+readiness, and in-process ClickHouse recovery. Live failure injection proved detailed 503-to-200
+recovery with 500 events written and queue/archive counts 0/0. Cross-plan discoveries record the
+ClickHaskell connection-lock failure and Shibuya retry-budget boundary; outcomes close Phase 3,
+and `docs/adr/0002-pipeline-observability-readiness-and-writer-recovery.md` holds the durable
+operational decisions.

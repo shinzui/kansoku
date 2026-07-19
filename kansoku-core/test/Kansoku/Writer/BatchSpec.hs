@@ -9,6 +9,7 @@ import Effectful (IOE, runEff)
 import Kansoku.ClickHouse
   ( clickHouseConfigFromConfig,
     countEvents,
+    insertEvents,
     openClickHouse,
   )
 import Kansoku.Config (loadConfig)
@@ -32,6 +33,7 @@ import Shibuya.Batch
     BatchTrigger (..),
     defaultBatchKey,
   )
+import Shibuya.Core.Ack (AckDecision (..), RetryDelay (..))
 import Shibuya.Core.Ingested (Message (..))
 import Shibuya.Core.Types (Envelope (..), MessageId (..))
 import Test.Hspec
@@ -45,7 +47,7 @@ spec metrics = describe "Kansoku.Writer.Batch" $ do
       batchesBefore <- Prometheus.getCounter (metrics ^. #writerBatchesTotal)
       eventsBefore <- Prometheus.getCounter (metrics ^. #writerEventsWrittenTotal)
       heartbeat <- newWriterHeartbeat
-      _ <- runEff (writerBatchHandler metrics heartbeat conn batchInfo (handlerMessage :| []))
+      _ <- runEff (writerBatchHandler metrics heartbeat (insertEvents conn) batchInfo (handlerMessage :| []))
       countAfter <- countEvents conn
       countAfter `shouldBe` countBefore + 1
       Prometheus.getCounter (metrics ^. #writerBatchesTotal)
@@ -71,6 +73,26 @@ spec metrics = describe "Kansoku.Writer.Batch" $ do
       `shouldReturn` (deadLettersBefore + 1)
     latest <- lastWriterBeat heartbeat
     latest `shouldSatisfy` isJust
+
+  it "retries every decodable message when the ClickHouse insert fails" $ do
+    failuresBefore <- Prometheus.getCounter (metrics ^. #writerInsertFailuresTotal)
+    eventsBefore <- Prometheus.getCounter (metrics ^. #writerEventsWrittenTotal)
+    heartbeat <- newWriterHeartbeat
+    batchAck <-
+      runEff
+        ( writerBatchHandler
+            metrics
+            heartbeat
+            (\_ -> ioError (userError "ClickHouse unavailable"))
+            batchInfo
+            (handlerMessage :| [])
+        )
+    batchAck ^. #fallback `shouldBe` AckRetry (RetryDelay 5)
+    Prometheus.getCounter (metrics ^. #writerInsertFailuresTotal)
+      `shouldReturn` (failuresBefore + 1)
+    Prometheus.getCounter (metrics ^. #writerEventsWrittenTotal)
+      `shouldReturn` eventsBefore
+    lastWriterBeat heartbeat `shouldReturn` Nothing
 
 withClickHouse :: (Connection -> Expectation) -> Expectation
 withClickHouse action = do

@@ -3,9 +3,12 @@ module Kansoku.ClickHouse
   ( ClickHouseConfig (..),
     EventProjection (..),
     QueryPool,
+    WriterConnection,
     clickHouseConfigFromConfig,
     countEvents,
     insertEvents,
+    insertWriterEvents,
+    newWriterConnection,
     openClickHouse,
     newQueryPool,
     selectEventProjections,
@@ -30,6 +33,7 @@ import ClickHaskell
     setUser,
     unsafeMkSelect,
   )
+import Control.Concurrent.MVar (MVar, modifyMVar, newMVar)
 import Control.Exception (SomeException, throwIO, try)
 import Data.Generics.Labels ()
 import Data.Pool qualified as Pool
@@ -59,6 +63,28 @@ clickHouseConfigFromConfig cfg =
 
 openClickHouse :: ClickHouseConfig -> IO Connection
 openClickHouse = openConnection . connectionArgs
+
+-- | A dedicated writer connection cache. ClickHaskell reconnects internally,
+-- but a reconnect that fails can leave its opaque connection lock empty. We
+-- therefore discard every handle whose operation throws and open a fresh one
+-- on the next queue retry.
+data WriterConnection = WriterConnection !ClickHouseConfig !(MVar (Maybe Connection))
+
+newWriterConnection :: ClickHouseConfig -> IO WriterConnection
+newWriterConnection config = WriterConnection config <$> newMVar Nothing
+
+insertWriterEvents :: WriterConnection -> [AnalyticsEvent] -> IO ()
+insertWriterEvents (WriterConnection config connectionCell) events = do
+  result <-
+    modifyMVar connectionCell $ \cachedConnection -> do
+      attempted <- try @SomeException $ do
+        connection <- maybe (openClickHouse config) pure cachedConnection
+        insertEvents connection events
+        pure connection
+      pure $ case attempted of
+        Left exception -> (Nothing, Left exception)
+        Right connection -> (Just connection, Right ())
+  either throwIO pure result
 
 -- | A fixed-size pool of ClickHouse connections for the metrics query path.
 -- The writer never uses this; it owns its own dedicated connection.

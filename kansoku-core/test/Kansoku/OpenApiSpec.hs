@@ -21,6 +21,7 @@ import Kansoku.Ingest.Api qualified as Ingest
 import Kansoku.Metrics.Api qualified as Metrics
 import Kansoku.Metrics.RoutingSpec (sentinelKansokuServer)
 import Kansoku.Prelude
+import Kansoku.Readiness (ReadyCheckFailure (..))
 import Kansoku.Server (ReadyProbe (..), envelopeFormatters, internalMetrics, waiWrapper)
 import Network.HTTP.Client qualified as HTTP
 import Network.HTTP.Types
@@ -30,6 +31,7 @@ import Network.HTTP.Types
     status200,
     status202,
     status404,
+    status503,
   )
 import Network.Wai (Application)
 import Network.Wai.Handler.Warp qualified as Warp
@@ -117,6 +119,8 @@ spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
       HTTP.responseStatus ready `shouldBe` status200
       readyBody <- decodeBody @Aeson.Value (HTTP.responseBody ready)
       lookupText ["status"] readyBody `shouldBe` Just "ready"
+      checkNames readyBody
+        `shouldBe` ["writer_alive", "pgmq_reachable", "queue_depth", "writer_flush_stale"]
 
       openapi <- get manager port "/openapi.json"
       HTTP.responseStatus openapi `shouldBe` status200
@@ -126,6 +130,18 @@ spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
       HTTP.responseStatus metrics `shouldBe` status200
       BSL.toStrict (HTTP.responseBody metrics)
         `shouldSatisfy` BS8.isInfixOf "kansoku_queue_length"
+
+  it "renders named pipeline readiness failures with observations"
+    $ Warp.testWithApplication
+      (pure (waiWrapper failingPipelineProbe sentinelApplication))
+    $ \port -> do
+      manager <- HTTP.newManager HTTP.defaultManagerSettings
+      ready <- get manager port "/ready"
+      HTTP.responseStatus ready `shouldBe` status503
+      readyBody <- decodeBody @Aeson.Value (HTTP.responseBody ready)
+      lookupText ["status"] readyBody `shouldBe` Just "unavailable"
+      valueAt ["checks"] readyBody
+        `shouldSatisfy` maybe False (containsFailedCheck "queue_depth" 101)
 
 expectedServedPaths :: [Text]
 expectedServedPaths =
@@ -229,7 +245,15 @@ alwaysReadyProbe :: ReadyProbe
 alwaysReadyProbe =
   ReadyProbe
     { writerAlive = pure True,
-      pgmqReachable = pure (Right ())
+      pgmqReachable = pure (Right ()),
+      pipelineReady = pure []
+    }
+
+failingPipelineProbe :: ReadyProbe
+failingPipelineProbe =
+  alwaysReadyProbe
+    { pipelineReady =
+        pure [QueueDepthExceeded {observed = 101, limit = 100}]
     }
 
 assertRouted :: HTTP.Manager -> Warp.Port -> Text -> Expectation
@@ -333,3 +357,23 @@ operationParameterNames operation =
         Just (Aeson.String name) <- [KeyMap.lookup "name" parameter]
       ]
     _ -> []
+
+checkNames :: Aeson.Value -> [Text]
+checkNames body =
+  case valueAt ["checks"] body of
+    Just (Aeson.Array checks) ->
+      [ name
+      | check <- Foldable.toList checks,
+        Just name <- [lookupText ["check"] check]
+      ]
+    _ -> []
+
+containsFailedCheck :: Text -> Int -> Aeson.Value -> Bool
+containsFailedCheck expectedName expectedObserved = \case
+  Aeson.Array checks -> any matches (Foldable.toList checks)
+  _ -> False
+  where
+    matches check =
+      lookupText ["check"] check == Just expectedName
+        && valueAt ["ok"] check == Just (Aeson.Bool False)
+        && valueAt ["observed"] check == Just (Aeson.toJSON expectedObserved)

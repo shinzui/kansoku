@@ -15,6 +15,7 @@ import Kansoku.ObservabilitySpec qualified
 import Kansoku.OpenApiSpec qualified
 import Kansoku.QueryIntegrationSpec qualified
 import Kansoku.QuerySpec qualified
+import Kansoku.ReadinessSpec qualified
 import Kansoku.Writer.BatchSpec qualified
 import Test.Hspec (hspec, runIO)
 
@@ -35,4 +36,5 @@ main = hspec $ do
   Kansoku.ObservabilitySpec.spec metrics
   Kansoku.QueryIntegrationSpec.spec
   Kansoku.QuerySpec.spec
+  Kansoku.ReadinessSpec.spec
   Kansoku.Writer.BatchSpec.spec metrics

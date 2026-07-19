@@ -12,13 +12,19 @@ import Kansoku.ClickHouse
 import Kansoku.Config (loadConfig)
 import Kansoku.Ingest.Queue (eventsQueueName, provisionQueue)
 import Kansoku.Observability
-  ( newQueueDepthCell,
+  ( lastWriterBeat,
+    newQueueDepthCell,
     newWriterHeartbeat,
+    readQueueDepth,
     registerPipelineMetrics,
     runQueueDepthPoller,
   )
 import Kansoku.Postgres (createPool)
 import Kansoku.Prelude
+import Kansoku.Readiness
+  ( ReadyThresholds (..),
+    evaluatePipelineReadiness,
+  )
 import Kansoku.Runtime (runApp)
 import Kansoku.Server (ReadyProbe (..), kansokuApp, pgmqReady, startServer)
 import Kansoku.Telemetry (Telemetry (..), makeTelemetry)
@@ -44,6 +50,7 @@ main = do
         provisionQueue pool queueName
         queryPool <- newQueryPool (clickHouseConfigFromConfig cfg) (cfg ^. #clickHouseQueryPoolSize)
         bracket makeTelemetry shutdownTelemetry $ \telemetry -> do
+          startedAt <- getCurrentTime
           let tracer = telemetry ^. #tracer
           metrics <- registerPipelineMetrics
           heartbeat <- newWriterHeartbeat
@@ -75,7 +82,22 @@ main = do
                       let probe =
                             ReadyProbe
                               { writerAlive = isNothing <$> poll writerAsync,
-                                pgmqReachable = pgmqReady pool queueName
+                                pgmqReachable = pgmqReady pool queueName,
+                                pipelineReady = do
+                                  queueSample <- readQueueDepth queueDepth
+                                  lastFlush <- lastWriterBeat heartbeat
+                                  now <- getCurrentTime
+                                  pure $
+                                    evaluatePipelineReadiness
+                                      ReadyThresholds
+                                        { maxQueueDepth = cfg ^. #readyMaxQueueDepth,
+                                          maxFlushAgeSec = cfg ^. #readyMaxFlushAgeSec,
+                                          sampleMaxAgeSec = 3 * (cfg ^. #queuePollIntervalSec)
+                                        }
+                                      startedAt
+                                      queueSample
+                                      lastFlush
+                                      now
                               }
                           app = kansokuApp cfg probe pool queueName queryPool
                        in race_

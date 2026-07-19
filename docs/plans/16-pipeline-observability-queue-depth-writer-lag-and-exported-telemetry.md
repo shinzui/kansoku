@@ -68,12 +68,12 @@ This section must always reflect the actual current state of the work.
 - [x] M2: GET /internal/metrics route in Kansoku.Server (respecting KANSOKU_INTERNAL_METRICS_ENABLED)
 - [x] M2: config fields KANSOKU_QUEUE_POLL_INTERVAL_SEC, KANSOKU_INTERNAL_METRICS_ENABLED with defaults
 - [x] M2: transcript captured — scrape before/during/after a /v1/batch load showing queue spike and drain
-- [ ] M3: new module Kansoku.Readiness (pure evaluatePipelineReadiness + threshold types)
-- [ ] M3: extend EP-10's /ready handler with the two pipeline checks and the named-check JSON body
-- [ ] M3: config fields KANSOKU_READY_MAX_QUEUE_DEPTH, KANSOKU_READY_MAX_FLUSH_AGE_SEC
-- [ ] M3: hspec unit tests for threshold logic (Kansoku.ReadinessSpec) and metrics registration smoke test
-- [ ] M3: failure-injection transcript — ClickHouse stopped, insert failures counted, /ready 503 with named check, recovery to 200
-- [ ] Living sections updated; MasterPlan Progress rows for EP-16 ticked
+- [x] M3: new module Kansoku.Readiness (pure evaluatePipelineReadiness + threshold types)
+- [x] M3: extend EP-10's /ready handler with the two pipeline checks and the named-check JSON body
+- [x] M3: config fields KANSOKU_READY_MAX_QUEUE_DEPTH, KANSOKU_READY_MAX_FLUSH_AGE_SEC
+- [x] M3: hspec unit tests for threshold logic (Kansoku.ReadinessSpec) and metrics registration smoke test
+- [x] M3: failure-injection transcript — ClickHouse stopped, insert failures counted, /ready 503 with named check, recovery to 200
+- [x] Living sections updated; MasterPlan Progress rows for EP-16 ticked
 - [x] Milestone 0 (completed 2026-07-19T16:02Z): reconciled the plan with EP-10, EP-11,
       EP-14, current dependency source, and ADR 0001; marked EP-16 In Progress and attached
       the MasterPlan intention. Baseline `cabal build all` and `cabal test all` passed with
@@ -91,6 +91,12 @@ This section must always reflect the actual current state of the work.
       dependency pause produced queue length 500 and a nonzero oldest-age/failure signal,
       recovery returned depth to 0, and the disabled toggle returned 404. Cabal tests pass
       with 67 core examples and the full Nix package build passes.
+- [x] Milestone 3 (completed 2026-07-19): extended `/ready` with ordered queue-depth and
+      successful-flush-age checks, configurable thresholds, pure boundary coverage, and a
+      writer connection that is discarded after any failed ClickHouse operation. In a live
+      failure injection, the running process reported a 500-message backlog, two failed
+      inserts, and both named 503 checks; restarting only ClickHouse recovered to 200, wrote
+      all 500 events, drained the queue, and archived none of the test messages.
 
 
 ## Surprises & Discoveries
@@ -136,8 +142,6 @@ shaped the design and a future implementer must not re-derive them:
   (`kansokuApp` in `kansoku-core/src/Kansoku/Server.hs` routes `"metrics" : _` to
   `metricsApp`, the product feature that answers DAU/retention/funnel queries). The
   Prometheus scrape endpoint therefore must live elsewhere; we use `/internal/metrics`.
-
-(Nothing further yet; add implementation-time discoveries below this line.)
 
 - Reconciliation discovery (2026-07-19): EP-10 landed writer liveness as an `Async` observed
   by `ReadyProbe.writerAlive`; there is no existing heartbeat cell. EP-16 therefore introduces
@@ -193,6 +197,28 @@ shaped the design and a future implementer must not re-derive them:
   This does not block the M2 metric contract, but it blocks M3's required in-process recovery
   proof; M3 must make writer inserts reacquire or replace a failed connection before its
   failure-injection acceptance can be checked off.
+
+- Milestone 3 discovery (2026-07-19): Mori-located ClickHaskell source explains the stale
+  connection. `withConnection` takes the driver's internal `MVar` and, after an operation
+  exception, synchronously recreates the connection state. If that recreation also fails,
+  cleanup throws before the state is returned, leaving the opaque `MVar` empty and every later
+  operation blocked. Kansoku cannot repair that hidden state, so the writer now owns a small
+  replace-on-failure cache around complete ClickHouse connections. A queue retry opens a new
+  handle instead of reusing a possibly poisoned one.
+
+- Milestone 3 discovery (2026-07-19): the original batch handler caught `SomeException`, which
+  also catches asynchronous cancellation. During a stuck driver operation this prevented
+  Shibuya's graceful stop from completing. The handler now rethrows `AsyncException` and counts
+  only synchronous insert errors as retryable failures.
+
+- Milestone 3 discovery (2026-07-19): the first recovery transcript was intentionally left down
+  too long for the pinned `shibuya-pgmq-adapter 0.12.0.0` default `maxRetries = 3`. PostgreSQL
+  showed the 500 messages archived with `read_ct = 4`, and ClickHouse contained zero matching
+  rows. Mori source and Hackage's exact release tar both confirm that the adapter auto-dead-letters
+  before invoking the handler when `readCount > maxRetries`; the handler's `withFallback
+  (AckRetry (RetryDelay 5))` was correct. A focused test now pins that fallback, and the accepted
+  live proof restarts ClickHouse inside the retry budget: two failures, 500 successful writes,
+  queue depth 0, archive count 0, and readiness 200 without restarting Kansoku.
 
 
 ## Decision Log
@@ -280,6 +306,25 @@ Record every decision made while working on the plan.
   upstream tags and keep Cabal/Nix dependency behavior coherent.
   Date: 2026-07-19
 
+- Decision: represent writer ClickHouse ownership as a logical `WriterConnection` that lazily
+  caches one physical connection, clears it after any failed operation, and opens a fresh handle
+  on the next Shibuya delivery. Preserve the query pool unchanged and rethrow asynchronous
+  cancellation from the batch handler.
+  Rationale: ClickHaskell's internal reconnect path can permanently empty its opaque connection
+  lock when the dependency stays unavailable, and the library exposes neither repair nor close.
+  Replacing the whole handle at Kansoku's ownership boundary restores in-process recovery while
+  keeping one insert connection, EP-11's query isolation, and Shibuya's existing retry decisions.
+  Date: 2026-07-19
+
+- Decision: keep the failure-injection outage inside the adapter's existing three-retry budget,
+  and document that bound in the reproducible transcript instead of changing the writer's
+  established dead-letter policy in an observability plan.
+  Rationale: `shibuya-pgmq-adapter` deliberately archives a message before handler invocation on
+  delivery four. EP-16 must prove connection recovery and readiness transitions without silently
+  turning that proof into a dead-letter-policy change; a separate reliability change may expose
+  or revise the retry budget if operators need longer automatic recovery windows.
+  Date: 2026-07-19
+
 
 ## Outcomes & Retrospective
 
@@ -300,6 +345,16 @@ Compare the result against the original purpose.
   public OpenAPI. Unit/integration tests cover registration, scrape routing, config, counters,
   and heartbeat semantics; live scrapes proved a 0 -> 500 -> 0 queue-depth lifecycle and
   exact healthy success counting.
+
+- Milestone 3: `Kansoku.Readiness` keeps threshold evaluation pure and the WAI response always
+  enumerates `writer_alive`, `pgmq_reachable`, `queue_depth`, and `writer_flush_stale` in order.
+  Missing or stale queue samples defer to EP-10's PostgreSQL check; an empty queue never fails
+  solely because the service is idle. The writer now replaces a failed ClickHouse handle and
+  honors asynchronous cancellation. Live failure injection on one uninterrupted Kansoku process
+  produced queue depth 500, oldest age 20 seconds, two failed insert attempts, and a detailed 503;
+  after ClickHouse restart it produced 500 successful writes, queue/archive counts 0/0, and a
+  detailed 200. The final Cabal suite reports 78 core examples and 10 client examples (the one
+  opt-in external client test remains pending), and the full Nix package build passes.
 
 
 ## Context and Orientation
@@ -1117,7 +1172,7 @@ M3 failure-injection transcript. Run the server with demonstration-friendly thre
 ```bash
 KANSOKU_QUEUE_POLL_INTERVAL_SEC=1 \
 KANSOKU_READY_MAX_QUEUE_DEPTH=100 \
-KANSOKU_READY_MAX_FLUSH_AGE_SEC=15 \
+KANSOKU_READY_MAX_FLUSH_AGE_SEC=5 \
 cabal run kansoku-server
 ```
 
@@ -1131,28 +1186,30 @@ RUN=$(date +%s) python3 - > .dev/batch.json <<'PY'
 ...same generator as above...
 PY
 curl -s -X POST localhost:8080/v1/batch -H 'Content-Type: application/json' --data-binary @.dev/batch.json
-sleep 20
+sleep 7
 curl -s localhost:8080/internal/metrics | grep -E '^kansoku_(queue_length|writer_insert_failures_total)'
 curl -si localhost:8080/ready | head -1
 curl -s localhost:8080/ready | python3 -m json.tool
 ```
 
-Expected: `kansoku_writer_insert_failures_total` at 2 or more and climbing (the writer
+Expected: `kansoku_writer_insert_failures_total` at 1 or more and climbing (the writer
 retries every ~5 s), `kansoku_queue_length` at 500, `HTTP/1.1 503 Service Unavailable`, and
 a JSON body in which `queue_depth` (500 > 100) and `writer_flush_stale` (no successful flush
-for > 15 s with a non-empty queue) both appear with `"ok": false` and their observed values,
-matching the shape shown in Milestone 3. Then recover:
+for > 5 s with a non-empty queue) both appear with `"ok": false` and their observed values,
+matching the shape shown in Milestone 3. Restart promptly: the adapter's established
+`maxRetries = 3` policy archives a message before its fourth delivery, so a longer outage tests
+dead-letter policy rather than automatic connection recovery. Then recover:
 
 ```bash
 process-compose process start clickhouse
-sleep 20
+sleep 12
 curl -si localhost:8080/ready | head -1
 curl -s localhost:8080/internal/metrics | grep -E '^kansoku_(queue_length|writer_events_written_total)'
 ```
 
 Expected: `HTTP/1.1 200 OK`, queue length back to 0, events-written advanced by 500, and no
-events lost — the at-least-once queue plus ClickHouse ReplacingMergeTree dedup means the
-retried batches land exactly once by `event_id`.
+test events archived — the at-least-once queue plus ClickHouse ReplacingMergeTree dedup means
+the retried batches land exactly once by `event_id`.
 
 Commit after each milestone with a conventional commit carrying the plan trailers, e.g.:
 
@@ -1200,9 +1257,11 @@ idempotent. The load generator writes unique event ids per run, so re-running tr
 never trips ReplacingMergeTree dedup in a way that hides progress; if you do reuse a batch
 file, `kansoku_writer_events_written_total` still advances (it counts insert attempts that
 succeeded, pre-dedup) but ClickHouse row counts will not — that is expected and not a
-failure. Stopping ClickHouse mid-run loses nothing: messages stay in pgmq (visibility
-timeout returns retried messages to the queue) and drain after restart; this is the same
-at-least-once guarantee the service already relies on. If a nix build breaks on one of the
+failure. Stopping ClickHouse mid-run keeps messages in pgmq while they remain inside the
+adapter's configured retry budget; visibility timeouts return them to the queue and the
+replace-on-failure writer connection drains them after restart. The pinned adapter default is
+three retries and auto-archives on delivery four, so a longer outage requires archive replay and
+is not the recovery case validated by this plan. If a nix build breaks on one of the
 new overlay packages, remove the offending line, re-enter `nix develop`, and fix the subdir
 or add `dontCheck`; cabal-in-shell builds are unaffected by overlay mistakes since they
 resolve from Hackage. Prometheus registration is once-per-process; if you hot-reload in
@@ -1242,7 +1301,10 @@ in Milestone 2), `registerPipelineMetrics :: IO PipelineMetrics`, `WriterHeartbe
 `readQueueDepth :: QueueDepthCell -> IO (Maybe QueueDepthSample)`, and
 `runQueueDepthPoller :: Hasql.Pool.Pool -> Pgmq.Effectful.QueueName -> PipelineMetrics -> QueueDepthCell -> Int -> IO ()`.
 In `Kansoku.Writer.Batch`: `writerBatchHandler :: (Effectful.IOE Effectful.:> es) =>
-PipelineMetrics -> WriterHeartbeat -> ClickHaskell.Connection -> Shibuya.Batch.BatchHandler es Data.Aeson.Value`.
+PipelineMetrics -> WriterHeartbeat -> ([Kansoku.Event.AnalyticsEvent] -> IO ()) ->
+Shibuya.Batch.BatchHandler es Data.Aeson.Value`. `Kansoku.ClickHouse.WriterConnection` owns
+the replace-on-failure writer handle; `newWriterConnection` constructs it and
+`insertWriterEvents` is the insertion action passed to the handler.
 `Kansoku.Writer.Run.runWriter` extended with the two leading parameters. `Kansoku.Server`
 serves `GET /internal/metrics`. `Kansoku.Config.Config` has `queuePollIntervalSec :: !Int`
 and `internalMetricsEnabled :: !Bool`.
@@ -1280,3 +1342,10 @@ the single writer heartbeat, exact-path scrape middleware, configuration, superv
 and live scrape evidence. Nix pins the verified prometheus-client/data-sketches release family.
 Failure injection exposed a stale ClickHaskell connection after dependency restart; that
 recovery defect is now an explicit prerequisite for Milestone 3's acceptance transcript.
+
+Revision note (2026-07-19): Milestone 3 added pure queue-depth/flush-age readiness evaluation,
+uniform ordered check JSON, threshold configuration, tests, and replace-on-failure ClickHouse
+writer ownership. Mori and exact-release source inspection identified both ClickHaskell's poisoned
+connection-lock failure and Shibuya's fourth-delivery auto-dead-letter boundary. The corrected live
+transcript stayed inside that retry budget and proved 503-to-200 recovery, all 500 rows written,
+queue/archive counts 0/0, and no Kansoku restart.

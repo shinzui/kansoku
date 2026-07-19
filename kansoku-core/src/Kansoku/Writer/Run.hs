@@ -13,7 +13,11 @@ import Effectful.Concurrent qualified as Concurrent
 import Effectful.Concurrent.Async qualified as Async
 import Effectful.Error.Static (runErrorNoCallStack)
 import Hasql.Pool qualified as Pool
-import Kansoku.ClickHouse (ClickHouseConfig, openClickHouse)
+import Kansoku.ClickHouse
+  ( ClickHouseConfig,
+    insertWriterEvents,
+    newWriterConnection,
+  )
 import Kansoku.Observability (PipelineMetrics, WriterHeartbeat)
 import Kansoku.Prelude
 import Kansoku.Writer.Batch (writerBatchHandler)
@@ -50,7 +54,7 @@ runWriter ::
   IO () ->
   IO ()
 runWriter metrics heartbeat pool tracer clickHouseConfig queueName visibilityTimeoutSec adapterBatchSize maxBatchSize maxLatencyMs waitForShutdown = do
-  clickHouse <- openClickHouse clickHouseConfig
+  clickHouse <- newWriterConnection clickHouseConfig
   result <-
     runEff $
       Concurrent.runConcurrent $
@@ -73,7 +77,7 @@ runWriter metrics heartbeat pool tracer clickHouseConfig queueName visibilityTim
               let processor =
                     mkBatchProcessor
                       adapter
-                      (writerBatchHandler metrics heartbeat clickHouse)
+                      (writerBatchHandler metrics heartbeat (insertWriterEvents clickHouse))
                       ( defaultBatchConfig
                           { batchSize = maxBatchSize,
                             batchTimeout = latencySeconds,

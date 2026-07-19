@@ -17,7 +17,9 @@ module Kansoku.Server
 where
 
 import Data.Aeson qualified as Aeson
+import Data.Either (isRight)
 import Data.Generics.Labels ()
+import Data.List (find)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text.Encoding
 import Effectful (Eff, IOE, runEff, type (:>))
@@ -34,6 +36,7 @@ import Kansoku.Ingest.Handler (ingestServer)
 import Kansoku.Logging (Log, logInfo)
 import Kansoku.Metrics.Handler (metricsServer)
 import Kansoku.Prelude
+import Kansoku.Readiness (ReadyCheckFailure (..), checkName)
 import Network.HTTP.Types (status200, status404, status413, status503)
 import Network.HTTP.Types.Header (hContentType)
 import Network.Wai (Application, Middleware, Response, pathInfo, responseLBS)
@@ -57,7 +60,8 @@ import Servant.Server.Generic (AsServerT)
 -- | Runtime checks used to answer GET /ready.
 data ReadyProbe = ReadyProbe
   { writerAlive :: !(IO Bool),
-    pgmqReachable :: !(IO (Either Text ()))
+    pgmqReachable :: !(IO (Either Text ())),
+    pipelineReady :: !(IO [ReadyCheckFailure])
   }
   deriving stock (Generic)
 
@@ -177,21 +181,62 @@ readyApp :: ReadyProbe -> Application
 readyApp probe _req respond = do
   isWriterAlive <- probe ^. #writerAlive
   postgresResult <- probe ^. #pgmqReachable
+  pipelineFailures <- probe ^. #pipelineReady
   let failingDependencies :: [Text]
       failingDependencies =
         ["writer" | not isWriterAlive]
           <> either (const ["postgres"]) (const []) postgresResult
+          <> (checkName <$> pipelineFailures)
+      checks =
+        [ simpleCheck "writer_alive" isWriterAlive,
+          simpleCheck "pgmq_reachable" (isRight postgresResult),
+          pipelineCheck "queue_depth" pipelineFailures,
+          pipelineCheck "writer_flush_stale" pipelineFailures
+        ]
       body
-        | null failingDependencies = Aeson.object ["status" Aeson..= ("ready" :: Text)]
+        | null failingDependencies =
+            Aeson.object
+              [ "status" Aeson..= ("ready" :: Text),
+                "checks" Aeson..= checks
+              ]
         | otherwise =
             Aeson.object
               [ "status" Aeson..= ("unavailable" :: Text),
-                "failing" Aeson..= failingDependencies
+                "failing" Aeson..= failingDependencies,
+                "checks" Aeson..= checks
               ]
       status
         | null failingDependencies = status200
         | otherwise = status503
   respond (responseLBS status [(hContentType, "application/json")] (Aeson.encode body))
+
+simpleCheck :: Text -> Bool -> Aeson.Value
+simpleCheck name ok = Aeson.object ["check" Aeson..= name, "ok" Aeson..= ok]
+
+pipelineCheck :: Text -> [ReadyCheckFailure] -> Aeson.Value
+pipelineCheck name failures =
+  case find ((== name) . checkName) failures of
+    Nothing -> simpleCheck name True
+    Just failure -> renderPipelineFailure failure
+
+renderPipelineFailure :: ReadyCheckFailure -> Aeson.Value
+renderPipelineFailure = \case
+  QueueDepthExceeded {observed, limit} ->
+    Aeson.object
+      [ "check" Aeson..= ("queue_depth" :: Text),
+        "ok" Aeson..= False,
+        "observed" Aeson..= observed,
+        "limit" Aeson..= limit
+      ]
+  WriterFlushStale {lastFlushAt, ageSeconds, limitSeconds, backlog} ->
+    Aeson.object
+      [ "check" Aeson..= ("writer_flush_stale" :: Text),
+        "ok" Aeson..= False,
+        "lastFlushAt" Aeson..= lastFlushAt,
+        "ageSeconds" Aeson..= ageSeconds,
+        "limitSeconds" Aeson..= limitSeconds,
+        "backlog" Aeson..= backlog
+      ]
 
 -- | Make Servant's pre-handler rejections use the same envelope as typed
 -- handler results. Servant raises 405 and 415 outside ErrorFormatters; those
