@@ -90,7 +90,7 @@ waves.
 | 11 | Split ClickHouse connections and adopt typed row decoding | docs/plans/11-split-clickhouse-connections-and-adopt-typed-row-decoding.md | EP-10 | None | Complete |
 | 12 | ClickHouse schema v2: sort key, FINAL-free resolution, join-free rollups | docs/plans/12-clickhouse-schema-v2-sort-key-final-free-resolution-join-free-rollups.md | EP-10 | None | Complete |
 | 9 | Convert kansoku to NamedRoutes, vertical slices, and MultiVerb | docs/plans/9-convert-kansoku-to-namedroutes-vertical-slices-and-multiverb.md | EP-10 | None | Complete |
-| 13 | Safe and correct metric SQL: validated inputs, ordered funnels, honest failures | docs/plans/13-safe-and-correct-metric-sql-validated-inputs-ordered-funnels-honest-failures.md | EP-12 | EP-11, EP-9 | In Progress |
+| 13 | Safe and correct metric SQL: validated inputs, ordered funnels, honest failures | docs/plans/13-safe-and-correct-metric-sql-validated-inputs-ordered-funnels-honest-failures.md | EP-12 | EP-11, EP-9 | Complete |
 | 14 | SDK-grade ingest contract: partial batch acceptance, CORS, and payload limits | docs/plans/14-sdk-grade-ingest-contract-partial-batch-acceptance-cors-and-payload-limits.md | EP-9 | None | Not Started |
 | 16 | Pipeline observability: queue depth, writer lag, and exported telemetry | docs/plans/16-pipeline-observability-queue-depth-writer-lag-and-exported-telemetry.md | EP-10 | EP-11 | Not Started |
 | 15 | API keys, service auth, and account-scoped queries | docs/plans/15-api-keys-service-auth-and-account-scoped-queries.md | EP-9 | EP-12, EP-13, EP-14 | Not Started |
@@ -244,9 +244,9 @@ and the milestone. This section provides an at-a-glance view of the entire initi
 - [x] EP-9: shared MultiVerb response algebra and generic SDK client
 - [x] EP-9: served-type OpenAPI generator, checked artifact, and conformance gates
 - [x] EP-9: predecessor plans revised to the live contract shapes
-- [ ] EP-13: metric SQL inputs validated or parameterized end-to-end
-- [ ] EP-13: funnel computed via ordered `windowFunnel` single pass
-- [ ] EP-13: decode/parse failures surface as errors, not zeros; redundant re-sort removed
+- [x] EP-13: metric SQL inputs validated and parameterized end-to-end
+- [x] EP-13: funnel computed via ordered `windowFunnel` single pass
+- [x] EP-13: decode/parse failures surface as errors, not zeros; redundant re-sort removed
 - [ ] EP-14: partial batch acceptance contract live in API, server, and `kansoku-client`
 - [ ] EP-14: CORS preflight and payload/batch limits enforced
 - [ ] EP-16: OTel exporter actually exports (current tracer provider has no exporter)
@@ -345,6 +345,17 @@ interactions between child plans. Provide concise evidence.
   - Current Cabal also requires the qualified `kansoku-server:exe:kansoku-server` target because
     the package contains two executables; EP-12 fixes `just run`. Port 8080 was occupied by another
     local process-compose project, so endpoint evidence was captured on isolated port 18080.
+
+- 2026-07-18, during EP-13 implementation:
+  - The authoritative upstream `v1.1.0` tag (`4524fbdd`) includes native query parameters,
+    and a live ClickHouse SELECT proved `passParameters`/`addParameter` on the service path.
+    Cabal and Nix now pin that exact release source. Its generic-product ordering defect is
+    still present, so EP-11's narrow per-block repairs remain; typed mismatch failures are
+    independently pinned to HTTP 503 rather than plausible zeros.
+  - Converting `occurred_at` from DateTime64 to DateTime is confirmed load-bearing for the
+    public seconds unit: the seven-day funnel reports 3/1, while `window=60` reports 3/0.
+    The parameterized `ARRAY JOIN` tuple list works over the native protocol, and the public
+    funnel result shape remains unchanged.
 
 - 2026-07-18, during EP-9 implementation:
   - NamedRoutes removes positional miscounting but cannot statically reject swapping two
@@ -468,6 +479,15 @@ occupied 10,898 bytes versus 8,034,824 bytes raw (0.136%, roughly 737x smaller);
 queries returned the fixture-backed active-user and page-view values. EP-13's hard EP-12
 dependency and soft EP-9 dependency are now both satisfied.
 
+EP-13 completed the first Phase 3 child. Metric and funnel event names cross an opaque strict
+charset boundary and are sent as native ClickHouse parameters; hostile input returns typed 400
+without touching storage. Funnels now use one ordered `windowFunnel` pass with an explicit,
+bounded seconds window. The typed decoder remains loud, query exceptions surface as retryable
+503, and ClickHouse `ORDER BY` is the sole result-order authority. Retention is labeled
+new-in-window with offset 0, rollup accuracy is user-visible, and the deterministic OpenAPI
+artifact carries both descriptions. Final verification passed 50 core and 8 client examples,
+fresh v2 fixture HTTP checks, the artifact freshness gate, and the Nix package build.
+
 The broader coordination lesson remains that Shibuya's internal processor lifetime is a
 separate supervision boundary from the executable's writer thread; EP-16 in particular must
 preserve both while adding heartbeat and telemetry.
@@ -523,3 +543,8 @@ dispatch limitation, SDK retry semantics, EP-14's future 413 extension, and the 
 Revision note (2026-07-18, fifth revision): EP-13 started after its hard dependency EP-12 and soft
 dependencies EP-11 and EP-9 completed. Implementation uses the master-plan intention and targets
 the landed schema-v2, typed-decoding, QueryPool, NamedRoutes, and MultiVerb architecture.
+
+Revision note (2026-07-18, sixth revision): EP-13 completed. The registry and aggregate progress
+now record strict name validation plus native parameters, ordered bounded-window funnels, loud
+typed failures, SQL-owned ordering, schema-v2 rollup/session alignment, retention semantics,
+fixture-backed HTTP evidence, deterministic OpenAPI, and coherent Cabal/Nix validation.
