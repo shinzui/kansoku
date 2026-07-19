@@ -45,15 +45,15 @@ ClickHouse query and served over HTTP.
 Concretely, this plan delivers two things a novice can see working:
 
 1. A library of metric definitions (`Kansoku.Metrics.*`) and a query compiler
-   (`Kansoku.Query.*`) that turns a metric definition plus a time range into a ClickHouse
+   (`Kansoku.Metrics.Query`) that turns a metric definition plus a time range into a ClickHouse
    query and runs it, returning typed rows.
 2. A set of HTTP endpoints under `GET /metrics/*` (added to the existing servant web server)
    that expose those metrics. Seven endpoints are **fully implemented** and return correct
    aggregates you can verify by hand (`/metrics/events`, `/metrics/page-views`,
    `/metrics/sessions`, `/metrics/users`, `/metrics/funnel`, `/metrics/retention`,
-   `/metrics/conversion`); four more are present but return HTTP 501 "Not Implemented" with a
-   clear JSON message (`/metrics/acquisition`, `/metrics/feature-adoption`,
-   `/metrics/organizations`, `/metrics/custom`). The 501 endpoints exist so that clients and
+   `/metrics/conversion`); four more are present but return a typed HTTP 404
+   `not_implemented` envelope (`/metrics/acquisition`, `/metrics/feature-adoption`,
+   `/metrics/organizations`, `/metrics/custom`). The stub endpoints exist so that clients and
    the OpenAPI surface are stable from day one, and so a later plan only has to fill in the
    handler body, not add routing.
 
@@ -269,10 +269,10 @@ Record every decision made while working on the plan.
 Summarize outcomes, gaps, and lessons learned at major milestones or at completion.
 Compare the result against the original purpose.
 
-EP-6 is complete. The shared API sub-library now exposes `Kansoku.Api.Metrics` and the combined
-`Kansoku.Api.KansokuAPI`; the main library defines the semantic metric data model, built-in
-registry, query compiler/executor, and servant handlers. The existing server mounts
-`GET /metrics/*` alongside ingestion and health.
+EP-6 is complete. The shared API library now exposes `Kansoku.Metrics.Api.MetricsRoutes` and
+the combined `Kansoku.Api.KansokuAPI`; the core library defines the semantic metric data model,
+built-in registry, query compiler/executor, and servant handlers. The existing server serves
+the NamedRoutes umbrella once, with operational routes handled by its WAI wrapper.
 
 Fixture validation covered the seven implemented endpoints: events returned day counts
 `5,3,1`; page views grouped by route returned `/home 2`, `/pricing 1`, `/home 1`; users and
@@ -280,7 +280,7 @@ sessions returned day counts `2,2,1`; conversion returned `0.5`; funnel returned
 `signup_started 2` and `signup_completed 1`; retention returned cohort/offset values
 `2026-06-01/0=2`, `2026-06-01/1=1`, `2026-06-02/0=1`, `2026-06-02/1=1`. The missing funnel
 `steps` request returned HTTP 400, and acquisition, feature-adoption, organizations, and custom
-returned HTTP 501 with the documented JSON body.
+returned HTTP 404 with the shared typed `not_implemented` envelope.
 
 
 ## Context and Orientation
@@ -396,34 +396,20 @@ Terms of art used in this plan, defined in plain language:
 The files this plan creates or edits, all under the repository root
 `/Users/shinzui/Keikaku/bokuno/kansoku-project/kansoku`:
 
-- `src/Kansoku/Api/Metrics.hs` — new (in the shared `kansoku:kansoku-api` sub-library): the
-  `TimeGrain` query-param enum, the JSON response types (`MetricResult`, `MetricPoint`), and
-  the servant API *type* `MetricsAPI`; no handlers and no `servant-server`. Created in
-  Milestone 1 (types the main library needs) and extended with the API type in Milestone 2.
-- `src/Kansoku/Metrics/Definition.hs` — new (main library): the metric data types
+- `kansoku-api/src/Kansoku/Metrics/Api.hs` — the shared `TimeGrain` query-param enum, JSON
+  response types (`MetricResult`, `MetricPoint`), and `MetricsRoutes` NamedRoutes record; no
+  handlers and no `servant-server`.
+- `kansoku-core/src/Kansoku/Metrics/Definition.hs` — the metric data types
   (`Aggregation`, `MetricDefinition`, `RatioMetric`); imports `TimeGrain` from
-  `Kansoku.Api.Metrics`.
-- `src/Kansoku/Metrics/Registry.hs` — new: the built-in metrics.
-- `src/Kansoku/Query.hs` — new: the SQL builder and executor.
-- `src/Kansoku/Metrics/Handler.hs` — new (main `kansoku` library): the metrics server
-  (`metricsServer`) and the code that hoists it into servant's `Handler` and mounts it.
-- `src/Kansoku/Config.hs` — edit: add any read-connection config the metrics server needs
-  (only if EP-3 has not already added it).
-- the module that assembles the servant application and runs warp (created by EP-4; commonly
-  `src/Kansoku/Server.hs` or similar — Milestone 0 tells you how to find it) — edit: combine the
-  metrics API into the top-level API and mount the metrics server.
-- `kansoku.cabal` — edit: add `Kansoku.Api.Metrics` (and, if EP-6 assembles it, `Kansoku.Api`)
-  to the `kansoku:kansoku-api` sub-library's `exposed-modules` (it depends on `servant` only,
-  and it is where `TimeGrain` and the response DTOs live — do this in Milestone 1, because the
-  main-library modules import from it); add the remaining new modules
-  (`Kansoku.Metrics.Definition`, `Kansoku.Metrics.Registry`, `Kansoku.Query`,
-  `Kansoku.Metrics.Handler`) to the main library's `exposed-modules`, with the main library
-  depending on the `kansoku-api` sub-library plus `servant`, `servant-server`, `warp`, `aeson`,
-  `text`, `time`, `containers` if not already present. The dependency direction is one-way:
-  the main library depends on `kansoku-api`, never the reverse — which is exactly why
-  `TimeGrain` must be defined in the sub-library.
-- `test/` — edit/new: a test module for `buildSQL` (name it to match EP-1's test-suite layout,
-  e.g. `test/Kansoku/QuerySpec.hs`).
+  `Kansoku.Metrics.Api`.
+- `kansoku-core/src/Kansoku/Metrics/Registry.hs` — the built-in metrics.
+- `kansoku-core/src/Kansoku/Metrics/Query.hs` — the SQL builder and bounded-pool executor.
+- `kansoku-core/src/Kansoku/Metrics/Handler.hs` — the `MetricsRoutes (AsServerT Handler)` server.
+- `kansoku-core/src/Kansoku/Server.hs` — constructs the umbrella `KansokuAPI` server record and
+  delegates it to the single Servant application.
+- `kansoku-api/kansoku-api.cabal` and `kansoku-core/kansoku-core.cabal` — expose the API and core
+  modules with their one-way dependency (`kansoku-core` depends on `kansoku-api`).
+- `kansoku-core/test/Kansoku/QuerySpec.hs` — exact SQL tests for the compiler.
 
 
 ## Plan of Work
@@ -434,7 +420,7 @@ hardest part (getting the SQL right) before any HTTP is in play. Milestone 2 wir
 read-only endpoints into the existing servant app and verifies them against known fixtures.
 Milestone 3 adds the funnel and conversion endpoints. Milestone 4 adds the sessions and
 retention endpoints (implemented per the two user scope decisions in the Decision Log) and
-freezes the four remaining stubbed endpoints at HTTP 501.
+freezes the four remaining stubbed endpoints as typed HTTP 404 `not_implemented` results.
 
 There is a Milestone 0 up front: a read-only confirmation step. It exists because this plan
 makes claims about tables and modules created by earlier plans; before writing code you confirm
@@ -470,26 +456,26 @@ and a function that compiles any metric plus a time-range request into ClickHous
 all unit-tested by asserting the exact SQL produced. No database and no HTTP are needed to run
 these tests, so this milestone is fully verifiable in isolation.
 
-Start with the shared sub-library, because the main library imports from it and never the
-other way around. Create `src/Kansoku/Api/Metrics.hs` in the `kansoku:kansoku-api` sub-library
+Start with the shared API library, because the core library imports from it and never the
+other way around. Create `kansoku-api/src/Kansoku/Metrics/Api.hs`
 (add it to that stanza's `exposed-modules` now). In it define
 `data TimeGrain = Hour | Day | Week | Month` with `deriving stock (Generic, Eq, Ord, Show)`,
 a hand-written `aeson` `ToJSON`/`FromJSON` instance whose wire form matches the spec strings
 exactly (`"hour"`, `"day"`, `"week"`, `"month"`), and a `FromHttpApiData` instance (from the
 `http-api-data` package that servant re-exports) parsing the same strings, so `TimeGrain` can
 be a query parameter. Also define here the response DTOs `MetricPoint` and `MetricResult`
-(shapes below, under `Kansoku.Query`, and in Interfaces and Dependencies) — they live in the
-sub-library so the servant API type added in Milestone 2 stays free of the ClickHaskell
+(shapes below, under `Kansoku.Metrics.Query`, and in Interfaces and Dependencies) — they live
+in the API library so the route record added in Milestone 2 stays free of the ClickHaskell
 dependency. `TimeGrain` lives here, not in `Kansoku.Metrics.Definition`, because the servant
-API type references it and the sub-library cannot import from the main library (see the
+route record references it and the API library cannot import from the core library (see the
 Decision Log).
 
-Then create `src/Kansoku/Metrics/Definition.hs` in the main library. Define
+Then create `kansoku-core/src/Kansoku/Metrics/Definition.hs` in the core library. Define
 `data Aggregation = Count | UniqueCount | Sum | Average | Ratio` with an explicit
 `deriving stock (Generic, Eq, Ord, Show)` and a hand-written `ToJSON`/`FromJSON` instance
 matching the spec strings exactly (`"count"`, `"unique_count"`, `"sum"`, `"average"`,
 `"ratio"`) — hand-written rather than generically derived so the JSON is guaranteed to match
-the spec. Import `TimeGrain` from `Kansoku.Api.Metrics`. Define the record faithfully to the
+the spec. Import `TimeGrain` from `Kansoku.Metrics.Api`. Define the record faithfully to the
 spec's TypeScript shape:
 
 ```haskell
@@ -522,7 +508,7 @@ data RatioMetric = RatioMetric
   deriving stock (Generic, Eq, Show)
 ```
 
-Create `src/Kansoku/Metrics/Registry.hs`. Export the twelve built-in metrics — the ten named
+Create `kansoku-core/src/Kansoku/Metrics/Registry.hs`. Export the twelve built-in metrics — the ten named
 in the spec plus two endpoint-backing entries (`events` and `page_views`) so that every
 implemented endpoint has a registry entry to look up — as top-level values, and a lookup map.
 Represent each as either a `MetricDefinition` or a `RatioMetric`, wrapped in a sum so the
@@ -563,13 +549,13 @@ plus the two endpoint-backing entries:
 Every metric must carry a non-empty `description`, because the value of the semantic
 layer is that the definition documents itself.
 
-Create `src/Kansoku/Query.hs` in the main library. Define the request type and the compiler
-there; the two result DTOs below are the ones you already defined in `Kansoku.Api.Metrics`
-(sub-library) earlier in this milestone, shown here because `Kansoku.Query` imports and
+Create `kansoku-core/src/Kansoku/Metrics/Query.hs` in the core library. Define the request type
+and compiler there; the two result DTOs below are already defined in `Kansoku.Metrics.Api`,
+shown here because `Kansoku.Metrics.Query` imports and
 produces them:
 
 ```haskell
--- In Kansoku.Query (main library):
+-- In Kansoku.Metrics.Query (core library):
 data QueryRequest = QueryRequest
   { from      :: !Day               -- inclusive, from Data.Time
   , to        :: !Day               -- exclusive upper bound (see below)
@@ -578,7 +564,7 @@ data QueryRequest = QueryRequest
   }
   deriving stock (Generic, Eq, Show)
 
--- In Kansoku.Api.Metrics (kansoku-api sub-library), imported by Kansoku.Query:
+-- In Kansoku.Metrics.Api (API library), imported by Kansoku.Metrics.Query:
 data MetricPoint = MetricPoint
   { bucket :: !(Maybe Text)      -- e.g. "2026-06-01"; Nothing for a single scalar
   , group  :: !(Map Text Text)   -- group-by dimension values; empty when no grouping
@@ -600,8 +586,8 @@ unchanged. Because these DTOs' generic wire form keys off the field names, the d
 also make the JSON response keys clean (`bucket`/`group`/`value`, `metric`/`points`).
 
 Give `MetricPoint` and `MetricResult` `ToJSON` instances (this is the HTTP response contract;
-its exact JSON is in Interfaces and Dependencies). They live in `Kansoku.Api.Metrics` because
-the servant `MetricsAPI` type (added in Milestone 2) references them and the sub-library must
+its exact JSON is in Interfaces and Dependencies). They live in `Kansoku.Metrics.Api` because
+the `MetricsRoutes` record (added in Milestone 2) references them and the API library must
 stay free of the ClickHaskell dependency.
 
 Define the **pure** SQL builder — this is the heart of the milestone and what the unit tests
@@ -705,7 +691,7 @@ placeholders with `Data.Text.replace` — MultilineStrings do not interpolate, s
 template-substitution keeps the SQL readable while staying pure and unit-testable:
 
 ```haskell
-module Kansoku.Query where
+module Kansoku.Metrics.Query where
 
 import Kansoku.Prelude
 import Data.Generics.Labels ()             -- enables #label reads below
@@ -788,18 +774,16 @@ buildSQL metric req = case metric of
 Define the executor that runs the SQL and decodes rows:
 
 ```haskell
-run :: (IOE :> es) => Connection -> BuiltinMetric -> QueryRequest -> Eff es MetricResult
+run :: (IOE :> es) => QueryPool -> BuiltinMetric -> QueryRequest -> Eff es MetricResult
 ```
 
-`Connection` is EP-3's plain ClickHaskell connection handle (exported by `Kansoku.ClickHouse`;
-EP-3 exposes no bespoke effect for it). It is passed as an ordinary first argument, threaded
-down from the server wiring the same way EP-1's Reader-`Config` pattern threads configuration:
-the server assembly opens the connection once at startup and hands it to `metricsServer`,
-which closes over it in each handler. `run` calls `buildSQL`, wraps the text in ClickHaskell's
+`QueryPool` is EP-11's bounded read pool. It is passed as an ordinary first argument; the
+server assembly opens it once at startup and hands it to `metricsServer`, which closes over it
+in each handler. `run` calls `buildSQL`, wraps the text in ClickHaskell's
 `unsafeMkSelect` targeting a fixed three-column result row `AggRow { bucket :: ChString,
 group_key :: ChString, value :: Float64 }` (deriving `Generic` and `ClickHaskell '[Column
 "bucket" ChString, Column "group_key" ChString, Column "value" Float64]`), executes it with
-ClickHaskell's `select` over that `Connection`, and maps each `AggRow` to a `MetricPoint`
+`withQueryConnection` and ClickHaskell's `select`, and maps each `AggRow` to a `MetricPoint`
 (empty `bucket`/`group_key` strings become `Nothing`/empty map). See Interfaces and
 Dependencies for the exact ClickHaskell signatures.
 
@@ -821,17 +805,15 @@ Scope: expose three metrics over HTTP by extending the existing servant applicat
 each against fixture events. At the end, `curl` against a running `kansoku-server` returns
 correct JSON for `/metrics/events`, `/metrics/page-views`, and `/metrics/users`.
 
-First ensure the metrics handlers can reach ClickHouse. EP-3 already added ClickHouse connection
-config to `Kansoku.Config` and a way to open a `Connection`; confirm that in Milestone 0. If the
-read path needs its own config (it should not — reads reuse the same connection), extend
-`Kansoku.Config` following EP-1's pattern (add a field, parse it from an environment variable,
-thread it through the `Config` record). Do not create a parallel config mechanism.
+First ensure the metrics handlers can reach ClickHouse. EP-11 added `QueryPool` and its size to
+`Kansoku.Config`; confirm that in Milestone 0. The server creates this bounded pool once and
+shares it with all metrics handlers. Do not create a parallel config or connection mechanism.
 
-Declare the servant API type in `src/Kansoku/Api/Metrics.hs` — the module you already created
+Declare the servant route record in `src/Kansoku/Metrics/Api.hs` — the module you already created
 in Milestone 1, which compiles into the shared `kansoku:kansoku-api` sub-library and therefore
-depends on `servant` only (no `servant-server`, no warp, no ClickHaskell). Milestone 1 put the
+depends on API-side Servant libraries only (no `servant-server`, no warp, no ClickHaskell). Milestone 1 put the
 `TimeGrain` enum and the response DTOs (`MetricResult`, `MetricPoint`) there; this milestone
-adds the `MetricsAPI` and `MetricQuery` type declarations that reference them (full type in
+adds the `MetricsRoutes` record and `MetricQuery` alias that reference them (full type in
 Interfaces and Dependencies). The shared query-parameter block is:
 
 ```haskell
@@ -840,26 +822,26 @@ type MetricQuery =
     :> QueryParam' '[Required] "to"   Day
     :> QueryParam  "groupBy"   Text
     :> QueryParam  "timeGrain" TimeGrain
-    :> Get '[JSON] MetricResult
+    :> MultiVerb 'GET '[JSON]
+         (OkResponses "Metric result" MetricResult)
+         (KansokuResult MetricResult)
 ```
 
 `from` and `to` are required ISO dates (`Day` from `Data.Time` has a `FromHttpApiData` instance
-parsing `YYYY-MM-DD`); `groupBy` and `timeGrain` are optional. This same sub-library also declares
-the combined `type KansokuAPI = IngestAPI :<|> MetricsAPI` in a sibling module `Kansoku.Api`
-(importing `IngestAPI` from `Kansoku.Api.Ingest`); it is fine for EP-6 to define `Kansoku.Api`
-here or to leave it for EP-8 to assemble, as long as the `Kansoku.Api` module exists by the time
-EP-8 needs it — EP-8 feeds `KansokuAPI` to `servant-openapi-hs`.
+parsing `YYYY-MM-DD`); `groupBy` and `timeGrain` are optional. The same sub-library declares
+`KansokuAPI mode`, whose `ingest` and `metrics` fields contain nested NamedRoutes records, plus
+`kansokuAPI :: Proxy (NamedRoutes KansokuAPI)`. EP-8 feeds this exact proxy to
+`servant-openapi-hs`.
 
 Then create `src/Kansoku/Metrics/Handler.hs` in the main `kansoku` library. Define
-`metricsServer` as a function `Connection -> ServerT MetricsAPI (Eff es)` — it takes EP-3's
-ClickHouse `Connection` (opened once at startup by the server assembly, following EP-1's
-Reader-`Config` threading pattern) and its implemented handlers build a `QueryRequest` from
+`metricsServer` as a function `QueryPool -> MetricsRoutes (AsServerT Handler)` — it takes EP-11's
+bounded ClickHouse query pool (opened once at startup by the server assembly) and its implemented
+handlers build a `QueryRequest` from
 the params, look up the right `BuiltinMetric` from the registry by key, and call
-`Kansoku.Query.run conn metric request`. Hoist it from `Eff es` into servant's `Handler` with
-`hoistServer` and the same `Eff`→`Handler` natural transformation EP-4 established for its
-ingestion handlers (reuse EP-4's helper; do not write a second one). Mount `MetricsAPI` into
-the top-level API in EP-4's server-assembly module by combining it with `:<|>` (this is
-exactly the `KansokuAPI` combination above).
+`Kansoku.Metrics.Query.run pool metric request`. Each handler returns a `KansokuResult` value:
+success is `200`, malformed input is `400`, an absent/stubbed metric is `404`, and query failure
+is `503`. `Kansoku.Server.kansokuServer` constructs the umbrella record, and one
+`serveWithContext kansokuAPI` call serves both slices.
 
 Implement three handlers fully:
 - `/metrics/events` → looks up the `events` registry entry (a `Count` with an empty
@@ -897,8 +879,8 @@ example a future `Sum`/`Average` over a numeric property (Revenue), or row-level
 the one inside EP-5's `events_resolved` view (which already applies `FINAL` internally for
 exactly this reason).
 
-Leave the other endpoints returning 501 for now (Milestones 3 and 4 finalize them, but wiring
-them as 501 here is fine).
+Leave the other endpoints returning typed `KansokuNotFound` values for now (Milestones 3 and 4
+finalize them, but their routes and response schemas are already present).
 
 Acceptance: with fixtures loaded and the server running, the three `curl` commands in Validation
 return JSON whose numbers equal the hand-computed values.
@@ -915,7 +897,7 @@ Implement `/metrics/funnel`: accept the funnel steps as a single **required** qu
 parameter — not a repeated parameter — because servant's `QueryParam` combinator binds a
 query-string key at most once; the handler splits the value on commas
 (`Text.splitOn ","`) and preserves the order as the step order. Declare it
-`QueryParam' '[Required] "steps" Text` in `MetricsAPI` (a funnel without steps is meaningless,
+`QueryParam' '[Required] "steps" Text` in the `funnel` field of `MetricsRoutes` (a funnel without steps is meaningless,
 so requests missing `steps` should fail with 400 at the servant layer rather than reach the
 handler). Compile to a ClickHouse `windowFunnel`-based query that, for each distinct resolved
 user, finds the furthest step reached within the window, then reports the number of distinct
@@ -935,10 +917,11 @@ values, and a funnel request without `steps` returns HTTP 400.
 ### Milestone 4 — Sessions and retention endpoints; freeze the four stubs
 
 Scope: implement the two endpoints the user pulled into the MVP scope on 2026-07-01 (see the
-Decision Log), and make the four remaining unimplemented endpoints return a clear HTTP 501. At
+Decision Log), and make the four remaining unimplemented endpoints return the shared typed
+HTTP 404 envelope. At
 the end all eleven spec endpoints are routable; seven compute correct numbers (`events`,
 `page-views`, `sessions`, `users`, `funnel`, `retention`, `conversion`); four return a
-documented 501 (`acquisition`, `feature-adoption`, `organizations`, `custom`).
+documented `not_implemented` result (`acquisition`, `feature-adoption`, `organizations`, `custom`).
 
 Implement `/metrics/sessions`: a count of distinct client-supplied session ids per time
 bucket, over `analytics.events_raw`. The `session_id` column is `Nullable(String)` (EP-3's
@@ -947,7 +930,7 @@ counts a NULL, and we additionally filter `session_id != ''` defensively so empt
 never count as a session either. `uniqExact` over `session_id` is duplicate-tolerant (the
 replayed fixture row adds no new distinct id), so no `FINAL` is needed. This is counts only —
 no session durations, boundaries, or timeout-based sessionization; that remains deferred
-beyond the MVP. Add the template to `buildSQL` (or a sibling builder in `Kansoku.Query`),
+beyond the MVP. Add the template to `buildSQL` (or a sibling builder in `Kansoku.Metrics.Query`),
 honoring the requested `timeGrain` through the same `{{bucket}}` expression as the events
 count:
 
@@ -1020,26 +1003,25 @@ at day grain, and (e) the retention query with default offsets. Five assertions 
 this milestone.
 
 Finalize the four stubs (`/metrics/acquisition`, `/metrics/feature-adoption`,
-`/metrics/organizations`, `/metrics/custom`). Each handler throws servant's `err501` with a
-JSON body explaining it is not implemented in the MVP and pointing at the metric it will
-serve, e.g.:
+`/metrics/organizations`, `/metrics/custom`). Each handler returns the shared typed `404`
+envelope so it stays inside every endpoint's MultiVerb response list:
 
 ```haskell
-notImplemented :: Text -> Handler a
-notImplemented name = throwError err501
-  { errBody = encode (object ["error" .= ("not_implemented" :: Text)
-                             , "metric" .= name
-                             , "message" .= ("This metric endpoint is stubbed in the MVP." :: Text)])
-  , errHeaders = [("Content-Type", "application/json")]
-  }
+notImplemented :: Text -> Day -> Day -> Maybe Text -> Maybe TimeGrain
+               -> Handler (KansokuResult MetricResult)
+notImplemented name _ _ _ _ =
+  pure
+    ( KansokuNotFound
+        (notFound "not_implemented" ("metric endpoint is stubbed in the MVP: " <> name))
+    )
 ```
 
-`/metrics/custom` additionally documents (in a Haddock comment and the 501 message) that it will
+`/metrics/custom` additionally documents (in a Haddock comment and the 404 message) that it will
 accept a full `MetricDefinition` JSON body and compile it with the same `buildSQL`, so the path
 is reserved.
 
 Acceptance: `curl` of each of the seven implemented endpoints matches hand-computed values;
-`curl` of each of the four stubs returns HTTP 501 with the JSON error body; `cabal test` runs
+`curl` of each of the four stubs returns HTTP 404 with `ErrorEnvelopeWire`; `cabal test` runs
 all five QuerySpec assertions green. Commands and expected output are in Validation.
 
 
@@ -1290,17 +1272,17 @@ Stub check (repeat for each of the four stubbed paths — `acquisition`, `featur
 curl -s -o /dev/null -w '%{http_code}\n' 'http://localhost:8080/metrics/acquisition?from=2026-06-01&to=2026-06-08'
 ```
 
-Expected: `501`. And the body:
+Expected: `404`. And the body:
 
 ```bash
 curl -s 'http://localhost:8080/metrics/acquisition?from=2026-06-01&to=2026-06-08'
 ```
 
 ```json
-{ "error": "not_implemented", "metric": "acquisition", "message": "This metric endpoint is stubbed in the MVP." }
+{ "code": "not_implemented", "message": "metric endpoint is stubbed in the MVP: acquisition", "retryable": false }
 ```
 
-Unit-test check (no database): `cabal test` runs `Kansoku.Query.QuerySpec` green (three
+Unit-test check (no database): `cabal test` runs `Kansoku.QuerySpec` green (three
 assertions after Milestone 1, five after Milestone 4 adds the sessions and retention SQL). To
 make the value of the change visible beyond compilation, break one expected-SQL string in the
 test and observe the test fail with a diff, then restore it — this proves the SQL builder is
@@ -1308,7 +1290,7 @@ actually exercised.
 
 The plan is accepted when: `cabal build` and `cabal test` pass; each of the seven implemented
 `curl` commands returns the JSON above (numbers matching the hand-computed values); and each of
-the four stub paths returns HTTP 501 with the documented JSON body.
+the four stub paths returns HTTP 404 with the documented shared error envelope.
 
 
 ## Idempotence and Recovery
@@ -1364,10 +1346,10 @@ Libraries used and why:
   `UTCTime`/`Word16` — see the ClickHaskell `types` reference. We deliberately `toString(...)`
   time buckets in SQL so the Haskell side only ever decodes `ChString`.)
 
-- **servant** / **servant-server** / **warp** — the HTTP layer, already introduced by EP-4. This
-  plan uses `QueryParam'`/`QueryParam`, `Get '[JSON]`, `:<|>`, `:>`, `hoistServer`, `ServerT`,
-  `Handler`, and `err501`/`throwError`. `Day` and the metric enums get `FromHttpApiData`
-  instances (from `http-api-data`) for query-param parsing.
+- **servant** / **servant-server** / **servant-multiverb** / **warp** — the HTTP layer, already
+  introduced by EP-4 and normalized by EP-9. This plan uses `NamedRoutes`, `(:-)`,
+  `QueryParam'`/`QueryParam`, `MultiVerb`, `AsServerT`, and `Handler`. `Day` and the metric enums
+  get `FromHttpApiData` instances (from `http-api-data`) for query-param parsing.
 - **aeson** (`ToJSON`/`FromJSON`), **text**, **time** (`Day`), **containers** (`Map`) — standard.
 
 Module and signature contract that must exist at the end of each milestone (full module paths
@@ -1381,7 +1363,7 @@ module Kansoku.Metrics.Definition where
 import Kansoku.Prelude
 import Data.Aeson (Value)          -- not re-exported by the prelude
 import Data.Map.Strict (Map)
-import Kansoku.Api.Metrics (TimeGrain)   -- defined in the kansoku-api sub-library (see below)
+import Kansoku.Metrics.Api (TimeGrain)   -- defined in the kansoku-api sub-library (see below)
 
 data Aggregation = Count | UniqueCount | Sum | Average | Ratio
   deriving stock (Generic, Eq, Ord, Show)
@@ -1395,7 +1377,7 @@ data RatioMetric = RatioMetric
   , numerator :: !MetricDefinition, denominator :: !MetricDefinition }
   deriving stock (Generic, Eq, Show)
 -- ToJSON/FromJSON for Aggregation, MetricDefinition, RatioMetric matching spec strings.
--- TimeGrain (and its ToJSON/FromJSON/FromHttpApiData) lives in Kansoku.Api.Metrics, because
+-- TimeGrain (and its ToJSON/FromJSON/FromHttpApiData) lives in Kansoku.Metrics.Api, because
 -- the servant API type needs it and the sub-library cannot depend on this main-library module.
 ```
 
@@ -1416,30 +1398,29 @@ builtinMetrics :: Map Text BuiltinMetric   -- keys: "events","page_views","activ
   -- ("events" and "page_views" back /metrics/events and /metrics/page-views)
 ```
 
-`Kansoku.Query`:
+`Kansoku.Metrics.Query`:
 
 ```haskell
-module Kansoku.Query where
+module Kansoku.Metrics.Query where
 
 import Kansoku.Prelude
 import Data.Generics.Labels ()               -- enables #label reads in buildSQL/run
 import Data.Time (Day)
 import Effectful (Eff, IOE, (:>))
-import Kansoku.ClickHouse (Connection)       -- EP-3's plain ClickHaskell connection handle
+import Kansoku.ClickHouse (QueryPool)
 import Kansoku.Metrics.Registry (BuiltinMetric)
-import Kansoku.Api.Metrics (MetricPoint (..), MetricResult (..), TimeGrain)
+import Kansoku.Metrics.Api (MetricPoint (..), MetricResult (..), TimeGrain)
 
 data QueryRequest = QueryRequest
   { from :: !Day, to :: !Day, groupBy :: !(Maybe [Text]), timeGrain :: !(Maybe TimeGrain) }
   deriving stock (Generic, Eq, Show)
--- TimeGrain, MetricPoint, and MetricResult are declared in Kansoku.Api.Metrics (the kansoku-api
+-- TimeGrain, MetricPoint, and MetricResult are declared in Kansoku.Metrics.Api (the kansoku-api
 -- sub-library, so the servant API type stays ClickHaskell-free) and imported here:
 --   data MetricPoint  = MetricPoint { bucket :: !(Maybe Text), group :: !(Map Text Text), value :: !Double }
 --   data MetricResult = MetricResult { metric :: !Text, points :: ![MetricPoint] }
 buildSQL :: BuiltinMetric -> QueryRequest -> Text                       -- pure, unit-tested
--- The Connection is passed explicitly, threaded down from the server wiring the same way
--- EP-1's Reader-Config pattern threads configuration (opened once at startup):
-run      :: (IOE :> es) => Connection -> BuiltinMetric -> QueryRequest -> Eff es MetricResult
+-- The bounded QueryPool is created once at startup and passed explicitly:
+run      :: (IOE :> es) => QueryPool -> BuiltinMetric -> QueryRequest -> Eff es MetricResult
 ```
 
 The `MetricResult` JSON contract (field names are `metric` and `points`; each point has
@@ -1449,18 +1430,22 @@ The `MetricResult` JSON contract (field names are `metric` and `points`; each po
 { "metric": "<name>", "points": [ { "bucket": "<string|null>", "group": { "<dim>": "<val>" }, "value": 0.0 } ] }
 ```
 
-End of Milestones 2–4 — the servant API type `Kansoku.Api.Metrics` (in the `kansoku:kansoku-api`
-sub-library; its `TimeGrain` and DTOs exist from Milestone 1, the API type from Milestone 2)
+End of Milestones 2–4 — the route record `Kansoku.Metrics.Api` (in the `kansoku:kansoku-api`
+sub-library; its `TimeGrain` and DTOs exist from Milestone 1, the record from Milestone 2)
 and the handler `Kansoku.Metrics.Handler` (main library):
 
 ```haskell
--- In the kansoku:kansoku-api sub-library (servant combinators + aeson only, no servant-server):
-module Kansoku.Api.Metrics where
+-- In the kansoku:kansoku-api sub-library (no servant-server):
+module Kansoku.Metrics.Api where
 
 import Kansoku.Prelude
-import Servant.API              -- combinators only (QueryParam', Get, :>, :<|>); NOT Servant.Server
 import Data.Time (Day)
 import Data.Map.Strict (Map)
+import Kansoku.Api.Response (KansokuResult, OkResponses)
+import Servant.API
+import Servant.API.Generic ((:-))
+import Servant.API.MultiVerb (MultiVerb)
+import Servant.API.Verbs qualified as Servant
 
 -- TimeGrain is DEFINED here (not in Kansoku.Metrics.Definition): the sub-library cannot import
 -- from the main library, and this API type references TimeGrain as a query parameter. Its
@@ -1468,7 +1453,7 @@ import Data.Map.Strict (Map)
 data TimeGrain = Hour | Day | Week | Month
   deriving stock (Generic, Eq, Ord, Show)
 
--- The response DTOs live here (not in Kansoku.Query) so the servant API type stays free of the
+-- The response DTOs live here (not in Kansoku.Metrics.Query) so the route record stays free of the
 -- ClickHaskell dependency. Both use strict fields + explicit deriving; their ToJSON is
 -- hand-written to pin the wire field names ("metric"/"points"; "bucket"/"group"/"value"):
 --   data MetricPoint  = MetricPoint { bucket :: !(Maybe Text), group :: !(Map Text Text), value :: !Double }
@@ -1478,57 +1463,89 @@ data TimeGrain = Hour | Day | Week | Month
 
 type MetricQuery =
        QueryParam' '[Required] "from" Day :> QueryParam' '[Required] "to" Day
-    :> QueryParam "groupBy" Text :> QueryParam "timeGrain" TimeGrain :> Get '[JSON] MetricResult
+    :> QueryParam "groupBy" Text :> QueryParam "timeGrain" TimeGrain
+    :> MultiVerb 'Servant.GET '[JSON]
+         (OkResponses "Metric result" MetricResult)
+         (KansokuResult MetricResult)
 
-type MetricsAPI =
-       "metrics" :> "events"           :> MetricQuery
-  :<|> "metrics" :> "page-views"       :> MetricQuery
-  :<|> "metrics" :> "sessions"         :> MetricQuery
-       -- steps is a single Required comma-separated list of ordered event names
-       -- (servant's QueryParam binds a key at most once, so it cannot repeat):
-  :<|> "metrics" :> "funnel"           :> QueryParam' '[Required] "from" Day
-                                       :> QueryParam' '[Required] "to" Day
-                                       :> QueryParam' '[Required] "steps" Text
-                                       :> Get '[JSON] MetricResult
-       -- days is an optional comma-separated offset list, default "1,7,14,30";
-       -- offset 0 (cohort size) is always included by the handler:
-  :<|> "metrics" :> "retention"        :> QueryParam' '[Required] "from" Day
-                                       :> QueryParam' '[Required] "to" Day
-                                       :> QueryParam "days" Text
-                                       :> Get '[JSON] MetricResult
-  :<|> "metrics" :> "acquisition"      :> MetricQuery
-  :<|> "metrics" :> "feature-adoption" :> MetricQuery
-  :<|> "metrics" :> "conversion"       :> MetricQuery
-  :<|> "metrics" :> "users"            :> MetricQuery
-  :<|> "metrics" :> "organizations"    :> MetricQuery
-  :<|> "metrics" :> "custom"           :> MetricQuery
-
--- The combined API for the whole server and for EP-8's OpenAPI generator. May live here in a
--- sibling module Kansoku.Api (same sub-library), or be assembled by EP-8 — either is fine as long
--- as the module exists:
---   module Kansoku.Api where
---   type KansokuAPI = IngestAPI :<|> MetricsAPI      -- IngestAPI from Kansoku.Api.Ingest
+data MetricsRoutes mode = MetricsRoutes
+  { events :: mode :- "metrics" :> "events" :> MetricQuery
+  , pageViews :: mode :- "metrics" :> "page-views" :> MetricQuery
+  , sessions :: mode :- "metrics" :> "sessions" :> MetricQuery
+  , funnel :: mode :- "metrics" :> "funnel"
+      :> QueryParam' '[Required] "from" Day
+      :> QueryParam' '[Required] "to" Day
+      :> QueryParam' '[Required] "steps" Text
+      :> MultiVerb 'Servant.GET '[JSON]
+           (OkResponses "Metric result" MetricResult)
+           (KansokuResult MetricResult)
+  , retention :: mode :- "metrics" :> "retention"
+      :> QueryParam' '[Required] "from" Day
+      :> QueryParam' '[Required] "to" Day
+      :> QueryParam "days" Text
+      :> MultiVerb 'Servant.GET '[JSON]
+           (OkResponses "Metric result" MetricResult)
+           (KansokuResult MetricResult)
+  , acquisition :: mode :- "metrics" :> "acquisition" :> MetricQuery
+  , featureAdoption :: mode :- "metrics" :> "feature-adoption" :> MetricQuery
+  , conversion :: mode :- "metrics" :> "conversion" :> MetricQuery
+  , users :: mode :- "metrics" :> "users" :> MetricQuery
+  , organizations :: mode :- "metrics" :> "organizations" :> MetricQuery
+  , custom :: mode :- "metrics" :> "custom" :> MetricQuery
+  }
+  deriving stock (Generic)
 ```
 
 ```haskell
--- In the main kansoku library (servant-server; imports MetricsAPI from Kansoku.Api.Metrics):
+module Kansoku.Api where
+
+import Kansoku.Ingest.Api (IngestRoutes)
+import Kansoku.Metrics.Api (MetricsRoutes)
+import Kansoku.Prelude
+import Servant.API (NamedRoutes)
+import Servant.API.Generic ((:-))
+
+data KansokuAPI mode = KansokuAPI
+  { ingest :: mode :- NamedRoutes IngestRoutes
+  , metrics :: mode :- NamedRoutes MetricsRoutes
+  }
+  deriving stock (Generic)
+
+kansokuAPI :: Proxy (NamedRoutes KansokuAPI)
+kansokuAPI = Proxy
+```
+
+```haskell
+-- In the main kansoku library:
 module Kansoku.Metrics.Handler where
 
 import Kansoku.Prelude
-import Data.Generics.Labels ()       -- if the handlers read/update records via #label
-import Servant                       -- servant-server: ServerT, Handler, hoistServer, err501, throwError
-import Effectful (Eff, IOE, (:>))
-import Kansoku.ClickHouse (Connection)
-import Kansoku.Api.Metrics (MetricsAPI)
+import Kansoku.Api.Response (KansokuResult)
+import Kansoku.ClickHouse (QueryPool)
+import Kansoku.Metrics.Api (MetricResult, MetricsRoutes (..))
+import Servant (Handler)
+import Servant.Server.Generic (AsServerT)
 
--- Takes EP-3's Connection (opened once at startup by the server assembly, per EP-1's
--- Reader-Config threading pattern) and closes over it in each handler:
-metricsServer :: (IOE :> es) => Connection -> ServerT MetricsAPI (Eff es)
+metricsServer :: QueryPool -> MetricsRoutes (AsServerT Handler)
+metricsServer pool =
+  MetricsRoutes
+    { events = metricHandler "events"
+    , pageViews = metricHandler "page_views"
+    , sessions = sessionsHandler
+    , funnel = funnelHandler
+    , retention = retentionHandler
+    , acquisition = notImplemented "acquisition"
+    , featureAdoption = notImplemented "feature_adoption"
+    , conversion = metricHandler "conversion_rate"
+    , users = metricHandler "active_users"
+    , organizations = notImplemented "organizations"
+    , custom = notImplemented "custom"
+    }
 ```
 
-Mount into EP-4's top-level API by extending it with `:<|> MetricsAPI` (the combined `KansokuAPI`
-above) and combining the servers with `:<|>`, hoisting `Eff`→`Handler` with EP-4's existing
-natural transformation.
+`Kansoku.Server.kansokuServer` returns `KansokuAPI (AsServerT Handler)` with `ingestServer` and
+`metricsServer` in their named fields. `serveWithContext kansokuAPI` consumes that record once;
+there is no separate metrics application or positional handler assembly.
 
 MasterPlan integration points honored by this plan: it reads the `analytics.events_raw` schema
 and `EventRow` shape from EP-3; it reads the rollup view names and identity map from EP-5; it
@@ -1674,3 +1691,8 @@ Intention: intention_01kwf425fxenc904ear54cr2n7
     by identity. And because `uniqExact` over `event_id`/`canonical_user`/`session_id` is
     duplicate-tolerant, none of this plan's queries add `FINAL`; `FINAL` is reserved for reads
     where row multiplicity matters (e.g. a future `Sum`-based Revenue).
+
+- 2026-07-18 — **Plan 9 alignment.** Updated the live metrics contract to
+  `Kansoku.Metrics.Api.MetricsRoutes`, the `KansokuAPI` umbrella record, MultiVerb's shared
+  error tail, and `QueryPool -> MetricsRoutes (AsServerT Handler)` server assembly. Historical
+  Progress entries remain unchanged.

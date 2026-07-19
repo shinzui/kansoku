@@ -55,15 +55,12 @@ events per HTTP request), retries transient network failures with backoff, and n
 the caller's business logic waiting on the network.
 
 How the SDK talks to the server (the load-bearing architectural decision of this plan): the
-client is **derived with `servant-client` from the very same servant API type the ingestion
-server exposes.** Both EP-4's server and this SDK import the API type `IngestAPI` from a
-shared public Cabal sub-library, `kansoku:kansoku-api` (defined in `kansoku.cabal`), which
-holds the event model *and* the servant API *type declarations only* — it depends on
-`servant` (plus aeson/base/text/time/containers/uuid), not on `servant-server` or `warp`.
-Because the client functions are generated from that one type, the SDK's request shape is
+client is **derived with `genericClient` from the same `IngestRoutes` record the ingestion
+server exposes.** Both server and SDK import `Kansoku.Ingest.Api` from the shared
+`kansoku-api` package. Because the client record is generated from that one type, the SDK's request shape is
 provably identical to the server's — client/server contract drift is impossible at the type
 level, not merely guarded by a test. This is why EP-7 now **hard-depends on EP-4**: it
-imports `Kansoku.Api.Ingest` (`IngestAPI`), which EP-4 owns.
+imports `Kansoku.Ingest.Api` (`IngestRoutes`), which EP-4 owns.
 
 How you can see it working: the integration milestone (Milestone 3) starts a real
 `kansoku-server`, emits a known number of events through the SDK, and asserts they appear in
@@ -311,7 +308,7 @@ Compare the result against the original purpose.
 
 EP-7 is complete. The repository now has a separate `kansoku-client` Cabal package exposing
 `Kansoku.Client`, a runnable `kansoku-client-example`, and a test suite. The SDK derives its
-single-event and batch functions from the shared `IngestAPI`, constructs service-source
+single-event and batch selectors from the shared `IngestRoutes` record, constructs service-source
 `AnalyticsEvent`s with generated UUID event ids, buffers events in a bounded `TBQueue`, flushes
 in batches, retries failed batches with stable event ids, drops newest events on overflow, and
 reports the drop count.
@@ -356,17 +353,17 @@ id helpers). This is the type your SDK constructs and serializes. **EP-7 hard-de
 EP-2**: you reuse `AnalyticsEvent` and its JSON; you do not redefine them.
 
 EP-4 (`docs/plans/4-ingestion-api-with-pgmq-queue-and-batched-clickhouse-writer.md`) defines
-the HTTP ingestion API as a **servant API type**, `IngestAPI`, in the module
-`Kansoku.Api.Ingest`. A "servant API type" is a Haskell type that describes the endpoints
+the HTTP ingestion API as the NamedRoutes record `IngestRoutes` in
+`Kansoku.Ingest.Api`. A Servant route record describes the endpoints
 (paths, methods, request/response bodies) at the type level; the same type can be interpreted
 by `servant-server` to build a server (what EP-4 does) and by `servant-client` to *derive*
-matching client-call functions (what this SDK does). This is the type your SDK derives its
-`postEvent`/`postBatch` functions from. **EP-7 hard-depends on EP-4**: you import `IngestAPI`
-and generate the client from it, so drift between the SDK and the server is impossible by
+matching client-call fields (what this SDK does). This is the type interpreted as
+`IngestRoutes (AsClientT ClientM)`. **EP-7 hard-depends on EP-4**: you import `IngestRoutes`
+and generate the client record from it, so drift between the SDK and the server is impossible by
 construction.
 
-Both `Kansoku.Event` and `Kansoku.Api.Ingest` are delivered to this plan through one shared
-public Cabal sub-library, `kansoku:kansoku-api`, described below and in the Decision Log. A
+Both `Kansoku.Event` and `Kansoku.Ingest.Api` are delivered through the shared
+`kansoku-api` Cabal package, described below and in the Decision Log. A
 "public Cabal sub-library" is a second `library` stanza inside a single `.cabal` file
 (`kansoku.cabal`) that can be depended on by name as `kansoku:kansoku-api`; it lets several
 packages share the exact same modules without duplicating them. `kansoku-api` deliberately
@@ -406,10 +403,10 @@ Definitions of terms used in this plan (defined here so the plan is self-contain
   it as the in-memory event buffer because it gives thread-safe enqueue/dequeue with a capacity
   bound out of the box.
 
-The EP-4 ingestion contract you target — expressed as the `IngestAPI` servant type you import
-and derive the client from. The two endpoints and their bodies are described below in prose so
-this plan is self-contained; the authoritative form is the `Kansoku.Api.Ingest.IngestAPI`
-type, and because you generate the client from that type you do not hand-encode any of it. EP-4
+The EP-4 ingestion contract you target is the `IngestRoutes` record interpreted by
+`genericClient`. The two endpoints and their bodies are described below in prose so
+this plan is self-contained; the authoritative form is `Kansoku.Ingest.Api.IngestRoutes`,
+and because you generate the client from that record you do not hand-encode any of it. EP-4
 serves these two endpoints and sets `receivedAt` server-side:
 
 ```text
@@ -417,24 +414,24 @@ POST /v1/events
   Request body:  a single AnalyticsEvent, JSON-encoded (the exact JSON that
                  Kansoku.Event's ToJSON produces).
   Response:      202 Accepted on success (the event was validated and enqueued),
-                 with a JSON IngestAck body (a DTO declared in Kansoku.Api.Ingest).
+                 with a JSON IngestAck body (a DTO declared in Kansoku.Ingest.Api).
 
 POST /v1/batch
   Request body:  a JSON array of AnalyticsEvent objects (the same per-element JSON
                  as /v1/events).
   Response:      202 Accepted on success (the batch was validated and enqueued),
-                 with a JSON BatchAck body (a DTO declared in Kansoku.Api.Ingest).
+                 with a JSON BatchAck body (a DTO declared in Kansoku.Ingest.Api).
 
 Notes:
   - The client sets occurredAt, eventId, eventName, source, the identity ids, and
     properties/context. The server sets receivedAt.
   - Content-Type: application/json for both.
-  - Validation failures return a non-2xx status with a JSON error body; treat any
-    non-2xx as a delivery failure (see retry policy below).
+  - Each raw call returns an inner KansokuResult (202 or typed 400/404/503) inside
+    runClientM's outer transport Either.
 ```
 
-EP-4 is a **hard** dependency: the SDK imports EP-4's `IngestAPI` type (via
-`kansoku:kansoku-api`) and derives its client functions from it, so EP-4's API type must exist
+EP-4 is a **hard** dependency: the SDK imports EP-4's `IngestRoutes` record from
+`kansoku-api` and derives its client fields from it, so EP-4's route type must exist
 to compile the SDK. You can still build and unit-test the SDK without a *running* server (the
 type is enough to generate and type-check the client), and you run the Milestone-3 integration
 test once a `kansoku-server` built from EP-4 is up. Note the shared sub-library keeps this hard
@@ -465,16 +462,14 @@ The work proceeds in three milestones. Each is independently verifiable.
 
 ### Milestone 0 — Confirm the reused artifacts (no code, but blocking)
 
-Before writing SDK code, also read EP-4's `Kansoku.Api.Ingest` module to learn the *actual*
-`IngestAPI` servant type: confirm the two endpoints it declares (the single-event `POST
+Before writing SDK code, also read EP-4's `Kansoku.Ingest.Api` module to learn the actual
+`IngestRoutes` record: confirm the two endpoints it declares (the single-event `POST
 /v1/events` and the batch `POST /v1/batch`), the request-body types (a single `AnalyticsEvent`
 and a `[AnalyticsEvent]` / JSON array), and the response types/verbs (both return `202
-Accepted` with response DTOs declared in `Kansoku.Api.Ingest`: `IngestAck` for `/v1/events`
-and `BatchAck` for `/v1/batch`). Confirm the exact way `postEvent` and `postBatch` fall out of
-`client (Proxy @IngestAPI)` — i.e. the order of the `:<|>`-separated endpoints in `IngestAPI`,
-because that order determines which derived function is which. Record any mismatch with this
-plan's assumptions in Surprises & Discoveries and adjust the client-derivation code below to
-match reality.
+Accepted` with response DTOs declared in `Kansoku.Ingest.Api`: `IngestAck` for `/v1/events`
+and `BatchAck` for `/v1/batch`). Confirm `genericClient` yields
+`IngestRoutes (AsClientT ClientM)` and that qualified selector application binds each call to
+its named field. Record any mismatch with this plan's assumptions in Surprises & Discoveries.
 
 Then read `src/Kansoku/Event.hs` to learn the *actual* shape of
 `AnalyticsEvent` as EP-2 built it: the exact Haskell field names (they may be
@@ -495,43 +490,23 @@ which is another reason to prefer reusing EP-2's generator.)
 
 Acceptance: you can state, in Surprises & Discoveries or by confirming here, the exact
 `AnalyticsEvent` constructor/fields, the `service` `EventSource` constructor, the id
-generation approach you will use, and the shape and endpoint order of EP-4's `IngestAPI` type
+generation approach you will use, and the shape of EP-4's `IngestRoutes` record
 that you will derive the client from. No build artifact yet.
 
 ### Milestone 1 — Package, event construction, and JSON contract
 
 Goal: a buildable `kansoku-client` package whose `track`/helper functions construct valid
 `AnalyticsEvent`s with sensible defaults and deliver them through a `servant-client` derived
-from EP-4's `IngestAPI`, using a straightforward synchronous single-event call. At the end of
+from EP-4's `IngestRoutes`, using a straightforward synchronous single-event call. At the end of
 this milestone `cabal test kansoku-client` passes with no server running, proving the client
-compiles against `IngestAPI` and events round-trip through the shared type.
+compiles against `IngestRoutes` and events round-trip through the shared type.
 
-First, ensure the shared `kansoku:kansoku-api` sub-library exists so the SDK can reuse both the
-event vocabulary and the API type cheaply. This sub-library is declared in `kansoku.cabal` as a
-public sub-library stanza named `kansoku-api`. In Cabal a public sub-library is written as
-`library kansoku-api` in the same `.cabal` file; give it its own `hs-source-dirs` (or reuse
-`src` with a tightly scoped `exposed-modules`) and list under `exposed-modules` the shared
-custom prelude (`Kansoku.Prelude`, established by EP-1), the event model (`Kansoku.Event`,
-`Kansoku.Event.Registry`, `Kansoku.Event.Validation`) and the servant API *type declarations
-only* (`Kansoku.Api.Ingest`, `Kansoku.Api.Metrics`, `Kansoku.Api`). Give it
-`build-depends: servant, aeson, base, text, time, containers, uuid, generic-lens, lens` — and
-deliberately NOT
-`servant-server` and NOT `warp`, so nothing that imports this sub-library pulls in the server
-runtime. Then ensure the main `kansoku` library's `build-depends` includes `kansoku:kansoku-api`
-and that `Kansoku.Event`/`Kansoku.Api.*` come from the sub-library (re-export from the main
-library if other modules import them by those paths — a plain dependency suffices since the
-module paths are unchanged). Verify `cabal build all` still builds the main library and the
-`kansoku-server` executable.
-
-This sub-library is a shared artifact: EP-2 owns the event modules and EP-4 owns
-`Kansoku.Api.Ingest` (`IngestAPI`), and EP-6 owns `Kansoku.Api.Metrics`; all live together in
-`kansoku-api`. If `kansoku-api` already exists when this plan is executed (because EP-4 created
-it), do not recreate it — just confirm it exposes `Kansoku.Api.Ingest` and depends on `servant`
-only, and add any missing event modules. If importing `IngestAPI` into the SDK turns out to
-pull server code, fix the sub-library so the API type is server-free (that is its purpose); only
-as a last resort depend on the full `kansoku` library from `kansoku-client` and record that in
-the Decision Log. Do not block Milestone 1 by hand-writing a client — the servant-derived
-client is the whole point.
+First, confirm the shared `kansoku-api` package exposes `Kansoku.Prelude`, the event modules,
+`Kansoku.Api.Response`, `Kansoku.Ingest.Api`, `Kansoku.Metrics.Api`, and `Kansoku.Api`, without
+depending on `servant-server` or `warp`. The `kansoku-client` package depends on `kansoku-api`,
+`servant-client`, and `servant-client-core`; the last dependency directly provides
+`Servant.Client.Generic`. Do not hand-write request paths or JSON bodies — the generic client
+record is the contract.
 
 Next, create the SDK package. Make a directory `kansoku-client/` at the repository root with:
 
@@ -566,8 +541,10 @@ client machinery:
 -- `kansoku:kansoku-api` sub-library), which supplies `Proxy`, `Text`, `Generic`,
 -- the aeson names, `time`, `NonEmpty`, and the lens operators.
 import Kansoku.Prelude
-import Kansoku.Api.Ingest (BatchAck, IngestAPI, IngestAck)
+import Kansoku.Api.Response (KansokuResult)
 import Kansoku.Event (AnalyticsEvent, EventSource (..))
+import Kansoku.Ingest.Api (BatchAck, IngestAck, IngestRoutes)
+import Kansoku.Ingest.Api qualified as Ingest
 import Network.HTTP.Client qualified as HTTP
 import Network.HTTP.Client.TLS qualified as HTTP.TLS
 import Servant.Client
@@ -575,19 +552,21 @@ import Servant.Client
   , ClientEnv
   , ClientM
   , Scheme (..)
-  , client
   , mkClientEnv
   , runClientM
   )
+import Servant.Client.Generic (AsClientT, genericClient)
 
--- The two client functions fall out of the single IngestAPI type, in the same
--- order the endpoints appear in that type (confirm the order in Milestone 0).
--- postEvent hits POST /v1/events (202 + IngestAck body); postBatch hits
--- POST /v1/batch (202 + BatchAck body). IngestAck and BatchAck are the ack
--- DTOs EP-4 declares in Kansoku.Api.Ingest, imported above.
-postEvent :: AnalyticsEvent -> ClientM IngestAck
-postBatch :: [AnalyticsEvent] -> ClientM BatchAck
-postEvent :<|> postBatch = client (Proxy @IngestAPI)
+-- The same NamedRoutes record used by the server is interpreted as a client.
+-- Qualified selector application keeps endpoint identity attached to its field.
+ingestClient :: IngestRoutes (AsClientT ClientM)
+ingestClient = genericClient
+
+postOne :: AnalyticsEvent -> ClientM (KansokuResult IngestAck)
+postOne event = Ingest.postEvent ingestClient event
+
+postMany :: [AnalyticsEvent] -> ClientM (KansokuResult BatchAck)
+postMany events = Ingest.postBatch ingestClient events
 ```
 
 Build the `ClientEnv` once (stored in the `Client` handle) from an `http-client` `Manager` and
@@ -603,8 +582,16 @@ mgr <- maybe (HTTP.newManager HTTP.TLS.tlsManagerSettings) pure (cfg ^. #manager
 -- construct BaseUrl {baseUrlScheme = Http, ...} directly.
 let env = mkClientEnv mgr baseUrl :: ClientEnv
 -- Deliver one event synchronously:
-result <- runClientM (postEvent evt) env   -- :: IO (Either ClientError IngestAck)
+result <- runClientM (Ingest.postEvent ingestClient evt) env
+  -- :: IO (Either ServantClient.ClientError (KansokuResult IngestAck))
 ```
+
+The outer `Either` is the transport channel: connection failures, protocol errors, and decode
+failures become `ServantClient.ClientError`. The inner `KansokuResult` is the endpoint channel:
+`KansokuOk` is success, `KansokuBadRequest` and `KansokuNotFound` are permanent rejections, and
+`KansokuUnavailable` is retryable only when its envelope says `retryable = True`. The SDK maps
+these to `DeliveryFailed` and `DeliveryRejected`, retries transport failures plus retryable 503
+results with backoff, and never retries typed 400/404 results.
 
 Implement `Kansoku.Client` for this milestone with: the `ClientConfig` record and
 `defaultClientConfig`; the opaque `Client` handle (holding the shared `ClientEnv`); the
@@ -615,9 +602,9 @@ fields, never `properties` entries); the event-building helpers (`trackEvent`, `
 `properties`, and call an internal `buildEvent` which auto-generates `eventId`, sets
 `occurredAt` to the current time (`Data.Time.Clock.getCurrentTime`), sets `source` to the
 `service` variant, and sets `sourceService` from config; and an *internal* synchronous
-single-event delivery function that runs `postEvent evt` via `runClientM` on the shared
-`ClientEnv`, treating `Right _` as success and any `Left ClientError` (including a non-2xx
-`FailureResponse` or a `ConnectionError`) as a delivery failure. That synchronous function is
+single-event delivery function that runs `Ingest.postEvent ingestClient evt` via `runClientM`
+on the shared `ClientEnv`, accepting only `Right (KansokuOk _)` as success. Outer transport
+errors and inner typed endpoint results remain distinct as described above. That synchronous function is
 a Milestone-1 stepping stone only: in Milestone 2 the public `track` becomes the non-blocking
 batched enqueue and the synchronous path is absorbed into the batch-delivery machinery — no
 `sendNow` is exported (see the Decision Log's superseding note; `flush` covers "deliver now").
@@ -631,12 +618,13 @@ with the expected `eventName`, `source = service`, a non-empty `eventId`, and an
 and that the `EventIds` argument populates the first-class identity fields (`userId`,
 `anonymousId`, `organizationId`, `accountId`, `sessionId`) while the pairs argument lands only
 in `properties` (assert a `userId` passed via `EventIds` is NOT present in `properties`);
-(2) a contract test asserting the client compiles against `IngestAPI` (the module type-checks
-`postEvent :<|> postBatch = client (Proxy @IngestAPI)` with the SDK's argument/return types)
+(2) a contract test asserting the client compiles against `IngestRoutes` (the module type-checks
+`ingestClient = genericClient` and qualified `Ingest.postEvent ingestClient` /
+`Ingest.postBatch ingestClient` selector applications with the SDK's argument/return types)
 and that a fully-populated event round-trips through the shared type — encode it and decode it
 back through `Kansoku.Event`'s `FromJSON` and assert equality — proving the SDK builds exactly
-the `AnalyticsEvent` the shared `IngestAPI` expects. Drift is prevented at the type level by
-using the one `IngestAPI` type, so no separate golden-JSON key-set test is needed; (3) confirm
+the `AnalyticsEvent` the shared route record expects. Drift is prevented at the type level by
+using the one `IngestRoutes` record, so no separate golden-JSON key-set test is needed; (3) confirm
 `receivedAt` handling matches what Milestone 0 found.
 
 Acceptance: `cabal build all` builds the main package and the SDK; `cabal test kansoku-client`
@@ -645,20 +633,20 @@ passes; no server is required.
 ### Milestone 2 — Batching, background flush, retry, overflow
 
 Goal: `track` becomes non-blocking and batched. Events enqueue into a bounded in-memory buffer;
-a background thread flushes them by running the servant-derived `postBatch` function (which
+a background thread flushes them by applying `Ingest.postBatch` to `ingestClient` (which
 targets `POST /v1/batch`) on a size or time threshold; transient failures are retried with
 bounded exponential backoff; overflow drops the newest event and increments a counter. At the
 end of this milestone the SDK sends many events per HTTP request and survives transient network
 failures, verified by tests that use a local stub HTTP server. The batching/retry/overflow
-design layers *on top of* servant-client: servant-client provides the single typed `postBatch`
+design layers *on top of* servant-client: the generic client provides the typed `postBatch`
 call, and this milestone adds the buffering, windowing, and retry loop around it.
 
 Extend `Kansoku.Client`:
 
 - Add to `ClientConfig`: `batchMaxSize :: Int` (flush when this many events are buffered),
-  `batchMaxInterval :: NominalDiffTime`/microseconds (flush at least this often),
+  `batchMaxIntervalMicros :: Int` (flush at least this often),
   `bufferCapacity :: Int` (max buffered events before drop), `maxRetries :: Int`,
-  `retryBaseDelay` (microseconds; backoff is `base * 2^attempt`, optionally capped). Give
+  `retryBaseDelayMicros :: Int` (backoff is `base * 2^attempt`, optionally capped). Give
   `defaultClientConfig` reasonable defaults (for example batch size 100, interval 5 s, buffer
   capacity 10000, 5 retries, base delay 100 ms).
 - Add to the `Client` handle: a `TBQueue AnalyticsEvent` buffer, an `Async ()` handle for the
@@ -666,7 +654,7 @@ Extend `Kansoku.Client`:
   `ClientEnv` (which itself wraps the `Network.HTTP.Client.Manager` and the `BaseUrl`).
 - `newClient` starts the background flush thread with `Control.Concurrent.Async.async`. The
   thread loops: it drains up to `batchMaxSize` events from the queue (or waits up to
-  `batchMaxInterval` for at least one), and if it has any events it calls the batch delivery.
+  `batchMaxIntervalMicros` for at least one), and if it has any events it calls the batch delivery.
   Implement the size-or-time window by combining an STM read of the queue with a timeout using
   `System.Timeout.timeout` or `registerDelay` + `retry`; a simple, correct approach is:
   `registerDelay intervalMicros` to get a timer `TVar`, then in one STM transaction read
@@ -674,8 +662,10 @@ Extend `Kansoku.Client`:
 - `track` uses a non-blocking enqueue: attempt `writeTBQueue` inside an STM transaction guarded
   by a fullness check (`isFullTBQueue`); if full, do not block — increment the drop counter and
   return. This realizes the drop-newest overflow policy without stalling the caller.
-- Batch delivery: call `runClientM (postBatch events) env` on the shared `ClientEnv`, where
-  `postBatch` is the servant-derived client function for `POST /v1/batch` (it encodes the
+- Batch delivery: call `runClientM (Ingest.postBatch ingestClient events) env` on the shared
+  `ClientEnv`. The result has an outer transport `Either` and an inner `KansokuResult`; retry
+  transport failures and retryable `KansokuUnavailable`, but reject 400/404 without retry. The
+  selector targets `POST /v1/batch` and encodes the
   `[AnalyticsEvent]` as a JSON array for you). Treat `Right _` as success; treat any
   `Left ClientError` — a non-2xx `FailureResponse` or a `ConnectionError` — as failure. On
   failure, retry up to `maxRetries` times with exponential backoff, **re-sending the exact
@@ -698,7 +688,7 @@ that records the request bodies it receives:
   batches (e.g. 3 requests, sizes 100/100/50) and that every `eventId` arrived exactly once
   across the batches.
 - Interval test: emit a few events (fewer than the batch size), wait slightly longer than
-  `batchMaxInterval`, and assert they were delivered by the timer path.
+  `batchMaxIntervalMicros`, and assert they were delivered by the timer path.
 - Retry test: a stub that returns 503 for the first N requests then 202; assert the batch is
   eventually delivered and that the redelivered batch carries the *same* `eventId`s (proving
   the retry-with-same-id contract).
@@ -766,7 +756,7 @@ Test suite kansoku-client-test: RUNNING...
 Kansoku.Client
   trackEvent builds a service-source event with an eventId:      OK
   EventIds fill identity fields; pairs land only in properties:  OK
-  client derives from IngestAPI and event round-trips the type:  OK
+  client derives from IngestRoutes and event round-trips the type:  OK
   buffer flushes at batch size (250 events -> 100/100/50):       OK
   buffer flushes on interval:                                    OK
   retry re-sends the same eventId after 503s:                    OK
@@ -831,17 +821,17 @@ The plan is accepted when all of the following observable behaviors hold.
 
 Milestone 1 is accepted when `cabal build all` succeeds and `cabal test kansoku-client` passes
 its construction and contract tests with no server running. Concretely: the client is derived
-from EP-4's `IngestAPI` (`postEvent :<|> postBatch = client (Proxy @IngestAPI)`), so the module
-type-checking is itself proof that the SDK's request shapes match the server's — the guard
+from EP-4's `IngestRoutes` (`ingestClient = genericClient`) and calls routes through qualified
+selectors, so module type-checking proves the SDK's request shapes match the server's — the guard
 against SDK/server drift is now at the type level, not a JSON key-set comparison. The
 round-trip test additionally proves that a fully populated event encodes and decodes back into
 a `Kansoku.Event.AnalyticsEvent` (via EP-2's `FromJSON`) equal to the original, confirming the
-SDK constructs exactly the type the shared `IngestAPI` carries.
+SDK constructs exactly the type the shared `IngestRoutes` record carries.
 
 Milestone 2 is accepted when the batching, interval, retry, and overflow tests pass against the
 in-test stub HTTP server: 250 events sent through `track` arrive as multiple `/v1/batch`
-requests (not 250 single requests), a stub returning 503 then 202 results in eventual delivery
-with the *same* `eventId`s, and exceeding the buffer capacity increments the drop counter
+requests (not 250 single requests), a typed retryable 503 then 202 results in eventual delivery
+with the *same* `eventId`s, typed 400/404 results are not retried, and exceeding the buffer capacity increments the drop counter
 without `track` ever blocking.
 
 Milestone 3 is accepted when, with a real `kansoku-server` and ClickHouse running, emitting N
@@ -863,10 +853,10 @@ The cabal edits are idempotent: re-running `cabal build all` after the same edit
 adding `./kansoku-client` to `packages:` a second time is harmless if you check before editing.
 Creating the `kansoku-client/` directory and files is safe to repeat (overwrite with the same
 content). If the `kansoku-api` sub-library causes a build break in the main library or
-`kansoku-server`, first fix the sub-library so the API *type* is server-free (its purpose);
+`kansoku-server`, first fix the API package so the route types remain server-free (its purpose);
 only as a last resort revert to depending on the full `kansoku` library from `kansoku-client`
 (record this in the Decision Log). Under that last-resort fallback the SDK code is unchanged
-*except* that it still imports `Kansoku.Api.Ingest`/`Kansoku.Event` from the same module paths,
+*except* that it still imports `Kansoku.Ingest.Api`/`Kansoku.Event` from the same module paths,
 so the servant-client derivation is unaffected.
 
 The SDK's runtime behavior is safe under repetition by design: because delivery is
@@ -886,34 +876,32 @@ Package and build structure (exact edits):
 - New package `kansoku-client` in directory `kansoku-client/`, with
   `kansoku-client/kansoku-client.cabal` declaring a `library` (exposing `Kansoku.Client`), a
   `test-suite`, and (Milestone 3) an `executable` `kansoku-client-example`.
-- Root `cabal.project` `packages:` stanza gains `./kansoku-client` (alongside `.`).
-- `kansoku.cabal` declares a public sub-library stanza `library kansoku-api` exposing the shared
-  custom prelude (`Kansoku.Prelude`, from EP-1), the event model (`Kansoku.Event`,
-  `Kansoku.Event.Registry`, `Kansoku.Event.Validation`) and the servant API type declarations
-  (`Kansoku.Api.Ingest`, `Kansoku.Api.Metrics`, `Kansoku.Api`) with
-  `build-depends: servant, aeson, base, text, time, containers, uuid, generic-lens, lens` (no
-  `servant-server`, no `warp`); the main `kansoku` library depends on `kansoku:kansoku-api`.
+- Root `cabal.project` lists `./kansoku-api`, `./kansoku-core`, `./kansoku-server`, and
+  `./kansoku-client`.
+- `kansoku-api/kansoku-api.cabal` exposes the shared prelude, event model, response algebra,
+  `Kansoku.Ingest.Api`, `Kansoku.Metrics.Api`, and `Kansoku.Api` (no `servant-server`, no `warp`).
 
 Libraries the SDK uses and why:
 
-- `kansoku:kansoku-api` — provides `Kansoku.Prelude` (the shared custom prelude every module
+- `kansoku-api` — provides `Kansoku.Prelude` (the shared custom prelude every module
   imports, re-exporting `Text`, `Generic`, the aeson names, `time`, `NonEmpty`, and the lens
   operators), `Kansoku.Event.AnalyticsEvent`, `EventSource`, the JSON instances, the id newtypes
-  (per the EP-2 hard dependency), AND `Kansoku.Api.Ingest.IngestAPI`, the servant type the SDK
+  (per the EP-2 hard dependency), and `Kansoku.Ingest.Api.IngestRoutes`, the route record the SDK
   derives its client from (per the EP-4 hard dependency). Reused, not redefined. `kansoku-client`
-  therefore lists `kansoku:kansoku-api` in its `build-depends`, and its `library` and
+  therefore lists `kansoku-api` in its `build-depends`, and its `library` and
   `test-suite` stanzas both `import: common` (GHC2024 + `DeriveAnyClass`,
   `DuplicateRecordFields`, `OverloadedLabels`, `OverloadedStrings`, `MultilineStrings`).
-- `servant` — provides the API-type combinators and `Proxy`; the `IngestAPI` type is written in
-  terms of it. The SDK imports the type; it does not declare endpoints itself.
+- `servant` — provides the API-type combinators used by `IngestRoutes`; the SDK imports the
+  record and does not declare endpoints itself.
 - `servant-client` (`haskell-servant/servant`, package `servant/servant-client`) — derives the
-  client-call functions from the API type. Key pieces (confirmed against the servant source):
-  `client :: HasClient ClientM api => Proxy api -> Client ClientM api`; `ClientM` (the client
+  client calls from the API type. Key pieces (confirmed against the servant source):
+  `ClientM` (the client
   monad); `runClientM :: ClientM a -> ClientEnv -> IO (Either ClientError a)`;
   `mkClientEnv :: Manager -> BaseUrl -> ClientEnv`; `ClientEnv (..)`;
   `BaseUrl (..)` with fields `baseUrlScheme`, `baseUrlHost`, `baseUrlPort`, `baseUrlPath`;
   `Scheme (..)` = `Http | Https`; and `parseBaseUrl :: MonadThrow m => String -> m BaseUrl` for
-  parsing `baseUrl`. The client falls out as `postEvent :<|> postBatch = client (Proxy @IngestAPI)`.
+  parsing `baseUrl`. `servant-client-core` provides
+  `genericClient :: GenericMode mode => routes mode` and `AsClientT ClientM`.
   Chosen over hand-written `http-client` to make the SDK provably the same shape as the server
   (drift-proof at the type level); see the Decision Log.
 - `http-client` + `http-client-tls` (`snoyberg/http-client`) — only used to build the
@@ -940,10 +928,12 @@ module Kansoku.Client
   , defaultClientConfig      -- :: Text -> ClientConfig  (base URL, e.g. "http://localhost:8080")
     -- Handle lifecycle
   , Client                   -- opaque
+  , ClientError(..)          -- DeliveryFailed transport error | DeliveryRejected typed envelope
   , newClient                -- :: ClientConfig -> IO Client
   , withClient               -- :: ClientConfig -> (Client -> IO a) -> IO a
   , flush                    -- :: Client -> IO ()
   , close                    -- :: Client -> IO ()
+  , droppedCount             -- :: Client -> IO Int
     -- Identity ids for the convenience helpers
   , EventIds(..)             -- first-class identity fields; NOT properties entries
   , emptyIds                 -- :: EventIds  (all fields Nothing)
@@ -952,27 +942,34 @@ module Kansoku.Client
   , trackEvent               -- :: Client -> EventIds -> Text -> [Pair] -> IO ()
   , identify                 -- :: Client -> Text -> Maybe Text -> [Pair] -> IO ()  (userId, optional anonymousId to stitch, traits)
   , group                    -- :: Client -> EventIds -> Text -> [Pair] -> IO ()    (ids, groupId + traits)
-  , alias                    -- :: Client -> Text -> Text -> IO ()                        (previousId, newId)
-    -- Re-export for convenience
-  , AnalyticsEvent
+  , alias                    -- :: Client -> Text -> Text -> [Pair] -> IO ()  (previousId, newId, properties)
   ) where
 
 import Kansoku.Prelude
 import Data.Generics.Labels ()               -- enables #label access over Generic records
 import Data.Aeson.Types (Pair)               -- Pair is exported from Data.Aeson.Types
+import Kansoku.Api.Response (ErrorEnvelopeWire, KansokuResult (..))
 import Kansoku.Event (AnalyticsEvent, EventSource (..))
-import Kansoku.Api.Ingest (BatchAck, IngestAPI, IngestAck)
-  -- IngestAPI: the servant API type the client is derived from.
-  -- IngestAck/BatchAck: the 202 ack DTOs the derived functions return.
+import Kansoku.Ingest.Api (BatchAck, IngestRoutes)
+import Kansoku.Ingest.Api qualified as Ingest
 import Servant.Client
   ( BaseUrl (..)
   , ClientEnv
   , ClientM
   , Scheme (..)
-  , client
   , mkClientEnv
   , runClientM
   )
+import Servant.Client qualified as ServantClient
+import Servant.Client.Generic (AsClientT, genericClient)
+
+data ClientError
+  = DeliveryFailed !ServantClient.ClientError
+  | DeliveryRejected !ErrorEnvelopeWire
+  deriving stock (Eq, Show)
+
+ingestClient :: IngestRoutes (AsClientT ClientM)
+ingestClient = genericClient
 ```
 
 The `EventIds` record (see the Decision Log entry for the full rationale). In every helper the
@@ -1007,14 +1004,12 @@ emptyIds = EventIds Nothing Nothing Nothing Nothing Nothing
 -- `Network.HTTP.Client` import (`HTTP.Manager`).
 data ClientConfig = ClientConfig
   { baseUrl          :: !Text                       -- e.g. "http://localhost:8080"
-  , apiKey           :: !(Maybe Text)               -- optional; sent as an auth header if present
-  , extraHeaders     :: ![(ByteString, ByteString)]
   , sourceService    :: !(Maybe Text)               -- populates AnalyticsEvent.sourceService
   , batchMaxSize     :: !Int                         -- flush when this many events buffered   (default 100)
-  , batchMaxInterval :: !NominalDiffTime             -- flush at least this often              (default 5s)
+  , batchMaxIntervalMicros :: !Int                  -- flush at least this often              (default 5s)
   , bufferCapacity   :: !Int                         -- max buffered before drop-newest        (default 10000)
   , maxRetries       :: !Int                         -- retries per batch on transient failure (default 5)
-  , retryBaseDelay   :: !Int                         -- microseconds; backoff base*2^attempt   (default 100ms)
+  , retryBaseDelayMicros :: !Int                    -- backoff base*2^attempt                 (default 100ms)
   , manager          :: !(Maybe HTTP.Manager)        -- reuse a caller-provided http-client Manager
   }
   deriving stock (Generic)
@@ -1023,22 +1018,22 @@ data ClientConfig = ClientConfig
 `Client` (opaque) internally holds: the shared servant `ClientEnv` (built with
 `mkClientEnv manager baseUrl`, wrapping the `http-client` `Manager` and the resolved
 `BaseUrl`), the `TBQueue AnalyticsEvent` buffer, the background `Async ()`, the `TVar Int` drop
-counter, and the config. The two derived client functions
-`postEvent :<|> postBatch = client (Proxy @IngestAPI)` are module-level values run with
-`runClientM ... env`.
+counter, and the config. The shared `ingestClient = genericClient` record is a module-level value;
+call sites use qualified selectors such as `Ingest.postBatch ingestClient events` and execute
+them with `runClientM ... env`.
 
-Endpoints the SDK calls (all derived from EP-4's `IngestAPI` type, so the SDK never hand-builds
-these requests): `postEvent` targets `POST {baseUrl}/v1/events` with a single `AnalyticsEvent`
-body and returns `IngestAck`, and `postBatch` targets `POST {baseUrl}/v1/batch` with a
-`[AnalyticsEvent]` JSON array (the default batched path) and returns `BatchAck`; both
-`Content-Type: application/json` and the `202 Accepted` + ack-DTO responses are fixed by the
-`IngestAPI` type (and its DTOs in `Kansoku.Api.Ingest`), not by the SDK. The client sets
-`receivedAt` to the same value as `occurredAt` because EP-2's shared event type requires it;
+Endpoints the SDK calls are derived from `IngestRoutes`, so the SDK never hand-builds requests.
+`Ingest.postEvent ingestClient` targets `POST {baseUrl}/v1/events`, and
+`Ingest.postBatch ingestClient` targets `POST {baseUrl}/v1/batch`. Each raw call returns a
+`KansokuResult` carrying either the 202 ack DTO or the shared 400/404/503 envelope. The outer
+`Either ServantClient.ClientError` remains the transport channel. `Content-Type` and every
+status/body pair are fixed by `IngestRoutes` and `Kansoku.Api.Response`, not by the SDK. The client sets
+`receivedAt` to the same value as `occurredAt` because the shared event type requires it;
 the ingestion server may overwrite it. The client also sets `eventId`, `eventName`, `source`
 (= the `service` variant of `EventSource`),
-the identity ids, and `properties`/`context`. Any `Left ClientError` from `runClientM` (a
-non-2xx `FailureResponse` or a `ConnectionError`) is a delivery failure and triggers
-retry-with-same-`eventId`.
+the identity ids, and `properties`/`context`. A `Left ServantClient.ClientError` is
+`DeliveryFailed`; a non-success `KansokuResult` is `DeliveryRejected`. Retry outer transport
+failures and retryable 503 envelopes with the same `eventId`; never retry typed 400/404 results.
 
 Commit trailers. Every commit made while executing this plan must carry these trailers (in
 addition to a Conventional Commits subject such as `feat(client): add kansoku-client batching`),
@@ -1180,3 +1175,8 @@ Intention: intention_01kwf425fxenc904ear54cr2n7
   Why: these were factual errors (wrong module homes, a nonexistent quote, a stale count) and
   two API-surface ambiguities that would have sent a novice implementer down the wrong path —
   cheapest to fix before any code exists.
+
+- 2026-07-18 — **Plan 9 alignment.** Replaced positional client derivation in the live sketches
+  with `ingestClient = genericClient` and qualified `Ingest` selector application. Documented
+  the outer transport versus inner typed-result channels and the retry policy. Historical
+  Progress entries remain unchanged.

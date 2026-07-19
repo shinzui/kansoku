@@ -667,12 +667,13 @@ libraries are a choice (dev convenience — library edits are picked up without 
 release), not a necessity; the shibuya entries, by contrast, are required because the batch
 feature is unreleased (see Milestone 0).
 
-Then edit `kansoku.cabal`. The servant API *type declaration* goes in the shared internal
+Then edit `kansoku.cabal`. The servant NamedRoutes declaration goes in the shared internal
 sub-library `kansoku:kansoku-api` (the same sub-library that holds the `Kansoku.Event*` event
-model): add `Kansoku.Api.Ingest` to that sub-library's `exposed-modules`. `kansoku-api` depends
-only on `servant` (the API combinators) plus aeson/base/text/bytestring/time/containers/uuid — it
+model): add `Kansoku.Ingest.Api` to that sub-library's `exposed-modules`. `kansoku-api` depends
+on the Servant API, generic, and MultiVerb libraries plus the DTO dependencies — it
 must NOT depend on `servant-server`, `warp`, the `pgmq-*` packages, or ClickHaskell, because EP-7's
-SDK derives a `servant-client` from `Kansoku.Api.Ingest` and EP-8 feeds it to `servant-openapi-hs`.
+SDK derives a generic client from `Kansoku.Ingest.Api` and EP-8 feeds the umbrella route record
+to `servant-openapi-hs`.
 
 Then edit the main `kansoku` `library` stanza: add to `exposed-modules` the handler/queue modules
 (`Kansoku.Ingest.Queue`, `Kansoku.Ingest.Producer`, `Kansoku.Ingest.Handler`,
@@ -782,23 +783,26 @@ enqueueMany qn evs =
   batchSendMessage BatchSendMessage { queueName = qn, messageBodies = map encodeEvent evs, delay = Nothing }
 ```
 
-API type module (in `kansoku:kansoku-api`). Create `src/Kansoku/Api/Ingest.hs`, holding ONLY the
-servant API *type declaration* and the JSON request/response payload types it references — no
-handlers, no `serve`, no `servant-server`, no warp. This module compiles into the `kansoku-api`
-sub-library and is what EP-7 (servant-client SDK) and EP-8 (OpenAPI) reuse, so it must stay free
-of server-only dependencies:
+API type module (in `kansoku:kansoku-api`). Create `src/Kansoku/Ingest/Api.hs`, holding only the
+NamedRoutes record and the JSON request/response payload types it references — no handlers, no
+`serve`, no `servant-server`, no warp. This module compiles into the `kansoku-api` sub-library
+and is what EP-7 (servant-client SDK) and EP-8 (OpenAPI) reuse, so it must stay free of
+server-only dependencies:
 
 ```haskell
-{-# LANGUAGE DataKinds, TypeOperators #-}
-module Kansoku.Api.Ingest
-  ( IngestAPI
+{-# LANGUAGE DataKinds, DeriveGeneric, TypeOperators #-}
+module Kansoku.Ingest.Api
+  ( IngestRoutes (..)
   , IngestAck (..)
   , BatchAck (..)   -- HTTP response type; not the shibuya BatchAck
   ) where
 
 import Kansoku.Prelude
-import Servant.API   -- combinators only (:>, :<|>, ReqBody, Verb, JSON); NOT Servant.Server
-import Kansoku.Event (AnalyticsEvent)   -- also in the kansoku-api sub-library
+import Kansoku.Api.Response (AcceptedResponses, KansokuResult)
+import Kansoku.Event (AnalyticsEvent)
+import Servant.API
+import Servant.API.Generic ((:-))
+import Servant.API.MultiVerb (MultiVerb)
 
 data IngestAck = IngestAck
   { accepted :: !Int
@@ -813,126 +817,90 @@ data BatchAck = BatchAck
   deriving stock (Generic, Eq, Show)
   deriving anyclass (FromJSON, ToJSON)
 
-type IngestAPI =
-       "v1" :> "events" :> ReqBody '[JSON] AnalyticsEvent   :> Verb 'POST 202 '[JSON] IngestAck
-  :<|> "v1" :> "batch"  :> ReqBody '[JSON] [AnalyticsEvent] :> Verb 'POST 202 '[JSON] BatchAck
+data IngestRoutes mode = IngestRoutes
+  { postEvent ::
+      mode :- "v1" :> "events" :> ReqBody '[JSON] AnalyticsEvent
+        :> MultiVerb 'POST '[JSON] (AcceptedResponses "Event accepted" IngestAck) (KansokuResult IngestAck)
+  , postBatch ::
+      mode :- "v1" :> "batch" :> ReqBody '[JSON] [AnalyticsEvent]
+        :> MultiVerb 'POST '[JSON] (AcceptedResponses "Batch accepted" BatchAck) (KansokuResult BatchAck)
+  }
+  deriving stock (Generic)
 ```
 
 (Both `FromJSON` and `ToJSON` are derived for the acks so the same types serve the server
 response, the servant-client SDK decode, and the OpenAPI schema.)
 
 Handler module (in the main `kansoku` library). Create `src/Kansoku/Ingest/Handler.hs`. It imports
-the API *type* from `Kansoku.Api.Ingest` and provides the handlers, the validation-to-400 mapping,
-`serve`/`hoistServer`, and the natural transformation from the effect stack to servant's `Handler`
-— everything that needs `servant-server` and the pgmq producer:
+the route record from `Kansoku.Ingest.Api` and builds that record in `AsServerT Handler` mode.
+The application-wide `serveWithContext` call lives in `Kansoku.App`, so ingestion does not create
+a second Servant application:
 
 ```haskell
-{-# LANGUAGE DataKinds, TypeOperators #-}
 module Kansoku.Ingest.Handler
-  ( ingestApp
+  ( ingestServer
   ) where
 
 import Kansoku.Prelude
-import Data.Generics.Labels ()             -- enables #label access on AnalyticsEvent below
-import Data.Aeson qualified as Aeson
-import Data.Aeson ((.=))
-import Data.ByteString.Lazy.Char8 qualified as LBS
+import Data.Either (partitionEithers)
+import Data.Generics.Labels ()
 import Data.Text qualified as Text
-import Data.Time.Format.ISO8601 (iso8601Show)
-import Effectful (Eff, IOE, runEff, (:>))
-import Effectful.Error.Static (Error, runErrorNoCallStack)
-import Effectful.Error.Static qualified as Error   -- Error.throwError = the Eff-side throw
-import Network.Wai (Application)
-import Servant                              -- servant-server: serve, hoistServer, Handler,
-                                            -- err400/err503, and Servant's OWN throwError
-                                            -- (Handler-side). Do NOT also import the Eff
-                                            -- throwError unqualified: `Effectful.Error.Static
-                                            -- (throwError)` next to unqualified `Servant`
-                                            -- is an ambiguous-occurrence error, which is why
-                                            -- the Eff throw is qualified as Error.throwError.
+import Effectful (Eff, IOE, runEff)
+import Effectful.Error.Static qualified as Error
 import Hasql.Pool qualified as Pool
-import Pgmq.Effectful (Pgmq, PgmqRuntimeError, runPgmq)
-import Pgmq.Types (QueueName)
-import Kansoku.Api.Ingest (IngestAPI, IngestAck (..), BatchAck (..))   -- the shared API type
-import Kansoku.Event (AnalyticsEvent, ValidationError, validateEvent)
-  -- validateEvent :: AnalyticsEvent -> Either [ValidationError] AnalyticsEvent (EP-2)
+import Pgmq.Effectful (Pgmq, QueueName, runPgmq)
+import Pgmq.Effectful.Interpreter (PgmqRuntimeError)
+import Kansoku.Api.Response (KansokuResult (..), badRequest, unavailable)
+import Kansoku.Event (AnalyticsEvent, EventId (..), ValidationError, validateEvent)
+import Kansoku.Ingest.Api (BatchAck (..), IngestAck (..), IngestRoutes (..))
 import Kansoku.Ingest.Producer (enqueueOne, enqueueMany)
+import Servant.Server.Generic (AsServerT)
+import Servant.Server (Handler)
 
--- The handler effect stack: producing needs Pgmq (which needs Error PgmqRuntimeError and IOE),
--- plus Error [ValidationError] so validation failures can be thrown inside Eff and mapped to
--- HTTP 400 at the effToHandler boundary.
-type HandlerEff = Eff '[Pgmq, Error PgmqRuntimeError, Error [ValidationError], IOE]
+type HandlerEff = '[Pgmq, Error.Error PgmqRuntimeError, IOE]
 
--- Run the effect stack for one request and translate errors to servant status codes.
--- NOTE on style: `err400 { … }` / `err503 { … }` record-update syntax below is a deliberate
--- deviation from the generic-lens #label rule — ServerError is an external, non-Generic
--- servant type, so #label access does not apply to it.
-effToHandler :: Pool.Pool -> HandlerEff a -> Handler a
-effToHandler pool act = do
-  res <- liftIO $ runEff $ runErrorNoCallStack @[ValidationError]
-                         $ runErrorNoCallStack @PgmqRuntimeError
-                         $ runPgmq pool act
-  case res of
-    Left verrs            -> throwError (validation400 verrs)   -- Servant's throwError (Handler)
-    Right (Left pgmqErr)  -> throwError err503 { errBody = "queue unavailable: " <> encodeErr pgmqErr }
-    Right (Right a)       -> pure a
-
--- Build the 400 whose body is the JSON error object promised by the API contract.
-validation400 :: [ValidationError] -> ServerError
-validation400 errs = err400
-  { errBody = Aeson.encode $ Aeson.object
-      [ "error" .= ("validation failed" :: Text), "details" .= map show errs ] }
-
--- Eff-side throw; effToHandler maps it to validation400 above.
-throwValidation400 :: (Error [ValidationError] :> es) => [ValidationError] -> Eff es a
-throwValidation400 = Error.throwError
-
-encodeErr :: PgmqRuntimeError -> LBS.ByteString
-encodeErr = LBS.pack . show
-
--- EP-2's receivedAt is Text ISO-8601 in this sketch; if it is UTCTime instead, set `now`
--- directly and drop renderTime.
-renderTime :: UTCTime -> Text
-renderTime = Text.pack . iso8601Show
-
-ingestApp :: Pool.Pool -> QueueName -> Application
-ingestApp pool qn = serve (Proxy @IngestAPI) (hoistServer (Proxy @IngestAPI) (effToHandler pool) server)
+ingestServer :: Pool.Pool -> QueueName -> IngestRoutes (AsServerT Handler)
+ingestServer pool qn = IngestRoutes {postEvent = postEventHandler, postBatch = postBatchHandler}
   where
-    server = postEvent :<|> postBatch
-
-    postEvent :: AnalyticsEvent -> HandlerEff IngestAck
-    postEvent evRaw = do
+    postEventHandler :: AnalyticsEvent -> Handler (KansokuResult IngestAck)
+    postEventHandler evRaw = do
       now <- liftIO getCurrentTime
-      let ev = evRaw & #receivedAt .~ renderTime now   -- set receivedAt server-side (lens setter)
+      let ev = evRaw & #receivedAt .~ now
       case validateEvent ev of
-        Left verrs -> throwValidation400 verrs         -- verrs :: [ValidationError]
-        Right ok   -> do _ <- enqueueOne qn ok
-                         pure IngestAck { accepted = 1, eventId = ok ^. #eventId }
+        Left verrs -> pure (validationFailure verrs)
+        Right ok -> effToHandler pool $ do
+          _ <- enqueueOne qn ok
+          pure IngestAck {accepted = 1, eventId = unEventId (ok ^. #eventId)}
 
-    postBatch :: [AnalyticsEvent] -> HandlerEff BatchAck
-    postBatch evsRaw = do
+    postBatchHandler :: [AnalyticsEvent] -> Handler (KansokuResult BatchAck)
+    postBatchHandler evsRaw = do
       now <- liftIO getCurrentTime
-      let stamped = map (\e -> e & #receivedAt .~ renderTime now) evsRaw
-      case traverse validateEvent stamped of
-        Left verrs -> throwValidation400 verrs
-        Right oks  -> do _ <- enqueueMany qn oks
-                         pure BatchAck { accepted = length oks }
+      let (validationErrs, oks) = partitionEithers (validateEvent . (& #receivedAt .~ now) <$> evsRaw)
+      if null validationErrs
+        then effToHandler pool $ do
+          _ <- enqueueMany qn oks
+          pure BatchAck {accepted = length oks}
+        else pure (validationFailure (concat validationErrs))
+
+effToHandler :: Pool.Pool -> Eff HandlerEff a -> Handler (KansokuResult a)
+effToHandler pool action = do
+  result <- liftIO $ runEff $ Error.runErrorNoCallStack @PgmqRuntimeError $ runPgmq pool action
+  pure $ case result of
+    Left _ -> KansokuUnavailable (unavailable "queue_unavailable" "analytics queue is unavailable")
+    Right value -> KansokuOk value
+
+validationFailure :: [ValidationError] -> KansokuResult a
+validationFailure errs = KansokuBadRequest (badRequest "validation_failed" (Text.pack (show errs)))
 ```
 
-Validation-to-400: servant's `throwError` lives in `Handler`, not in `HandlerEff`, so the
-sketch implements the boundary directly: an `Error [ValidationError]` effect in `HandlerEff`,
-thrown inside the Eff action with `throwValidation400` (which is just the Eff-side
-`Error.throwError`), and mapped by `effToHandler` to `err400` with the JSON error body built
-by `validation400`. (The alternative — validating in the `Handler` monad before entering the
-Eff action — also works but duplicates the run boundary, so it is not used.) An invalid event
-must produce HTTP `400` with a JSON body like
-`{"error":"validation failed","details":["eventName must not be empty"]}` — `details` is an
-array precisely because `validateEvent` reports **all** failures as `[ValidationError]` — and
-must **not** enqueue anything. The `#receivedAt` and `#eventId` labels used above resolve
+Validation and queue failures are values in the shared `KansokuResult` response algebra, not
+`ServerError` exceptions. An invalid event produces HTTP `400` with the shared error envelope;
+pgmq failure produces HTTP `503`; successful enqueue produces the typed `202` response. The
+request must **not** enqueue anything after validation fails. The `#receivedAt` and `#eventId`
+labels used above resolve
 through generic-lens over EP-2's `AnalyticsEvent` record (hence
-`import Data.Generics.Labels ()`), so confirm EP-2's actual field names and types before
-writing (e.g. `occurredAt`/`receivedAt` may be `Text` ISO-8601 or `UTCTime`; if `UTCTime`,
-set `now` directly and drop `renderTime`).
+`import Data.Generics.Labels ()`); `receivedAt` is a `UTCTime`, so the server sets it directly
+from `getCurrentTime`.
 
 Verification for Milestone 1 (see Concrete Steps for exact transcripts): start postgres, run a
 tiny bootstrap+enqueue path from the REPL (the HTTP route only arrives in Milestone 3), then
@@ -1172,8 +1140,8 @@ main = do
        (cfg ^. #writerMaxLatencyMs)
        waitForShutdown)
     $ \_writerThread -> do
-        -- warp blocks in the main thread; combine the ingest app with EP-1's health route.
-        Warp.run (cfg ^. #httpPort) (ingestApp pool qn)     -- or a combined API including /health
+        -- The one application serves both NamedRoutes slices; WAI handles operational routes.
+        Warp.run (cfg ^. #httpPort) (kansokuApp probe pool qn queryPool)
 ```
 
 `makeTracer` is deliberately **noop-first** for the MVP: hs-opentelemetry-api's global tracer
@@ -1190,8 +1158,9 @@ makeTracer = do
   pure (OTel.makeTracer tp "kansoku" OTel.tracerOptions)
 ```
 
-If EP-1's server already defines a servant `Application` with `/health`, combine the APIs with
-`:<|>` into one `serve` call rather than starting two warp servers. Use
+The umbrella `KansokuAPI` record combines ingestion and metrics in one `serveWithContext` call;
+`waiWrapper` handles `/health`, `/ready`, and `/openapi.json` before delegating analytics routes.
+Use
 `Control.Concurrent.Async.withAsync` so the writer thread is cancelled when `main` exits, and
 signal `shutdown` from a SIGTERM/SIGINT handler if EP-1 installs one (otherwise Ctrl-C tears
 the process down and `withAsync` cancels the writer). The writer and the HTTP handlers share the
@@ -1225,7 +1194,7 @@ Expected: `psql` prints a `1` row; `clickhouse-client` prints `1`.
 cabal build kansoku
 ```
 
-Expected: it compiles `Kansoku.Api.Ingest` (in the `kansoku-api` sub-library), `Kansoku.Ingest.Queue`,
+Expected: it compiles `Kansoku.Ingest.Api` (in the `kansoku-api` sub-library), `Kansoku.Ingest.Queue`,
 `Kansoku.Ingest.Producer`, `Kansoku.Ingest.Handler`, `Kansoku.Writer.Batch`, and `Kansoku.Writer.Run`
 and the `kansoku-server` executable with no
 errors. First build will compile the newly-added local packages (`pgmq-*`, `shibuya-core`,
@@ -1431,7 +1400,7 @@ Signatures that must exist at the end of each milestone (full module paths):
 - `Kansoku.Ingest.Queue.bootstrapQueue :: Pool -> QueueName -> IO ()`
 - `Kansoku.Ingest.Producer.enqueueOne :: Pgmq :> es => QueueName -> AnalyticsEvent -> Eff es MessageId`
 - `Kansoku.Ingest.Producer.enqueueMany :: Pgmq :> es => QueueName -> [AnalyticsEvent] -> Eff es [MessageId]`
-- `Kansoku.Api.Ingest.IngestAPI` (the servant type below, in the `kansoku:kansoku-api` sub-library), `Kansoku.Ingest.Handler.ingestApp :: Pool -> QueueName -> Application` (in the main `kansoku` library)
+- `Kansoku.Ingest.Api.IngestRoutes` (the NamedRoutes record below, in the `kansoku:kansoku-api` sub-library), `Kansoku.Ingest.Handler.ingestServer :: Pool -> QueueName -> IngestRoutes (AsServerT Handler)` (in the main `kansoku` library)
 - `Kansoku.Writer.Batch.writerBatchHandler :: IOE :> es => Connection -> BatchInfo -> NonEmpty (Ingested es Value) -> Eff es BatchAck` (i.e. `Connection -> BatchHandler es Value` after partial application, since `BatchHandler es Value = BatchInfo -> NonEmpty (Ingested es Value) -> Eff es BatchAck`)
 - `Kansoku.Writer.Run.runWriter :: Pool -> Tracer -> Connection -> QueueName -> Int32 -> Int32 -> Int -> Int -> IO () -> IO ()`
 
@@ -1439,23 +1408,29 @@ The queue name and message-body encoding (the MasterPlan integration point this 
 queue is `kansoku_events`; each message body is a `Data.Aeson.Value` holding one JSON-encoded
 `AnalyticsEvent` using EP-2's `ToJSON`/`FromJSON`. No other plan touches the queue.
 
-The HTTP ingestion API contract lives as the servant *type declaration* `IngestAPI` in module
-`Kansoku.Api.Ingest`, inside the shared `kansoku:kansoku-api` sub-library (which depends on
-`servant` only). It is reused three ways so it cannot drift: this plan's server serves it, EP-7's
-SDK derives a `servant-client` from it, and EP-8 feeds it — as part of the combined
-`Kansoku.Api.KansokuAPI = IngestAPI :<|> MetricsAPI` (EP-6's `MetricsAPI`) — to
-`servant-openapi-hs`. The type:
+The HTTP ingestion API contract lives as the NamedRoutes record `IngestRoutes` in module
+`Kansoku.Ingest.Api`, inside the shared `kansoku:kansoku-api` sub-library. It is reused three
+ways so it cannot drift: this plan's server builds it in `AsServerT Handler` mode, EP-7 derives
+the same record in `AsClientT ClientM` mode, and EP-8 feeds the umbrella
+`Proxy (NamedRoutes KansokuAPI)` to `servant-openapi-hs`. The type:
 
 ```haskell
-type IngestAPI =
-       "v1" :> "events" :> ReqBody '[JSON] AnalyticsEvent   :> Verb 'POST 202 '[JSON] IngestAck
-  :<|> "v1" :> "batch"  :> ReqBody '[JSON] [AnalyticsEvent] :> Verb 'POST 202 '[JSON] BatchAck
+data IngestRoutes mode = IngestRoutes
+  { postEvent ::
+      mode :- "v1" :> "events" :> ReqBody '[JSON] AnalyticsEvent
+        :> MultiVerb 'POST '[JSON] (AcceptedResponses "Event accepted" IngestAck) (KansokuResult IngestAck)
+  , postBatch ::
+      mode :- "v1" :> "batch" :> ReqBody '[JSON] [AnalyticsEvent]
+        :> MultiVerb 'POST '[JSON] (AcceptedResponses "Batch accepted" BatchAck) (KansokuResult BatchAck)
+  }
+  deriving stock (Generic)
 ```
 
 `POST /v1/events` takes one `AnalyticsEvent` JSON object and returns `202` with
 `{"accepted":1,"eventId":"<id>"}`. `POST /v1/batch` takes a JSON array of `AnalyticsEvent` and
-returns `202` with `{"accepted":<n>}`. Validation failure is `400` with
-`{"error":"...","details":[...]}`. The server sets `receivedAt` and preserves `occurredAt`.
+returns `202` with `{"accepted":<n>}`. Validation failure is `400` and queue failure is `503`,
+both using the shared `ErrorEnvelopeWire` (`code`, `message`, `retryable`). The server sets
+`receivedAt` and preserves `occurredAt`.
 
 The shibuya batch API relied upon (the real, confirmed signatures from the `Shibuya.Batch`
 module on shibuya `master`, commit `8a91e83` or later — unreleased, so consumed via the local
@@ -1661,3 +1636,7 @@ Intention: intention_01kwf425fxenc904ear54cr2n7
     (Hackage's hasql-migration-0.3.1 does not build against hasql 1.10; shibuya-pgmq-adapter
     and rei carry the same pin), and notes that the pgmq packages ARE on Hackage at 0.3.0.0 —
     their local `packages:` entries are a dev convenience, unlike the required shibuya ones.
+
+- 2026-07-18 — **Plan 9 alignment.** Updated the live ingestion contract and server sketches to
+  `Kansoku.Ingest.Api.IngestRoutes`, `MultiVerb`, `KansokuResult`, and record-based
+  `ingestServer` assembly. Historical Progress entries remain unchanged.
