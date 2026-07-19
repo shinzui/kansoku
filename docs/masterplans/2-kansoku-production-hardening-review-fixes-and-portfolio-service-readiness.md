@@ -90,7 +90,7 @@ waves.
 | 11 | Split ClickHouse connections and adopt typed row decoding | docs/plans/11-split-clickhouse-connections-and-adopt-typed-row-decoding.md | EP-10 | None | Complete |
 | 12 | ClickHouse schema v2: sort key, FINAL-free resolution, join-free rollups | docs/plans/12-clickhouse-schema-v2-sort-key-final-free-resolution-join-free-rollups.md | EP-10 | None | Complete |
 | 9 | Convert kansoku to NamedRoutes, vertical slices, and MultiVerb | docs/plans/9-convert-kansoku-to-namedroutes-vertical-slices-and-multiverb.md | EP-10 | None | Complete |
-| 13 | Safe and correct metric SQL: validated inputs, ordered funnels, honest failures | docs/plans/13-safe-and-correct-metric-sql-validated-inputs-ordered-funnels-honest-failures.md | EP-12 | EP-11, EP-9 | Not Started |
+| 13 | Safe and correct metric SQL: validated inputs, ordered funnels, honest failures | docs/plans/13-safe-and-correct-metric-sql-validated-inputs-ordered-funnels-honest-failures.md | EP-12 | EP-11, EP-9 | In Progress |
 | 14 | SDK-grade ingest contract: partial batch acceptance, CORS, and payload limits | docs/plans/14-sdk-grade-ingest-contract-partial-batch-acceptance-cors-and-payload-limits.md | EP-9 | None | Not Started |
 | 16 | Pipeline observability: queue depth, writer lag, and exported telemetry | docs/plans/16-pipeline-observability-queue-depth-writer-lag-and-exported-telemetry.md | EP-10 | EP-11 | Not Started |
 | 15 | API keys, service auth, and account-scoped queries | docs/plans/15-api-keys-service-auth-and-account-scoped-queries.md | EP-9 | EP-12, EP-13, EP-14 | Not Started |
@@ -519,3 +519,7 @@ now record the thirteen-route dispatch guard, one served NamedRoutes umbrella, v
 shared MultiVerb result algebra, generic SDK client, served-type OpenAPI generator, deterministic
 artifact/conformance gates, and predecessor-plan revisions. Cross-plan notes pin the same-typed
 dispatch limitation, SDK retry semantics, EP-14's future 413 extension, and the exact WAI allowlist.
+
+Revision note (2026-07-18, fifth revision): EP-13 started after its hard dependency EP-12 and soft
+dependencies EP-11 and EP-9 completed. Implementation uses the master-plan intention and targets
+the landed schema-v2, typed-decoding, QueryPool, NamedRoutes, and MultiVerb architecture.

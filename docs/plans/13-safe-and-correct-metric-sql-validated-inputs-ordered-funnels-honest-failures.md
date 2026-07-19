@@ -5,6 +5,7 @@ title: "Safe and correct metric SQL: validated inputs, ordered funnels, honest f
 kind: exec-plan
 created_at: 2026-07-15T21:30:34Z
 master_plan: "docs/masterplans/2-kansoku-production-hardening-review-fixes-and-portfolio-service-readiness.md"
+intention: intention_01kxr5jt2heyvt0n768ym9dwqd
 ---
 
 # Safe and correct metric SQL: validated inputs, ordered funnels, honest failures
@@ -53,6 +54,9 @@ validator, the `windowFunnel` SQL shape, and the updated golden SQL.
 Use a checklist to summarize granular steps. Every stopping point must be documented here,
 even if it requires splitting a partially completed task into two ("done" vs. "remaining").
 This section must always reflect the actual current state of the work.
+
+- [x] 2026-07-18: implementation started after EP-12, EP-11, and EP-9 completed; reconciled
+      target state is schema v2 + typed ClickHaskell decoding + QueryPool + NamedRoutes/MultiVerb
 
 - [ ] M1: `Kansoku.Query.Validate` module with `SqlName` smart constructor and charset rules
 - [ ] M1: funnel handler rejects invalid steps with HTTP 400 JSON naming the value
