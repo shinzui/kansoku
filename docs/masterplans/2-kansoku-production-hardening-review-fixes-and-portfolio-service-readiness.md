@@ -54,6 +54,14 @@ accommodates it). The four metric stubs (acquisition, feature-adoption, organiza
 stay stubbed with typed HTTP 404 `not_implemented` envelopes; new metric families are out of scope.
 
 
+## Relevant Architecture Decisions
+
+- `docs/adr/0001-sdk-grade-ingest-contract-boundaries.md` records EP-14's durable batch
+  acceptance and SDK retry semantics, ingest-only CORS boundary, positive body/batch limits,
+  CORS-outside-limit middleware order, and shared HTTP 413 response algebra. EP-15 and future SDK
+  initiatives must preserve this contract unless they supersede the ADR explicitly.
+
+
 ## Decomposition Strategy
 
 The initiative decomposes along the failure modes the review found, not along packages or
@@ -91,7 +99,7 @@ waves.
 | 12 | ClickHouse schema v2: sort key, FINAL-free resolution, join-free rollups | docs/plans/12-clickhouse-schema-v2-sort-key-final-free-resolution-join-free-rollups.md | EP-10 | None | Complete |
 | 9 | Convert kansoku to NamedRoutes, vertical slices, and MultiVerb | docs/plans/9-convert-kansoku-to-namedroutes-vertical-slices-and-multiverb.md | EP-10 | None | Complete |
 | 13 | Safe and correct metric SQL: validated inputs, ordered funnels, honest failures | docs/plans/13-safe-and-correct-metric-sql-validated-inputs-ordered-funnels-honest-failures.md | EP-12 | EP-11, EP-9 | Complete |
-| 14 | SDK-grade ingest contract: partial batch acceptance, CORS, and payload limits | docs/plans/14-sdk-grade-ingest-contract-partial-batch-acceptance-cors-and-payload-limits.md | EP-9 | None | In Progress |
+| 14 | SDK-grade ingest contract: partial batch acceptance, CORS, and payload limits | docs/plans/14-sdk-grade-ingest-contract-partial-batch-acceptance-cors-and-payload-limits.md | EP-9 | None | Complete |
 | 16 | Pipeline observability: queue depth, writer lag, and exported telemetry | docs/plans/16-pipeline-observability-queue-depth-writer-lag-and-exported-telemetry.md | EP-10 | EP-11 | Not Started |
 | 15 | API keys, service auth, and account-scoped queries | docs/plans/15-api-keys-service-auth-and-account-scoped-queries.md | EP-9 | EP-12, EP-13, EP-14 | Not Started |
 
@@ -247,8 +255,8 @@ and the milestone. This section provides an at-a-glance view of the entire initi
 - [x] EP-13: metric SQL inputs validated and parameterized end-to-end
 - [x] EP-13: funnel computed via ordered `windowFunnel` single pass
 - [x] EP-13: decode/parse failures surface as errors, not zeros; redundant re-sort removed
-- [ ] EP-14: partial batch acceptance contract live in API, server, and `kansoku-client`
-- [ ] EP-14: CORS preflight and payload/batch limits enforced
+- [x] EP-14: partial batch acceptance contract live in API, server, and `kansoku-client`
+- [x] EP-14: CORS preflight and payload/batch limits enforced
 - [ ] EP-16: OTel exporter actually exports (current tracer provider has no exporter)
 - [ ] EP-16: queue depth, batch flush latency/size, and insert-failure metrics emitted
 - [ ] EP-16: readiness extended with queue-depth/lag thresholds
@@ -369,6 +377,20 @@ interactions between child plans. Provide concise evidence.
   - OpenAPI is now generated from the exact served `Proxy (NamedRoutes KansokuAPI)`. Its checked
     artifact contains exactly thirteen analytics paths with stable operation IDs and a typed error
     tail on every operation; `/health`, `/ready`, and `/openapi.json` are the only WAI escapes.
+
+- 2026-07-19, during EP-14 implementation:
+  - Parsed batches now always finish with HTTP 202, including all-invalid batches; only malformed
+    JSON remains 400. `kansoku-client` drops indexed server rejections without retrying them. EP-15
+    must attach authentication without changing those delivery semantics.
+  - `AnalyticsEvent` live fixtures require both `properties` and `context`, and `page_view`
+    additionally requires `properties.url`. Later auth and observability HTTP proofs must use
+    schema-valid events or they will exercise decoding/validation instead of their intended path.
+  - Ingest CORS is deliberately outside the body-size middleware so browser callers can read 413
+    envelopes, and it already pre-allows `X-Api-Key` and `Authorization`. EP-15 should add auth
+    inside that boundary; EP-16 must preserve the middleware order when extending the WAI wrapper.
+  - HTTP 413 is now part of the shared MultiVerb error tail and therefore appears on every
+    analytics operation in OpenAPI. Future response-algebra changes must update both `AsUnion`
+    instances, the generic client, conformance expectations, and the checked artifact together.
 
 
 ## Decision Log
@@ -549,6 +571,22 @@ now record strict name validation plus native parameters, ordered bounded-window
 typed failures, SQL-owned ordering, schema-v2 rollup/session alignment, retention semantics,
 fixture-backed HTTP evidence, deterministic OpenAPI, and coherent Cabal/Nix validation.
 
+EP-14 completed the SDK-grade ingest foundation. Parsed batches partially accept valid events and
+return indexed rejections without poisoning client retry buffers; the Haskell SDK treats those
+rejections and typed 413s as permanent drops. Browser ingest now has configurable ingest-only
+CORS with future auth headers pre-approved, while metrics remain closed. Positive configurable
+5 MiB body and 500-event batch caps return one non-retryable envelope shape, and the shared
+response algebra, served API, SDK, and checked OpenAPI artifact agree. Final verification passed
+62 core and 10 client examples, plus live partial-batch, CORS, 6 MiB body, 501/500-event boundary,
+and runtime override checks. The durable contract is distilled in
+`docs/adr/0001-sdk-grade-ingest-contract-boundaries.md` for EP-15 and future SDK work.
+
 Revision note (2026-07-19): EP-14 started after its hard dependency EP-9 completed. Implementation
 uses the MasterPlan's recorded intention and targets the landed NamedRoutes, shared MultiVerb
 response algebra, generic SDK client, deterministic OpenAPI, and WAI assembly architecture.
+
+Revision note (2026-07-19, second revision): EP-14 completed. The registry and aggregate progress
+now record partial batch acceptance, SDK rejection accounting, ingest-only CORS, positive body and
+batch caps, the shared 413 response, and live boundary evidence. Cross-plan discoveries constrain
+EP-15 authentication and EP-16 middleware assembly, outcomes summarize the verified contract, and
+`docs/adr/0001-sdk-grade-ingest-contract-boundaries.md` holds the durable project decisions.

@@ -85,7 +85,9 @@ even if it requires splitting a partially completed task into two ("done" vs. "r
       10 client examples, 1 opt-in live pending). Live HTTP returned a CORS-readable 413 for a
       chunked 6 MiB body, exact 413/202 results at 501/500 events, a configured limit of 2 in a
       3-event rejection, and the documented `413` OpenAPI response.
-- [ ] MasterPlan registry row for EP-14 flipped to Complete; MasterPlan Progress ticks updated.
+- [x] Completion bookkeeping (completed 2026-07-19T15:43Z): distilled durable ingest-contract
+      decisions into `docs/adr/0001-sdk-grade-ingest-contract-boundaries.md`, flipped the
+      MasterPlan registry row to Complete, and checked both EP-14 aggregate Progress entries.
 
 
 ## Surprises & Discoveries
@@ -259,8 +261,21 @@ the shared response algebra plus checked OpenAPI artifact advertise 413 consiste
 live verification covered both sides of the 500-event boundary, a chunked body over 5 MiB, and a
 runtime batch-limit override.
 
+EP-14 is complete. Its three contract changes landed in coherent API/server/client/OpenAPI
+increments, all planned live transcripts reproduced, and the full build, test, formatting, and
+artifact-freshness gates passed. Durable choices that future SDK and authentication work must
+preserve are recorded in `docs/adr/0001-sdk-grade-ingest-contract-boundaries.md`; transient
+dependency inspection and local-service observations remain in this plan.
+
 
 ## Context and Orientation
+
+### Relevant architecture decision
+
+`docs/adr/0001-sdk-grade-ingest-contract-boundaries.md` records the completed contract's durable
+partial-acceptance, retry, CORS, limit, middleware-order, and shared-response-algebra decisions.
+It was distilled from this plan at completion and is the project-level reference for future SDK
+and EP-15 authentication changes.
 
 ### Dependencies and the reconciliation rule (read this first)
 
@@ -1360,3 +1375,7 @@ Revision note (2026-07-19, fourth revision): Milestone 3 completed. Progress, di
 decisions, outcomes, dependency notes, and validation evidence now record the request and batch
 limits, positive-only configuration, wai-extra's declared/chunked enforcement behavior,
 CORS-readable 413 response, shared response-algebra widening, and live boundary checks.
+
+Revision note (2026-07-19, fifth revision): EP-14 completed. The final bookkeeping entry,
+retrospective, and context now reference the distilled ingest-contract ADR, while the linked
+MasterPlan records the complete registry and aggregate progress state.
