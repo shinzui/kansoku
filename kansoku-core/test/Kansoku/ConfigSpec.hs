@@ -24,6 +24,7 @@ clearEnv =
       "KANSOKU_WRITER_MAX_LATENCY_MS",
       "KANSOKU_WRITER_VT_SEC",
       "KANSOKU_WRITER_ADAPTER_BATCH",
+      "KANSOKU_CORS_ORIGINS",
       "KANSOKU_SERVER_PORT"
     ]
 
@@ -47,6 +48,7 @@ spec = describe "Kansoku.Config.loadConfig" $ do
         (cfg ^. #writerMaxLatencyMs) `shouldBe` 5000
         (cfg ^. #writerVisibilityTimeoutSec) `shouldBe` 60
         (cfg ^. #writerAdapterBatchSize) `shouldBe` 1000
+        (cfg ^. #corsAllowedOrigins) `shouldBe` Nothing
         (cfg ^. #serverPort) `shouldBe` 8080
 
   it "parses values from the environment" $ do
@@ -63,6 +65,7 @@ spec = describe "Kansoku.Config.loadConfig" $ do
     setEnv "KANSOKU_WRITER_MAX_LATENCY_MS" "2500"
     setEnv "KANSOKU_WRITER_VT_SEC" "90"
     setEnv "KANSOKU_WRITER_ADAPTER_BATCH" "250"
+    setEnv "KANSOKU_CORS_ORIGINS" "https://app.example.com, https://admin.example.com,"
     setEnv "KANSOKU_SERVER_PORT" "9999"
     result <- loadConfig
     clearEnv
@@ -81,7 +84,16 @@ spec = describe "Kansoku.Config.loadConfig" $ do
         (cfg ^. #writerMaxLatencyMs) `shouldBe` 2500
         (cfg ^. #writerVisibilityTimeoutSec) `shouldBe` 90
         (cfg ^. #writerAdapterBatchSize) `shouldBe` 250
+        (cfg ^. #corsAllowedOrigins)
+          `shouldBe` Just ["https://app.example.com", "https://admin.example.com"]
         (cfg ^. #serverPort) `shouldBe` 9999
+
+  it "treats an explicit wildcard CORS origin as unrestricted" $ do
+    clearEnv
+    setEnv "KANSOKU_CORS_ORIGINS" " * "
+    result <- loadConfig
+    clearEnv
+    (result <&> (^. #corsAllowedOrigins)) `shouldBe` Right Nothing
 
   it "rejects a non-numeric port with a Left" $ do
     clearEnv

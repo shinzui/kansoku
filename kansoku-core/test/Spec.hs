@@ -2,6 +2,7 @@ module Main (main) where
 
 import Kansoku.ClickHouseSpec qualified
 import Kansoku.ConfigSpec qualified
+import Kansoku.CorsSpec qualified
 import Kansoku.EventSpec qualified
 import Kansoku.Ingest.HandlerSpec qualified
 import Kansoku.Ingest.QueueSpec qualified
@@ -17,6 +18,7 @@ import Test.Hspec (hspec)
 main :: IO ()
 main = hspec $ do
   Kansoku.ConfigSpec.spec
+  Kansoku.CorsSpec.spec
   Kansoku.ClickHouseSpec.spec
   Kansoku.EventSpec.spec
   Kansoku.Ingest.HandlerSpec.spec

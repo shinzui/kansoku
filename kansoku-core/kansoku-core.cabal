@@ -79,6 +79,7 @@ library
     , time
     , unordered-containers
     , wai
+    , wai-cors
     , warp
 
 test-suite kansoku-core-test
@@ -91,6 +92,7 @@ test-suite kansoku-core-test
     Kansoku.ClickHouseSpec
     Kansoku.ClickHouseTestSupport
     Kansoku.ConfigSpec
+    Kansoku.CorsSpec
     Kansoku.EventSpec
     Kansoku.Ingest.HandlerSpec
     Kansoku.Ingest.QueueSpec

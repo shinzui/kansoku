@@ -38,6 +38,7 @@ data Config = Config
     writerMaxLatencyMs :: !Int,
     writerVisibilityTimeoutSec :: !Int32,
     writerAdapterBatchSize :: !Int32,
+    corsAllowedOrigins :: !(Maybe [Text]),
     serverPort :: !Int
   }
   deriving stock (Generic, Eq, Show)
@@ -63,6 +64,7 @@ loadConfig = do
   writerLatency <- lookupEnv "KANSOKU_WRITER_MAX_LATENCY_MS"
   writerVt <- lookupEnv "KANSOKU_WRITER_VT_SEC"
   writerAdapterBatch <- lookupEnv "KANSOKU_WRITER_ADAPTER_BATCH"
+  corsOrigins <- lookupEnv "KANSOKU_CORS_ORIGINS"
   srv <- lookupEnv "KANSOKU_SERVER_PORT"
   pure $ do
     tcp <- parsePort "CLICKHOUSE_TCP_PORT" 9000 chTcp
@@ -88,6 +90,7 @@ loadConfig = do
           writerMaxLatencyMs = maxLatency,
           writerVisibilityTimeoutSec = visibility,
           writerAdapterBatchSize = adapterBatch,
+          corsAllowedOrigins = parseCorsOrigins corsOrigins,
           serverPort = port
         }
   where
@@ -110,6 +113,14 @@ parsePositiveInt name def raw = do
   if value >= 1
     then Right value
     else Left (ConfigError (name <> ": must be at least 1"))
+
+parseCorsOrigins :: Maybe String -> Maybe [Text]
+parseCorsOrigins Nothing = Nothing
+parseCorsOrigins (Just raw)
+  | Text.strip value == "*" = Nothing
+  | otherwise = Just (filter (not . Text.null) (Text.strip <$> Text.splitOn "," value))
+  where
+    value = Text.pack raw
 
 parseInt32 :: Text -> Int32 -> Maybe String -> Either ConfigError Int32
 parseInt32 _ def Nothing = Right def

@@ -5,6 +5,7 @@ module Kansoku.Server
   ( ReadyProbe (..),
     envelopeFormatters,
     healthApp,
+    ingestCors,
     kansokuApp,
     kansokuServer,
     pgmqReady,
@@ -16,6 +17,7 @@ where
 import Data.Aeson qualified as Aeson
 import Data.Generics.Labels ()
 import Data.Text qualified as Text
+import Data.Text.Encoding qualified as Text.Encoding
 import Effectful (Eff, IOE, runEff, type (:>))
 import Effectful.Error.Static qualified as Error
 import Effectful.Reader.Static (Reader, asks)
@@ -32,8 +34,9 @@ import Kansoku.Metrics.Handler (metricsServer)
 import Kansoku.Prelude
 import Network.HTTP.Types (status200, status404, status503)
 import Network.HTTP.Types.Header (hContentType)
-import Network.Wai (Application, pathInfo, responseLBS)
+import Network.Wai (Application, Middleware, pathInfo, responseLBS)
 import Network.Wai.Handler.Warp qualified as Warp
+import Network.Wai.Middleware.Cors qualified as Cors
 import Pgmq.Effectful (QueueName, queueMetrics, runPgmq)
 import Pgmq.Effectful.Interpreter (PgmqRuntimeError)
 import Servant
@@ -70,15 +73,36 @@ kansokuServer pool queueName queryPool =
       metrics = metricsServer queryPool
     }
 
-kansokuApp :: ReadyProbe -> Pool.Pool -> QueueName -> QueryPool -> Application
-kansokuApp probe pool queueName queryPool =
+kansokuApp :: Config -> ReadyProbe -> Pool.Pool -> QueueName -> QueryPool -> Application
+kansokuApp config probe pool queueName queryPool =
   waiWrapper
     probe
-    ( serveWithContext
-        kansokuAPI
-        (envelopeFormatters :. EmptyContext)
-        (kansokuServer pool queueName queryPool)
+    ( ingestCors
+        (config ^. #corsAllowedOrigins)
+        ( serveWithContext
+            kansokuAPI
+            (envelopeFormatters :. EmptyContext)
+            (kansokuServer pool queueName queryPool)
+        )
     )
+
+-- | Apply browser CORS policy only to the ingestion route family. Metrics and
+-- operational endpoints remain same-origin. Auth headers are pre-authorized
+-- for EP-15 so browser SDKs do not need another contract change.
+ingestCors :: Maybe [Text] -> Middleware
+ingestCors allowedOrigins inner req respond =
+  case pathInfo req of
+    "v1" : _ -> Cors.cors (const (Just policy)) inner req respond
+    _ -> inner req respond
+  where
+    policy =
+      Cors.simpleCorsResourcePolicy
+        { Cors.corsOrigins =
+            (\origins -> (Text.Encoding.encodeUtf8 <$> origins, False)) <$> allowedOrigins,
+          Cors.corsMethods = ["POST"],
+          Cors.corsRequestHeaders = ["Content-Type", "X-Api-Key", "Authorization"],
+          Cors.corsMaxAge = Just 3600
+        }
 
 -- | Operational/meta routes stay at WAI level; all analytics routes delegate
 -- to the one Servant application. Taking the inner app keeps this wrapper

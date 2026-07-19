@@ -71,8 +71,13 @@ even if it requires splitting a partially completed task into two ("done" vs. "r
       accepted plus indices 1/3
       rejected, all-invalid returned 202/0, malformed JSON and invalid single events returned 400,
       the accepted subset reached ClickHouse, and `kansoku-client-example` exited 0.
-- [ ] Milestone 2: `wai-cors` middleware on the ingest paths only; `KANSOKU_CORS_ORIGINS` config
-      field; preflight verified end-to-end with the curl transcript; tests green.
+- [x] Milestone 2 (completed 2026-07-19T15:25Z): added `wai-cors` 0.2.7, total
+      `KANSOKU_CORS_ORIGINS` parsing, ingest-only middleware, config and middleware specs, and
+      threaded `Config` through the landed `ReadyProbe`/`QueryPool` assembly. `cabal build all`
+      and `cabal test all` passed (59 core examples, 0 failures; 9 client examples, 1 opt-in live
+      pending). Live preflight returned 200 with `*`, POST/GET/HEAD, auth/content headers, and
+      max-age 3600; an actual ingest response carried `*`; metrics carried no CORS header; a
+      disallowed configured origin returned 400 without an allow-origin header.
 - [ ] Milestone 3: 5 MiB body cap via wai-extra's request-size-limit middleware; 500-event batch
       cap in the handler with a 413 JSON response; `KANSOKU_INGEST_MAX_BODY_BYTES` and
       `KANSOKU_INGEST_MAX_BATCH_LENGTH` config fields; 413 transcripts verified; tests green.
@@ -105,6 +110,19 @@ implementation. Provide concise evidence.
   `use_skip_indexes=0` returned the expected row. The acceptance query now uses `FINAL` to make
   this event-id-only diagnostic reliable; production metric queries retain their account/event/
   time predicates and are outside this plan.
+
+- Discovery (Milestone 2, 2026-07-19): Mori has no registered `wai-cors` project. Hackage and
+  the package's upstream metadata identify 0.2.7 as the current release; its source was acquired
+  with `cabal get` and inspected directly before implementation. Cabal selected that same release
+  without a compatibility bound or pin.
+
+- Discovery (Milestone 2, 2026-07-19): `wai-cors` unions the configured methods and request
+  headers with the CORS "simple" sets. The live preflight therefore rendered
+  `Access-Control-Allow-Methods: POST, GET, HEAD` and appended Accept, Accept-Language, and
+  Content-Language to the three explicit headers. A disallowed origin produced HTTP 400 with the
+  package's plain-text diagnostic and no allow-origin header. Tests assert the required subset
+  rather than freezing library-owned order or extras, and the transcript below records the
+  observed release behavior.
 
 
 ## Decision Log
@@ -204,6 +222,11 @@ Haskell SDK, tests, and checked OpenAPI artifact. Parsed batches now finish exac
 events enqueue, invalid events return indexed human-readable rejections, and the SDK accounts for
 those rejections without retrying. The live proof covered mixed, all-invalid, malformed, and
 single-invalid requests and observed the accepted subset in ClickHouse.
+
+Milestone 2 made the ingest API usable from browsers without opening the metrics surface. The
+default is unrestricted origins, operators may supply an exact allowlist, future EP-15 auth
+headers are already preflight-approved, and live evidence covers preflight, actual response,
+metrics exclusion, and refusal of an unlisted origin.
 
 
 ## Context and Orientation
@@ -1109,8 +1132,8 @@ Surprises & Discoveries and pin it in `CorsSpec`):
 ```text
 HTTP/1.1 200 OK
 Access-Control-Allow-Origin: *
-Access-Control-Allow-Methods: POST
-Access-Control-Allow-Headers: Content-Type, X-Api-Key, Authorization
+Access-Control-Allow-Methods: POST, GET, HEAD
+Access-Control-Allow-Headers: Content-Type, X-Api-Key, Authorization, Accept, Accept-Language, Content-Language
 Access-Control-Max-Age: 3600
 ```
 
@@ -1137,7 +1160,7 @@ Restricted-origin mode:
 KANSOKU_CORS_ORIGINS='https://allowed.example' just run   # restart the server with pinned origins
 curl -s -o /dev/null -w '%{http_code}\n' -X OPTIONS "$BASE/v1/batch" \
   -H 'Origin: https://evil.example' -H 'Access-Control-Request-Method: POST'
-# -> a non-2xx preflight refusal with no allow-origin header
+# -> 400 with no allow-origin header (wai-cors 0.2.7's observed behavior)
 ```
 
 ### Milestone 3 — limits, end to end
@@ -1295,3 +1318,8 @@ Revision note (2026-07-19, second revision): Milestone 1 completed. Progress, di
 outcomes, and live Validation fixtures now record the partial-acceptance implementation, SDK and
 OpenAPI synchronization, required event object fields, and the reliable `FINAL` diagnostic used
 to observe the accepted subset in ClickHouse.
+
+Revision note (2026-07-19, third revision): Milestone 2 completed. Progress, discoveries,
+outcomes, and the CORS transcript now record the verified `wai-cors` 0.2.7 dependency, additive
+origin configuration, ingest-only middleware, release-owned simple method/header union, and live
+open/restricted-origin behavior.

@@ -56,7 +56,7 @@ main = do
                       { writerAlive = isNothing <$> poll writerAsync,
                         pgmqReachable = pgmqReady pool queueName
                       }
-                  app = kansokuApp probe pool queueName queryPool
+                  app = kansokuApp cfg probe pool queueName queryPool
                in race_
                     (wait writerAsync)
                     (runApp cfg (startServer app))
