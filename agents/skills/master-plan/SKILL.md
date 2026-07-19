@@ -30,6 +30,17 @@ Child ExecPlans created by a MasterPlan live in `docs/plans/` following the stan
 When you write commands, transcripts, diffs, or code into a MasterPlan or any child ExecPlan, use fenced code blocks (triple backticks) and **always specify a language tag** on the opening fence — for example ` ```bash `, ` ```typescript `, ` ```haskell `, ` ```python `, ` ```diff `, or ` ```text ` for plain output and commit messages. Never emit a bare ` ``` ` fence without a language. This rule applies to every plan file you create or edit. See MASTERPLAN.md and the ExecPlan PLANS.md for the full formatting rules.
 
 
+## Architecture Decision Records
+
+Architecture Decision Records (ADRs) live in `docs/adr/`. They hold durable project context: architectural decisions, rejected alternatives, cross-cutting constraints, and other project-level judgments that should survive beyond one plan.
+
+When creating a MasterPlan, inspect `docs/adr/` if it exists. Scan filenames and headings first, then read only ADRs relevant to the initiative. Do not bulk-read unrelated ADRs. Carry relevant ADR context into the MasterPlan and into any child ExecPlans whose work depends on it.
+
+When implementing or updating a MasterPlan, update or create ADRs in the same change whenever the initiative changes durable project context. MasterPlans should especially identify cross-plan decisions that deserve ADR records: architecture boundaries, decomposition rationale that will matter later, shared interface ownership, durable integration constraints, and deliberate exclusions.
+
+At completion, distill durable context from the MasterPlan and child ExecPlans: review Decision Logs, Surprises & Discoveries, and Outcomes & Retrospectives, then promote project-level decisions or lessons into `docs/adr/`. Leave task-local execution details in the plans.
+
+
 ## Git Trailers
 
 Every commit made while working under a MasterPlan must include a `MasterPlan:` git trailer:
@@ -62,11 +73,13 @@ Create a new MasterPlan and all its child ExecPlans. The remaining arguments des
 
 1. Research the codebase thoroughly before writing anything. Use Glob, Grep, and Read to understand the repository: file structure, key modules, build system, test infrastructure, dependency management, and existing patterns. A MasterPlan coordinates multiple plans, so you need both broad and deep understanding of the codebase. The research must be proportional to the initiative's scope.
 
-2. Identify the natural work streams. Group by functional concern, not by file. Each work stream should produce an independently verifiable behavior. Aim for two to seven child plans per the decomposition principles in MASTERPLAN.md. If you identify more than seven, introduce phases to group them into implementation waves.
+2. Inspect `docs/adr/` if it exists. Scan ADR filenames and headings, then read only ADRs relevant to this initiative. Carry relevant ADR context into the MasterPlan and any child ExecPlans affected by it. If no relevant ADR exists, note that explicitly in the MasterPlan.
 
-3. For each work stream, determine its purpose and scope (what exists after it is complete that did not exist before), the key files and modules it touches, its dependencies on other work streams (hard, soft, or integration per MASTERPLAN.md), and integration points with other work streams (shared types, interfaces, files, or configurations).
+3. Identify the natural work streams. Group by functional concern, not by file. Each work stream should produce an independently verifiable behavior. Aim for two to seven child plans per the decomposition principles in MASTERPLAN.md. If you identify more than seven, introduce phases to group them into implementation waves.
 
-4. Run the init script to create the MasterPlan file with frontmatter and skeleton:
+4. For each work stream, determine its purpose and scope (what exists after it is complete that did not exist before), the key files and modules it touches, its dependencies on other work streams (hard, soft, or integration per MASTERPLAN.md), and integration points with other work streams (shared types, interfaces, files, or configurations). Identify any cross-plan decisions likely to deserve ADR records, especially architecture boundaries, durable integration constraints, shared interface ownership, decomposition rationale that will matter later, and deliberate exclusions.
+
+5. Run the init script to create the MasterPlan file with frontmatter and skeleton:
 
     ```bash
     bun agents/skills/master-plan/init-masterplan.ts --title "<initiative title>" [--intention <id>]
@@ -74,7 +87,7 @@ Create a new MasterPlan and all its child ExecPlans. The remaining arguments des
 
     The script prints the created file path to stdout. Read the file back and flesh out the prose sections (Vision & Scope, Decomposition Strategy, Dependency Graph, Integration Points). Leave the living-document sections empty for now, except the Decision Log which records the initial decomposition decisions.
 
-5. Create each child ExecPlan by running the exec-plan skill's init script, passing the parent path:
+6. Create each child ExecPlan by running the exec-plan skill's init script, passing the parent path:
 
     ```bash
     bun agents/skills/exec-plan/init-plan.ts --title "<child title>" --master-plan <path-to-this-masterplan> [--intention <id>]
@@ -85,10 +98,11 @@ Create a new MasterPlan and all its child ExecPlans. The remaining arguments des
     - Be fully self-contained: a novice with only the child plan and the working tree must be able to implement it end-to-end.
     - Reference other child plans only by file path when describing dependencies or integration points, never by assumed shared context.
     - Include all relevant codebase context discovered during research, even if it overlaps with other child plans. Self-containment takes precedence over avoiding repetition.
+    - Include any ADR context relevant to that child plan, by repository-relative path.
 
-6. After creating all documents, fill in the MasterPlan's Exec-Plan Registry with each child plan's number, title, path, dependencies, and initial status (Not Started).
+7. After creating all documents, fill in the MasterPlan's Exec-Plan Registry with each child plan's number, title, path, dependencies, and initial status (Not Started).
 
-7. Present a summary to the user: the initiative's purpose, the number of child plans created, a one-line description of each with its dependencies, and all file paths.
+8. Present a summary to the user: the initiative's purpose, relevant ADRs consulted, the number of child plans created, a one-line description of each with its dependencies, and all file paths.
 
 For large initiatives (five or more child plans), consider using the Agent tool to research and draft child exec-plans in parallel. Each agent should receive the full codebase context relevant to its work stream plus the integration points it must respect. After parallel creation, review all child plans for cross-plan consistency — shared types must agree, dependency references must be correct, and integration points must be documented identically in each plan that touches them.
 
@@ -115,8 +129,11 @@ Implement child ExecPlans under an existing MasterPlan. The first argument is th
    - Update the MasterPlan's Exec-Plan Registry: mark the child plan Complete.
    - Update the MasterPlan's Progress section: check off the corresponding milestones.
    - Record any cross-plan discoveries in the MasterPlan's Surprises & Discoveries section — especially anything that affects other child plans' assumptions, interfaces, or feasibility.
+   - Update or create ADRs in `docs/adr/` for durable cross-plan decisions, architecture boundaries, shared interface ownership, integration constraints, or deliberate exclusions revealed by the child plan.
 
 6. Check for the next implementable child plan. If one exists, present it and ask the user whether to continue implementation or stop here. If the user chooses to continue, repeat from step 2. If no plans remain, fill in the MasterPlan's Outcomes & Retrospective section.
+
+7. When the MasterPlan is complete, perform the ADR distillation pass across the MasterPlan and all child ExecPlans. Review Decision Logs, Surprises & Discoveries, and Outcomes & Retrospectives, then promote durable project context into `docs/adr/`.
 
 
 ### Mode: status
@@ -158,7 +175,9 @@ Revise an existing MasterPlan to reflect new information, changed requirements, 
 
 4. Cascade changes to affected child ExecPlans when necessary — update dependency references, integration point descriptions, or context sections that reference changed plans.
 
-5. Append a revision note at the bottom of the MasterPlan describing what changed and why.
+5. Update or create ADRs in `docs/adr/` when the revision changes durable project context, especially cross-plan boundaries, shared interfaces, integration constraints, or exclusions.
+
+6. Append a revision note at the bottom of the MasterPlan describing what changed and why.
 
 
 ### Mode: discuss
@@ -171,7 +190,9 @@ Discuss or review an existing MasterPlan. The argument is the master plan file p
 
 3. For every decision reached during discussion, update the Decision Log in the MasterPlan with the decision, rationale, and date.
 
-4. If the discussion results in changes to the MasterPlan or any child plans, update all affected sections and documents. Per MASTERPLAN.md, revisions must be comprehensively reflected across all sections. Append a revision note at the bottom of the MasterPlan.
+4. If a decision reached during discussion changes durable project context, update or create the relevant ADR in `docs/adr/`.
+
+5. If the discussion results in changes to the MasterPlan or any child plans, update all affected sections and documents. Per MASTERPLAN.md, revisions must be comprehensively reflected across all sections. Append a revision note at the bottom of the MasterPlan.
 
 
 ## MasterPlan Skeleton

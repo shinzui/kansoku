@@ -23,6 +23,17 @@ Create new plans with the bundled `init-plan.ts` script (see Mode: create). The 
 When you write commands, transcripts, diffs, or code into a plan, use fenced code blocks (triple backticks) and **always specify a language tag** on the opening fence — for example ` ```bash `, ` ```typescript `, ` ```haskell `, ` ```python `, ` ```diff `, or ` ```text ` for plain output and commit messages. Never emit a bare ` ``` ` fence without a language. This rule applies to every plan file you create or edit. See PLANS.md for the full formatting rules.
 
 
+## Architecture Decision Records
+
+Architecture Decision Records (ADRs) live in `docs/adr/`. They hold durable project context: architectural decisions, rejected alternatives, cross-cutting constraints, and other project-level judgments that should survive beyond one plan.
+
+When creating a plan, inspect `docs/adr/` if it exists. Scan filenames and headings first, then read only ADRs that are relevant to the planned work. Do not bulk-read unrelated ADRs. Summarize any relevant ADRs in the plan's Context and Orientation section by path, and say when no relevant ADR exists.
+
+When implementing a plan, update or create ADRs in the same change whenever the implementation changes durable project context. Keep task-local details in the ExecPlan; promote only durable facts and decisions to ADRs.
+
+At completion, distill durable context: review the plan's Decision Log, Surprises & Discoveries, and Outcomes & Retrospective, then promote project-level decisions or lessons into `docs/adr/`. Leave execution notes, transient blockers, and task-local retrospectives in the plan.
+
+
 ## Git Trailers
 
 Every commit made while working on an ExecPlan **must** include a git trailer linking back to the plan:
@@ -56,7 +67,9 @@ Create a new ExecPlan. The remaining arguments describe the feature or change.
 
 1. Research the codebase thoroughly before writing anything. Use Glob, Grep, and Read to understand the current state of the repository — file structure, key modules, build system, test infrastructure, and any existing patterns relevant to the planned work.
 
-2. Run the init script to create the file with frontmatter and skeleton:
+2. Inspect `docs/adr/` if it exists. Scan ADR filenames and headings, then read only ADRs relevant to this plan. Carry any relevant ADR context into the plan's Context and Orientation section with repository-relative links. If no relevant ADR exists, note that explicitly in the same section.
+
+3. Run the init script to create the file with frontmatter and skeleton:
 
     ```bash
     bun agents/skills/exec-plan/init-plan.ts --title "<short, action-oriented title>" [--intention <id>] [--master-plan <path>]
@@ -64,13 +77,13 @@ Create a new ExecPlan. The remaining arguments describe the feature or change.
 
     The script prints the created file path to stdout (e.g., `docs/plans/4-add-template-engine.md`). Pass `--intention` only when an Intention ID is active for this session; pass `--master-plan` only when this plan is a child of an existing MasterPlan, naming the parent's file path.
 
-3. Read the file back and flesh out each prose section in order, grounding every claim in what you found during research. The Progress, Surprises & Discoveries, Decision Log, and Outcomes & Retrospective sections start empty by design — only the Decision Log should be seeded now, with any initial scoping decisions you made.
+4. Read the file back and flesh out each prose section in order, grounding every claim in what you found during research. The Progress, Surprises & Discoveries, Decision Log, and Outcomes & Retrospective sections start empty by design — only the Decision Log should be seeded now, with any initial scoping decisions you made.
 
-4. The plan must be fully self-contained per PLANS.md: a novice with only the plan file and the working tree must be able to implement the feature end-to-end. Define every term of art in plain language. Name files by full repository-relative path. Show exact commands with working directories and expected output.
+5. The plan must be fully self-contained per PLANS.md: a novice with only the plan file and the working tree must be able to implement the feature end-to-end. Define every term of art in plain language. Name files by full repository-relative path. Show exact commands with working directories and expected output.
 
-5. Anchor the plan with observable outcomes — what the user can do after implementation, commands to run, behavior to verify.
+6. Anchor the plan with observable outcomes — what the user can do after implementation, commands to run, behavior to verify.
 
-6. After writing, present a summary to the user: the plan's purpose, milestone count, and the file path.
+7. After writing, present a summary to the user: the plan's purpose, milestone count, relevant ADRs consulted, and the file path.
 
 
 ### Mode: implement
@@ -89,6 +102,7 @@ Implement an existing ExecPlan. The argument is the plan file path (e.g., `docs/
    - Add new items discovered during implementation.
    - Record any surprises in Surprises & Discoveries with evidence.
    - Record any decisions in the Decision Log with rationale.
+   - Update or create ADRs in `docs/adr/` when the change affects durable project context.
 
 5. Resolve ambiguities autonomously. When you make a judgment call, record it in the Decision Log.
 
@@ -97,6 +111,8 @@ Implement an existing ExecPlan. The argument is the plan file path (e.g., `docs/
 7. After completing each milestone, run the validation steps described in the plan and record the results.
 
 8. At completion, fill in the Outcomes & Retrospective section.
+
+9. Distill durable context before declaring the plan complete: review the Decision Log, Surprises & Discoveries, and Outcomes & Retrospective, then update or create ADRs in `docs/adr/` for project-level decisions, constraints, gotchas, or architectural lessons that should survive beyond this plan.
 
 
 ### Mode: discuss
