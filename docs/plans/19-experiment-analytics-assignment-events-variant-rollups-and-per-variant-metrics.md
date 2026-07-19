@@ -4,6 +4,7 @@ slug: experiment-analytics-assignment-events-variant-rollups-and-per-variant-met
 title: "Experiment analytics: assignment events, variant rollups, and per-variant metrics"
 kind: exec-plan
 created_at: 2026-07-15T21:43:59Z
+intention: intention_01kxxscv06exbvqdtefzqnf9h5
 master_plan: "docs/masterplans/3-kansoku-analytics-extensions-queryable-properties-multi-signal-identity-and-experiment-analytics.md"
 ---
 
@@ -61,16 +62,16 @@ Use a checklist to summarize granular steps. Every stopping point must be docume
 even if it requires splitting a partially completed task into two ("done" vs. "remaining").
 This section must always reflect the actual current state of the work.
 
-- [ ] M1: EP-17's recorded property representation read and copied into this plan's
+- [x] (2026-07-19 13:48 PDT) M1: EP-17's recorded property representation read and copied into this plan's
       Surprises & Discoveries (the exact ClickHouse expressions for `experiment`/`variant`)
 - [ ] M1: `PropertySpec` gains `propPattern`; `PropertyPattern`/`SqlNamePattern` defined;
       existing registry entries updated
 - [ ] M1: `experiment_viewed` schema registered (in-code registry, or EP-20's versioned
-      registry if landed — record which in the Decision Log)
+      registry source of truth (the in-code registry, because EP-20 has not landed)
 - [ ] M1: `Kansoku.Event.Validation` enforces `propPattern`; new `InvalidPropertyValue`
       error; validation specs cover missing/mistyped/bad-charset properties
 - [ ] M1: charset-agreement test (kansoku-api pattern predicate ≡ `mkSqlName` acceptance)
-- [ ] M1: migration `00NN_experiment_exposures.sql` written (table + backfill + MV) and
+- [ ] M1: migration `0014_experiment_exposures.sql` written (table + backfill + MV) and
       applied; fixture file `db/clickhouse/fixtures/ep19_fixtures.sql` + `just` recipe added
 - [ ] M1: clickhouse-client transcript captured — fixture rows appear in
       `analytics.experiment_exposures` with expected unique-user counts
@@ -93,9 +94,22 @@ This section must always reflect the actual current state of the work.
 Document unexpected behaviors, bugs, optimizations, or insights discovered during
 implementation. Provide concise evidence.
 
-(None yet. The first entry must be the reconciliation record described in Milestone 1:
-what EP-17 actually chose as the property representation, what EP-15 actually named its
-auth/scoping types, and which repo state — pre/post plan 9 module moves — was found.)
+- 2026-07-19: Implementation-start reconciliation found the fully landed vertical-slice
+  tree: the API is `Kansoku.Metrics.Api` with authenticated `MultiVerb` results, handlers
+  receive `AuthenticatedPrincipal`, and `QueryRequest.accountId` becomes the native
+  `{account_id:String}` query parameter. EP-17 stores raw `properties` as a JSON-encoded
+  `String` and materializes `properties_json JSON`; reads use
+  `toString(getSubcolumn(properties_json, 'experiment'))` and
+  `toString(getSubcolumn(properties_json, 'variant'))`. Direct SQL fixtures must therefore
+  provide valid JSON strings such as `'{"experiment":"checkout_v2","variant":"control"}'`
+  plus `'{}'` for `context`. EP-18's `analytics.events_resolved` exposes the ordered
+  seven-column contract including `account_id` and `properties_json`, verified by live
+  `DESCRIBE`, so no compatibility view migration is needed. The ledger ends at `0013`;
+  this plan claims `0014_experiment_exposures.sql`. EP-20 is not implemented, so the
+  in-code `defaultRegistry` remains the schema source of truth.
+
+- 2026-07-19: The clean baseline is `just build` plus `just test`: 109 core examples and
+  10 client examples passed with zero failures; one opt-in live client example was pending.
 
 
 ## Decision Log
@@ -193,6 +207,14 @@ Record every decision made while working on the plan.
   reporting cross-variant contamination is future dashboard scope.
   Date: 2026-07-15
 
+- Decision: Implement against the landed `Kansoku.Metrics.*` modules, `MultiVerb` response
+  family, `QueryRequest.accountId` parameter path, native-JSON `getSubcolumn` expressions,
+  and in-code registry; use migration number `0014`.
+  Rationale: EP-17 and EP-18 are complete, EP-20 is not, and the live schema and baseline
+  tests verify these are the current contracts. Replacing the authored placeholders now
+  keeps the plan restartable from the actual tree.
+  Date: 2026-07-19
+
 
 ## Outcomes & Retrospective
 
@@ -224,23 +246,17 @@ that shape every design choice here:
 
 **Hard dependency — EP-17 must be Complete**
 (`docs/plans/17-queryable-event-properties-typed-storage-and-property-based-grouping.md`).
-EP-17 decides how event `properties` (a JSON object, stored today as a raw `String` column)
-become queryable in ClickHouse — a native `JSON` column with typed subcolumn access, or
-registry-driven materialized columns, or both. **This plan's variant grouping and its
-rollup materialized view must use EP-17's chosen representation and must never call
+EP-17 made event `properties` queryable through
+`properties_json JSON MATERIALIZED CAST(properties, 'JSON')`. **This plan's variant
+grouping and its rollup materialized view use that representation and never call
 `JSONExtract*` over the raw string** (the MasterPlan's "Properties storage representation"
-integration point). At authoring time EP-17's plan file was still a skeleton, so this plan
-writes the extraction expressions as two named placeholders — `<experiment_expr>` and
-`<variant_expr>` — and the very first implementation step is to read EP-17's Decision Log
-(and the MasterPlan's Integration Points, where the decision must also be recorded) and
-substitute the real expressions everywhere. The two candidate shapes, so you recognize what
-you find: if EP-17 chose a native JSON column, the expression is a typed subcolumn access
-(something like `properties.experiment.:String` on recent ClickHouse, or
-`toString(properties.experiment)` — copy EP-17's exact recorded syntax); if EP-17 chose
-registry-driven materialized columns, the expression is a plain column reference under
-EP-17's naming scheme (something like `prop_experiment`). Record what you substituted in
-this plan's Surprises & Discoveries. A QuerySpec test asserts no generated SQL contains
-`JSONExtract`, pinning the contract.
+integration point). The exact expressions are
+`toString(getSubcolumn(properties_json, 'experiment'))` and
+`toString(getSubcolumn(properties_json, 'variant'))`; `getSubcolumn` works through both
+the base table and the `analytics.events_resolved` view expression. Direct SQL fixtures
+still insert a valid JSON string into `properties`, because `properties_json` is computed
+server-side. A QuerySpec test asserts no generated experiment SQL contains `JSONExtract`,
+pinning the contract.
 
 **External prerequisites from MasterPlan 2** (all Complete before this plan starts):
 
@@ -261,7 +277,7 @@ this plan's Surprises & Discoveries. A QuerySpec test asserts no generated SQL c
 - *Validated query builders and ordered funnels* (EP-13,
   `docs/plans/13-safe-and-correct-metric-sql-validated-inputs-ordered-funnels-honest-failures.md`).
   Every user-derived string that reaches SQL passes through
-  `Kansoku.Query.Validate.mkSqlName :: Text -> Either Text SqlName` — an opaque newtype
+  `Kansoku.Metrics.Query.Validate.mkSqlName :: Text -> Either Text SqlName` — an opaque newtype
   whose smart constructor accepts only non-empty strings of at most 128 characters drawn
   from `[a-z0-9_.:-]` — and handlers answer HTTP 400 naming the offending value otherwise.
   EP-13 also rewrote the funnel as a single-pass `windowFunnel` query (explained below) with
@@ -273,13 +289,11 @@ this plan's Surprises & Discoveries. A QuerySpec test asserts no generated SQL c
   `docs/plans/15-api-keys-service-auth-and-account-scoped-queries.md`). Experiment data is
   tenant data. Every metrics endpoint requires a **ServiceToken** (EP-15's bearer credential
   for service callers) and every query is scoped to the authenticated principal's
-  `account_id`. At authoring time EP-15's plan file was a skeleton, so this plan names the
-  scoping as a placeholder `<account_predicate>` (a `WHERE account_id = '<principal account>'`
-  conjunct) and instructs: thread the account exactly the way EP-15 threaded it through the
-  existing builders — if EP-15 put the account into `QueryRequest`, the new builders take it
-  from there and the placeholder disappears; if it is a separate argument, mirror that.
-  The new route fields must carry the same auth combinators as their sibling metrics fields.
-  Record what you found in Surprises & Discoveries.
+  `account_id`. EP-15 landed `AuthenticatedPrincipal.accountId`; the handler copies it into
+  `QueryRequest.accountId`, runners bind it as the native `{account_id:String}` parameter,
+  and builders render `account_id = {account_id:String}` (or the alias-qualified equivalent).
+  The umbrella `KansokuAPI` protects the complete `NamedRoutes MetricsRoutes` record with
+  `MetricsAuth`, so all new route fields inherit the same service-token boundary.
 - *NamedRoutes and same-commit contract discipline* (plan 9,
   `docs/plans/9-convert-kansoku-to-namedroutes-vertical-slices-and-multiverb.md`, and EP-14).
   The metrics API is a servant `NamedRoutes` record — `MetricsRoutes`, one named field per
@@ -287,23 +301,20 @@ this plan's Surprises & Discoveries. A QuerySpec test asserts no generated SQL c
   the OpenAPI document is generated from (`cabal run kansoku-openapi` writes
   `docs/api/openapi.json`; CI fails if it is stale). Any commit that changes a wire type
   regenerates the OpenAPI artifact and updates `kansoku-client` **in the same commit**.
-  Plan 9's later milestones also move modules (`Kansoku.Api.Metrics` → `Kansoku.Metrics.Api`,
-  `Kansoku.Query` → `Kansoku.Metrics.Query`) and wrap responses in `MultiVerb`. This plan
-  names modules by their pre-move paths and says "or its post-plan-9 location" — run
-  `grep -rn "MetricsRoutes" --include='*.hs' kansoku-api kansoku-core | grep -v dist-newstyle`
-  first to find the record, and make new route fields end in whatever response combinator
-  the sibling fields use (`Get '[JSON] MetricResult` pre-MultiVerb, the `MultiVerb`
-  `OkResponses` family after).
+  Plan 9 moved the metric modules into vertical slices and wrapped responses in
+  `MultiVerb`. This plan uses the landed modules `Kansoku.Metrics.Api`,
+  `Kansoku.Metrics.Query`, and
+  `Kansoku.Metrics.Handler`. New fields use the same `MultiVerb 'Servant.GET '[JSON]
+  (OkResponses "Metric result" MetricResult) (KansokuResult MetricResult)` result family as
+  sibling metrics.
 
-**Soft dependencies.** EP-18 (multi-signal identity) may replace how `canonical_user` is
-computed underneath `analytics.events_resolved`; this plan consumes `canonical_user`
-opaquely — a `String` column that names the resolved user for each event, empty when
-unresolvable — and encodes no assumption about how it is resolved, so EP-18 landing before
-or after changes nothing here (the MasterPlan makes EP-18 verify that). EP-20 (versioned
-registry) changes *where* event schemas are declared; both registration paths are described
-in Milestone 1.
+**Soft dependencies.** EP-18 has replaced how `canonical_user` is computed underneath
+`analytics.events_resolved` and verified the projection; this plan consumes that `String`
+opaquely and encodes no resolution-policy assumption. EP-20 remains unimplemented and will
+later migrate the `experiment_viewed` declaration from the in-code registry without
+semantic change.
 
-The files this plan owns or edits (pre-plan-9-move names; adjust per the grep above):
+The files this plan owns or edits:
 
 - `kansoku-api/src/Kansoku/Event/Registry.hs` — the in-code event schema registry:
   `EventRegistry` (a `Map EventName EventSchema`), `EventSchema` (event name + list of
@@ -314,25 +325,24 @@ The files this plan owns or edits (pre-plan-9-move names; adjust per the grep ab
   (`validateEventWith :: EventRegistry -> AnalyticsEvent -> Either [ValidationError] AnalyticsEvent`).
   Unknown event names pass; known names get property checks (missing required, wrong JSON
   type). Gains pattern enforcement and the `InvalidPropertyValue` error.
-- `kansoku-api/src/Kansoku/Api/Metrics.hs` (post-plan-9: `Kansoku.Metrics.Api`) — the
+- `kansoku-api/src/Kansoku/Metrics/Api.hs` — the
   `MetricsRoutes` record and DTOs `MetricResult { metric :: Text, points :: [MetricPoint] }`
   and `MetricPoint { bucket :: Maybe Text, group :: Map Text Text, value :: Double }`.
   These DTOs are **reused unchanged**; the new endpoints only add group-key vocabulary
   (`"experiment"`, `"variant"`, `"measure"`, and for funnels `"step"`/`"index"`). Gains
   three route fields.
-- `kansoku-core/src/Kansoku/Query.hs` (post-plan-9: `Kansoku.Metrics.Query`) — the query
+- `kansoku-core/src/Kansoku/Metrics/Query.hs` — the query
   compiler: pure SQL builders returning `Text`, runners executing over the ClickHouse
   connection/pool, and point functions shaping rows into `MetricPoint`s. Every builder emits
   a relation with exactly the columns `bucket` (String), `group_key` (String), `value`
   (Float64), already `ORDER BY`-ed — that is the decode contract EP-11/EP-13 established.
   Gains three builders, three runners, three point functions.
-- `kansoku-core/src/Kansoku/Metrics/Handler.hs` (or its plan-9 slice location) — metrics
+- `kansoku-core/src/Kansoku/Metrics/Handler.hs` — metrics
   handlers; where query parameters are validated and 400s produced. Gains three handlers.
 - `kansoku-core/test/Kansoku/QuerySpec.hs` and the validation specs under
   `kansoku-api`/`kansoku-core` test suites — gain shape tests.
-- `db/clickhouse/migrations/00NN_experiment_exposures.sql` — new (NN = next unused number
-  at implementation time; EP-12 used 0004–0007 and EP-15/16/17/18 may have added more —
-  `ls db/clickhouse/migrations/` and take the next).
+- `db/clickhouse/migrations/0014_experiment_exposures.sql` — new; the landed ledger is
+  occupied through EP-18's `0013_retire_identity_map.sql`.
 - `db/clickhouse/fixtures/ep19_fixtures.sql` and a `just ch-fixtures-ep19` recipe — new.
 - `kansoku-client/src/Kansoku/Client.hs` (or a new module) and `docs/api/openapi.json` —
   regenerated/extended with each wire change.
@@ -368,9 +378,9 @@ order. The window unit is the tick of the timestamp column; `occurred_at` is
 to make the window seconds — keep that wrapping.
 
 *`canonical_user`* — the stitched identity exposed by the view
-`analytics.events_resolved`: for each event, the resolved user identifier (user id if
-present, else the identity-map resolution of the anonymous id, else the anonymous id;
-EP-18 may change the mechanics). Empty string means unresolvable. Query-time only.
+`analytics.events_resolved`: for each event, the explicit user id when present, otherwise
+the strongest account-scoped signal binding ranked by EP-18's confidence/recency policy,
+otherwise the anonymous cookie. Empty string means unresolvable. Query-time only.
 
 
 ## Plan of Work
@@ -387,17 +397,12 @@ land in a queryable rollup. At the end, ingesting the fixture events produces vi
 in `analytics.experiment_exposures`, a malformed exposure event is rejected with an error
 naming the property, and no HTTP metrics surface has changed yet.
 
-**Step 0 — reconcile.** Before writing code, read EP-17's Decision Log and the MasterPlan 3
-Integration Points and write into this plan's Surprises & Discoveries: the exact ClickHouse
-expressions for reading the `experiment` and `variant` properties (they replace
-`<experiment_expr>`/`<variant_expr>` below), the exact form in which fixture INSERTs must
-write `properties` (raw JSON string into a `String` column, or a `JSON`-typed literal —
-EP-17 owns that), and whether `analytics.events_resolved` exposes `account_id` and the
-property representation (EP-15's account scoping and EP-17's grouping should each have
-required these; if either is missing from the view's column list, add a small migration
-that recreates the view with the missing columns — a view recreate is metadata-only — and
-record it as a cross-plan surprise). Also record which repo state plan 9 left (module
-names, response combinator) and how EP-15 threads the account.
+**Step 0 — reconcile (completed 2026-07-19).** EP-17's Decision Log, MasterPlan 3's
+Integration Points, the live migration ledger, and `DESCRIBE analytics.events_resolved`
+were checked before implementation. Property expressions, fixture encoding, the
+seven-column resolved projection, the landed `Kansoku.Metrics.*` module names, `MultiVerb`
+result family, and EP-15 account threading are recorded in Surprises & Discoveries. No
+compatibility migration is required; the next migration is `0014`.
 
 **The event contract.** In `kansoku-api/src/Kansoku/Event/Registry.hs`, extend the spec
 types additively:
@@ -405,7 +410,7 @@ types additively:
 ```haskell
 -- | A syntactic constraint on a string property's value, checked at ingest.
 -- SqlNamePattern deliberately equals the charset of
--- Kansoku.Query.Validate.mkSqlName (EP-13), so an ingest-accepted value is
+-- Kansoku.Metrics.Query.Validate.mkSqlName (EP-13), so an ingest-accepted value is
 -- provably safe to compare against in generated SQL.
 data PropertyPattern = SqlNamePattern
   deriving stock (Generic, Eq, Show)
@@ -441,16 +446,11 @@ are idempotent. `experiment` identifies the experiment (e.g. `checkout_v2`), `va
 arm (e.g. `control`, `treatment`); both are lowercase names of at most 128 characters from
 `[a-z0-9_.:-]`.
 
-**Two registration paths, depending on EP-20.** If EP-20
+**Registration path.** EP-20
 (`docs/plans/20-event-schema-governance-versioned-registry-and-portfolio-event-contracts.md`)
-has landed by the time you implement, the source of truth for event schemas is its
-versioned registry (a publishable contract other kikan services consume) and the in-code
-`defaultRegistry` is derived from or migrated into it — in that case add `experiment_viewed`
-as a new versioned entry in EP-20's declaration format (its plan documents the format),
-carrying the same two required patterned string properties, and let EP-20's machinery
-surface it to `validateEvent`. If EP-20 has not landed, the in-code registry above is the
-source of truth (the MasterPlan's "Event registry" integration point guarantees EP-20 will
-migrate the entry without semantic change). Record which path you took in the Decision Log.
+has not landed, so the in-code `defaultRegistry` is the source of truth. Add
+`experiment_viewed` there. MasterPlan 3's "Event registry" integration point requires
+EP-20 to migrate this entry later without semantic change.
 
 **Validation.** In `kansoku-api/src/Kansoku/Event/Validation.hs`, add a constructor to
 `ValidationError`:
@@ -465,7 +465,7 @@ check already ran), and the spec carries `Just SqlNamePattern`, require
 `isSqlSafeName s` where
 
 ```haskell
--- Mirrors Kansoku.Query.Validate.mkSqlName's acceptance (kansoku-core); kept
+-- Mirrors Kansoku.Metrics.Query.Validate.mkSqlName's acceptance (kansoku-core); kept
 -- in sync by a test in kansoku-core (kansoku-api cannot depend on kansoku-core).
 isSqlSafeName :: Text -> Bool
 isSqlSafeName s =
@@ -520,9 +520,9 @@ and a rejected one (charset violation — uppercase and `!`):
 }
 ```
 
-**The rollup migration.** Create `db/clickhouse/migrations/00NN_experiment_exposures.sql`
-(NN = next unused number). Substitute `<experiment_expr>`/`<variant_expr>` with EP-17's
-recorded expressions before applying — never `JSONExtract*`:
+**The rollup migration.** Create
+`db/clickhouse/migrations/0014_experiment_exposures.sql`. Use EP-17's native-JSON
+expressions — never `JSONExtract*`:
 
 ```sql
 -- Experiment exposure rollup: unique users per account x experiment x variant x day.
@@ -552,8 +552,8 @@ ORDER BY (account_id, experiment, variant, day);
 INSERT INTO analytics.experiment_exposures (account_id, experiment, variant, day, users)
 SELECT
     account_id,
-    <experiment_expr> AS experiment,
-    <variant_expr> AS variant,
+    toString(getSubcolumn(properties_json, 'experiment')) AS experiment,
+    toString(getSubcolumn(properties_json, 'variant')) AS variant,
     toDate(occurred_at) AS day,
     uniqCombinedState(if(user_id != '', user_id, anonymous_id)) AS users
 FROM analytics.events_raw
@@ -566,8 +566,8 @@ TO analytics.experiment_exposures
 AS
 SELECT
     account_id,
-    <experiment_expr> AS experiment,
-    <variant_expr> AS variant,
+    toString(getSubcolumn(properties_json, 'experiment')) AS experiment,
+    toString(getSubcolumn(properties_json, 'variant')) AS variant,
     toDate(occurred_at) AS day,
     uniqCombinedState(if(user_id != '', user_id, anonymous_id)) AS users
 FROM analytics.events_raw
@@ -622,9 +622,8 @@ variant" and "which variant converts better" — authenticated, account-scoped, 
 with client and OpenAPI regenerated in the same commit. At the end, the transcripts in
 Validation (including the ordering proof and the two-account isolation proof) pass.
 
-**Route fields.** In the `MetricsRoutes` record (`kansoku-api/src/Kansoku/Api/Metrics.hs`
-or its post-plan-9 location), add two fields, matching the auth combinators and response
-combinator of the sibling fields exactly (shown here pre-MultiVerb, pre-auth for clarity):
+**Route fields.** In `kansoku-api/src/Kansoku/Metrics/Api.hs`, add two fields. Authentication
+is inherited from the umbrella API and both fields use the landed sibling response family:
 
 ```haskell
 experiments :: mode :- "metrics" :> "experiments"
@@ -638,7 +637,7 @@ experiments :: mode :- "metrics" :> "experiments"
   :> QueryParam' '[Required] "to" Day
   :> QueryParam "experiment" Text
   :> QueryParam "timeGrain" TimeGrain
-  :> Get '[JSON] MetricResult
+  :> MultiVerb 'Servant.GET '[JSON] (OkResponses "Metric result" MetricResult) (KansokuResult MetricResult)
 
 experimentConversion :: mode :- "metrics" :> "experiments" :> "conversion"
   :> Description "Per-variant conversion for one experiment: exposed unique users, \
@@ -649,21 +648,22 @@ experimentConversion :: mode :- "metrics" :> "experiments" :> "conversion"
   :> QueryParam' '[Required] "event" Text
   :> QueryParam' '[Required] "from" Day
   :> QueryParam' '[Required] "to" Day
-  :> Get '[JSON] MetricResult
+  :> MultiVerb 'Servant.GET '[JSON] (OkResponses "Metric result" MetricResult) (KansokuResult MetricResult)
 ```
 
-Route-matching note: servant only matches `"experiments"` with `Get` at the *end* of the
+Route-matching note: servant only matches `"experiments"` with its terminal GET at the *end* of the
 path, so `/metrics/experiments/conversion` can never be swallowed by the bare
 `experiments` field — no field-order hazard. Missing required parameters produce servant's
 own 400s; nothing to hand-roll there.
 
-**Builders.** In `kansoku-core/src/Kansoku/Query.hs` (or `Kansoku.Metrics.Query`), follow
+**Builders.** In `kansoku-core/src/Kansoku/Metrics/Query.hs`, follow
 the repo code standards (GHC2024, `Kansoku.Prelude`, postpositive qualified imports,
 generic-lens `#labels`, strict fields, explicit deriving, MultilineStrings `"""` literals
 for the SQL — see `/Users/shinzui/Keikaku/bokuno/haskell-jitsurei/core/`). Every dynamic
 fragment spliced into the literals is machine-generated (`renderDay` of a `Day`,
 `toString` of an `Int`) or a `renderSqlName`-rendered `SqlName` wrapped in `sqlString` —
-the EP-13 discipline. `<account_predicate>` is EP-15's account conjunct (step 0).
+the EP-13 discipline. Bind the authenticated account through `QueryRequest.accountId` and
+render `account_id = {account_id:String}`.
 
 *Exposures* — `buildExperimentExposuresSQL` reads the rollup. With `timeGrain=day`,
 optional filter `experiment=checkout_v2`:
@@ -674,7 +674,7 @@ SELECT
     concat(experiment, '|', variant) AS group_key,
     toFloat64(uniqCombinedMerge(users)) AS value
 FROM analytics.experiment_exposures
-WHERE <account_predicate>
+WHERE account_id = {account_id:String}
   AND day >= '2026-08-01' AND day < '2026-08-08'
   AND match(experiment, '^[a-z0-9_.:-]{1,128}$')
   AND match(variant, '^[a-z0-9_.:-]{1,128}$')
@@ -701,14 +701,14 @@ WITH exposures AS
 (
     SELECT
         canonical_user,
-        <variant_expr> AS variant,
+        toString(getSubcolumn(properties_json, 'variant')) AS variant,
         min(occurred_at) AS first_exposure
     FROM analytics.events_resolved
     WHERE canonical_user != ''
-      AND <account_predicate>
+      AND account_id = {account_id:String}
       AND event_name = 'experiment_viewed'
-      AND <experiment_expr> = 'checkout_v2'
-      AND match(<variant_expr>, '^[a-z0-9_.:-]{1,128}$')
+      AND toString(getSubcolumn(properties_json, 'experiment')) = 'checkout_v2'
+      AND match(toString(getSubcolumn(properties_json, 'variant')), '^[a-z0-9_.:-]{1,128}$')
       AND occurred_at >= '2026-08-01 00:00:00' AND occurred_at < '2026-08-08 00:00:00'
     GROUP BY canonical_user, variant
 ),
@@ -719,7 +719,7 @@ conversions AS
         max(occurred_at) AS last_conversion
     FROM analytics.events_resolved
     WHERE canonical_user != ''
-      AND <account_predicate>
+      AND account_id = {account_id:String}
       AND event_name = 'purchase_completed'
       AND occurred_at >= '2026-08-01 00:00:00' AND occurred_at < '2026-08-08 00:00:00'
     GROUP BY canonical_user
@@ -831,7 +831,7 @@ experimentFunnel :: mode :- "metrics" :> "experiments" :> "funnel"
   :> QueryParam' '[Required] "from" Day
   :> QueryParam' '[Required] "to" Day
   :> QueryParam "window" Int
-  :> Get '[JSON] MetricResult
+  :> MultiVerb 'Servant.GET '[JSON] (OkResponses "Metric result" MetricResult) (KansokuResult MetricResult)
 ```
 
 **Builder** — `buildExperimentFunnelSQL` composes the M2 `exposures` CTE with EP-13's
@@ -844,14 +844,14 @@ WITH exposures AS
 (
     SELECT
         canonical_user,
-        <variant_expr> AS variant,
+        toString(getSubcolumn(properties_json, 'variant')) AS variant,
         min(occurred_at) AS first_exposure
     FROM analytics.events_resolved
     WHERE canonical_user != ''
-      AND <account_predicate>
+      AND account_id = {account_id:String}
       AND event_name = 'experiment_viewed'
-      AND <experiment_expr> = 'checkout_v2'
-      AND match(<variant_expr>, '^[a-z0-9_.:-]{1,128}$')
+      AND toString(getSubcolumn(properties_json, 'experiment')) = 'checkout_v2'
+      AND match(toString(getSubcolumn(properties_json, 'variant')), '^[a-z0-9_.:-]{1,128}$')
       AND occurred_at >= '2026-08-01 00:00:00' AND occurred_at < '2026-08-08 00:00:00'
     GROUP BY canonical_user, variant
 )
@@ -870,7 +870,7 @@ FROM
     FROM analytics.events_resolved AS r
     INNER JOIN exposures AS e ON e.canonical_user = r.canonical_user
     WHERE r.canonical_user != ''
-      AND <account_predicate applied to r>
+      AND r.account_id = {account_id:String}
       AND r.event_name IN ('checkout_started', 'purchase_completed')
       AND r.occurred_at >= e.first_exposure
       AND r.occurred_at >= '2026-08-01 00:00:00' AND r.occurred_at < '2026-08-08 00:00:00'
@@ -970,10 +970,10 @@ just ch-migrate
 ```text
 skipping 0001_events_raw.sql (already applied)
 ...
-applying 00NN_experiment_exposures.sql
+applying 0014_experiment_exposures.sql
 ```
 
-and a second run prints `skipping 00NN_experiment_exposures.sql (already applied)`.
+and a second run prints `skipping 0014_experiment_exposures.sql (already applied)`.
 
 Rollup inspection while developing (fastest feedback — also the M1 acceptance query):
 
@@ -1278,10 +1278,9 @@ All Haskell changes revert with git. The one risky class of step is the migratio
 additive (a new table and MV; no existing object is altered), so the rollback is
 `DROP TABLE analytics.mv_experiment_exposures` then
 `DROP TABLE analytics.experiment_exposures` issued manually — but prefer roll-forward with
-a new migration file, since the applied file is immutable under EP-12's rule. If step 0
-reveals that `analytics.events_resolved` lacks `account_id` or the property columns, stop,
-record it in Surprises & Discoveries, add the view-recreate migration described in
-Milestone 1 step 0, and note the cross-plan gap at the MasterPlan level before continuing.
+a new migration file, since the applied file is immutable under EP-12's rule. Step 0
+verified that `analytics.events_resolved` already has `account_id` and `properties_json`,
+so recovery does not need to recreate the shared view.
 
 If EP-17's landed representation differs from both candidate shapes sketched here, do not
 force these SQL sketches onto it: substitute its real expressions, update the QuerySpec
@@ -1298,12 +1297,9 @@ String)` with `uniqCombinedState`/`uniqCombinedMerge`, materialized views, `wind
 tuple `ARRAY JOIN`, `uniqExactIf`, `countIf`, `match` — all present in any ClickHouse
 recent enough to run the v2 schema.
 
-Module contracts at end of plan. Names use pre-plan-9-move paths; if the moves landed, the
-same signatures live in `Kansoku.Metrics.Api` / `Kansoku.Metrics.Query`, and post-EP-15 the
-runners take whatever connection/pool and principal types the sibling runners take — accept
-what exists and record it in the Decision Log. `AccountScope` below stands for EP-15's
-scoping value exactly as its sibling builders receive it (possibly a field of
-`QueryRequest`, in which case the extra parameter disappears).
+Module contracts at end of plan. The landed modules are `Kansoku.Metrics.Api` and
+`Kansoku.Metrics.Query`; all builders receive the account through `QueryRequest` and all
+runners receive the existing `QueryPool`.
 
 ```haskell
 module Kansoku.Event.Registry
@@ -1320,12 +1316,12 @@ module Kansoku.Event.Validation
     validateEvent, validateEventWith,
   )
 
-module Kansoku.Query          -- post-plan-9: Kansoku.Metrics.Query
+module Kansoku.Metrics.Query
   ( -- existing exports unchanged, plus:
-    buildExperimentExposuresSQL,   -- :: AccountScope -> QueryRequest -> Maybe SqlName -> Text
-    buildExperimentConversionSQL,  -- :: AccountScope -> QueryRequest -> SqlName -> SqlName -> Text
+    buildExperimentExposuresSQL,   -- :: QueryRequest -> Maybe SqlName -> Text
+    buildExperimentConversionSQL,  -- :: QueryRequest -> SqlName -> SqlName -> Text
                                    --    (experiment, conversion event)
-    buildExperimentFunnelSQL,      -- :: AccountScope -> QueryRequest -> SqlName -> Int -> [SqlName] -> Text
+    buildExperimentFunnelSQL,      -- :: QueryRequest -> SqlName -> Int -> [SqlName] -> Text
                                    --    (experiment, window seconds, steps)
     runExperimentExposures, runExperimentConversion, runExperimentFunnel,
   )
@@ -1342,7 +1338,14 @@ minimal `Kansoku.Client.Metrics` derivation), and `docs/api/openapi.json` docume
 both regenerated in the same commit as each route change.
 
 ClickHouse objects: this plan owns `analytics.experiment_exposures` and
-`analytics.mv_experiment_exposures` (one migration file). It reads
+`analytics.mv_experiment_exposures` (migration `0014_experiment_exposures.sql`). It reads
 `analytics.events_resolved` (owned by EP-12/EP-18) and, through EP-17's representation,
 the property columns of `analytics.events_raw` — it owns neither and must not alter them
-except for the contingency view-recreate described in Milestone 1 step 0.
+because step 0 verified the shared projection already satisfies the contract.
+
+---
+
+Revision note (2026-07-19, implementation start): reconciled every authored placeholder
+with the landed EP-17/EP-18 schema, current `Kansoku.Metrics.*`/`MultiVerb` API, EP-15
+account-parameter path, in-code registry source, and migration ledger through `0013`;
+linked the active intention and recorded the green baseline.
