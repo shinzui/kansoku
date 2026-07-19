@@ -50,6 +50,12 @@ spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
   it "declares one success and the shared error tail on every operation" $
     traverse_ assertStatuses operationValues
 
+  it "documents ordered funnel semantics and the optional window parameter" $ do
+    let funnelOperation = fromMaybe Aeson.Null (valueAt ["paths", "/metrics/funnel", "get"] documentValue)
+    lookupText ["description"] funnelOperation
+      `shouldSatisfy` maybe False (Text.isInfixOf "performed steps 1..N in order")
+    operationParameterNames funnelOperation `shouldContain` ["window"]
+
   it "keeps every wire DTO's ToJSON representation within its ToSchema" $ do
     conforms "AnalyticsEvent" sampleEvent
     conforms "IngestAck" Ingest.IngestAck {Ingest.accepted = 1, Ingest.eventId = "evt_openapi"}
@@ -291,3 +297,13 @@ containsEnumValue expected = \case
           expected `elem` [text | Aeson.String text <- Foldable.toList values]
         _ ->
           False
+
+operationParameterNames :: Aeson.Value -> [Text]
+operationParameterNames operation =
+  case valueAt ["parameters"] operation of
+    Just (Aeson.Array values) ->
+      [ name
+      | Aeson.Object parameter <- Foldable.toList values,
+        Just (Aeson.String name) <- [KeyMap.lookup "name" parameter]
+      ]
+    _ -> []

@@ -67,10 +67,10 @@ This section must always reflect the actual current state of the work.
       `addParameter`); charset validation retained as defense-in-depth; outcome recorded in
       Decision Log and Surprises & Discoveries (fallback: validation-only, per Plan of Work
       step 4)
-- [ ] M2: optional `window` query parameter added to the funnel route (API type + OpenAPI)
-- [ ] M2: `buildFunnelSQL` rewritten to single-pass `windowFunnel` with MultilineStrings
-- [ ] M2: QuerySpec shape tests for the new funnel SQL
-- [ ] M2: out-of-order fixture user added; curl transcript proves ordered semantics
+- [x] (2026-07-18 21:47Z) M2: optional `window` query parameter added to the funnel route (API type + OpenAPI)
+- [x] (2026-07-18 21:47Z) M2: `buildFunnelSQL` rewritten to single-pass `windowFunnel` with MultilineStrings
+- [x] (2026-07-18 21:47Z) M2: QuerySpec shape tests for the new funnel SQL
+- [x] (2026-07-18 21:47Z) M2: out-of-order fixture user added; curl transcript proves ordered semantics
 - [ ] M3: decode fallbacks throw instead of yielding zeros (state which EP-11 branch applied)
 - [ ] M3: Haskell-side re-sort removed from `runSQLWith`
 - [ ] M3: `buildSessionsSQL` predicate updated for v2 non-Nullable `session_id`
@@ -137,6 +137,16 @@ implementation. Provide concise evidence.
   `message`, and `retryable`, not the plan's pre-EP-9 `details` object. The invalid step is
   named in `message` (`"invalid funnel step: <value>"`), preserving the observable safety
   requirement without widening the shared response algebra owned by EP-9/EP-14.
+
+- 2026-07-18, M2: the `windowFunnel` tick-unit warning is confirmed against the live
+  DateTime64 fixture. With `toDateTime(occurred_at)`, the default seven-day range reports
+  step counts 3 then 1, while `window=60` excludes u1's five-minute completion and reports
+  3 then 0. The parameterized conditions and `ARRAY JOIN` tuple placeholders are accepted
+  by ClickHouse 26.5 over the native protocol.
+
+- 2026-07-18, M2: `kansoku-client` contains no metrics/funnel client generation, so the
+  additive `window` wire change affects only `kansoku-api`, the server handler, and the
+  generated OpenAPI artifact, as the plan predicted.
 
 
 ## Decision Log
@@ -207,6 +217,14 @@ Record every decision made while working on the plan.
   and validation retains early, useful HTTP 400 feedback.
   Date: 2026-07-18
 
+- Decision: Reject a non-positive implicit from/to range with the same
+  `invalid_funnel_window` response used for an explicit out-of-range value.
+  Rationale: `windowFunnel` requires a positive window. Clamping an inverted or empty date
+  range to one second would misrepresent the caller's request; naming the derived invalid
+  value is honest and avoids emitting invalid SQL. Positive ranges over 90 days still use
+  the documented 7,776,000-second cap.
+  Date: 2026-07-18
+
 
 ## Outcomes & Retrospective
 
@@ -222,6 +240,15 @@ only typed placeholders. The live suite passed 42/42 core examples, including th
 parameter query and EP-11 pool/decoder checks. Upstream still needs the per-block generic
 decoder compatibility repair, so M3 must remove only the Haskell-side result sort, not that
 repair.
+
+Milestone 2 is complete. The funnel route accepts an optional, documented `window` in
+seconds, defaults it to the positive request range, and caps it at 90 days. The query is one
+`events_resolved` scan using `windowFunnel(toDateTime(occurred_at), ...)`, with parameterized
+conditions, scan pruning, an `ARRAY JOIN` of ordered step tuples, and ClickHouse ordering.
+The public result shape is unchanged. Fresh v2 fixtures plus the real HTTP server returned
+step counts 3/1 for the default window, 3/0 for 60 seconds, HTTP 400 for both hostile input
+and `window=0`, and a served OpenAPI operation containing the description and all four
+parameters. The live core suite passed 47/47 examples.
 
 
 ## Context and Orientation
@@ -871,6 +898,24 @@ the server exposes it — e.g. `cabal repl kansoku-core` then
 `Data.Aeson.encode Kansoku.OpenApi.openApiDoc`) contains the string
 "new-in-window cohorts" on the retention operation and a `window` parameter on the funnel
 operation.
+
+Observed for M1/M2 on 2026-07-18 against a fresh seven-migration replay, the updated EP-6
+fixture, and the real server on port 18080:
+
+```text
+hostile step: HTTP 400
+{"code":"invalid_funnel_step","message":"invalid funnel step: signup'--","retryable":false}
+
+default window:
+{"metric":"funnel","points":[{"bucket":null,"group":{"index":"1","step":"signup_started"},"value":3},{"bucket":null,"group":{"index":"2","step":"signup_completed"},"value":1}]}
+
+window=0: HTTP 400
+{"code":"invalid_funnel_window","message":"invalid funnel window: 0; expected 1..7776000 seconds","retryable":false}
+
+window=60: step 1 = 3, step 2 = 0
+OpenAPI funnel parameters: from, to, steps, window
+Live core suite: 47 examples, 0 failures
+```
 
 Test-level acceptance: `cabal test` green; `ValidateSpec` covers accept/reject cases
 including the injection payloads; `QuerySpec` asserts the `windowFunnel` shape, absence of

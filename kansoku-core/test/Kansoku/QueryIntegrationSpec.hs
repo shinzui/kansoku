@@ -5,6 +5,7 @@ import Control.Concurrent.Async (mapConcurrently)
 import Data.Aeson.KeyMap qualified as KeyMap
 import Data.Generics.Labels ()
 import Data.Map.Strict qualified as Map
+import Data.Text qualified as Text
 import Data.Time.Calendar (fromGregorian)
 import Data.Time.Clock (NominalDiffTime, diffUTCTime)
 import Data.Word (Word8)
@@ -14,6 +15,7 @@ import Kansoku.ClickHouseTestSupport
 import Kansoku.Event
 import Kansoku.Metrics.Api (TimeGrain (Day))
 import Kansoku.Metrics.Query qualified as Query
+import Kansoku.Metrics.Query.Validate (SqlName, mkSqlName)
 import Kansoku.Metrics.Registry (BuiltinMetric, builtinMetric)
 import Kansoku.Prelude
 import Test.Hspec
@@ -75,6 +77,36 @@ spec = describe "Kansoku.Query integration" $ do
               }
       sum (fmap (^. #value) (result ^. #points)) `shouldBe` 1
 
+  it "excludes a user whose funnel events occurred out of order" $
+    withClickHouse $ \conn -> do
+      resetTable conn
+      insertEvents
+        conn
+        [ funnelEvent "evt_funnel_1" "signup_started" "u1" "2026-06-01 11:05:00 UTC",
+          funnelEvent "evt_funnel_2" "signup_completed" "u1" "2026-06-01 11:10:00 UTC",
+          funnelEvent "evt_funnel_3" "signup_started" "u3" "2026-06-02 09:00:00 UTC",
+          funnelEvent "evt_funnel_4" "signup_completed" "u4" "2026-06-03 09:00:00 UTC",
+          funnelEvent "evt_funnel_5" "signup_started" "u4" "2026-06-03 10:00:00 UTC"
+        ]
+      queryPool <- (`newQueryPool` 2) . clickHouseConfigFromConfig =<< requireConfig
+      steps <- traverse validSqlName ["signup_started", "signup_completed"]
+      result <-
+        runEff $
+          Query.runFunnel
+            queryPool
+            Query.QueryRequest
+              { from = fromGregorian 2026 6 1,
+                to = fromGregorian 2026 6 8,
+                groupBy = Nothing,
+                timeGrain = Nothing
+              }
+            604800
+            steps
+      [ (Map.lookup "index" (point ^. #group), point ^. #value)
+        | point <- result ^. #points
+        ]
+        `shouldBe` [(Just "1", 3), (Just "2", 1)]
+
 type SleepColumns = '[Column "s" UInt8]
 
 newtype SleepRow = SleepRow {s :: Word8}
@@ -109,3 +141,17 @@ sampleEvent eid name =
     .~ KeyMap.fromList [("url", "https://example.com/query")]
     & #context
     .~ KeyMap.fromList [("userAgent", "hspec")]
+
+funnelEvent :: Text -> Text -> Text -> String -> AnalyticsEvent
+funnelEvent eid name user timestamp =
+  baseEvent (EventId eid) (EventName name) Web (read timestamp) (read timestamp)
+    & #accountId
+    .~ Just (AccountId "acct_funnel")
+    & #userId
+    .~ Just (UserId user)
+
+validSqlName :: Text -> IO SqlName
+validSqlName value =
+  case mkSqlName value of
+    Right name -> pure name
+    Left invalid -> expectationFailure ("invalid SQL name fixture: " <> Text.unpack invalid) >> fail "invalid SQL name fixture"

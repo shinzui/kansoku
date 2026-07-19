@@ -8,7 +8,7 @@ where
 
 import Control.Exception (SomeException, try)
 import Data.Text qualified as Text
-import Data.Time (Day)
+import Data.Time (Day, diffDays)
 import Effectful (Eff, IOE, runEff)
 import Kansoku.Api.Response
   ( KansokuResult (..),
@@ -52,8 +52,8 @@ metricsServer pool =
     sessionsHandler fromDay toDay groupBy timeGrain =
       effToHandler (Query.runSessions pool (queryRequest fromDay toDay groupBy timeGrain))
 
-    funnelHandler :: Day -> Day -> Text -> Handler (KansokuResult MetricResult)
-    funnelHandler fromDay toDay stepsParam =
+    funnelHandler :: Day -> Day -> Text -> Maybe Int -> Handler (KansokuResult MetricResult)
+    funnelHandler fromDay toDay stepsParam requestedWindow =
       case nonEmptyCsv stepsParam of
         [] -> pure (KansokuBadRequest (badRequest "invalid_funnel_steps" ("invalid funnel steps: " <> stepsParam)))
         rawSteps ->
@@ -64,7 +64,14 @@ metricsServer pool =
                     (badRequest "invalid_funnel_step" ("invalid funnel step: " <> invalid))
                 )
             Right steps ->
-              effToHandler (Query.runFunnel pool (queryRequest fromDay toDay Nothing Nothing) steps)
+              case funnelWindow fromDay toDay requestedWindow of
+                Left invalid ->
+                  pure
+                    ( KansokuBadRequest
+                        (badRequest "invalid_funnel_window" ("invalid funnel window: " <> invalid <> "; expected 1..7776000 seconds"))
+                    )
+                Right window ->
+                  effToHandler (Query.runFunnel pool (queryRequest fromDay toDay Nothing Nothing) window steps)
 
     retentionHandler :: Day -> Day -> Maybe Text -> Handler (KansokuResult MetricResult)
     retentionHandler fromDay toDay daysParam =
@@ -105,6 +112,21 @@ parseOffsets (Just raw) =
       case reads (Text.unpack piece) of
         [(n, "")] | n > 0 -> Right n
         _ -> Left ("invalid day offset: " <> piece)
+
+funnelWindow :: Day -> Day -> Maybe Int -> Either Text Int
+funnelWindow fromDay toDay requested =
+  case requested of
+    Just seconds
+      | seconds >= 1 && seconds <= maxFunnelWindowSeconds -> Right seconds
+      | otherwise -> Left (Text.pack (show seconds))
+    Nothing
+      | rangeSeconds <= 0 -> Left (Text.pack (show rangeSeconds))
+      | otherwise -> Right (fromInteger (min (toInteger maxFunnelWindowSeconds) rangeSeconds))
+  where
+    rangeSeconds = toInteger (diffDays toDay fromDay) * 86400
+
+maxFunnelWindowSeconds :: Int
+maxFunnelWindowSeconds = 7776000
 
 effToHandler :: Eff '[IOE] MetricResult -> Handler (KansokuResult MetricResult)
 effToHandler action = do

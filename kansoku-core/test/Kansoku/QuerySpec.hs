@@ -4,6 +4,7 @@ import Data.Text qualified as Text
 import Data.Time (fromGregorian)
 import Kansoku.Metrics.Api (TimeGrain (..))
 import Kansoku.Metrics.Query
+import Kansoku.Metrics.Query.Validate (SqlName, mkSqlName)
 import Kansoku.Metrics.Registry
 import Kansoku.Prelude
 import Test.Hspec
@@ -70,6 +71,19 @@ spec = describe "Kansoku.Query.buildSQL" $ do
     buildRetentionSQL dayRequest [1, 7, 14, 30]
       `shouldContainText` "WHERE dateDiff('day', f.cohort_day, a.active_day) IN (0,1,7,14,30)"
 
+  it "builds a single-pass ordered funnel with native placeholders" $ do
+    let sql = buildFunnelSQL dayRequest 604800 (sqlName <$> ["signup_started", "signup_completed"])
+    sql `shouldContainText` "windowFunnel(604800)(toDateTime(occurred_at), event_name = {funnel_step_1:String}, event_name = {funnel_step_2:String})"
+    sql `shouldContainText` "event_name IN ({funnel_step_1:String}, {funnel_step_2:String})"
+    sql `shouldContainText` "ARRAY JOIN [(1, {funnel_step_1:String}), (2, {funnel_step_2:String})] AS step"
+    sql `shouldContainText` "toFloat64(countIf(level >= step.1)) AS value"
+    sql `shouldContainText` "ORDER BY step.1"
+    sql `shouldNotContainText` "UNION ALL"
+
+  it "renders three funnel step indices in caller order" $
+    buildFunnelSQL dayRequest 3600 (sqlName <$> ["one", "two", "three"])
+      `shouldContainText` "ARRAY JOIN [(1, {funnel_step_1:String}), (2, {funnel_step_2:String}), (3, {funnel_step_3:String})] AS step"
+
 dayRequest :: QueryRequest
 dayRequest =
   QueryRequest
@@ -86,3 +100,9 @@ shouldContainText haystack needle =
 shouldNotContainText :: Text -> Text -> Expectation
 shouldNotContainText haystack needle =
   Text.isInfixOf needle haystack `shouldBe` False
+
+sqlName :: Text -> SqlName
+sqlName value =
+  case mkSqlName value of
+    Right name -> name
+    Left invalid -> error ("invalid SQL name fixture: " <> Text.unpack invalid)

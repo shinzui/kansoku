@@ -81,9 +81,9 @@ runRetention :: (IOE :> es) => QueryPool -> QueryRequest -> [Int] -> Eff es Metr
 runRetention pool req offsets =
   liftIO (runSQLWith pool "retention" retentionPoint [] (buildRetentionSQL req offsets))
 
-runFunnel :: (IOE :> es) => QueryPool -> QueryRequest -> [SqlName] -> Eff es MetricResult
-runFunnel pool req steps =
-  liftIO (runSQLWith pool "funnel" funnelPoint (namedParameters "funnel_step" steps) (buildFunnelSQL req steps))
+runFunnel :: (IOE :> es) => QueryPool -> QueryRequest -> Int -> [SqlName] -> Eff es MetricResult
+runFunnel pool req window steps =
+  liftIO (runSQLWith pool "funnel" funnelPoint (namedParameters "funnel_step" steps) (buildFunnelSQL req window steps))
 
 type QueryParameter = (String, SqlName)
 
@@ -325,28 +325,64 @@ buildRetentionSQL req offsets =
       "ORDER BY f.cohort_day, dateDiff('day', f.cohort_day, a.active_day)"
     ]
 
-buildFunnelSQL :: QueryRequest -> [SqlName] -> Text
-buildFunnelSQL req steps =
-  Text.intercalate "\nUNION ALL\n" (stepSQL <$> zip [1 :: Int ..] steps)
+-- | One-pass ordered funnel over identity-resolved users. Converting
+-- DateTime64 to DateTime is load-bearing: windowFunnel measures its window in
+-- timestamp ticks, so the conversion makes the public window unit seconds.
+-- Equal timestamps may satisfy consecutive steps; repeated step names mean
+-- the user performed that event repeatedly in order.
+buildFunnelSQL :: QueryRequest -> Int -> [SqlName] -> Text
+buildFunnelSQL req window steps =
+  """
+  SELECT
+      '' AS bucket,
+      concat(toString(step.1), '|', step.2) AS group_key,
+      toFloat64(countIf(level >= step.1)) AS value
+  FROM
+  (
+      SELECT
+          canonical_user,
+          windowFunnel(
+  """
+    <> Text.pack (show window)
+    <> ")(toDateTime(occurred_at), "
+    <> conditions
+    <> """
+       ) AS level
+         FROM analytics.events_resolved
+         WHERE canonical_user != ''
+           AND event_name IN (
+       """
+    <> placeholders
+    <> ")\n      AND "
+    <> timestampPredicate req
+    <> """
+
+           GROUP BY canonical_user
+       )
+       ARRAY JOIN [
+       """
+    <> stepTuples
+    <> """
+       ] AS step
+       GROUP BY step
+       ORDER BY step.1
+       """
   where
-    stepSQL (stepIndex, _step) =
-      Text.unlines
-        [ "SELECT '' AS bucket, concat(" <> sqlString (Text.pack (show stepIndex) <> "|") <> ", " <> parameterPlaceholder "funnel_step" stepIndex <> ") AS group_key,",
-          "       toFloat64(uniqExact(canonical_user)) AS value",
-          "FROM analytics.events_resolved",
-          "WHERE canonical_user != ''",
-          "  AND event_name = " <> parameterPlaceholder "funnel_step" stepIndex,
-          previousStepPredicates stepIndex,
-          "  AND " <> timestampPredicate req
+    indexedSteps = zip [1 :: Int ..] steps
+    placeholders =
+      Text.intercalate
+        ", "
+        [parameterPlaceholder "funnel_step" position | (position, _step) <- indexedSteps]
+    conditions =
+      Text.intercalate
+        ", "
+        ["event_name = " <> parameterPlaceholder "funnel_step" position | (position, _step) <- indexedSteps]
+    stepTuples =
+      Text.intercalate
+        ", "
+        [ "(" <> Text.pack (show position) <> ", " <> parameterPlaceholder "funnel_step" position <> ")"
+        | (position, _step) <- indexedSteps
         ]
-    previousStepPredicates stepIndex =
-      Text.unlines (previousPredicate <$> take (stepIndex - 1) (zip [1 :: Int ..] steps))
-    previousPredicate (previousIndex, _previous) =
-      "  AND canonical_user IN (SELECT canonical_user FROM analytics.events_resolved WHERE canonical_user != '' AND event_name = "
-        <> parameterPlaceholder "funnel_step" previousIndex
-        <> " AND "
-        <> timestampPredicate req
-        <> ")"
 
 effectiveGrain :: MetricDefinition -> QueryRequest -> Maybe TimeGrain
 effectiveGrain MetricDefinition {timeGrain = defaultGrain} QueryRequest {timeGrain = requestedGrain} =

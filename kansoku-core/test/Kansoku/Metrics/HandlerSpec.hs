@@ -17,7 +17,7 @@ import Servant (Context (..), serveWithContext)
 import Test.Hspec
 
 spec :: Spec
-spec = describe "Kansoku.Metrics.Handler" $
+spec = describe "Kansoku.Metrics.Handler" $ do
   it "rejects an invalid funnel step before forcing the query pool" $
     Warp.testWithApplication (pure validationApplication) $ \port -> do
       manager <- HTTP.newManager HTTP.defaultManagerSettings
@@ -35,6 +35,24 @@ spec = describe "Kansoku.Metrics.Handler" $
           Left err -> expectationFailure ("JSON decode failed: " <> err) >> fail err
       Response.code envelope `shouldBe` "invalid_funnel_step"
       Response.message envelope `shouldSatisfy` Text.isInfixOf "bad'step"
+
+  it "rejects a funnel window outside 1..7776000 before forcing the query pool" $
+    Warp.testWithApplication (pure validationApplication) $ \port -> do
+      manager <- HTTP.newManager HTTP.defaultManagerSettings
+      request <-
+        HTTP.parseRequest
+          ( "http://127.0.0.1:"
+              <> show port
+              <> "/metrics/funnel?from=2026-06-01&to=2026-06-08&steps=ok_step&window=0"
+          )
+      response <- HTTP.httpLbs request manager
+      HTTP.responseStatus response `shouldBe` status400
+      envelope <-
+        case eitherDecode (HTTP.responseBody response) of
+          Right value -> pure value
+          Left err -> expectationFailure ("JSON decode failed: " <> err) >> fail err
+      Response.code envelope `shouldBe` "invalid_funnel_window"
+      Response.message envelope `shouldSatisfy` Text.isInfixOf "0"
 
 validationApplication :: Application
 validationApplication =

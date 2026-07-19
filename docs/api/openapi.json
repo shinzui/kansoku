@@ -806,6 +806,7 @@
     },
     "/metrics/funnel": {
       "get": {
+        "description": "Users counted at step N performed steps 1..N in order within `window` seconds of the chain's first step. Default window: the full from/to range, capped at 90 days (7776000 s).",
         "operationId": "getMetricsFunnel",
         "parameters": [
           {
@@ -832,6 +833,16 @@
             "required": true,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "maximum": 9223372036854775807,
+              "minimum": -9223372036854775808,
+              "type": "integer"
             }
           }
         ],
@@ -864,7 +875,7 @@
                 }
               }
             },
-            "description": "Malformed request or `steps` or `to` or `from`"
+            "description": "Malformed request or `window` or `steps` or `to` or `from`"
           },
           "404": {
             "content": {

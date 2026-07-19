@@ -205,8 +205,8 @@ sentinelMetricsServer =
     stubSentinel name _fromDay _toDay _groupBy _timeGrain =
       pure (Response.KansokuNotFound (Response.notFound "not_implemented" ("metric endpoint is stubbed in the MVP: " <> name)))
 
-    funnelSentinel :: Day -> Day -> Text -> Handler (Response.KansokuResult Metrics.MetricResult)
-    funnelSentinel _fromDay _toDay _steps = pure (Response.KansokuOk (sentinelResult "funnel"))
+    funnelSentinel :: Day -> Day -> Text -> Maybe Int -> Handler (Response.KansokuResult Metrics.MetricResult)
+    funnelSentinel _fromDay _toDay _steps _window = pure (Response.KansokuOk (sentinelResult "funnel"))
 
     retentionSentinel :: Day -> Day -> Maybe Text -> Handler (Response.KansokuResult Metrics.MetricResult)
     retentionSentinel _fromDay _toDay _days = pure (Response.KansokuOk (sentinelResult "retention"))

@@ -16,7 +16,8 @@ import Data.Time (Day)
 import Kansoku.Api.Response (KansokuResult, OkResponses)
 import Kansoku.Prelude
 import Servant.API
-  ( JSON,
+  ( Description,
+    JSON,
     QueryParam,
     QueryParam',
     Required,
@@ -90,9 +91,11 @@ data MetricsRoutes mode = MetricsRoutes
       mode
         :- "metrics"
           :> "funnel"
+          :> Description "Users counted at step N performed steps 1..N in order within `window` seconds of the chain's first step. Default window: the full from/to range, capped at 90 days (7776000 s)."
           :> QueryParam' '[Required] "from" Day
           :> QueryParam' '[Required] "to" Day
           :> QueryParam' '[Required] "steps" Text
+          :> QueryParam "window" Int
           :> MultiVerb 'Servant.GET '[JSON] (OkResponses "Metric result" MetricResult) (KansokuResult MetricResult),
     retention ::
       mode
