@@ -149,9 +149,9 @@ route.
       DTO's `ToJSON` validates against its `ToSchema`, and the served-path-set-equals-documented-
       path-set guard. The generator is byte-stable across consecutive runs, `just openapi-check`
       passes, and all six OpenAPI/WAI examples are green without live databases.
-- [ ] Milestone 6: amend the plans of record (`docs/plans/4`, `6`, `7`, `8`) whose code blocks
-      specify the `:<|>` shapes this plan removes, and note plan 8's OpenAPI executable and
-      conformance tests.
+- [x] Milestone 6 (completed 2026-07-18): amended the plans of record (`docs/plans/4`, `6`,
+      `7`, `8`) to the live NamedRoutes/MultiVerb, generic-client, and OpenAPI artifact shapes;
+      preserved historical Progress entries and appended a dated Plan 9 alignment note to each.
 
 
 ## Surprises & Discoveries
@@ -304,12 +304,20 @@ implementation. Provide concise evidence.
   The artifact reports OpenAPI 3.1.0, contains exactly thirteen paths, and carries the
   deterministic identifiers `postV1Events` and `getMetricsUsers` at representative endpoints.
 
+- Discovery (Milestone 6, 2026-07-18): the four predecessor plans contained more than the
+  positional code snippets named in this plan: their adjacent interface prose still described
+  old module paths, single ClickHouse connections, thrown 501 errors, and transport-only client
+  failures. Updating the live sections while preserving historical Progress and revision entries
+  made the plans useful as current records without rewriting their implementation history. A
+  fence-aware check found no remaining positional route, handler, or client derivation block.
+
 
 ## Decision Log
 
 - Decision: Order the milestones as (1) pin behavior with a routing test, (2) NamedRoutes, (3)
-  module moves, (4) MultiVerb, (5) amend the plans of record.
-  Rationale: The four technical changes are independent, and interleaving them produces diffs a
+  module moves, (4) MultiVerb, (5) OpenAPI-from-served-types plus artifact conformance, and
+  (6) amend the plans of record.
+  Rationale: The five technical changes are independent, and interleaving them produces diffs a
   reviewer cannot read (a route-type change tangled with a file rename tangled with a
   status-code change). Risk decreases in this order. The routing test must come *first* because
   the misordering hazard is exactly what every later milestone could silently reintroduce: the
@@ -494,7 +502,33 @@ implementation. Provide concise evidence.
 Summarize outcomes, gaps, and lessons learned at major milestones or at completion. Compare the
 result against the original purpose.
 
-(To be filled during and after implementation.)
+EP-9 is complete. The thirteen analytics routes are declared as `IngestRoutes`, `MetricsRoutes`,
+and the umbrella `KansokuAPI` record; one `serveWithContext kansokuAPI` application serves them.
+The database-free dispatch guard covers every route, including all nine same-typed metric fields.
+The three layer-first modules moved into their ingestion and metrics slices without changing
+history, and all handler outcomes now inhabit the shared `KansokuResult` MultiVerb response
+algebra with 400/404/503 error envelopes.
+
+The Haskell SDK derives `ingestClient` with `genericClient`, uses qualified field selectors, and
+keeps outer transport failures distinct from typed endpoint rejections. Its retry loop retries
+transport failures and retryable 503 values but not typed 400/404 values. Operational
+`/health`, `/ready`, and `/openapi.json` remain the exact WAI-level allowlist.
+
+OpenAPI is generated from the same `kansokuAPI :: Proxy (NamedRoutes KansokuAPI)` value the
+server consumes. `kansoku-openapi` writes the byte-stable `docs/api/openapi.json`, stable
+operation IDs are assigned, and `just openapi-check` rejects drift. Conformance tests prove the
+exact thirteen-path set, success plus 400/404/503 responses on every operation, DTO JSON/schema
+agreement, served/documented equality, and the WAI allowlist.
+
+Final verification on 2026-07-18: `cabal build all` was up to date; `cabal test all` passed with
+39 core examples (0 failures, 9 ClickHouse-dependent pending) and 8 client examples (0 failures,
+1 opt-in live integration pending); `just openapi-check` passed. The generated artifact's
+repeatable SHA-256 is
+`bf9c48a78c82ad1b92b4df9a8d70dd91fdc603cd8e0fc60e3f0ac33e9b547dde`.
+
+Known boundaries remain explicit: Servant emits 405/415 outside `ErrorFormatters`; the four
+unimplemented metric endpoints return typed 404 `not_implemented` envelopes; EP-14 will widen
+the shared response tail with 413 rather than treating the current list as permanently frozen.
 
 
 ## Context and Orientation
@@ -518,8 +552,8 @@ The four kansoku packages, each a directory at the repository root with its own 
   `docs/api/openapi.json` — the document lives with the route types it is derived from.
 - `kansoku-core` — the effectful runtime: configuration, logging, the pgmq queue producer, the
   ClickHouse storage adapter, the batch writer, the metric query compiler and handlers, and the
-  HTTP application assembly. (Today it also holds the OpenAPI generator, `Kansoku.OpenApi`;
-  Milestone 5 relocates that to `kansoku-api`.)
+  HTTP application assembly. The OpenAPI generator now lives in `kansoku-api` beside the route
+  types it consumes.
 - `kansoku-client` — a lightweight Haskell SDK for *emitting* events, plus a servant-generated
   client for the ingestion endpoints. Depends on `kansoku-api`.
 - `kansoku-server` — the executable that wires config, pools, and the WAI application together.
@@ -2011,3 +2045,9 @@ holds the four conformance tests, all pure of ClickHouse.
   `waiWrapper` so the conformance suite proves the exact thirteen-path Servant surface and the
   `/health`, `/ready`, `/openapi.json` WAI allowlist without database handles. Recorded the
   confirmed fork pins and the artifact's repeatable SHA-256.
+
+- 2026-07-18, Milestone 6 — Revised plans 4, 6, 7, and 8 in place to describe the live route
+  records, typed response algebra, generic client, generator location, artifact executable, and
+  conformance gates. Preserved their historical Progress entries, appended Plan 9 alignment
+  notes, passed the fence-aware positional-shape check, and completed EP-9 after the final build,
+  test, and OpenAPI freshness gates.

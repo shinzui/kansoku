@@ -50,8 +50,8 @@ queue depth, batch flush latency, and insert failures are exported telemetry, no
 Explicitly excluded: the JS/React browser SDKs (`kansoku-js`, `kansoku-react`) and the
 dashboard UI remain a separate frontend initiative; this plan only guarantees the server is
 ready for them. Kafka ingestion stays deferred (the shibuya adapter boundary already
-accommodates it). The four HTTP-501 metric stubs (acquisition, feature-adoption,
-organizations, custom) stay stubbed; new metric families are out of scope.
+accommodates it). The four metric stubs (acquisition, feature-adoption, organizations, custom)
+stay stubbed with typed HTTP 404 `not_implemented` envelopes; new metric families are out of scope.
 
 
 ## Decomposition Strategy
@@ -89,7 +89,7 @@ waves.
 | 10 | Restore the build and supervise the writer | docs/plans/10-restore-the-build-and-supervise-the-writer.md | EP-21 | None | Complete |
 | 11 | Split ClickHouse connections and adopt typed row decoding | docs/plans/11-split-clickhouse-connections-and-adopt-typed-row-decoding.md | EP-10 | None | Complete |
 | 12 | ClickHouse schema v2: sort key, FINAL-free resolution, join-free rollups | docs/plans/12-clickhouse-schema-v2-sort-key-final-free-resolution-join-free-rollups.md | EP-10 | None | Complete |
-| 9 | Convert kansoku to NamedRoutes, vertical slices, and MultiVerb | docs/plans/9-convert-kansoku-to-namedroutes-vertical-slices-and-multiverb.md | EP-10 | None | In Progress |
+| 9 | Convert kansoku to NamedRoutes, vertical slices, and MultiVerb | docs/plans/9-convert-kansoku-to-namedroutes-vertical-slices-and-multiverb.md | EP-10 | None | Complete |
 | 13 | Safe and correct metric SQL: validated inputs, ordered funnels, honest failures | docs/plans/13-safe-and-correct-metric-sql-validated-inputs-ordered-funnels-honest-failures.md | EP-12 | EP-11, EP-9 | Not Started |
 | 14 | SDK-grade ingest contract: partial batch acceptance, CORS, and payload limits | docs/plans/14-sdk-grade-ingest-contract-partial-batch-acceptance-cors-and-payload-limits.md | EP-9 | None | Not Started |
 | 16 | Pipeline observability: queue depth, writer lag, and exported telemetry | docs/plans/16-pipeline-observability-queue-depth-writer-lag-and-exported-telemetry.md | EP-10 | EP-11 | Not Started |
@@ -152,7 +152,7 @@ builders), and EP-14 (write keys and service tokens attach to the finalized inge
 
 ## Integration Points
 
-`Kansoku.Query` (kansoku-core/src/Kansoku/Query.hs) — touched by EP-11, EP-13, EP-15. EP-11
+`Kansoku.Metrics.Query` (kansoku-core/src/Kansoku/Metrics/Query.hs) — touched by EP-11, EP-13, EP-15. EP-11
 defines the typed row-decoding shape (replacing the `concat(..., '\t', ...)`/`splitOn` wire
 hack and the `AggLine` type); EP-13 rewrites the SQL builders on top of that shape; EP-15 adds
 an account predicate to `QueryRequest` and threads it through every builder. Later plans must
@@ -172,8 +172,10 @@ EP-13's query runner, EP-9's restructured handlers, and EP-16's gauges all consu
 type EP-11 introduces. Plan 9's milestone that wires handlers must accept whatever handle
 type exists at implementation time and note it in its own Decision Log.
 
-Ingest and metrics wire types (`kansoku-api/src/Kansoku/Api/*.hs`) — EP-9 restructures the
-route declarations into NamedRoutes records (same DTOs); EP-14 changes `BatchAck` into a
+Ingest and metrics wire types (`kansoku-api/src/Kansoku/Ingest/Api.hs`,
+`kansoku-api/src/Kansoku/Metrics/Api.hs`, `kansoku-api/src/Kansoku/Api/Response.hs`) — EP-9
+restructured the route declarations into NamedRoutes records and added the shared typed response
+algebra; EP-14 changes `BatchAck` into a
 partial-acceptance response and adds limit-related errors; EP-15 adds authentication to the
 route types. Order is EP-9 then EP-14 then EP-15; each updates `kansoku-client` and the
 generated OpenAPI document in the same change.
@@ -202,19 +204,19 @@ duplicated DDL in `Kansoku/ClickHouse.hs` `createEventsRawTable`). EP-13, EP-15,
 add any new ClickHouse objects through that mechanism only.
 
 `Kansoku/Server.hs` WAI assembly — touched by EP-10 (`/ready` route in the hand-rolled
-router), EP-9 (replaces the hand-rolled router with a served NamedRoutes record), EP-14
+router), EP-9 (replaced analytics dispatch with a served NamedRoutes record), EP-14
 (CORS and size-limit middleware around the ingest subtree), and EP-16 (`GET
-/internal/metrics` scrape endpoint and the `/ready` threshold extension). EP-9 and EP-16 are
-both Phase 3-adjacent and parallelizable, so ordering is not guaranteed: EP-16 must add its
-scrape endpoint as WAI middleware wrapped around whatever application exists (keeping it out
+/internal/metrics` scrape endpoint and the `/ready` threshold extension). EP-9 has landed, so
+EP-16 must add its scrape endpoint as WAI middleware around the single Servant application
+(keeping it out
 of the servant types and therefore out of the OpenAPI document), and EP-14 attaches its
-middleware to the assembly EP-9 produces. The conventional Prometheus path `/metrics` is
+middleware to the assembly EP-9 produced. The conventional Prometheus path `/metrics` is
 unavailable — it is the analytics query API — hence `/internal/metrics`.
 
 Shared MultiVerb error tail (plan 9) — plan 9 pins every operation's error alternatives
 (400/404/503) and its conformance test asserts that literal. EP-14's batch-length cap adds a
-413 alternative to the shared tail, so plan 9's implementer must not treat that test literal
-as frozen; EP-14 edits the expectation when it widens the tail.
+413 alternative to the shared tail; EP-14 must widen the aliases and conformance expectation
+together rather than treating the current literal as frozen.
 
 
 ## Progress
@@ -237,7 +239,11 @@ and the milestone. This section provides an at-a-glance view of the entire initi
 - [x] EP-12: schema v2 migration (sort key, Nullable cleanup) applied and data rewritten
 - [x] EP-12: FINAL-free `events_resolved`; join-free DAU/WAU materialized views
 - [x] EP-12: rollup aggregate states replaced; storage and query-time verified against fixtures
-- [ ] EP-9: (see plan file for its milestones; registry tracks overall status)
+- [x] EP-9: database-free thirteen-route dispatch guard
+- [x] EP-9: one served NamedRoutes umbrella and vertical-slice module layout
+- [x] EP-9: shared MultiVerb response algebra and generic SDK client
+- [x] EP-9: served-type OpenAPI generator, checked artifact, and conformance gates
+- [x] EP-9: predecessor plans revised to the live contract shapes
 - [ ] EP-13: metric SQL inputs validated or parameterized end-to-end
 - [ ] EP-13: funnel computed via ordered `windowFunnel` single pass
 - [ ] EP-13: decode/parse failures surface as errors, not zeros; redundant re-sort removed
@@ -340,6 +346,19 @@ interactions between child plans. Provide concise evidence.
     the package contains two executables; EP-12 fixes `just run`. Port 8080 was occupied by another
     local process-compose project, so endpoint evidence was captured on isolated port 18080.
 
+- 2026-07-18, during EP-9 implementation:
+  - NamedRoutes removes positional miscounting but cannot statically reject swapping two
+    same-typed record fields. Kansoku has nine such metric fields; a deliberate users/organizations
+    swap compiled and failed the new runtime dispatch guard. EP-13 and EP-15 must preserve that
+    guard when they change metric handlers and authentication.
+  - MultiVerb moves declared 400/404/503 statuses into a shared `KansokuResult` value channel.
+    The SDK now distinguishes that channel from outer transport failures, retries only transport
+    failures and retryable 503 values, and does not retry typed 400/404 values. EP-14 owns the
+    planned 413 tail extension.
+  - OpenAPI is now generated from the exact served `Proxy (NamedRoutes KansokuAPI)`. Its checked
+    artifact contains exactly thirteen analytics paths with stable operation IDs and a typed error
+    tail on every operation; `/health`, `/ready`, and `/openapi.json` are the only WAI escapes.
+
 
 ## Decision Log
 
@@ -426,19 +445,28 @@ longer leak through 503 responses, and ClickHouse credentials are configurable. 
 build and test suite passes with live PostgreSQL and ClickHouse, and an accepted HTTP event
 was observed end-to-end in `analytics.events_raw`.
 
-EP-11 and EP-12 are complete; EP-9 remains independently implementable in Phase 2. The writer
-now owns a dedicated ClickHouse connection, request-side queries use a bounded configurable
-pool, and real typed columns replace tab-delimited wire parsing with loud header/type failures.
-The main EP-11 handoff is to EP-13: its driver bump must re-evaluate the pinned driver's
-per-block generic-product normalization before removing it.
+Phase 2 is complete: EP-11, EP-12, and EP-9 all landed. The writer owns a dedicated ClickHouse
+connection, request-side queries use a bounded configurable pool, and real typed columns replace
+tab-delimited wire parsing with loud header/type failures. The main EP-11 handoff is to EP-13:
+its driver bump must re-evaluate the pinned driver's per-block generic-product normalization
+before removing it.
+
+EP-9 replaced positional route chains and the hand-rolled analytics dispatch with one served
+NamedRoutes umbrella, moved the residual layer-first modules into domain slices, and declared
+every analytics outcome through a shared MultiVerb response algebra. The SDK is derived from the
+same ingest record and preserves transport-versus-typed-result semantics. OpenAPI is generated
+from the served proxy into a deterministic checked artifact, with pure conformance tests for
+routes, statuses, schemas, served/documented equality, and the operational WAI allowlist. Final
+verification passed 39 core and 8 client examples with only unavailable/live integrations pending,
+plus the artifact freshness gate.
 
 EP-12 established a seven-file immutable ClickHouse migration history and made it the only DDL
 owner. The raw table now uses the account/event/time sort key, string absence is consistently
 represented by `''`, identity resolution no longer forces `FINAL`, and DAU/WAU ingestion no
 longer joins the identity map. Under a representative 100,000-event load, all four rollups
 occupied 10,898 bytes versus 8,034,824 bytes raw (0.136%, roughly 737x smaller); live HTTP
-queries returned the fixture-backed active-user and page-view values. EP-13's hard dependency
-is now satisfied, while its EP-9 dependency remains soft.
+queries returned the fixture-backed active-user and page-view values. EP-13's hard EP-12
+dependency and soft EP-9 dependency are now both satisfied.
 
 The broader coordination lesson remains that Shibuya's internal processor lifetime is a
 separate supervision boundary from the executable's writer thread; EP-16 in particular must
@@ -485,3 +513,9 @@ Revision note (2026-07-18, third revision): EP-12 completed. The registry, aggre
 outcomes, and cross-plan discoveries now record the immutable migration ledger, events_raw v2,
 FINAL-free and join-free resolution path, bounded rollup states, 737x representative storage
 reduction, fixture/HTTP evidence, explicit Cabal targets, and stale local PostgreSQL ledger note.
+
+Revision note (2026-07-18, fourth revision): EP-9 completed. The registry and aggregate progress
+now record the thirteen-route dispatch guard, one served NamedRoutes umbrella, vertical slices,
+shared MultiVerb result algebra, generic SDK client, served-type OpenAPI generator, deterministic
+artifact/conformance gates, and predecessor-plan revisions. Cross-plan notes pin the same-typed
+dispatch limitation, SDK retry semantics, EP-14's future 413 extension, and the exact WAI allowlist.
