@@ -83,10 +83,14 @@ This section must always reflect the actual current state of the work.
       route change
 - [x] (2026-07-19 14:14 PDT) M2: transcripts captured — exposures per day, conversion with the before-exposure
       user excluded, two-account isolation
-- [ ] M3: `buildExperimentFunnelSQL` builder, runner, point function; QuerySpec shape tests
-- [ ] M3: `experimentFunnel` route field, handler, client + OpenAPI regenerated same commit
-- [ ] M3: per-variant funnel transcript captured; full `cabal test` + end-to-end pass
-- [ ] M3: MasterPlan 3 registry row and Progress bullets for EP-19 updated; Outcomes written
+- [x] (2026-07-19 14:26 PDT) M3: `buildExperimentFunnelSQL` builder, runner, point function;
+      QuerySpec shape tests
+- [x] (2026-07-19 14:26 PDT) M3: `experimentFunnel` route field, handler, client + OpenAPI
+      regenerated same commit
+- [x] (2026-07-19 14:26 PDT) M3: per-variant funnel transcript captured; full `cabal test` +
+      end-to-end pass
+- [x] (2026-07-19 14:26 PDT) M3: MasterPlan 3 registry row and Progress bullets for EP-19
+      updated; Outcomes written
 
 
 ## Surprises & Discoveries
@@ -256,6 +260,15 @@ Record every decision made while working on the plan.
   before application traffic resumes.
   Date: 2026-07-19
 
+- Decision: Adopt ADR 0006 as the durable owner of the experiment-analytics semantics:
+  render-time exposure, raw-identity exposure rollups, exact query-time stitched conversion
+  and funnel counts, post-exposure ordering, multi-variant counting, and no significance or
+  winner calculation.
+  Rationale: These rules span event producers, storage, three API endpoints, and future
+  dashboard/statistics work. Keeping them in one accepted ADR prevents later consumers from
+  inferring incompatible assignment or denominator semantics from an endpoint name alone.
+  Date: 2026-07-19
+
 
 ## Outcomes & Retrospective
 
@@ -283,6 +296,19 @@ an unknown valid experiment returned 200/empty, bad name/hour/same-event request
 400, and missing credentials returned 401. The new typed client selectors made the same
 route shapes, OpenAPI documented both operations, and the complete pass reached 118 core
 examples plus 11 client examples with zero failures (one opt-in client example pending).
+
+Milestone 3 completed on 2026-07-19. The authenticated API and typed client now expose an
+ordered per-variant funnel whose steps are restricted to each canonical user's
+post-exposure timeline. Native parameters carry the experiment and step names, stored
+property values retain charset guards, and the generated SQL preserves EP-13's
+second-based `windowFunnel` behavior without `UNION ALL` or raw-string `JSONExtract`.
+Fresh migrations through `0015`, direct fixtures, and a real server returned account A's
+control funnel `1/1` and treatment funnel `4/3`; account B returned no funnel points, a
+well-formed unknown experiment returned 200/empty, and invalid step/window requests
+returned 400. The final suite passed 120 core examples and 11 client examples with zero
+failures (one opt-in live client example pending). ADR 0006 now records the cross-plan
+exposure and attribution contract; all three milestones and both MasterPlan EP-19 progress
+items are complete.
 
 
 ## Context and Orientation
@@ -918,14 +944,15 @@ WITH exposures AS
 (
     SELECT
         canonical_user,
-        toString(getSubcolumn(properties_json, 'variant')) AS variant,
+        CAST(toString(getSubcolumn(properties_json, 'variant')), 'String') AS variant,
         min(occurred_at) AS first_exposure
     FROM analytics.events_resolved
     WHERE canonical_user != ''
       AND account_id = {account_id:String}
       AND event_name = 'experiment_viewed'
-      AND toString(getSubcolumn(properties_json, 'experiment')) = 'checkout_v2'
-      AND match(toString(getSubcolumn(properties_json, 'variant')), '^[a-z0-9_.:-]{1,128}$')
+      AND CAST(toString(getSubcolumn(properties_json, 'experiment')), 'String') = {experiment:String}
+      AND match(CAST(toString(getSubcolumn(properties_json, 'experiment')), 'String'), '^[a-z0-9_.:-]{1,128}$')
+      AND match(CAST(toString(getSubcolumn(properties_json, 'variant')), 'String'), '^[a-z0-9_.:-]{1,128}$')
       AND occurred_at >= '2026-08-01 00:00:00' AND occurred_at < '2026-08-08 00:00:00'
     GROUP BY canonical_user, variant
 )
@@ -939,18 +966,18 @@ FROM
         e.variant AS variant,
         r.canonical_user AS canonical_user,
         windowFunnel(604800)(toDateTime(r.occurred_at),
-          r.event_name = 'checkout_started',
-          r.event_name = 'purchase_completed') AS level
+          r.event_name = {experiment_funnel_step_1:String},
+          r.event_name = {experiment_funnel_step_2:String}) AS level
     FROM analytics.events_resolved AS r
     INNER JOIN exposures AS e ON e.canonical_user = r.canonical_user
     WHERE r.canonical_user != ''
       AND r.account_id = {account_id:String}
-      AND r.event_name IN ('checkout_started', 'purchase_completed')
+      AND r.event_name IN ({experiment_funnel_step_1:String}, {experiment_funnel_step_2:String})
       AND r.occurred_at >= e.first_exposure
       AND r.occurred_at >= '2026-08-01 00:00:00' AND r.occurred_at < '2026-08-08 00:00:00'
     GROUP BY e.variant, r.canonical_user
 )
-ARRAY JOIN [(1, 'checkout_started'), (2, 'purchase_completed')] AS step
+ARRAY JOIN [(1, {experiment_funnel_step_1:String}), (2, {experiment_funnel_step_2:String})] AS step
 GROUP BY variant, step
 ORDER BY variant, step.1
 ```
@@ -967,8 +994,9 @@ the conversion endpoint (Decision Log); grouping by `e.variant` makes variant a 
 The `group_key` encoding is `index|step|variant` — index and step are validated `SqlName`s
 that cannot contain `|`, and variant (data-derived, `match`-guarded) is last, so the point
 function splits on the first two `|` and takes the remainder as the variant. Point
-function `experimentFunnelPoint :: SqlName -> AggRow -> MetricPoint` emits group keys
-`"experiment"` (injected), `"variant"`, `"index"`, `"step"`. Metric name:
+function `experimentFunnelPoint :: SqlName -> Text -> Double -> MetricPoint` decodes the
+row's composite key and emits group keys `"experiment"` (injected), `"variant"`, `"index"`,
+`"step"`. Metric name:
 `"experiment_funnel"`.
 
 **Handler** — `experimentFunnelHandler`: validate `experiment` and each CSV piece of
@@ -1320,6 +1348,14 @@ curl -s -H "Authorization: Bearer $TOKEN_A" \
 }
 ```
 
+Observed on 2026-07-19 against an isolated, fully migrated `kansoku_ep19_m3`
+PostgreSQL database and a real server on port 18080: account A returned the exact four
+points above (`control` 1/1, `treatment` 4/3). Account B returned an empty funnel, proving
+account isolation. An invalid step (`bad'step`) and `window=0` returned named HTTP 400
+responses, while a valid unknown experiment returned
+`{"metric":"experiment_funnel","points":[]}` with HTTP 200. The temporary database
+contained only acceptance credentials/queue state and was dropped afterward.
+
 **7. Error contract** (M2/M3):
 
 ```bash
@@ -1345,7 +1381,9 @@ curl -s -H "Authorization: Bearer $TOKEN_A" \
 { "metric": "experiment_conversion", "points": [] }
 ```
 
-**Test-level acceptance:** `cabal test` green throughout; QuerySpec asserts the three new
+**Test-level acceptance:** `just build` and `just test` are green: 120 core examples and
+11 client examples passed with zero failures, with one opt-in live client example pending.
+QuerySpec asserts the three new
 SQL shapes (including no `JSONExtract` and no `UNION ALL` anywhere, `ORDER BY` everywhere,
 the ordering predicate, the `match` guards); validation specs cover the
 `experiment_viewed` schema (missing, mistyped, bad-charset, conforming) and the
@@ -1422,6 +1460,7 @@ module Kansoku.Metrics.Query
     buildExperimentFunnelSQL,      -- :: QueryRequest -> SqlName -> Int -> [SqlName] -> Text
                                    --    (experiment, window seconds, steps)
     runExperimentExposures, runExperimentConversion, runExperimentFunnel,
+    experimentExposuresPoint, experimentConversionPoint, experimentFunnelPoint,
   )
 ```
 
@@ -1448,3 +1487,8 @@ Revision note (2026-07-19, implementation start): reconciled every authored plac
 with the landed EP-17/EP-18 schema, current `Kansoku.Metrics.*`/`MultiVerb` API, EP-15
 account-parameter path, in-code registry source, and migration ledger through `0013`;
 linked the active intention and recorded the green baseline.
+
+Revision note (2026-07-19, completion): marked all three milestones complete, replaced the
+funnel sketch's illustrative literals with the landed native ClickHouse parameters and
+Dynamic-to-String guards, recorded the fresh end-to-end transcripts and final test counts,
+and linked the durable exposure-based contract in ADR 0006.

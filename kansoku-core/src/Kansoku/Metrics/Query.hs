@@ -7,17 +7,20 @@ module Kansoku.Metrics.Query
     QueryRequest (..),
     buildExperimentConversionSQL,
     buildExperimentExposuresSQL,
+    buildExperimentFunnelSQL,
     buildFunnelSQL,
     buildRetentionSQL,
     buildSQL,
     buildSessionsSQL,
     experimentConversionPoint,
     experimentExposuresPoint,
+    experimentFunnelPoint,
     queryCompileErrorCode,
     queryCompileErrorMessage,
     run,
     runExperimentConversion,
     runExperimentExposures,
+    runExperimentFunnel,
     runFunnel,
     runRetention,
     runSessions,
@@ -164,6 +167,17 @@ runExperimentConversion pool req experiment conversionEvent =
         (buildExperimentConversionSQL req experiment conversionEvent)
     )
 
+runExperimentFunnel :: (IOE :> es) => QueryPool -> QueryRequest -> SqlName -> Int -> [SqlName] -> Eff es MetricResult
+runExperimentFunnel pool req experiment window steps =
+  liftIO
+    ( runSQLWith
+        pool
+        "experiment_funnel"
+        (experimentFunnelAggPoint experiment)
+        (accountParameter req <> [experimentParameter experiment] <> namedParameters "experiment_funnel_step" steps)
+        (buildExperimentFunnelSQL req experiment window steps)
+    )
+
 type QueryParameter = (String, Text)
 
 runSQL :: QueryPool -> Text -> Maybe Text -> [QueryParameter] -> Text -> IO MetricResult
@@ -240,6 +254,10 @@ experimentConversionAggPoint :: SqlName -> AggRow -> MetricPoint
 experimentConversionAggPoint experiment AggRow {group_key, value} =
   experimentConversionPoint experiment (decodeUtf8 group_key) value
 
+experimentFunnelAggPoint :: SqlName -> AggRow -> MetricPoint
+experimentFunnelAggPoint experiment AggRow {group_key, value} =
+  experimentFunnelPoint experiment (decodeUtf8 group_key) value
+
 experimentExposuresPoint :: Maybe Text -> Text -> Double -> MetricPoint
 experimentExposuresPoint bucketValue groupKey value =
   case splitGroupKey groupKey of
@@ -266,6 +284,23 @@ experimentConversionPoint experiment groupKey value =
           value
         }
     Nothing -> MetricPoint {bucket = Nothing, group = Map.empty, value}
+
+experimentFunnelPoint :: SqlName -> Text -> Double -> MetricPoint
+experimentFunnelPoint experiment groupKey value =
+  case Text.splitOn "|" groupKey of
+    [stepIndex, step, variant] ->
+      MetricPoint
+        { bucket = Nothing,
+          group =
+            Map.fromList
+              [ ("experiment", renderSqlName experiment),
+                ("variant", variant),
+                ("index", stepIndex),
+                ("step", step)
+              ],
+          value
+        }
+    _ -> MetricPoint {bucket = Nothing, group = Map.empty, value}
 
 splitGroupKey :: Text -> Maybe (Text, Text)
 splitGroupKey value = do
@@ -681,6 +716,68 @@ experimentFilterClause = \case
   Nothing -> ""
   Just _ -> "\n  AND experiment = {experiment:String}"
 
+-- | Ordered per-variant funnel restricted to each user's post-exposure event
+-- timeline. DateTime64 is converted to DateTime so windowFunnel's public
+-- window unit remains seconds, matching the plain funnel endpoint.
+buildExperimentFunnelSQL :: QueryRequest -> SqlName -> Int -> [SqlName] -> Text
+buildExperimentFunnelSQL req _experiment window steps =
+  Text.unlines
+    [ "WITH exposures AS",
+      "(",
+      "    SELECT",
+      "        canonical_user,",
+      "        CAST(toString(getSubcolumn(properties_json, 'variant')), 'String') AS variant,",
+      "        min(occurred_at) AS first_exposure",
+      "    FROM analytics.events_resolved",
+      "    WHERE canonical_user != ''",
+      "      AND " <> accountPredicate,
+      "      AND event_name = 'experiment_viewed'",
+      "      AND CAST(toString(getSubcolumn(properties_json, 'experiment')), 'String') = {experiment:String}",
+      "      AND match(CAST(toString(getSubcolumn(properties_json, 'experiment')), 'String'), '^[a-z0-9_.:-]{1,128}$')",
+      "      AND match(CAST(toString(getSubcolumn(properties_json, 'variant')), 'String'), '^[a-z0-9_.:-]{1,128}$')",
+      "      AND " <> timestampPredicate req,
+      "    GROUP BY canonical_user, variant",
+      ")",
+      "SELECT",
+      "    '' AS bucket,",
+      "    concat(toString(step.1), '|', step.2, '|', variant) AS group_key,",
+      "    toFloat64(countIf(level >= step.1)) AS value",
+      "FROM",
+      "(",
+      "    SELECT",
+      "        e.variant AS variant,",
+      "        r.canonical_user AS canonical_user,",
+      "        windowFunnel(" <> Text.pack (show window) <> ")(toDateTime(r.occurred_at), " <> conditions <> ") AS level",
+      "    FROM analytics.events_resolved AS r",
+      "    INNER JOIN exposures AS e ON e.canonical_user = r.canonical_user",
+      "    WHERE r.canonical_user != ''",
+      "      AND r.account_id = {account_id:String}",
+      "      AND r.event_name IN (" <> placeholders <> ")",
+      "      AND r.occurred_at >= e.first_exposure",
+      "      AND " <> qualifiedTimestampPredicate "r" req,
+      "    GROUP BY e.variant, r.canonical_user",
+      ")",
+      "ARRAY JOIN [" <> stepTuples <> "] AS step",
+      "GROUP BY variant, step",
+      "ORDER BY variant, step.1"
+    ]
+  where
+    indexedSteps = zip [1 :: Int ..] steps
+    placeholders =
+      Text.intercalate
+        ", "
+        [parameterPlaceholder "experiment_funnel_step" position | (position, _step) <- indexedSteps]
+    conditions =
+      Text.intercalate
+        ", "
+        ["r.event_name = " <> parameterPlaceholder "experiment_funnel_step" position | (position, _step) <- indexedSteps]
+    stepTuples =
+      Text.intercalate
+        ", "
+        [ "(" <> Text.pack (show position) <> ", " <> parameterPlaceholder "experiment_funnel_step" position <> ")"
+        | (position, _step) <- indexedSteps
+        ]
+
 effectiveGrain :: MetricDefinition -> QueryRequest -> Maybe TimeGrain
 effectiveGrain MetricDefinition {timeGrain = defaultGrain} QueryRequest {timeGrain = requestedGrain} =
   requestedGrain <|> defaultGrain <|> Just Day
@@ -811,6 +908,16 @@ timestampPredicate req =
   "occurred_at >= "
     <> sqlString (renderDay (req ^. #from) <> " 00:00:00")
     <> " AND occurred_at < "
+    <> sqlString (renderDay (req ^. #to) <> " 00:00:00")
+
+qualifiedTimestampPredicate :: Text -> QueryRequest -> Text
+qualifiedTimestampPredicate qualifier req =
+  qualifier
+    <> ".occurred_at >= "
+    <> sqlString (renderDay (req ^. #from) <> " 00:00:00")
+    <> " AND "
+    <> qualifier
+    <> ".occurred_at < "
     <> sqlString (renderDay (req ^. #to) <> " 00:00:00")
 
 eventNameClause :: Text -> [SqlName] -> Text

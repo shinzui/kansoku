@@ -137,6 +137,18 @@ data MetricsRoutes mode = MetricsRoutes
           :> QueryParam' '[Required] "event" Text
           :> QueryParam' '[Required] "from" Day
           :> QueryParam' '[Required] "to" Day
+          :> MultiVerb 'Servant.GET '[JSON] (OkResponses "Metric result" MetricResult) (KansokuResult MetricResult),
+    experimentFunnel ::
+      mode
+        :- "metrics"
+          :> "experiments"
+          :> "funnel"
+          :> Description "Ordered funnel per variant of one experiment. Users counted at step N performed steps 1..N in order, all at or after their first exposure to the experiment, within `window` seconds of the chain's first step (default: the full from/to range, capped at 90 days). Steps before first exposure do not count."
+          :> QueryParam' '[Required] "experiment" Text
+          :> QueryParam' '[Required] "steps" Text
+          :> QueryParam' '[Required] "from" Day
+          :> QueryParam' '[Required] "to" Day
+          :> QueryParam "window" Int
           :> MultiVerb 'Servant.GET '[JSON] (OkResponses "Metric result" MetricResult) (KansokuResult MetricResult)
   }
   deriving stock (Generic)

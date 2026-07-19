@@ -214,6 +214,9 @@ spec = describe "Kansoku.Query integration" $ do
           experimentEvent "evt_exp_t1" "acct_experiment_spec" "experiment_viewed" "t1" "2026-08-01 10:00:00 UTC" (Just "treatment"),
           experimentEvent "evt_exp_t2" "acct_experiment_spec" "experiment_viewed" "t2" "2026-08-01 10:00:00 UTC" (Just "treatment"),
           experimentEvent "evt_exp_c1_again" "acct_experiment_spec" "experiment_viewed" "c1" "2026-08-02 10:00:00 UTC" (Just "control"),
+          experimentEvent "evt_checkout_c1" "acct_experiment_spec" "checkout_started" "c1" "2026-08-01 11:00:00 UTC" Nothing,
+          experimentEvent "evt_checkout_t1" "acct_experiment_spec" "checkout_started" "t1" "2026-08-01 11:00:00 UTC" Nothing,
+          experimentEvent "evt_checkout_t2" "acct_experiment_spec" "checkout_started" "t2" "2026-08-01 11:00:00 UTC" Nothing,
           experimentEvent "evt_conv_c2_before" "acct_experiment_spec" "purchase_completed" "c2" "2026-08-01 09:00:00 UTC" Nothing,
           experimentEvent "evt_conv_c1" "acct_experiment_spec" "purchase_completed" "c1" "2026-08-01 12:00:00 UTC" Nothing,
           experimentEvent "evt_conv_t1" "acct_experiment_spec" "purchase_completed" "t1" "2026-08-01 12:00:00 UTC" Nothing,
@@ -250,6 +253,20 @@ spec = describe "Kansoku.Query integration" $ do
             ((Just "conversion_rate", Just "treatment"), 0.5),
             ((Just "exposed", Just "control"), 2),
             ((Just "exposed", Just "treatment"), 2)
+          ]
+      steps <- traverse validSqlName ["checkout_started", "purchase_completed"]
+      funnel <- runEff (Query.runExperimentFunnel queryPool request experiment 604800 steps)
+      Map.fromList
+        [ ( (Map.lookup "index" (point ^. #group), Map.lookup "variant" (point ^. #group)),
+            point ^. #value
+          )
+        | point <- funnel ^. #points
+        ]
+        `shouldBe` Map.fromList
+          [ ((Just "1", Just "control"), 1),
+            ((Just "2", Just "control"), 1),
+            ((Just "1", Just "treatment"), 2),
+            ((Just "2", Just "treatment"), 1)
           ]
 
 type SleepColumns = '[Column "s" UInt8]

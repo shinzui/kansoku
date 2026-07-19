@@ -131,6 +131,29 @@ spec = describe "Kansoku.Query.buildSQL" $ do
     sql `shouldNotContainText` "purchase_completed"
     sql `shouldNotContainText` "UNION ALL"
 
+  it "builds a parameterized post-exposure ordered funnel per variant" $ do
+    let sql =
+          buildExperimentFunnelSQL
+            dayRequest
+            (sqlName "checkout_v2")
+            604800
+            (sqlName <$> ["checkout_started", "purchase_completed"])
+    sql `shouldContainText` "windowFunnel(604800)(toDateTime(r.occurred_at), r.event_name = {experiment_funnel_step_1:String}, r.event_name = {experiment_funnel_step_2:String})"
+    sql `shouldContainText` "INNER JOIN exposures AS e"
+    sql `shouldContainText` "r.occurred_at >= e.first_exposure"
+    sql `shouldContainText` "r.event_name IN ({experiment_funnel_step_1:String}, {experiment_funnel_step_2:String})"
+    sql `shouldContainText` "ARRAY JOIN [(1, {experiment_funnel_step_1:String}), (2, {experiment_funnel_step_2:String})] AS step"
+    sql `shouldContainText` "toFloat64(countIf(level >= step.1)) AS value"
+    sql `shouldContainText` "ORDER BY variant, step.1"
+    sql `shouldNotContainText` "checkout_v2"
+    sql `shouldNotContainText` "checkout_started"
+    sql `shouldNotContainText` "purchase_completed"
+    sql `shouldNotContainText` "UNION ALL"
+
+  it "renders three experiment funnel step indices in caller order" $
+    buildExperimentFunnelSQL dayRequest (sqlName "checkout_v2") 3600 (sqlName <$> ["one", "two", "three"])
+      `shouldContainText` "ARRAY JOIN [(1, {experiment_funnel_step_1:String}), (2, {experiment_funnel_step_2:String}), (3, {experiment_funnel_step_3:String})] AS step"
+
   it "decodes experiment group keys into the public metric-point vocabulary" $ do
     experimentExposuresPoint (Just "2026-08-01") "checkout_v2|control" 5
       `shouldBe` MetricPoint
@@ -144,12 +167,19 @@ spec = describe "Kansoku.Query.buildSQL" $ do
           group = Map.fromList [("experiment", "checkout_v2"), ("variant", "treatment"), ("measure", "conversion_rate")],
           value = 0.6
         }
+    experimentFunnelPoint (sqlName "checkout_v2") "2|purchase_completed|treatment" 3
+      `shouldBe` MetricPoint
+        { bucket = Nothing,
+          group = Map.fromList [("experiment", "checkout_v2"), ("variant", "treatment"), ("index", "2"), ("step", "purchase_completed")],
+          value = 3
+        }
 
   it "uses the native JSON projection for every experiment query" $
     traverse_
       (`shouldNotContainText` "JSONExtract")
       [ buildExperimentExposuresSQL dayRequest (Just (sqlName "checkout_v2")),
-        buildExperimentConversionSQL dayRequest (sqlName "checkout_v2") (sqlName "purchase_completed")
+        buildExperimentConversionSQL dayRequest (sqlName "checkout_v2") (sqlName "purchase_completed"),
+        buildExperimentFunnelSQL dayRequest (sqlName "checkout_v2") 604800 (sqlName <$> ["checkout_started", "purchase_completed"])
       ]
 
   it "scopes every SQL builder with a native account parameter" $ do
@@ -166,7 +196,8 @@ spec = describe "Kansoku.Query.buildSQL" $ do
             buildRetentionSQL dayRequest [1, 7],
             buildFunnelSQL dayRequest 604800 (sqlName <$> ["signup_started", "signup_completed"]),
             buildExperimentExposuresSQL dayRequest (Just (sqlName "checkout_v2")),
-            buildExperimentConversionSQL dayRequest (sqlName "checkout_v2") (sqlName "purchase_completed")
+            buildExperimentConversionSQL dayRequest (sqlName "checkout_v2") (sqlName "purchase_completed"),
+            buildExperimentFunnelSQL dayRequest (sqlName "checkout_v2") 604800 (sqlName <$> ["checkout_started", "purchase_completed"])
           ]
     traverse_ (`shouldContainText` "account_id = {account_id:String}") sqlBuilders
     traverse_ (`shouldNotContainText` "acct_query") sqlBuilders
@@ -184,7 +215,8 @@ spec = describe "Kansoku.Query.buildSQL" $ do
         buildRetentionSQL dayRequest [1, 7],
         buildFunnelSQL dayRequest 604800 (sqlName <$> ["signup_started", "signup_completed"]),
         buildExperimentExposuresSQL dayRequest (Just (sqlName "checkout_v2")),
-        buildExperimentConversionSQL dayRequest (sqlName "checkout_v2") (sqlName "purchase_completed")
+        buildExperimentConversionSQL dayRequest (sqlName "checkout_v2") (sqlName "purchase_completed"),
+        buildExperimentFunnelSQL dayRequest (sqlName "checkout_v2") 604800 (sqlName <$> ["checkout_started", "purchase_completed"])
       ]
 
   it "requires every Sum or Average builtin to declare a numeric aggregation property" $

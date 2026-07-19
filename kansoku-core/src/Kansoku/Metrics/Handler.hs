@@ -44,7 +44,8 @@ metricsServer principal pool =
       organizations = notImplemented "organizations",
       custom = notImplemented "custom",
       experiments = experimentsHandler,
-      experimentConversion = experimentConversionHandler
+      experimentConversion = experimentConversionHandler,
+      experimentFunnel = experimentFunnelHandler
     }
   where
     metricHandler :: Text -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> Handler (KansokuResult MetricResult)
@@ -138,6 +139,41 @@ metricsServer principal pool =
                         experiment
                         conversionEvent
                     )
+
+    experimentFunnelHandler :: Text -> Text -> Day -> Day -> Maybe Int -> Handler (KansokuResult MetricResult)
+    experimentFunnelHandler experimentParam stepsParam fromDay toDay requestedWindow =
+      case mkSqlName experimentParam of
+        Left invalid ->
+          pure
+            ( KansokuBadRequest
+                (badRequest "invalid_experiment_name" ("invalid experiment name: " <> invalid))
+            )
+        Right experiment ->
+          case nonEmptyCsv stepsParam of
+            [] -> pure (KansokuBadRequest (badRequest "invalid_funnel_steps" ("invalid funnel steps: " <> stepsParam)))
+            rawSteps ->
+              case traverse mkSqlName rawSteps of
+                Left invalid ->
+                  pure
+                    ( KansokuBadRequest
+                        (badRequest "invalid_funnel_step" ("invalid funnel step: " <> invalid))
+                    )
+                Right steps ->
+                  case funnelWindow fromDay toDay requestedWindow of
+                    Left invalid ->
+                      pure
+                        ( KansokuBadRequest
+                            (badRequest "invalid_funnel_window" ("invalid funnel window: " <> invalid <> "; expected 1..7776000 seconds"))
+                        )
+                    Right window ->
+                      effToHandler
+                        ( Query.runExperimentFunnel
+                            pool
+                            (queryRequest account fromDay toDay Nothing Nothing)
+                            experiment
+                            window
+                            steps
+                        )
 
     notImplemented :: Text -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> Handler (KansokuResult MetricResult)
     notImplemented name _ _ _ _ =

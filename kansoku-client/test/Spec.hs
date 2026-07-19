@@ -164,6 +164,13 @@ spec = describe "Kansoku.Client" $ do
       case conversionResult of
         Right (KansokuOk result) -> metric result `shouldBe` "experiment_conversion"
         other -> expectationFailure ("unexpected conversion client result: " <> show other)
+      funnelResult <-
+        runClientM
+          (experimentFunnelClient credential "checkout_v2" "checkout_started,purchase_completed" fromDay toDay (Just 604800))
+          env
+      case funnelResult of
+        Right (KansokuOk result) -> metric result `shouldBe` "experiment_funnel"
+        other -> expectationFailure ("unexpected funnel client result: " <> show other)
 
   it "skips the live integration test unless KANSOKU_SERVER_URL is set" $ do
     server <- lookupEnv "KANSOKU_SERVER_URL"
@@ -248,6 +255,11 @@ metricsRecorderApp request respond =
         | queryValue "experiment" request == Just "checkout_v2",
           queryValue "event" request == Just "purchase_completed" ->
             ok "experiment_conversion"
+      ["metrics", "experiments", "funnel"]
+        | queryValue "experiment" request == Just "checkout_v2",
+          queryValue "steps" request == Just "checkout_started,purchase_completed",
+          queryValue "window" request == Just "604800" ->
+            ok "experiment_funnel"
       _ -> respond (responseLBS status400 [("content-type", "application/json")] (Aeson.encode ErrorEnvelopeWire {code = "bad_request", message = "unexpected metrics request", retryable = False}))
   where
     ok name =

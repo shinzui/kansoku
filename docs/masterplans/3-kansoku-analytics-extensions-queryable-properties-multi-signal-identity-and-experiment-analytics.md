@@ -79,7 +79,7 @@ it non-trivial; recorded as future scope.
 |----|-------|------|-----------|-----------|--------|
 | 17 | Queryable event properties: typed storage and property-based grouping | docs/plans/17-queryable-event-properties-typed-storage-and-property-based-grouping.md | None (external: MP-2) | EP-20 | Complete |
 | 18 | Multi-signal identity: identifier kinds, fingerprints, and confidence-aware stitching | docs/plans/18-multi-signal-identity-identifier-kinds-fingerprints-and-confidence-aware-stitching.md | None (external: MP-2) | None | Complete |
-| 19 | Experiment analytics: assignment events, variant rollups, and per-variant metrics | docs/plans/19-experiment-analytics-assignment-events-variant-rollups-and-per-variant-metrics.md | EP-17 | EP-18, EP-20 | In Progress |
+| 19 | Experiment analytics: assignment events, variant rollups, and per-variant metrics | docs/plans/19-experiment-analytics-assignment-events-variant-rollups-and-per-variant-metrics.md | EP-17 | EP-18, EP-20 | Complete |
 | 20 | Event schema governance: versioned registry and portfolio event contracts | docs/plans/20-event-schema-governance-versioned-registry-and-portfolio-event-contracts.md | None (external: MP-2) | None | Not Started |
 
 Status values: Not Started, In Progress, Complete, Cancelled.
@@ -211,8 +211,8 @@ and the milestone. This section provides an at-a-glance view of the entire initi
 - [x] EP-18: identity-signals model (wire field, storage, ingestion) live
 - [x] EP-18: confidence-aware resolution replaces latest-wins; merge conflicts representable
 - [x] EP-18: fingerprint retention/deletion policy implemented and documented
-- [ ] EP-19: assignment event schemas registered; variant rollups populated
-- [ ] EP-19: per-variant metrics endpoints (exposure, conversion, funnel) serving
+- [x] EP-19: assignment event schemas registered; variant rollups populated
+- [x] EP-19: per-variant metrics endpoints (exposure, conversion, funnel) serving
 - [ ] EP-20: events carry schema version; versioned registry established
 - [ ] EP-20: portfolio event contract published and consumable by other kikan services
 
@@ -268,6 +268,20 @@ interactions between child plans. Provide concise evidence.
   - ADR 0005 owns the cross-plan identifier vocabulary, one-hop evidence semantics,
     ranking policy, conflict visibility, and 180-day fingerprint boundary.
 
+- 2026-07-19, during EP-19 implementation:
+  - The event contract is exposure-based: `experiment_viewed` means a variant was actually
+    shown. Its required `experiment` and `variant` properties use the same SQL-safe name
+    rule as metric inputs, and the rollup returned the expected account/day/variant counts
+    `5/1/5/2` under replay-safe unique sketches.
+  - A ClickHouse 26 insert block containing no experiment JSON paths left
+    `toString(getSubcolumn(...))` dynamically typed while analyzing the materialized view's
+    `GROUP BY`. Immutable corrective migration `0015` recreates only the EP-19 view with an
+    explicit outer String cast; fresh replay through `0015` and ordinary inserts passed.
+  - Exact stitched conversion and funnel queries share a first-exposure boundary. The live
+    account-A fixture returned control/treatment conversions `1/3` from `5/5` exposures and
+    ordered funnels `1/1` and `4/3`; account B remained isolated. ADR 0006 owns these
+    semantics and explicitly excludes significance claims.
+
 
 ## Decision Log
 
@@ -314,6 +328,15 @@ interactions between child plans. Provide concise evidence.
   Durable rationale and privacy consequences live in ADR 0005.
   Date: 2026-07-19
 
+- Decision: EP-19's cross-plan experiment contract is render-time
+  `experiment_viewed`, an approximate raw-identity exposure rollup, and exact canonical-user
+  conversion/funnel endpoints that exclude pre-exposure outcomes. Users seen in multiple
+  variants count in each, and no endpoint declares statistical significance or a winner.
+  Rationale: This preserves causal ordering, keeps the high-frequency dashboard read cheap,
+  leaves identity resolution revisable at query time for attribution, and makes data-quality
+  contamination visible. Durable rationale and consequences live in ADR 0006.
+  Date: 2026-07-19
+
 
 ## Outcomes & Retrospective
 
@@ -332,7 +355,16 @@ API, client, OpenAPI, writer, and storage; account-scoped evidence with confiden
 resolution and queryable conflicts; 180-day fingerprint evidence retention; an exercised
 raw-retention and per-user erasure runbook; and retirement of the latest-wins identity
 map. The seven-column resolved-event contract and MP-2-era counts remained stable. EP-19
-and EP-20 remain to complete the initiative.
+could therefore consume canonical identity and native properties without compatibility
+work.
+
+EP-19 completed on 2026-07-19. It delivered the validated `experiment_viewed` exposure
+contract; an account/experiment/variant/day exposure rollup; authenticated exposure,
+conversion, and ordered-funnel endpoints; typed client selectors and regenerated OpenAPI;
+and ADR 0006's durable attribution semantics. Fresh migrations, real HTTP acceptance, and
+the final 120-core/11-client test pass verified exact post-exposure counts, tenant
+isolation, malformed-input rejection, and empty unknown-experiment results. EP-20 is the
+only remaining child plan in this initiative.
 
 ---
 
@@ -347,3 +379,8 @@ Revision note (2026-07-19, EP-18 completion): marked EP-18 complete, recorded it
 wire and resolved-event contracts, captured cross-plan verification evidence, linked ADR
 0005's durable identity policy, and updated the remaining initiative outcome to EP-19 and
 EP-20.
+
+Revision note (2026-07-19, EP-19 completion): marked EP-19 complete, recorded the shipped
+exposure rollup and three per-variant endpoints, captured the ClickHouse Dynamic cast
+correction and end-to-end counts, linked ADR 0006, and left EP-20 as the sole remaining
+child plan.

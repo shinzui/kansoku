@@ -5,6 +5,7 @@
 -- | Typed servant-client access to Kansoku's experiment metrics.
 module Kansoku.Client.Metrics
   ( experimentConversionClient,
+    experimentFunnelClient,
     experimentsClient,
     kansokuMetricsCredential,
     metricsClient,
@@ -42,3 +43,7 @@ experimentsClient credential =
 experimentConversionClient :: AuthenticatedRequest MetricsAuth -> Text -> Text -> Day -> Day -> ClientM (KansokuResult MetricResult)
 experimentConversionClient credential =
   Metrics.experimentConversion (metricsClient credential)
+
+experimentFunnelClient :: AuthenticatedRequest MetricsAuth -> Text -> Text -> Day -> Day -> Maybe Int -> ClientM (KansokuResult MetricResult)
+experimentFunnelClient credential =
+  Metrics.experimentFunnel (metricsClient credential)

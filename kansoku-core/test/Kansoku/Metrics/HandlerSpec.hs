@@ -97,6 +97,18 @@ spec = describe "Kansoku.Metrics.Handler" $ do
           ( "/metrics/experiments/conversion?experiment=checkout_v2&event=experiment_viewed&from=2026-06-01&to=2026-06-08",
             "invalid_conversion_event",
             "must differ"
+          ),
+          ( "/metrics/experiments/funnel?experiment=bad%27name&steps=checkout_started,purchase_completed&from=2026-06-01&to=2026-06-08",
+            "invalid_experiment_name",
+            "bad'name"
+          ),
+          ( "/metrics/experiments/funnel?experiment=checkout_v2&steps=checkout_started,bad%27step&from=2026-06-01&to=2026-06-08",
+            "invalid_funnel_step",
+            "bad'step"
+          ),
+          ( "/metrics/experiments/funnel?experiment=checkout_v2&steps=checkout_started,purchase_completed&from=2026-06-01&to=2026-06-08&window=0",
+            "invalid_funnel_window",
+            "0"
           )
         ]
 
