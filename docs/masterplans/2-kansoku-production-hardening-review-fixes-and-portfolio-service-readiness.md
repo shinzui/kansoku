@@ -91,7 +91,7 @@ waves.
 | 12 | ClickHouse schema v2: sort key, FINAL-free resolution, join-free rollups | docs/plans/12-clickhouse-schema-v2-sort-key-final-free-resolution-join-free-rollups.md | EP-10 | None | Complete |
 | 9 | Convert kansoku to NamedRoutes, vertical slices, and MultiVerb | docs/plans/9-convert-kansoku-to-namedroutes-vertical-slices-and-multiverb.md | EP-10 | None | Complete |
 | 13 | Safe and correct metric SQL: validated inputs, ordered funnels, honest failures | docs/plans/13-safe-and-correct-metric-sql-validated-inputs-ordered-funnels-honest-failures.md | EP-12 | EP-11, EP-9 | Complete |
-| 14 | SDK-grade ingest contract: partial batch acceptance, CORS, and payload limits | docs/plans/14-sdk-grade-ingest-contract-partial-batch-acceptance-cors-and-payload-limits.md | EP-9 | None | Not Started |
+| 14 | SDK-grade ingest contract: partial batch acceptance, CORS, and payload limits | docs/plans/14-sdk-grade-ingest-contract-partial-batch-acceptance-cors-and-payload-limits.md | EP-9 | None | In Progress |
 | 16 | Pipeline observability: queue depth, writer lag, and exported telemetry | docs/plans/16-pipeline-observability-queue-depth-writer-lag-and-exported-telemetry.md | EP-10 | EP-11 | Not Started |
 | 15 | API keys, service auth, and account-scoped queries | docs/plans/15-api-keys-service-auth-and-account-scoped-queries.md | EP-9 | EP-12, EP-13, EP-14 | Not Started |
 
@@ -548,3 +548,7 @@ Revision note (2026-07-18, sixth revision): EP-13 completed. The registry and ag
 now record strict name validation plus native parameters, ordered bounded-window funnels, loud
 typed failures, SQL-owned ordering, schema-v2 rollup/session alignment, retention semantics,
 fixture-backed HTTP evidence, deterministic OpenAPI, and coherent Cabal/Nix validation.
+
+Revision note (2026-07-19): EP-14 started after its hard dependency EP-9 completed. Implementation
+uses the MasterPlan's recorded intention and targets the landed NamedRoutes, shared MultiVerb
+response algebra, generic SDK client, deterministic OpenAPI, and WAI assembly architecture.

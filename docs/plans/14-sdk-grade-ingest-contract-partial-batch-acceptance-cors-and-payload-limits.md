@@ -5,6 +5,7 @@ title: "SDK-grade ingest contract: partial batch acceptance, CORS, and payload l
 kind: exec-plan
 created_at: 2026-07-15T21:30:34Z
 master_plan: "docs/masterplans/2-kansoku-production-hardening-review-fixes-and-portfolio-service-readiness.md"
+intention: intention_01kxr5jt2heyvt0n768ym9dwqd
 ---
 
 # SDK-grade ingest contract: partial batch acceptance, CORS, and payload limits
@@ -57,9 +58,11 @@ the contract.
 Use a checklist to summarize granular steps. Every stopping point must be documented here,
 even if it requires splitting a partially completed task into two ("done" vs. "remaining").
 
-- [ ] Milestone 0: reconcile this plan's Context against plan 9's *landed* state (module paths,
-      MultiVerb idiom, response-envelope types). Record any divergence in Surprises & Discoveries
-      and update this plan's file paths and code sketches before writing any code.
+- [x] Milestone 0 (completed 2026-07-19T15:11Z): reconciled this plan against EP-9's landed
+      NamedRoutes/MultiVerb/OpenAPI shape and EP-10/EP-11's later `ReadyProbe`/`QueryPool`
+      assembly. Updated the server signatures and sketches below. Baseline `cabal build all`
+      and `cabal test all` passed (50 core examples, 11 ClickHouse-dependent pending; 8 client
+      examples, 1 opt-in live pending).
 - [ ] Milestone 1: `RejectedEvent` + new `BatchAck` wire types; `renderValidationError`; partial
       acceptance in the batch handler (`partitionBatch`); `kansoku-client` and its tests updated;
       OpenAPI document regenerated; `OpenApiSpec` and routing-test expectations updated;
@@ -77,7 +80,13 @@ even if it requires splitting a partially completed task into two ("done" vs. "r
 Document unexpected behaviors, bugs, optimizations, or insights discovered during
 implementation. Provide concise evidence.
 
-(None yet.)
+- Discovery (Milestone 0, 2026-07-19): EP-9 landed every expected contract shape, but EP-10 and
+  EP-11 subsequently changed the server assembly beyond this plan's original sketches.
+  `kansokuApp` is currently `ReadyProbe -> Pool.Pool -> QueueName -> QueryPool -> Application`,
+  calls `serveWithContext kansokuAPI (envelopeFormatters :. EmptyContext)`, and passes the probe
+  into `waiWrapper`; it no longer accepts a single ClickHouse `Connection`. EP-14 therefore adds
+  `Config` while preserving `ReadyProbe`, `QueryPool`, the envelope formatter context, and all
+  three WAI-level operational routes.
 
 
 ## Decision Log
@@ -157,6 +166,14 @@ Record every decision made while working on the plan.
   (buffer overflow, delivery failure), and rejection is a third way to lose an event. No new API
   surface is needed.
   Date: 2026-07-15
+
+- Decision: Add `Config` as the first `kansokuApp` argument while preserving the landed
+  `ReadyProbe`, PostgreSQL pool, queue name, and `QueryPool` arguments.
+  Rationale: EP-10 and EP-11 completed after this plan was authored. CORS and size-limit settings
+  need the full configuration value, while readiness supervision and query pooling are completed
+  dependencies that EP-14 must not regress. Keeping the remaining argument order intact makes the
+  call-site change in `kansoku-server/app/Main.hs` explicit and narrow.
+  Date: 2026-07-19
 
 
 ## Outcomes & Retrospective
@@ -348,14 +365,14 @@ commit. (Pre-plan-9 fallback: the generator is `kansoku-core/src/Kansoku/OpenApi
 
 ### Server assembly and configuration
 
-After plan 9, `kansoku-core/src/Kansoku/Server.hs` assembles one servant application:
-`kansokuApp pool queueName conn = waiWrapper (serve (Proxy @(NamedRoutes KansokuAPI)) (kansokuServer ...))`,
-where `waiWrapper` answers `/health` and `/openapi.json` at the WAI level and delegates everything
-else to servant. **Middleware** — a function `Application -> Application` that wraps a WAI app to
-observe/modify requests and responses — attaches here. Milestones 2 and 3 wrap the servant
-application (inside `waiWrapper`, so `/health` stays untouched); the pre-plan-9 fallback location
-is the `_ -> ingestApp pool queueName req respond` branch of the old `pathInfo` dispatch in the
-same file.
+After EP-9, EP-10, and EP-11, `kansoku-core/src/Kansoku/Server.hs` assembles one Servant
+application with `kansokuApp :: ReadyProbe -> Pool.Pool -> QueueName -> QueryPool -> Application`.
+It calls `serveWithContext kansokuAPI (envelopeFormatters :. EmptyContext)` and passes the result
+through `waiWrapper probe`, which answers `/health`, `/ready`, and `/openapi.json` at the WAI level
+and delegates everything else to Servant. **Middleware** — a function `Application -> Application`
+that wraps a WAI app to observe or modify requests and responses — attaches around that inner
+Servant application. Milestones 2 and 3 add `Config` as the first `kansokuApp` argument and wrap
+the inner application, so all three operational routes remain untouched.
 
 `kansoku-core/src/Kansoku/Config.hs` holds the `Config` record loaded by `loadConfig` from
 environment variables, total with defaults (missing variables never fail). Per the MasterPlan's
@@ -691,17 +708,19 @@ Attach it around the servant application, inside plan 9's `waiWrapper` so `/heal
 call in `kansoku-server/app/Main.hs`, which already holds the loaded `Config`):
 
 ```haskell
-kansokuApp :: Config -> Pool.Pool -> QueueName -> Connection -> Application
-kansokuApp config pool queueName conn =
+kansokuApp :: Config -> ReadyProbe -> Pool.Pool -> QueueName -> QueryPool -> Application
+kansokuApp config probe pool queueName queryPool =
   waiWrapper
+    probe
     ( ingestCors
         (config ^. #corsAllowedOrigins)
-        (serve (Proxy @(NamedRoutes KansokuAPI)) (kansokuServer pool queueName conn))
+        ( serveWithContext
+            kansokuAPI
+            (envelopeFormatters :. EmptyContext)
+            (kansokuServer pool queueName queryPool)
+        )
     )
 ```
-
-(Pre-plan-9 fallback: wrap only the `ingestApp pool queueName` value in the `_ ->` branch of the
-old `pathInfo` dispatch — the path guard then becomes redundant but harmless.)
 
 **Step 4 — a middleware test.** Add `kansoku-core/test/Kansoku/CorsSpec.hs` (register in
 `Spec.hs` and the cabal stanza) exercising `ingestCors` over a sentinel inner app with
@@ -812,14 +831,19 @@ responses browser SDKs most need to understand — recorded here so the next rea
 "simplify" the nesting:
 
 ```haskell
-kansokuApp :: Config -> Pool.Pool -> QueueName -> Connection -> Application
-kansokuApp config pool queueName conn =
+kansokuApp :: Config -> ReadyProbe -> Pool.Pool -> QueueName -> QueryPool -> Application
+kansokuApp config probe pool queueName queryPool =
   waiWrapper
+    probe
     ( ingestCors
         (config ^. #corsAllowedOrigins)
         ( bodySizeLimit
             (config ^. #ingestMaxBodyBytes)
-            (serve (Proxy @(NamedRoutes KansokuAPI)) (kansokuServer pool queueName conn))
+            ( serveWithContext
+                kansokuAPI
+                (envelopeFormatters :. EmptyContext)
+                (kansokuServer pool queueName queryPool)
+            )
         )
     )
 ```
@@ -1211,7 +1235,7 @@ corsAllowedOrigins :: !(Maybe [Text])          -- field on Config; KANSOKU_CORS_
 
 -- kansoku-core/src/Kansoku/Server.hs
 ingestCors :: Maybe [Text] -> Middleware
-kansokuApp :: Config -> Pool.Pool -> QueueName -> Connection -> Application
+kansokuApp :: Config -> ReadyProbe -> Pool.Pool -> QueueName -> QueryPool -> Application
 
 -- Milestone 3
 -- kansoku-core/src/Kansoku/Config.hs
@@ -1237,3 +1261,10 @@ commits as `kansoku-client` and the OpenAPI document (MasterPlan integration poi
 metrics wire types", order EP-9 → EP-14 → EP-15); EP-15 will attach write-key authentication to
 the contract this plan finalizes, which is why `X-Api-Key`/`Authorization` are pre-allowed in
 CORS and why nothing here hard-codes an assumption that ingest is unauthenticated.
+
+---
+
+Revision note (2026-07-19): Milestone 0 reconciled the plan with the completed EP-9, EP-10, and
+EP-11 working tree. The server context and code sketches now preserve `ReadyProbe`, `QueryPool`,
+`serveWithContext`, envelope formatters, and the `/ready` WAI route while adding `Config` for
+EP-14 middleware settings. The baseline build and test evidence is recorded in Progress.
