@@ -2,6 +2,7 @@
 module Kansoku.Event.Registry
   ( EventRegistry (..),
     EventSchema (..),
+    PropertyPattern (..),
     PropertySpec (..),
     PropertyType (..),
     defaultRegistry,
@@ -20,10 +21,15 @@ import Kansoku.Prelude
 data PropertyType = PTString | PTNumber | PTBool | PTObject | PTArray | PTAny
   deriving stock (Generic, Eq, Show)
 
+-- | A syntactic constraint applied after a property's JSON type is validated.
+data PropertyPattern = SqlNamePattern
+  deriving stock (Generic, Eq, Show)
+
 data PropertySpec = PropertySpec
   { propName :: !Text,
     propType :: !PropertyType,
-    propRequired :: !Bool
+    propRequired :: !Bool,
+    propPattern :: !(Maybe PropertyPattern)
   }
   deriving stock (Generic, Eq, Show)
 
@@ -52,27 +58,42 @@ defaultRegistry =
     emptyRegistry
     [ EventSchema
         (EventName "page_view")
-        [PropertySpec "url" PTString True],
+        [plainProperty "url" PTString True],
       EventSchema
         (EventName "session_start")
-        [PropertySpec "sessionId" PTString True],
+        [plainProperty "sessionId" PTString True],
       EventSchema
         (EventName "identify")
         [],
       EventSchema
         (EventName "user_registered")
-        [PropertySpec "userId" PTString True],
+        [plainProperty "userId" PTString True],
       EventSchema
         (EventName "subscription_started")
-        [ PropertySpec "plan" PTString True,
-          PropertySpec "amount" PTNumber False
+        [ plainProperty "plan" PTString True,
+          plainProperty "amount" PTNumber False
         ],
       EventSchema
         (EventName "payment_completed")
-        [ PropertySpec "amount" PTNumber True,
-          PropertySpec "plan" PTString False
+        [ plainProperty "amount" PTNumber True,
+          plainProperty "plan" PTString False
         ],
       EventSchema
         (EventName "feature_used")
-        [PropertySpec "feature" PTString True]
+        [plainProperty "feature" PTString True],
+      -- Emit an exposure when a user is shown a variant, not merely assigned
+      -- one. Re-exposures are allowed because analytics count unique users.
+      EventSchema
+        (EventName "experiment_viewed")
+        [ sqlNameProperty "experiment",
+          sqlNameProperty "variant"
+        ]
     ]
+
+plainProperty :: Text -> PropertyType -> Bool -> PropertySpec
+plainProperty name propertyType required =
+  PropertySpec name propertyType required Nothing
+
+sqlNameProperty :: Text -> PropertySpec
+sqlNameProperty name =
+  PropertySpec name PTString True (Just SqlNamePattern)

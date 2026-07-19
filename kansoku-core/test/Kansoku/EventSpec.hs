@@ -1,13 +1,17 @@
 module Kansoku.EventSpec (spec) where
 
 import Data.Aeson (Value, decode, eitherDecode, encode)
+import Data.Aeson qualified as Aeson
 import Data.Aeson.KeyMap qualified as KeyMap
 import Data.ByteString.Lazy.Char8 qualified as LBS8
+import Data.Either (isRight)
+import Data.Foldable (traverse_)
 import Data.Generics.Labels ()
 import Data.List (isInfixOf)
 import Data.Map.Strict qualified as Map
 import Data.Text qualified as Text
 import Kansoku.Event
+import Kansoku.Metrics.Query.Validate (mkSqlName)
 import Kansoku.Prelude
 import Test.Hspec
 
@@ -57,6 +61,24 @@ spec = describe "Kansoku.Event" $ do
     it "flags a missing required property for a registered event" $
       validateEvent (expectedSample & #properties .~ KeyMap.empty)
         `shouldSatisfy` hasError (MissingRequiredProperty (EventName "page_view") "url")
+
+    it "enforces the experiment_viewed property contract" $ do
+      let valid = experimentEvent (Aeson.String "checkout_v2") (Just (Aeson.String "treatment"))
+      validateEvent valid `shouldBe` Right valid
+      validateEvent (experimentEvent (Aeson.String "checkout_v2") Nothing)
+        `shouldSatisfy` hasError (MissingRequiredProperty (EventName "experiment_viewed") "variant")
+      validateEvent (experimentEvent (Aeson.String "checkout_v2") (Just (Aeson.Number 1)))
+        `shouldSatisfy` hasError (WrongPropertyType (EventName "experiment_viewed") "variant" PTString)
+      validateEvent (experimentEvent (Aeson.String "checkout_v2") (Just (Aeson.String "Treatment!")))
+        `shouldSatisfy` hasError (InvalidPropertyValue (EventName "experiment_viewed") "variant" "expected [a-z0-9_.:-]{1,128}")
+
+    it "keeps registry SqlNamePattern acceptance aligned with mkSqlName" $ do
+      let accepted = ["checkout_v2", "control", "a", "x.y:z-1", Text.replicate 128 "a"]
+          rejected = ["", Text.replicate 129 "a", "Control", "checkout v2", "variant'--", "bad|variant", "bad\nvariant"]
+          agrees value =
+            isRight (validateEvent (experimentEvent (Aeson.String "checkout_v2") (Just (Aeson.String value))))
+              == isRight (mkSqlName value)
+      traverse_ (\value -> agrees value `shouldBe` True) (accepted <> rejected)
 
     it "accepts every declared identifier kind" $ do
       let ids = Map.fromList [(name, "opaque-value") | name <- allowedIdentifierKindNames]
@@ -183,3 +205,17 @@ isLeftContaining _ (Right _) = False
 hasError :: ValidationError -> Either [ValidationError] AnalyticsEvent -> Bool
 hasError expected (Left errs) = expected `elem` errs
 hasError _ (Right _) = False
+
+experimentEvent :: Aeson.Value -> Maybe Aeson.Value -> AnalyticsEvent
+experimentEvent experiment variant =
+  baseEvent
+    (EventId "evt_experiment")
+    (EventName "experiment_viewed")
+    Web
+    (read "2026-08-01 10:00:00 UTC")
+    (read "2026-08-01 10:00:01 UTC")
+    & #userId
+    .~ Just (UserId "user_experiment")
+    & #properties
+    .~ KeyMap.fromList
+      ([("experiment", experiment)] <> maybe [] (pure . ("variant",)) variant)

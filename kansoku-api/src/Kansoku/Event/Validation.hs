@@ -10,6 +10,7 @@ where
 import Data.Aeson (Value (..))
 import Data.Aeson.Key qualified as Key
 import Data.Aeson.KeyMap qualified as KeyMap
+import Data.Char (isAsciiLower, isDigit)
 import Data.Map.Strict qualified as Map
 import Data.Text qualified as Text
 import Data.Time.Format (defaultTimeLocale, formatTime)
@@ -27,6 +28,7 @@ data ValidationError
   | IdentifierValueBadCharset Text
   | MissingRequiredProperty EventName Text
   | WrongPropertyType EventName Text PropertyType
+  | InvalidPropertyValue EventName Text Text
   deriving stock (Generic, Eq, Show)
 
 -- | Validate against an explicit registry. Unknown event names are allowed; the
@@ -73,8 +75,11 @@ validateEventWith registry event =
           | propRequired spec -> [MissingRequiredProperty (eventName event) (propName spec)]
           | otherwise -> []
         Just value
-          | propertyMatches (propType spec) value -> []
-          | otherwise -> [WrongPropertyType (eventName event) (propName spec) (propType spec)]
+          | not (propertyMatches (propType spec) value) ->
+              [WrongPropertyType (eventName event) (propName spec) (propType spec)]
+          | not (propertyPatternMatches (propPattern spec) value) ->
+              [InvalidPropertyValue (eventName event) (propName spec) sqlNamePatternRule]
+          | otherwise -> []
 
 validateEvent :: AnalyticsEvent -> Either [ValidationError] AnalyticsEvent
 validateEvent = validateEventWith defaultRegistry
@@ -125,6 +130,13 @@ renderValidationError = \case
       <> propertyName
       <> "' must be of type "
       <> renderPropertyType expected
+  InvalidPropertyValue name propertyName rule ->
+    "event '"
+      <> unEventName name
+      <> "': property '"
+      <> propertyName
+      <> "' has an invalid value; "
+      <> rule
   where
     renderTimestamp = Text.pack . formatTime defaultTimeLocale "%FT%T%QZ"
 
@@ -162,3 +174,24 @@ propertyMatches expected value =
       Array _ -> True
       _ -> False
     PTAny -> True
+
+propertyPatternMatches :: Maybe PropertyPattern -> Value -> Bool
+propertyPatternMatches Nothing _ = True
+propertyPatternMatches (Just SqlNamePattern) (String value) = isSqlSafeName value
+propertyPatternMatches (Just SqlNamePattern) _ = False
+
+sqlNamePatternRule :: Text
+sqlNamePatternRule = "expected [a-z0-9_.:-]{1,128}"
+
+-- Keep this predicate aligned with Kansoku.Metrics.Query.Validate.mkSqlName.
+-- It lives in kansoku-api because this package cannot depend on kansoku-core.
+isSqlSafeName :: Text -> Bool
+isSqlSafeName value =
+  not (Text.null value)
+    && Text.length value <= 128
+    && Text.all allowed value
+  where
+    allowed char =
+      isAsciiLower char
+        || isDigit char
+        || char `elem` ("_.:-" :: String)

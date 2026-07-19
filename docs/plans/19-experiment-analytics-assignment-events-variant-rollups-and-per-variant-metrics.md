@@ -64,16 +64,16 @@ This section must always reflect the actual current state of the work.
 
 - [x] (2026-07-19 13:48 PDT) M1: EP-17's recorded property representation read and copied into this plan's
       Surprises & Discoveries (the exact ClickHouse expressions for `experiment`/`variant`)
-- [ ] M1: `PropertySpec` gains `propPattern`; `PropertyPattern`/`SqlNamePattern` defined;
+- [x] (2026-07-19 13:59 PDT) M1: `PropertySpec` gains `propPattern`; `PropertyPattern`/`SqlNamePattern` defined;
       existing registry entries updated
-- [ ] M1: `experiment_viewed` schema registered (in-code registry, or EP-20's versioned
-      registry source of truth (the in-code registry, because EP-20 has not landed)
-- [ ] M1: `Kansoku.Event.Validation` enforces `propPattern`; new `InvalidPropertyValue`
+- [x] (2026-07-19 13:59 PDT) M1: `experiment_viewed` schema registered in the in-code registry,
+      because EP-20's versioned registry has not landed
+- [x] (2026-07-19 13:59 PDT) M1: `Kansoku.Event.Validation` enforces `propPattern`; new `InvalidPropertyValue`
       error; validation specs cover missing/mistyped/bad-charset properties
-- [ ] M1: charset-agreement test (kansoku-api pattern predicate ≡ `mkSqlName` acceptance)
-- [ ] M1: migration `0014_experiment_exposures.sql` written (table + backfill + MV) and
+- [x] (2026-07-19 13:59 PDT) M1: charset-agreement test (kansoku-api pattern predicate ≡ `mkSqlName` acceptance)
+- [x] (2026-07-19 13:59 PDT) M1: migration `0014_experiment_exposures.sql` written (table + backfill + MV) and
       applied; fixture file `db/clickhouse/fixtures/ep19_fixtures.sql` + `just` recipe added
-- [ ] M1: clickhouse-client transcript captured — fixture rows appear in
+- [x] (2026-07-19 13:59 PDT) M1: clickhouse-client and HTTP rejection transcripts captured — fixture rows appear in
       `analytics.experiment_exposures` with expected unique-user counts
 - [ ] M2: `buildExperimentExposuresSQL` + `buildExperimentConversionSQL` builders and
       runners in the query module; point functions; QuerySpec shape tests
@@ -110,6 +110,17 @@ implementation. Provide concise evidence.
 
 - 2026-07-19: The clean baseline is `just build` plus `just test`: 109 core examples and
   10 client examples passed with zero failures; one opt-in live client example was pending.
+
+- 2026-07-19: The authored migration sketch only guarded identities, while the Decision
+  Log requires every stored experiment and variant read to exclude non-conforming legacy or
+  direct-insert values. Migration `0014` therefore applies the same anchored
+  `[a-z0-9_.:-]{1,128}` guards in both its backfill and materialized-view trigger.
+
+- 2026-07-19: The acceptance fixture dates (2026-08-01) were still in the future at
+  implementation time, and the ingest handler correctly adds a future-time rejection.
+  The isolated HTTP validation transcript used 2026-07-19 timestamps so it pins only the
+  intended bad-pattern and missing-property failures; the direct ClickHouse fixture retains
+  the plan's August dates for stable analytics queries.
 
 
 ## Decision Log
@@ -221,7 +232,16 @@ Record every decision made while working on the plan.
 Summarize outcomes, gaps, and lessons learned at major milestones or at completion.
 Compare the result against the original purpose.
 
-(To be filled during and after implementation.)
+Milestone 1 completed on 2026-07-19. The in-code event registry now declares
+`experiment_viewed` as an exposure event with required, string-valued, SQL-safe
+`experiment` and `variant` properties. Validation and `mkSqlName` agree over accepted and
+rejected boundary samples. Migration `0014` creates an account-scoped daily
+`uniqCombined` rollup, backfills it, and maintains it with a guarded materialized view.
+The live fixture result was exactly `5/1/5/2`, migration replay skipped the recorded file,
+and authenticated HTTP batches rejected both a bad variant and a missing variant while
+returning the established partial-batch HTTP 202 envelope. `just build` and `just test`
+passed (111 core examples, 10 client examples, one opt-in client example pending), and the
+OpenAPI artifact remained unchanged as required for this non-wire milestone.
 
 
 ## Context and Orientation
@@ -559,6 +579,8 @@ SELECT
 FROM analytics.events_raw
 WHERE event_name = 'experiment_viewed'
   AND (user_id != '' OR anonymous_id != '')
+  AND match(toString(getSubcolumn(properties_json, 'experiment')), '^[a-z0-9_.:-]{1,128}$')
+  AND match(toString(getSubcolumn(properties_json, 'variant')), '^[a-z0-9_.:-]{1,128}$')
 GROUP BY account_id, experiment, variant, day;
 
 CREATE MATERIALIZED VIEW IF NOT EXISTS analytics.mv_experiment_exposures
@@ -573,6 +595,8 @@ SELECT
 FROM analytics.events_raw
 WHERE event_name = 'experiment_viewed'
   AND (user_id != '' OR anonymous_id != '')
+  AND match(toString(getSubcolumn(properties_json, 'experiment')), '^[a-z0-9_.:-]{1,128}$')
+  AND match(toString(getSubcolumn(properties_json, 'variant')), '^[a-z0-9_.:-]{1,128}$')
 GROUP BY account_id, experiment, variant, day;
 ```
 
@@ -1111,9 +1135,20 @@ curl -s -X POST http://localhost:8080/v1/batch \
   --data-binary '[{"eventId":"exp-bad-1","eventName":"experiment_viewed","source":"web","occurredAt":"2026-08-01T10:00:00Z","receivedAt":"2026-08-01T10:00:00Z","userId":"c9","accountId":"acct_a","properties":{"experiment":"checkout_v2","variant":"Treatment!"},"context":{}}]'
 ```
 
-The response marks `exp-bad-1` rejected with a validation error naming property `variant`
-(EP-14's per-event rejection shape; capture the exact body here when observed). An event
-missing `variant` entirely is likewise rejected (`MissingRequiredProperty`).
+Observed on 2026-07-19 against an isolated, fully migrated `kansoku_ep19` PostgreSQL
+database and port 18080 (the event timestamp was moved to 2026-07-19 so this check did not
+also trigger future-time validation):
+
+```text
+{"accepted":0,"rejected":[{"errors":["event 'experiment_viewed': property 'variant' has an invalid value; expected [a-z0-9_.:-]{1,128}"],"eventId":"exp-bad-2","index":0}]}
+HTTP 202
+{"accepted":0,"rejected":[{"errors":["event 'experiment_viewed': missing required property 'variant'"],"eventId":"exp-missing-2","index":0}]}
+HTTP 202
+```
+
+This is EP-14's partial-batch contract: the HTTP request itself succeeds with 202 while
+each invalid event is named in `rejected`. The temporary database was dropped after the
+transcript; it contained acceptance-only credentials and queue data.
 
 **3. Exposures** (M2) — per day, then whole-range, as account A:
 

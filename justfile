@@ -53,6 +53,10 @@ ch-fixtures-ep18:
 ch-fixtures-ep18-conflict:
     clickhouse-client --port $CLICKHOUSE_TCP_PORT --multiquery < db/clickhouse/fixtures/ep18_conflict.sql
 
+# Load the EP-19 experiment analytics verification fixtures.
+ch-fixtures-ep19:
+    clickhouse-client --port $CLICKHOUSE_TCP_PORT --multiquery < db/clickhouse/fixtures/ep19_fixtures.sql
+
 # Run the HTTP server.
 run: migrate
     cabal run kansoku-server:exe:kansoku-server
