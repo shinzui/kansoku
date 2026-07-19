@@ -36,6 +36,7 @@ import Data.Time (Day)
 import Data.Time.Format (defaultTimeLocale, formatTime)
 import Effectful (Eff, IOE, type (:>))
 import Kansoku.ClickHouse (QueryPool, withQueryConnection)
+import Kansoku.Event (AccountId (..))
 import Kansoku.Metrics.Api (MetricPoint (..), MetricResult (..), TimeGrain (..))
 import Kansoku.Metrics.Definition (Aggregation (..), MetricDefinition (..), RatioMetric (..))
 import Kansoku.Metrics.Query.Validate (SqlName, mkSqlName, renderSqlName)
@@ -43,7 +44,8 @@ import Kansoku.Metrics.Registry (BuiltinMetric (..))
 import Kansoku.Prelude
 
 data QueryRequest = QueryRequest
-  { from :: !Day,
+  { accountId :: !AccountId,
+    from :: !Day,
     to :: !Day,
     groupBy :: !(Maybe [Text]),
     timeGrain :: !(Maybe TimeGrain)
@@ -71,21 +73,21 @@ buildSQL = \case
 
 run :: (IOE :> es) => QueryPool -> BuiltinMetric -> QueryRequest -> Eff es MetricResult
 run pool metric req =
-  liftIO (runSQL pool (metricName metric) (groupLabel req) (metricParameters metric req) (buildSQL metric req))
+  liftIO (runSQL pool (metricName metric) (groupLabel req) (accountParameter req <> metricParameters metric req) (buildSQL metric req))
 
 runSessions :: (IOE :> es) => QueryPool -> QueryRequest -> Eff es MetricResult
 runSessions pool req =
-  liftIO (runSQL pool "sessions" Nothing [] (buildSessionsSQL req))
+  liftIO (runSQL pool "sessions" Nothing (accountParameter req) (buildSessionsSQL req))
 
 runRetention :: (IOE :> es) => QueryPool -> QueryRequest -> [Int] -> Eff es MetricResult
 runRetention pool req offsets =
-  liftIO (runSQLWith pool "retention" retentionPoint [] (buildRetentionSQL req offsets))
+  liftIO (runSQLWith pool "retention" retentionPoint (accountParameter req) (buildRetentionSQL req offsets))
 
 runFunnel :: (IOE :> es) => QueryPool -> QueryRequest -> Int -> [SqlName] -> Eff es MetricResult
 runFunnel pool req window steps =
-  liftIO (runSQLWith pool "funnel" funnelPoint (namedParameters "funnel_step" steps) (buildFunnelSQL req window steps))
+  liftIO (runSQLWith pool "funnel" funnelPoint (accountParameter req <> namedParameters "funnel_step" steps) (buildFunnelSQL req window steps))
 
-type QueryParameter = (String, SqlName)
+type QueryParameter = (String, Text)
 
 runSQL :: QueryPool -> Text -> Maybe Text -> [QueryParameter] -> Text -> IO MetricResult
 runSQL pool name groupName =
@@ -120,7 +122,7 @@ aggSelect parameters sql =
             ]
   where
     addOne (name, value) rest =
-      addParameter name (toChType (Text.unpack (renderSqlName value)) :: ChString) . rest
+      addParameter name (toChType (Text.unpack value) :: ChString) . rest
 
 defaultPoint :: Maybe Text -> AggRow -> MetricPoint
 defaultPoint groupName AggRow {bucket, group_key, value} =
@@ -212,13 +214,15 @@ buildRatioSQL RatioMetric {numerator, denominator} req =
       "  ( SELECT",
       "      ( SELECT toFloat64(uniqExact(canonical_user))",
       "        FROM analytics.events_resolved",
-      "        WHERE canonical_user != ''",
+      "        WHERE " <> accountPredicate,
+      "          AND canonical_user != ''",
       "          AND " <> eventNamePredicate "numerator_event_name" (validatedEventNames numerator),
       "          AND " <> timestampPredicate req,
       "      ) AS numerator,",
       "      ( SELECT toFloat64(uniqExact(canonical_user))",
       "        FROM analytics.events_resolved",
-      "        WHERE canonical_user != ''",
+      "        WHERE " <> accountPredicate,
+      "          AND canonical_user != ''",
       "          AND " <> eventNamePredicate "denominator_event_name" (validatedEventNames denominator),
       "          AND " <> timestampPredicate req,
       "      ) AS denominator",
@@ -232,7 +236,8 @@ countEventsSQL def req =
     [ "SELECT " <> bucketExpr (effectiveGrain def req) <> " AS bucket, " <> groupExpr req <> " AS group_key,",
       "       toFloat64(count(DISTINCT event_id)) AS value",
       "FROM analytics.events_raw",
-      "WHERE " <> timestampPredicate req <> eventNameClause "event_name" (validatedEventNames def),
+      "WHERE " <> accountPredicate,
+      "  AND " <> timestampPredicate req <> eventNameClause "event_name" (validatedEventNames def),
       "GROUP BY bucket, group_key",
       "ORDER BY bucket, group_key"
     ]
@@ -243,7 +248,8 @@ uniqueUsersSQL def req =
     [ "SELECT " <> bucketExpr (effectiveGrain def req) <> " AS bucket, " <> groupExpr req <> " AS group_key,",
       "       toFloat64(uniqExact(canonical_user)) AS value",
       "FROM analytics.events_resolved",
-      "WHERE canonical_user != ''",
+      "WHERE " <> accountPredicate,
+      "  AND canonical_user != ''",
       "  AND " <> timestampPredicate req <> eventNameClause "event_name" (validatedEventNames def),
       "GROUP BY bucket, group_key",
       "ORDER BY bucket, group_key"
@@ -255,7 +261,8 @@ propertyAggregateSQL fn def req =
     [ "SELECT " <> bucketExpr (effectiveGrain def req) <> " AS bucket, " <> groupExpr req <> " AS group_key,",
       "       toFloat64(" <> fn <> "(JSONExtractFloat(properties, 'amount'))) AS value",
       "FROM analytics.events_raw",
-      "WHERE " <> timestampPredicate req <> eventNameClause "event_name" (validatedEventNames def),
+      "WHERE " <> accountPredicate,
+      "  AND " <> timestampPredicate req <> eventNameClause "event_name" (validatedEventNames def),
       "GROUP BY bucket, group_key",
       "ORDER BY bucket, group_key"
     ]
@@ -266,7 +273,8 @@ activeUsersDaySQL req =
     [ "SELECT toString(day) AS bucket, '' AS group_key,",
       "       toFloat64(uniqCombinedMerge(users)) AS value",
       "FROM analytics.dau",
-      "WHERE day >= " <> sqlString (renderDay (req ^. #from)) <> " AND day < " <> sqlString (renderDay (req ^. #to)),
+      "WHERE " <> accountPredicate,
+      "  AND day >= " <> sqlString (renderDay (req ^. #from)) <> " AND day < " <> sqlString (renderDay (req ^. #to)),
       "GROUP BY day",
       "ORDER BY day"
     ]
@@ -277,7 +285,8 @@ activeUsersWeekSQL req =
     [ "SELECT toString(week) AS bucket, '' AS group_key,",
       "       toFloat64(uniqCombinedMerge(users)) AS value",
       "FROM analytics.wau",
-      "WHERE week >= " <> sqlString (renderDay (req ^. #from)) <> " AND week < " <> sqlString (renderDay (req ^. #to)),
+      "WHERE " <> accountPredicate,
+      "  AND week >= " <> sqlString (renderDay (req ^. #from)) <> " AND week < " <> sqlString (renderDay (req ^. #to)),
       "GROUP BY week",
       "ORDER BY week"
     ]
@@ -290,7 +299,8 @@ pageViewsDaySQL req =
         [ "SELECT toString(day) AS bucket, route AS group_key,",
           "       toFloat64(countMerge(views)) AS value",
           "FROM analytics.page_views_by_route",
-          "WHERE day >= " <> sqlString (renderDay (req ^. #from)) <> " AND day < " <> sqlString (renderDay (req ^. #to)),
+          "WHERE " <> accountPredicate,
+          "  AND day >= " <> sqlString (renderDay (req ^. #from)) <> " AND day < " <> sqlString (renderDay (req ^. #to)),
           "GROUP BY day, route",
           "ORDER BY day, route"
         ]
@@ -299,7 +309,8 @@ pageViewsDaySQL req =
         [ "SELECT toString(day) AS bucket, '' AS group_key,",
           "       toFloat64(countMerge(views)) AS value",
           "FROM analytics.page_views_by_route",
-          "WHERE day >= " <> sqlString (renderDay (req ^. #from)) <> " AND day < " <> sqlString (renderDay (req ^. #to)),
+          "WHERE " <> accountPredicate,
+          "  AND day >= " <> sqlString (renderDay (req ^. #from)) <> " AND day < " <> sqlString (renderDay (req ^. #to)),
           "GROUP BY day",
           "ORDER BY day"
         ]
@@ -312,6 +323,8 @@ buildSessionsSQL req =
               toFloat64(uniqExact(session_id)) AS value
        FROM analytics.events_raw
        WHERE """
+    <> accountPredicate
+    <> "\n  AND "
     <> timestampPredicate req
     <> """
 
@@ -330,7 +343,8 @@ buildRetentionSQL req offsets =
       "  (",
       "    SELECT canonical_user, min(toDate(occurred_at)) AS cohort_day",
       "    FROM analytics.events_resolved",
-      "    WHERE canonical_user != ''",
+      "    WHERE " <> accountPredicate,
+      "      AND canonical_user != ''",
       "      AND " <> timestampPredicate req,
       "    GROUP BY canonical_user",
       "  ),",
@@ -338,7 +352,8 @@ buildRetentionSQL req offsets =
       "  (",
       "    SELECT DISTINCT canonical_user, toDate(occurred_at) AS active_day",
       "    FROM analytics.events_resolved",
-      "    WHERE canonical_user != ''",
+      "    WHERE " <> accountPredicate,
+      "      AND canonical_user != ''",
       "      AND " <> timestampPredicate req,
       "  )",
       "SELECT",
@@ -376,8 +391,11 @@ buildFunnelSQL req window steps =
     <> """
        ) AS level
          FROM analytics.events_resolved
-         WHERE canonical_user != ''
-           AND event_name IN (
+         WHERE """
+    <> accountPredicate
+    <> """
+       AND canonical_user != ''
+       AND event_name IN (
        """
     <> placeholders
     <> ")\n      AND "
@@ -461,7 +479,13 @@ parameterName prefix position = prefix <> "_" <> Text.pack (show position)
 
 namedParameters :: Text -> [SqlName] -> [QueryParameter]
 namedParameters prefix =
-  zipWith (\position value -> (Text.unpack (parameterName prefix position), value)) [1 :: Int ..]
+  zipWith (\position value -> (Text.unpack (parameterName prefix position), renderSqlName value)) [1 :: Int ..]
+
+accountParameter :: QueryRequest -> [QueryParameter]
+accountParameter req = [("account_id", unAccountId (req ^. #accountId))]
+
+accountPredicate :: Text
+accountPredicate = "account_id = {account_id:String}"
 
 metricParameters :: BuiltinMetric -> QueryRequest -> [QueryParameter]
 metricParameters metric req =

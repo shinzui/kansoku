@@ -64,6 +64,10 @@ stay stubbed with typed HTTP 404 `not_implemented` envelopes; new metric familie
   OTel/Prometheus split, WAI-level scrape boundary, sampled readiness semantics, and
   replace-on-failure ClickHouse writer ownership. Operational and future deployment work must
   preserve those boundaries or supersede the ADR explicitly.
+- `docs/adr/0003-api-key-authentication-and-account-scoped-analytics.md` records EP-15's
+  hash-only credential model, always-on typed auth, server-stamped account identity, immediate
+  revocation, native-parameter query scoping, and account-dimensioned rollups. Future clients
+  and metric builders must preserve those boundaries or supersede the ADR explicitly.
 
 
 ## Decomposition Strategy
@@ -105,7 +109,7 @@ waves.
 | 13 | Safe and correct metric SQL: validated inputs, ordered funnels, honest failures | docs/plans/13-safe-and-correct-metric-sql-validated-inputs-ordered-funnels-honest-failures.md | EP-12 | EP-11, EP-9 | Complete |
 | 14 | SDK-grade ingest contract: partial batch acceptance, CORS, and payload limits | docs/plans/14-sdk-grade-ingest-contract-partial-batch-acceptance-cors-and-payload-limits.md | EP-9 | None | Complete |
 | 16 | Pipeline observability: queue depth, writer lag, and exported telemetry | docs/plans/16-pipeline-observability-queue-depth-writer-lag-and-exported-telemetry.md | EP-10 | EP-11 | Complete |
-| 15 | API keys, service auth, and account-scoped queries | docs/plans/15-api-keys-service-auth-and-account-scoped-queries.md | EP-9 | EP-12, EP-13, EP-14 | In Progress |
+| 15 | API keys, service auth, and account-scoped queries | docs/plans/15-api-keys-service-auth-and-account-scoped-queries.md | EP-9 | EP-12, EP-13, EP-14 | Complete |
 
 Status values: Not Started, In Progress, Complete, Cancelled.
 Hard Deps and Soft Deps reference other rows by their # prefix (e.g., EP-10).
@@ -196,10 +200,11 @@ generated OpenAPI document in the same change.
 
 `Kansoku.Config` (kansoku-core/src/Kansoku/Config.hs) — EP-10 adds ClickHouse
 host/user/password environment variables (currently hardcoded to `127.0.0.1` and user
-`default`); EP-15 adds key-storage settings; EP-16 adds queue polling, scrape toggle, and
-readiness thresholds while standard OTel environment variables configure exporters. Additive
-record fields only; every plan keeps `loadConfig` total with defaults suitable for `nix
-develop` + `process-compose`.
+`default`); EP-15 deliberately adds no settings because authentication is always on and uses
+the existing PostgreSQL pool; EP-16 adds queue polling, scrape toggle, and readiness thresholds
+while standard OTel environment variables configure exporters. Additive record fields only;
+every plan keeps `loadConfig` total with defaults suitable for `nix develop` +
+`process-compose`.
 
 PostgreSQL migration ownership — EP-21 defines `Kansoku.Migrations` and the
 `kansoku-migrate` administrative executable. Its application plan contains only the PGMQ
@@ -267,9 +272,9 @@ and the milestone. This section provides an at-a-glance view of the entire initi
 - [x] EP-16: OTel exporter actually exports and flushes on shutdown
 - [x] EP-16: queue depth, batch flush latency/size, and insert-failure metrics emitted
 - [x] EP-16: readiness extended with queue-depth/lag thresholds and writer recovery proven
-- [ ] EP-15: key model, storage, and issuance path
-- [ ] EP-15: ingest authenticated (write keys, service tokens)
-- [ ] EP-15: metrics read-authenticated and account-scoped
+- [x] EP-15: key model, storage, and issuance path
+- [x] EP-15: ingest authenticated (write keys, service tokens)
+- [x] EP-15: metrics read-authenticated and account-scoped
 
 ## Surprises & Discoveries
 
@@ -414,6 +419,17 @@ interactions between child plans. Provide concise evidence.
     from public OpenAPI, while `/ready` extends EP-10's probe with ordered sampled pipeline checks.
     ADR 0002 records this placement and the OTel/Prometheus ownership split.
 
+- 2026-07-19, during EP-15 implementation:
+  - Distinct `IngestPrincipal` and `MetricsPrincipal` result types let Servant select the two
+    `AuthHandler`s without ambiguity, and local `HasOpenApi` instances attach the corresponding
+    write-key and service-token requirements to the already-served NamedRoutes contract.
+  - EP-13's native ClickHouse parameter executor was generalized internally from validated
+    `SqlName` values to `Text`, preserving the validation boundary for event/funnel names while
+    allowing opaque `AccountId` values to use `{account_id:String}` without interpolation.
+  - ClickHouse migration 0008 preserved EP-12's FINAL-free view and bounded v2 aggregate states
+    while rebuilding all four rollups with account-leading keys. Repeat application skipped all
+    eight files; live raw and rollup queries returned disjoint 2/3 and 1/1 account results.
+
 
 ## Decision Log
 
@@ -496,6 +512,15 @@ interactions between child plans. Provide concise evidence.
   OpenAPI, disturbing EP-14 middleware, or coupling readiness probe frequency to database scans.
   Date: 2026-07-19
 
+- Decision: Adopt ADR 0003 as the durable authentication and account-tenancy boundary:
+  hash-only prefixed credentials, always-on type-level enforcement, server-stamped ingest
+  accounts, per-request lookup for immediate revocation, native-parameter metric scoping, and
+  account-dimensioned rollups.
+  Rationale: Kansoku is now a portfolio-wide multi-account service. Credential authority and
+  query/storage tenancy must remain one end-to-end contract across the API, server, client,
+  PostgreSQL store, ClickHouse compiler, migrations, OpenAPI artifact, and acceptance tests.
+  Date: 2026-07-19
+
 
 ## Outcomes & Retrospective
 
@@ -550,6 +575,18 @@ produced a 500-message backlog, two insert failures, and detailed 503 checks; de
 wrote all 500 events, left queue/archive counts at 0/0, and returned readiness to 200. Final Cabal
 tests report 78 core and 10 client examples, and the full Nix package build passes. ADR 0002
 captures the durable operational boundaries and the existing three-retry auto-archive limit.
+
+Phase 4 and this MasterPlan are complete. EP-15 added an application-owned pg-migrate component,
+hash-only write/service credentials, operator issuance, type-level Servant enforcement, matching
+OpenAPI security requirements, and a credential-required Haskell client. Ingest account identity
+is now server-stamped. Every metric builder binds the service-token account through a native
+ClickHouse parameter, and migration 0008 carries that dimension through `events_resolved` and all
+four rollups. Live acceptance returned 401/403/200 for missing/write/service access, persisted the
+credential account over spoofed bodies, isolated same-range event results to 2 and 3, isolated
+DAU rollups to 1 and 1, and rejected a revoked token on the next request. Final verification
+passed `cabal build all`, 92 core and 10 client examples (one opt-in live client test pending),
+repeat PostgreSQL and ClickHouse migration checks, and the deterministic OpenAPI freshness gate.
+ADR 0003 captures the durable authentication and tenancy contract.
 
 The broader coordination lesson is that Shibuya's internal processor lifetime, the executable's
 writer thread, and downstream connection health are three distinct boundaries. Supervision owns
@@ -650,3 +687,11 @@ soft dependencies EP-12, EP-13, and EP-14 completed. Implementation reuses the M
 intention and reconciles the authored auth plan with EP-21's explicit `pg-migrate` ownership,
 the landed schema-v2 rollup state types, EP-13's native ClickHouse parameters, EP-14's final
 ingest contract, and EP-16's WAI assembly.
+
+Revision note (2026-07-19, sixth revision): EP-15 completed, closing Phase 4 and the MasterPlan.
+The registry and aggregate progress now record hash-only credential issuance, typed route auth,
+server-stamped accounts, service-token metrics access, native account parameters, and
+account-dimensioned rollups. Live acceptance proved the 401/403/200 matrix, spoof resistance,
+2/3 raw-metric isolation, 1/1 DAU isolation, and next-request revocation. Outcomes record the
+final build/test/migration/OpenAPI gates, and
+`docs/adr/0003-api-key-authentication-and-account-scoped-analytics.md` holds the durable contract.

@@ -41,9 +41,9 @@ Second, every credential belongs to exactly one account, and the server — neve
 decides which account data belongs to. On ingest, the authenticated key's account overwrites
 whatever `accountId` the client put in the event body, so a compromised or buggy client cannot
 write into another tenant's data. On metrics, every generated ClickHouse query carries an
-`account_id = '<the caller's account>'` predicate taken from the service token, never from a
-query parameter, so two accounts querying the same endpoint over the same date range see
-disjoint results.
+`account_id = {account_id:String}` predicate bound from the service token as a native database
+parameter, never from an HTTP query parameter, so two accounts querying the same endpoint over
+the same date range see disjoint results.
 
 Third, credentials are operable: they are issued by a `kansoku-server issue-key` subcommand
 that prints the token exactly once and stores only a SHA-256 hash; the prefix (`ksk_w_` /
@@ -73,11 +73,11 @@ This section must always reflect the actual current state of the work.
 - [x] M2: ingest route family authenticated (write key or service token, both headers); 401 and 202 transcripts captured
 - [x] M2: ingested events are server-stamped with the key's account; stamped `account_id` observed in ClickHouse
 - [x] M2: `kansoku-client` sends credentials; client tests green; plan 9 routing test updated for the auth context
-- [ ] M3: metrics route family requires a service token; 403-for-write-key transcript captured
-- [ ] M3: `QueryRequest.accountId` threaded through every SQL builder; `QuerySpec` asserts the predicate in all of them
-- [ ] M3: `events_resolved` exposes `account_id` (migration through EP-12's mechanism)
-- [ ] M3: rollups (`dau`, `wau`, `daily_event_counts`, `page_views_by_route`) rebuilt with an `account_id` dimension and backfilled
-- [ ] M3: two-account isolation demo executed and transcript captured
+- [x] M3: metrics route family requires a service token; 403-for-write-key transcript captured
+- [x] M3: `QueryRequest.accountId` threaded through every SQL builder; `QuerySpec` asserts the predicate in all of them
+- [x] M3: `events_resolved` exposes `account_id` (migration through EP-12's mechanism)
+- [x] M3: rollups (`dau`, `wau`, `daily_event_counts`, `page_views_by_route`) rebuilt with an `account_id` dimension and backfilled
+- [x] M3: two-account isolation demo executed and transcript captured
 
 
 ## Surprises & Discoveries
@@ -114,6 +114,18 @@ implementation. Provide concise evidence.
   with the landed `NamedRoutes` API. The regenerated document declares `writeKey` as the
   `X-Api-Key` API-key scheme and `serviceToken` as HTTP bearer auth, attaches the expected
   per-operation security requirement, and advertises the implemented 401/403 responses.
+
+- Discovery (implementation, 2026-07-19): EP-13's native ClickHouse parameter path was
+  specialized to validated `SqlName` values. Account IDs are opaque domain values, so the
+  executor's internal parameter representation now carries `Text`; the event-name constructors
+  still render only validated `SqlName`s, while `account_id` passes directly as a native
+  parameter. SQL text contains `{account_id:String}` and never the account literal.
+
+- Discovery (implementation, 2026-07-19): migration `0008_account_scoped_metrics.sql` had to
+  preserve EP-12's landed FINAL-free view, join-free DAU/WAU expression, `count` states, and
+  `uniqCombined` states rather than the authored pre-EP-12 examples. A second `just ch-migrate`
+  skipped all eight files, and schema inspection showed `account_id` on the view and every
+  rollup with account-leading sort keys.
 
 ## Decision Log
 
@@ -202,7 +214,8 @@ Record every decision made while working on the plan.
   undoing the first time a dashboard ships.
   Date: 2026-07-15
 
-- Decision: kansoku's own Postgres DDL (the `kansoku.api_keys` table) is applied at startup by
+- Decision: SUPERSEDED on 2026-07-19 by the pg-migrate decision below. Kansoku's own Postgres
+  DDL (the `kansoku.api_keys` table) was provisionally planned to be applied at startup by
   a new `Kansoku.Postgres.Migration` module built on the **pinned `shinzui/hasql-migration`
   fork** (`cabal.project` already carries the source-repository-package pin), with the ledger
   table placed in a dedicated `kansoku` schema via `SET LOCAL search_path`.
@@ -261,6 +274,22 @@ Record every decision made while working on the plan.
   `Authorization: Bearer` transport rather than merely checking a helper in isolation.
   Date: 2026-07-19
 
+- Decision: Represent metric tenancy as a strict `AccountId` in `QueryRequest` and bind it
+  through ClickHouse's native `{account_id:String}` parameter in every builder.
+  Rationale: An account-less query is unrepresentable, the domain type preserves the principal
+  provenance through the handler/compiler boundary, and native binding accepts opaque account
+  values without weakening EP-13's separate event-name validation or introducing SQL escaping
+  as a security boundary. A completeness spec enumerates raw, resolved, ratio, retention,
+  funnel, session, and rollup-backed builders and rejects both a missing placeholder and an
+  interpolated fixture account.
+  Date: 2026-07-19
+
+- Decision: Adopt ADR 0003 as the durable authentication and tenancy boundary.
+  Rationale: Always-on typed auth, hash-only credentials, server-stamped account identity,
+  immediate revocation, native-parameter metric scoping, and account-dimensioned rollups are
+  production invariants that future clients, routes, and metric builders must preserve together.
+  Date: 2026-07-19
+
 
 ## Outcomes & Retrospective
 
@@ -285,6 +314,19 @@ write key attempted a metrics request. Two events whose bodies claimed `acct_spo
 persisted as `acct_alpha`, proving account identity is server-stamped from the credential.
 The core suite passed 90 examples with zero failures; the client suite passed 10 examples
 with zero failures (the explicitly opt-in live test remained pending).
+
+Milestone 3 (2026-07-19): service-token principals now supply the strict account on every metric
+request, and every SQL builder binds that account through the same native ClickHouse parameter.
+Migration `0008_account_scoped_metrics.sql` added the column to `events_resolved`, rebuilt and
+backfilled all four v2 rollups, and was a zero-work skip on second application. Live ingestion
+accepted two events for `acct_alpha` and three for `acct_beta`; the same metrics endpoint returned
+exactly `2` and `3` by service token, while the DAU-backed endpoint returned `1` and `1`. Missing
+auth returned 401, a write key returned 403, both service tokens returned 200, and revoking only
+the beta token made its very next request return 401 while alpha remained 200. The core suite
+passed 92 examples with zero failures after the migration, including a live native-parameter
+query for an account containing an apostrophe; the client suite passed 10 examples
+with zero failures and one explicitly opt-in live test pending. `cabal build all` and the
+generated OpenAPI freshness gate also passed.
 
 
 ## Context and Orientation
@@ -340,24 +382,17 @@ Soft dependencies, and what this plan honestly needs from each:
   always precedes EP-15 (Phase 4), so this is a consistency check, not an expected state.
   Milestones 1 and 2 do not touch ClickHouse DDL and are not blocked.
 - **EP-13** (`docs/plans/13-safe-and-correct-metric-sql-…`): rewrites the SQL builders with
-  validated/parameterized inputs. If landed, thread the account value through its safe-input
-  path; if not, use the existing `sqlString` escaping (the value comes from kansoku's own
-  database, not from the caller, so the residual risk is low either way).
+  validated/parameterized inputs. It landed before EP-15, so account values use its native
+  ClickHouse parameter path and never cross a string-escaping boundary.
 - **EP-14** (`docs/plans/14-sdk-grade-ingest-contract-…`): finalizes the ingest contract and
   pre-allows `Authorization` and `X-Api-Key` in CORS. Without it, browsers cannot make
   cross-origin authenticated calls (preflight fails); server-to-server traffic and all of this
   plan's acceptance are unaffected.
 
-One cross-plan compile note discovered while authoring this plan: `kansoku-core/src/Kansoku/Ingest/Queue.hs`
-calls `Pgmq.Migration.migrate` (a hasql `Session`), but the pinned local `pgmq-migration`
-package (path in `cabal.project`:
-`/Users/shinzui/Keikaku/bokuno/libraries/pgmq-hs-project/pgmq-hs/pgmq-migration`) has since
-moved to the `pg-migrate` framework and now exports only `pgmqMigrations` (a
-`MigrationComponent`) — no `migrate`. Restoring that call site is EP-10's business (the "repo
-does not compile" plan), not this plan's; it is noted here because this plan's Milestone 1
-adds a *second*, kansoku-owned migration call next to `bootstrapQueue`, and the reader should
-not confuse the two mechanisms: pgmq migrates pgmq's schema with pgmq's tooling; kansoku
-migrates kansoku's schema with hasql-migration.
+One cross-plan compile note discovered while authoring this plan was resolved by EP-21 before
+implementation: `Pgmq.Migration.migrate` disappeared when PGMQ moved to pg-migrate. The landed
+repository now has one explicit `Kansoku.Migrations` plan that composes PGMQ followed by the
+application component; server startup and key issuance intentionally do not apply DDL.
 
 ### Terms used in this plan
 
@@ -382,15 +417,10 @@ key's id, kind, and account.
 **write key / service token** — the two credential kinds this plan introduces; defined in
 Purpose. Both are rows in one Postgres table, distinguished by a `kind` column.
 
-**hasql-migration** — a small migration library for hasql (pinned fork
-`shinzui/hasql-migration` in `cabal.project`, source at
-`/Users/shinzui/Keikaku/hub/haskell/hasql-migration`). Its API: `runMigration ::
-MigrationCommand -> Transaction (Maybe MigrationError)` where `MigrationCommand` is
-`MigrationInitialization` (create the ledger table `schema_migrations(filename, checksum,
-executed_at)`) or `MigrationScript name sqlBytes` (execute the SQL once, recording an MD5
-checksum; a re-run with matching checksum is a no-op; a re-run with a *different* checksum is
-an error — migrations are immutable once applied). The ledger table name is unqualified, so it
-lands in whatever schema leads `search_path`; this plan pins it into the `kansoku` schema.
+**pg-migrate** — the released component migration framework landed by EP-21. Kansoku builds one
+ordered `MigrationPlan`: PGMQ owns its component and the `kansoku` application component depends
+on it. `kansoku-migrate up` is the explicit administrative entry point, and strict verification
+plus repeat application are part of the migration tests.
 
 **materialized view / rollup** — in ClickHouse, a materialized view (MV) is an insert trigger:
 each block inserted into `events_raw` is transformed by the MV's `SELECT` and appended to a
@@ -399,7 +429,7 @@ target *rollup* table holding pre-aggregated state (engine `AggregatingMergeTree
 fire only on *new* inserts, so changing an MV requires backfilling its target from the raw
 table.
 
-### The current state, file by file
+### Implementation-start state, file by file
 
 **Routes.** `kansoku-api/src/Kansoku/Api/Ingest.hs` (post-plan-9:
 `kansoku-api/src/Kansoku/Ingest/Api.hs`) declares `POST /v1/events` (→ `IngestAck`) and
@@ -437,8 +467,8 @@ predicate:
 - `countEventsSQL`, `propertyAggregateSQL`, `buildSessionsSQL` — read `analytics.events_raw`
   (has `account_id`).
 - `uniqueUsersSQL`, `buildRatioSQL` (two subselects), `buildRetentionSQL` (two CTEs:
-  `first_seen`, `activity`), `buildFunnelSQL` (one subquery per step *plus* one
-  `canonical_user IN (…)` subquery per previous step) — read `analytics.events_resolved`,
+  `first_seen`, `activity`), `buildFunnelSQL` (EP-13's single `windowFunnel` source) — read
+  `analytics.events_resolved`,
   a view whose `SELECT` list today (`db/clickhouse/migrations/0002_identity.sql`) is
   `event_id, event_name, occurred_at, url, canonical_user` — **no `account_id`**. The view
   must be recreated with the column (Milestone 3).
@@ -447,23 +477,23 @@ predicate:
 - (`analytics.daily_event_counts` exists but no builder reads it today; it still gains the
   dimension so it answers per-account questions when something does.)
 
-The rollups (`db/clickhouse/migrations/0003_rollups.sql`) have **no account column at all**:
+The landed v2 rollups (`db/clickhouse/migrations/0006_rollups_v2.sql`) have **no account column at all**:
 `dau` is `ORDER BY day`, `wau` is `ORDER BY week`, `daily_event_counts` is `ORDER BY (day,
 event_name)`, `page_views_by_route` is `ORDER BY (day, route)`. They aggregate across all
 accounts — which, per the Decision Log, answers nobody's real question in a multi-account
 service.
 
-**events_raw sort key.** `db/clickhouse/migrations/0001_events_raw.sql` (and EP-12's v2
-successor) orders by `(account_id, user_id, event_name, occurred_at, event_id)`. The
+**events_raw sort key.** EP-12's `db/clickhouse/migrations/0004_events_raw_v2.sql` orders by
+`(account_id, event_name, occurred_at, event_id)`. The
 MasterPlan's Decision Log records that EP-12 keeps `account_id` leading *because this plan*
 makes every metric query filter on it: after Milestone 3, every raw-table scan starts with an
 `account_id =` prefix match on the primary key.
 
 **Storage for keys.** There is none. Postgres (database `kansoku`, connection string from
 `PG_CONNECTION_STRING`, default `postgresql:///kansoku`) currently hosts only pgmq's objects,
-created by `bootstrapQueue` (`kansoku-core/src/Kansoku/Ingest/Queue.hs`) with pgmq's own
-tooling. kansoku has never owned a Postgres table, so this plan introduces kansoku's own
-migration path (Decision Log: hasql-migration, `kansoku` schema).
+owned by the PGMQ component in EP-21's explicit migration plan. Kansoku has never owned a
+Postgres table, so this plan adds the first application component after PGMQ and creates the
+`kansoku` schema within that existing mechanism.
 
 **Config.** `kansoku-core/src/Kansoku/Config.hs` `loadConfig` is total with defaults. Per the
 Decision Log this plan adds **no fields**.
@@ -490,61 +520,42 @@ checksum ledger hashes exactly what ships).
 ### Milestone 1 — Key model, Postgres migration path, and issuance
 
 Scope: everything needed to *have* credentials, with the HTTP surface untouched. At the end,
-`kansoku-server` (a) applies kansoku's own Postgres migrations at startup, creating
-`kansoku.api_keys`, and (b) gains an `issue-key` subcommand that mints a token, stores its
-hash, and prints the token once. Commands: `cabal build all && cabal test all`, then the
-issuance transcript below. Acceptance: the transcript matches; `psql -d kansoku -c "select
-kind, account_id, token_hash from kansoku.api_keys"` shows a 64-hex-character hash and never
-the token; restarting the server re-runs migrations as a no-op.
+`Kansoku.Migrations` composes an application component after PGMQ, and `kansoku-server` gains
+an `issue-key` subcommand that mints a token, stores its hash, and prints the token once.
+Commands: `cabal build all && cabal test all`, explicitly run `kansoku-migrate up`, then capture
+the issuance transcript below. Acceptance: the transcript matches; `psql -d kansoku -c "select
+kind, account_id, token_hash from kansoku.api_keys"` shows a 64-hex-character hash and never the
+token; strict verification and repeat migration application are clean.
 
-**1a. The migration runner.** New module `kansoku-core/src/Kansoku/Postgres/Migration.hs`
-exporting `migrateKansoku :: Pool.Pool -> IO ()` and (for tests) `kansokuMigrations ::
-[(String, ByteString)]`. Add `hasql-migration` and `hasql-transaction` to `kansoku-core`'s
-`build-depends` (both resolve — `cabal.project` already pins `shinzui/hasql-migration`, and
-`hasql-transaction` is in its closure). The runner composes ONE `Hasql.Transaction`:
-
-1. `sql "create schema if not exists kansoku"`,
-2. `sql "set local search_path to kansoku, public"` — this pins hasql-migration's unqualified
-   `schema_migrations` ledger (and any unqualified DDL) into the `kansoku` schema for the
-   duration of the transaction, keeping `public.schema_migrations` free for pgmq's tooling
-   (Decision Log),
-3. `runMigration MigrationInitialization`,
-4. for each `(name, sqlBytes)` in `kansokuMigrations` in order: `runMigration (MigrationScript
-   name sqlBytes)`, aborting with `error` (startup must fail loudly) on `Just migrationError`.
-
-Run it via `Hasql.Transaction.Sessions.transaction Serializable Write` and `Pool.use pool`,
-`error`-ing on session failure exactly as `bootstrapQueue` does. The first (and in this plan
-only) migration entry is `("0001_api_keys", encodeUtf8 apiKeysDdl)` where `apiKeysDdl` is a
-`MultilineStrings` literal containing exactly:
+**1a. The migration component.** Extend the landed `Kansoku.Migrations` module with
+`kansokuApplicationMigrations :: Either DefinitionError MigrationComponent`. Its component name
+is `kansoku`, it depends on `pgmq`, and it contains one `sqlMigration "0001-api-keys"` with:
 
 ```sql
-create table if not exists kansoku.api_keys
-  ( id          uuid primary key default gen_random_uuid()
-  , kind        text not null check (kind in ('write_key', 'service_token'))
-  , token_hash  text not null unique
-  , account_id  text not null
-  , description text not null default ''
-  , created_at  timestamptz not null default now()
-  , revoked_at  timestamptz
-  );
+CREATE SCHEMA IF NOT EXISTS kansoku;
 
-create index if not exists api_keys_account_idx
-  on kansoku.api_keys (account_id);
+CREATE TABLE kansoku.api_keys
+(
+    id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    kind        text NOT NULL CHECK (kind IN ('write_key', 'service_token')),
+    token_hash  text NOT NULL UNIQUE,
+    account_id  text NOT NULL,
+    description text NOT NULL DEFAULT '',
+    created_at  timestamptz NOT NULL DEFAULT now(),
+    revoked_at  timestamptz
+);
+
+CREATE INDEX api_keys_account_idx ON kansoku.api_keys (account_id);
 ```
 
 Notes a novice needs: `gen_random_uuid()` is built into PostgreSQL 13+ (no extension);
 `token_hash` is the lowercase hex SHA-256 of the *full* token string (prefix included) and its
 `unique` constraint is what makes lookup a point query; `revoked_at is null` is the liveness
 condition — revocation is `update kansoku.api_keys set revoked_at = now() where id = …`, no
-delete, so audit history survives. The DDL is schema-qualified (`kansoku.api_keys`) so it is
-correct regardless of `search_path`; the `set local` in step 2 exists for the *ledger*, which
-hasql-migration writes unqualified. Never edit `apiKeysDdl` after it has been applied anywhere
-that matters — hasql-migration will (correctly) refuse with a checksum error; add a new
-`0002_…` entry instead.
-
-Call `migrateKansoku pool` in `kansoku-server/app/Main.hs` immediately before
-`bootstrapQueue pool queueName`, inside the existing `bracket`. Both are idempotent, so
-ordering between them is by ownership clarity only.
+delete, so audit history survives. Compose PGMQ and the application component in
+`kansokuMigrationPlan`; the server continues to provision only the already-migrated queue.
+Migration application remains the responsibility of `kansoku-migrate`, and applied migration
+history is immutable.
 
 **1b. Domain types.** New module `kansoku-core/src/Kansoku/Auth/Types.hs`:
 
@@ -559,7 +570,7 @@ newtype ApiKeyId = ApiKeyId {unApiKeyId :: UUID}
 data AuthenticatedPrincipal = AuthenticatedPrincipal
   { keyId :: !ApiKeyId,
     kind :: !CredentialKind,
-    accountId :: !Text
+    accountId :: !AccountId
   }
   deriving stock (Generic, Eq, Show)
 
@@ -587,7 +598,7 @@ tokenKind :: Text -> Maybe CredentialKind
 ```
 
 `generateToken` draws 32 bytes from `Crypto.Random.getRandomBytes` (package `crypton`; add to
-`build-depends` — it is already in the closure via hasql-migration's `Crypto.Hash` use),
+`build-depends`),
 encodes them base64url *without padding* (package `base64-bytestring`, module
 `Data.ByteString.Base64.URL`, `encodeUnpadded` — 43 characters), and prepends `ksk_w_` for
 `WriteKey` or `ksk_s_` for `ServiceToken`. `hashToken` is the lowercase hex SHA-256 of the
@@ -599,10 +610,12 @@ pre-check, but the database `kind` column is always the authority.
 **1d. The store.** New module `kansoku-core/src/Kansoku/Auth/Store.hs` with two hasql
 `Statement`s and pool-running wrappers:
 
-- `insertApiKey :: Pool.Pool -> CredentialKind -> Text -> Text -> Text -> IO ApiKeyId` —
+- `insertApiKey :: Pool.Pool -> CredentialKind -> Text -> AccountId -> Text -> IO (Either
+  AuthStoreError ApiKeyId)` —
   `insert into kansoku.api_keys (kind, token_hash, account_id, description) values ($1, $2,
   $3, $4) returning id`.
-- `lookupApiKey :: Pool.Pool -> Text -> IO (Maybe AuthenticatedPrincipal)` — `select id, kind,
+- `lookupApiKey :: Pool.Pool -> Text -> IO (Either AuthStoreError (Maybe
+  AuthenticatedPrincipal))` — `select id, kind,
   account_id from kansoku.api_keys where token_hash = $1 and revoked_at is null`, decoding
   `kind` through the `credentialKindText` inverse (failing the row loudly on an unknown value,
   which the `check` constraint makes unreachable).
@@ -612,16 +625,18 @@ the call site (the auth handler in Milestone 2 maps it to 503, not 401 — an un
 store must not read as "bad credentials").
 
 **1e. Issuance.** New module `kansoku-core/src/Kansoku/Auth/Issue.hs` exporting
-`issueKey :: Pool.Pool -> CredentialKind -> Text -> Text -> IO (ApiKeyId, Token)`
+`issueKey :: Pool.Pool -> CredentialKind -> AccountId -> Text -> IO (Either AuthStoreError
+(ApiKeyId, Token))`
 (generate → hash → `insertApiKey` → return both), and argv dispatch in
 `kansoku-server/app/Main.hs`: `getArgs`; `[]` → the current server path unchanged;
 `"issue-key" : rest` → parse `--kind write|service`, `--account <text>` (both required),
 `--description <text>` (optional, default `""`) by simple pattern matching on the argument
 list (two required flags do not justify an option-parser dependency; print a usage line and
 `exitFailure` on anything unrecognized, empty `--account`, or a kind other than
-`write`/`service`); then `loadConfig`, `createPool`, `migrateKansoku` (so issuance works on a
-fresh database before the server has ever run), `issueKey`, print, `exitSuccess`. Exact output
-contract (the token appears exactly once, on its own line, so shell capture is trivial):
+`write`/`service`); then `loadConfig`, `createPool`, `issueKey`, print, `exitSuccess`. Direct
+issuance fails loudly if the explicit migration step was omitted; the `just issue-key` recipe
+depends on `migrate` for local ergonomics. Exact output contract (the token appears exactly
+once, on its own line, so shell capture is trivial):
 
 ```text
 issued write_key 6f3e9d0a-4c1b-4b7e-9a52-1de1c2a4b970 for account acct_alpha
@@ -633,13 +648,13 @@ Add `just` recipes to the repository `justfile`:
 
 ```makefile
 # Issue an API key. kind is write|service.
-issue-key kind account description="":
-    cabal run kansoku-server -- issue-key --kind {{kind}} --account {{account}} --description "{{description}}"
+issue-key kind account description="": migrate
+    cabal run kansoku-server:exe:kansoku-server -- issue-key --kind {{kind}} --account {{account}} --description "{{description}}"
 
 # Bootstrap local dev credentials (one write key + one service token for account "dev").
-dev-keys:
-    cabal run kansoku-server -- issue-key --kind write --account dev --description "local dev write key"
-    cabal run kansoku-server -- issue-key --kind service --account dev --description "local dev service token"
+dev-keys: migrate
+    cabal run kansoku-server:exe:kansoku-server -- issue-key --kind write --account dev --description "local dev write key"
+    cabal run kansoku-server:exe:kansoku-server -- issue-key --kind service --account dev --description "local dev service token"
 ```
 
 (`just dev-keys` mints *new* keys each run; old ones stay valid until revoked — fine for dev.)
@@ -863,33 +878,34 @@ queryRequest authed fromDay toDay groupBy timeGrain =
 ```
 
 **3b. The query compiler.** In `Kansoku.Metrics.Query` (pre-plan-9 name: `Kansoku.Query`),
-add `accountId :: !Text` to `QueryRequest` (strict, non-Maybe — an account-less metrics query
-must be unrepresentable), and a single helper:
+add `accountId :: !AccountId` to `QueryRequest` (strict, non-Maybe — an account-less metrics
+query must be unrepresentable), and a single placeholder:
 
 ```haskell
-accountPredicate :: QueryRequest -> Text
-accountPredicate req = "account_id = " <> sqlString (req ^. #accountId)
+accountPredicate :: Text
+accountPredicate = "account_id = {account_id:String}"
 ```
 
-(if EP-13 has landed, route the value through its validated/parameterized input path instead
-of `sqlString`, keeping the same "predicate present in every builder" acceptance). Then thread
-it through **every** builder — the complete inventory, none optional:
+EP-13 has landed, so `run`, `runSessions`, `runRetention`, and `runFunnel` bind the principal's
+opaque account value through `addParameter`; it is never rendered into SQL. The internal
+parameter representation carries `Text`, while validated event and funnel names still enter it
+only through `renderSqlName`. Thread the predicate through **every** builder — the complete
+inventory, none optional:
 
 - `countEventsSQL`, `propertyAggregateSQL`, `buildSessionsSQL`: append
   `AND <accountPredicate>` to the `WHERE` over `events_raw`.
 - `uniqueUsersSQL`: same, over `events_resolved` (column exists after 3c).
 - `buildRatioSQL`: add it to **both** the numerator and denominator subselects.
 - `buildRetentionSQL`: add it to **both** CTEs (`first_seen` and `activity`).
-- `buildFunnelSQL`: add it to every step's `WHERE` **and** to every
-  `canonical_user IN (SELECT … )` previous-step subquery — a funnel that scopes steps but not
-  the membership subqueries silently mixes tenants' users into step qualification.
+- `buildFunnelSQL`: add it to EP-13's single `windowFunnel` source `WHERE`, which is the only
+  event source after the ordered-funnel rewrite.
 - `activeUsersDaySQL` / `activeUsersWeekSQL` / `pageViewsDaySQL`: add
   `WHERE <accountPredicate> AND day >= … ` (the rollups have the column after 3d; the
   `GROUP BY`/`ORDER BY` stay on `day`/`week`/`route` since the account is fixed per query).
 
-The value never comes from a query parameter — only from `QueryRequest.accountId`, which only
-`queryRequest` constructs, which only reads the principal. That chain is the tenancy
-guarantee.
+The value never comes from an HTTP query parameter — only from `QueryRequest.accountId`, which
+only `queryRequest` constructs from the principal. It then crosses the database boundary as a
+native ClickHouse query parameter. That chain is the tenancy guarantee.
 
 **3c. `events_resolved` gains `account_id`.** New ClickHouse migration (through EP-12's
 mechanism; number it after EP-12's last). Against the current view definition
@@ -1007,16 +1023,15 @@ in Surprises & Discoveries. Backfilled rows from pre-auth data land under `accou
 a bucket no authenticated query can ever select (see Idempotence).
 
 **3e. Tests.** Extend `kansoku-core/test/Kansoku/QuerySpec.hs`: give the shared `dayRequest`
-fixture `accountId = "acct_test"`, update the exact-string expectations (`activeUsersDaySQL`
-and the others now contain `WHERE account_id = 'acct_test'` clauses), and add a completeness
+fixture `accountId = AccountId "acct_test"`, update the exact-string expectations
+(`activeUsersDaySQL` and the others now contain `WHERE account_id = {account_id:String}`
+clauses), and add a completeness
 spec that maps over *every* builder — `buildSQL` over a `Simple` count metric, a `UniqueCount`
 metric, a `Sum` metric, an `active_users` day and week request, a `page_views` day request
 (grouped and ungrouped), `Ratioed`, plus `buildSessionsSQL`, `buildRetentionSQL`, and
-`buildFunnelSQL` with three steps — asserting each output contains
-`account_id = 'acct_test'`, and for the funnel that the *count of occurrences* equals steps
-plus previous-step subqueries (for 3 steps: 3 + 3 = 6), so a forgotten subquery fails. Add a
-negative guard: an account value containing `'` renders escaped (via the existing `sqlString`
-behavior), e.g. `accountId = "acc't"` produces `account_id = 'acc\'t'`.
+`buildFunnelSQL` — asserting each output contains the native account placeholder. Add a
+negative guard asserting none contains the fixture account literal, so a future interpolation
+regression fails.
 
 ```text
 feat(metrics): require service tokens and scope every metric query by account
@@ -1207,10 +1222,10 @@ then the `$SB` metrics query returns 401 on the next request.
 
 ## Idempotence and Recovery
 
-Everything here is safe to re-run. `migrateKansoku` is checksum-ledgered: reapplying is a
-no-op, and *changing* an applied script fails loudly at startup with hasql-migration's
-`ScriptChanged` — the fix is always a new numbered script, never an edit. The `api_keys` DDL
-itself is additionally `if not exists`-guarded, so even a lost ledger row cannot double-create.
+Everything here is safe to re-run. `kansokuMigrations` is owned by the explicit pg-migrate
+plan: reapplying reports `AlreadyApplied`, strict verification checks the plan and installed
+history, and the fix for an applied migration is always a new versioned migration rather than
+editing history. The `api_keys` DDL itself is additionally `if not exists`-guarded.
 `issue-key` is not idempotent by design (each run mints a new credential); a half-failed run
 (generated but insert failed) leaks nothing because the token was never printed or stored.
 Recovery from a mis-issued key is revocation (`update … set revoked_at = now()`), never
@@ -1240,8 +1255,8 @@ Libraries (all already pinned or in the dependency closure; added to `build-depe
 named): `servant` / `servant-server` for `Servant.API.Experimental.Auth (AuthProtect)` and
 `Servant.Server.Experimental.Auth (AuthHandler, AuthServerData, mkAuthHandler)` plus
 `serveWithContext`/`Context`; `servant-client-core` in `kansoku-client` for
-`AuthClientData`/`mkAuthenticatedRequest`; the pinned `shinzui/hasql-migration` fork plus
-`hasql-transaction` for kansoku's Postgres migrations; `crypton` for `Crypto.Random
+`AuthClientData`/`mkAuthenticatedRequest`; released `pg-migrate` and `pgmq-migration` for the
+explicit PostgreSQL component plan; `crypton` for `Crypto.Random
 (getRandomBytes)` and `Crypto.Hash (SHA256, hashWith)`; `base64-bytestring` for
 `Data.ByteString.Base64.URL (encodeUnpadded)`; `uuid` for `ApiKeyId`; the pinned local
 `openapi-hs` (security-scheme data types) and `servant-openapi-hs` (`HasOpenApi` — the
@@ -1250,17 +1265,19 @@ named): `servant` / `servant-server` for `Servant.API.Experimental.Auth (AuthPro
 Modules and signatures that must exist at the end of each milestone (full module paths;
 post-plan-9 layout):
 
-Milestone 1 — `Kansoku.Postgres.Migration` (`kansoku-core`): `migrateKansoku :: Pool.Pool ->
-IO ()`, `kansokuMigrations :: [(String, ByteString)]`. `Kansoku.Auth.Types` (`kansoku-core`):
+Milestone 1 — `Kansoku.Migrations` (`kansoku-core`): `kansokuApplicationMigrations :: Either
+DefinitionError MigrationComponent`, `kansokuMigrationPlan :: Either MigrationPlanError
+MigrationPlan`. `Kansoku.Auth.Types` (`kansoku-core`):
 `CredentialKind (..)`, `credentialKindText :: CredentialKind -> Text`, `parseCredentialKind ::
 Text -> Maybe CredentialKind`, `ApiKeyId (..)`, `AuthenticatedPrincipal (..)`,
 `IngestPrincipal (..)`, `MetricsPrincipal (..)`. `Kansoku.Auth.Token` (`kansoku-core`):
 `Token (..)`, `generateToken :: CredentialKind -> IO Token`, `hashToken :: Token -> Text`,
 `tokenKind :: Text -> Maybe CredentialKind`. `Kansoku.Auth.Store` (`kansoku-core`):
-`insertApiKey :: Pool.Pool -> CredentialKind -> Text -> Text -> Text -> IO ApiKeyId`,
-`lookupApiKey :: Pool.Pool -> Text -> IO (Maybe AuthenticatedPrincipal)`.
-`Kansoku.Auth.Issue` (`kansoku-core`): `issueKey :: Pool.Pool -> CredentialKind -> Text ->
-Text -> IO (ApiKeyId, Token)`. `kansoku-server/app/Main.hs`: argv dispatch (`[]` → server;
+`insertApiKey :: Pool.Pool -> CredentialKind -> Text -> AccountId -> Text -> IO (Either
+AuthStoreError ApiKeyId)`, `lookupApiKey :: Pool.Pool -> Text -> IO (Either AuthStoreError
+(Maybe AuthenticatedPrincipal))`. `Kansoku.Auth.Issue` (`kansoku-core`): `issueKey :: Pool.Pool
+-> CredentialKind -> AccountId -> Text -> IO (Either AuthStoreError (ApiKeyId, Token))`.
+`kansoku-server/app/Main.hs`: argv dispatch (`[]` → server;
 `issue-key` → issuance).
 
 Milestone 2 — `Kansoku.Auth.Api` (`kansoku-api`): `type IngestAuth = AuthProtect
@@ -1268,8 +1285,9 @@ Milestone 2 — `Kansoku.Auth.Api` (`kansoku-api`): `type IngestAuth = AuthProte
 fields wrapped as `IngestAuth :> NamedRoutes IngestRoutes` / `MetricsAuth :> NamedRoutes
 MetricsRoutes`. `Kansoku.Api.OpenApi` (`kansoku-api`): the two `HasOpenApi (AuthProtect … :>
 sub)` instances and `securitySchemes` registration. `Kansoku.Auth.Handler` (`kansoku-core`):
-`AuthServerData` type instances, `authenticateWith :: (Text -> IO (Maybe
-AuthenticatedPrincipal)) -> Request -> Handler AuthenticatedPrincipal`, `ingestAuthHandler ::
+`AuthServerData` type instances, `type PrincipalLookup = Text -> IO (Either AuthStoreError
+(Maybe AuthenticatedPrincipal))`, `authenticateWith :: PrincipalLookup -> Request -> Handler
+AuthenticatedPrincipal`, `ingestAuthHandler ::
 Pool.Pool -> AuthHandler Request IngestPrincipal`, `metricsAuthHandler :: Pool.Pool ->
 AuthHandler Request MetricsPrincipal`, `authContext :: Pool.Pool -> Context '[AuthHandler
 Request IngestPrincipal, AuthHandler Request MetricsPrincipal]`. `Kansoku.Ingest.Handler`:
@@ -1278,7 +1296,7 @@ Request IngestPrincipal, AuthHandler Request MetricsPrincipal]`. `Kansoku.Ingest
 AuthenticatedRequest (AuthProtect "kansoku-ingest")`.
 
 Milestone 3 — `Kansoku.Metrics.Query` (`kansoku-core`): `QueryRequest` with `accountId ::
-!Text`; `accountPredicate :: QueryRequest -> Text`; every exported builder (`buildSQL`,
+!AccountId`; `accountPredicate :: Text` with a native placeholder; every exported builder (`buildSQL`,
 `buildSessionsSQL`, `buildRetentionSQL`, `buildFunnelSQL` and the internal per-metric SQL
 functions) emits the predicate. `Kansoku.Metrics.Handler`: `metricsServer` takes the
 principal; `queryRequest` sets `accountId`. One new ClickHouse migration through EP-12's

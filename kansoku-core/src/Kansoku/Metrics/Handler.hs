@@ -18,6 +18,7 @@ import Kansoku.Api.Response
   )
 import Kansoku.Auth.Types (AuthenticatedPrincipal)
 import Kansoku.ClickHouse (QueryPool)
+import Kansoku.Event (AccountId)
 import Kansoku.Logging (logError, runLogStderr)
 import Kansoku.Metrics.Api (MetricResult, MetricsRoutes (..), TimeGrain)
 import Kansoku.Metrics.Query qualified as Query
@@ -28,7 +29,7 @@ import Servant (Handler)
 import Servant.Server.Generic (AsServerT)
 
 metricsServer :: AuthenticatedPrincipal -> QueryPool -> MetricsRoutes (AsServerT Handler)
-metricsServer _principal pool =
+metricsServer principal pool =
   MetricsRoutes
     { events = metricHandler "events",
       pageViews = metricHandler "page_views",
@@ -47,11 +48,11 @@ metricsServer _principal pool =
     metricHandler key fromDay toDay groupBy timeGrain =
       case builtinMetric key of
         Nothing -> pure (KansokuNotFound (notFound "metric_not_found" ("no such metric: " <> key)))
-        Just metric -> effToHandler (Query.run pool metric (queryRequest fromDay toDay groupBy timeGrain))
+        Just metric -> effToHandler (Query.run pool metric (queryRequest account fromDay toDay groupBy timeGrain))
 
     sessionsHandler :: Day -> Day -> Maybe Text -> Maybe TimeGrain -> Handler (KansokuResult MetricResult)
     sessionsHandler fromDay toDay groupBy timeGrain =
-      effToHandler (Query.runSessions pool (queryRequest fromDay toDay groupBy timeGrain))
+      effToHandler (Query.runSessions pool (queryRequest account fromDay toDay groupBy timeGrain))
 
     funnelHandler :: Day -> Day -> Text -> Maybe Int -> Handler (KansokuResult MetricResult)
     funnelHandler fromDay toDay stepsParam requestedWindow =
@@ -72,13 +73,13 @@ metricsServer _principal pool =
                         (badRequest "invalid_funnel_window" ("invalid funnel window: " <> invalid <> "; expected 1..7776000 seconds"))
                     )
                 Right window ->
-                  effToHandler (Query.runFunnel pool (queryRequest fromDay toDay Nothing Nothing) window steps)
+                  effToHandler (Query.runFunnel pool (queryRequest account fromDay toDay Nothing Nothing) window steps)
 
     retentionHandler :: Day -> Day -> Maybe Text -> Handler (KansokuResult MetricResult)
     retentionHandler fromDay toDay daysParam =
       case parseOffsets daysParam of
         Left message -> pure (KansokuBadRequest (badRequest "invalid_retention_days" message))
-        Right offsets -> effToHandler (Query.runRetention pool (queryRequest fromDay toDay Nothing Nothing) offsets)
+        Right offsets -> effToHandler (Query.runRetention pool (queryRequest account fromDay toDay Nothing Nothing) offsets)
 
     notImplemented :: Text -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> Handler (KansokuResult MetricResult)
     notImplemented name _ _ _ _ =
@@ -87,10 +88,13 @@ metricsServer _principal pool =
             (notFound "not_implemented" ("metric endpoint is stubbed in the MVP: " <> name))
         )
 
-queryRequest :: Day -> Day -> Maybe Text -> Maybe TimeGrain -> Query.QueryRequest
-queryRequest fromDay toDay groupBy timeGrain =
+    account = principal ^. #accountId
+
+queryRequest :: AccountId -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> Query.QueryRequest
+queryRequest accountId fromDay toDay groupBy timeGrain =
   Query.QueryRequest
-    { from = fromDay,
+    { accountId,
+      from = fromDay,
       to = toDay,
       groupBy = nonEmptyCsv <$> groupBy,
       timeGrain

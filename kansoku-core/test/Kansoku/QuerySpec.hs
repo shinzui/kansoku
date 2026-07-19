@@ -3,6 +3,7 @@ module Kansoku.QuerySpec (spec) where
 import Data.Foldable (traverse_)
 import Data.Text qualified as Text
 import Data.Time (fromGregorian)
+import Kansoku.Event (AccountId (..))
 import Kansoku.Metrics.Api (TimeGrain (..))
 import Kansoku.Metrics.Query
 import Kansoku.Metrics.Query.Validate (SqlName, mkSqlName)
@@ -18,7 +19,8 @@ spec = describe "Kansoku.Query.buildSQL" $ do
         [ "SELECT toString(day) AS bucket, '' AS group_key,",
           "       toFloat64(uniqCombinedMerge(users)) AS value",
           "FROM analytics.dau",
-          "WHERE day >= '2026-06-01' AND day < '2026-06-08'",
+          "WHERE account_id = {account_id:String}",
+          "  AND day >= '2026-06-01' AND day < '2026-06-08'",
           "GROUP BY day",
           "ORDER BY day"
         ]
@@ -29,7 +31,8 @@ spec = describe "Kansoku.Query.buildSQL" $ do
         [ "SELECT toString(day) AS bucket, '' AS group_key,",
           "       toFloat64(countMerge(views)) AS value",
           "FROM analytics.page_views_by_route",
-          "WHERE day >= '2026-06-01' AND day < '2026-06-08'",
+          "WHERE account_id = {account_id:String}",
+          "  AND day >= '2026-06-01' AND day < '2026-06-08'",
           "GROUP BY day",
           "ORDER BY day"
         ]
@@ -40,7 +43,8 @@ spec = describe "Kansoku.Query.buildSQL" $ do
         [ "SELECT toString(toDate(occurred_at)) AS bucket, '' AS group_key,",
           "       toFloat64(count(DISTINCT event_id)) AS value",
           "FROM analytics.events_raw",
-          "WHERE occurred_at >= '2026-06-01 00:00:00' AND occurred_at < '2026-06-08 00:00:00'",
+          "WHERE account_id = {account_id:String}",
+          "  AND occurred_at >= '2026-06-01 00:00:00' AND occurred_at < '2026-06-08 00:00:00'",
           "GROUP BY bucket, group_key",
           "ORDER BY bucket, group_key"
         ]
@@ -62,7 +66,8 @@ spec = describe "Kansoku.Query.buildSQL" $ do
                  SELECT toString(toDate(occurred_at)) AS bucket, '' AS group_key,
                         toFloat64(uniqExact(session_id)) AS value
                  FROM analytics.events_raw
-                 WHERE occurred_at >= '2026-06-01 00:00:00' AND occurred_at < '2026-06-08 00:00:00'
+                 WHERE account_id = {account_id:String}
+                   AND occurred_at >= '2026-06-01 00:00:00' AND occurred_at < '2026-06-08 00:00:00'
                    AND session_id != ''
                  GROUP BY bucket, group_key
                  ORDER BY bucket, group_key"""
@@ -84,6 +89,23 @@ spec = describe "Kansoku.Query.buildSQL" $ do
     buildFunnelSQL dayRequest 3600 (sqlName <$> ["one", "two", "three"])
       `shouldContainText` "ARRAY JOIN [(1, {funnel_step_1:String}), (2, {funnel_step_2:String}), (3, {funnel_step_3:String})] AS step"
 
+  it "scopes every SQL builder with a native account parameter" $ do
+    let sqlBuilders =
+          [ buildSQL (Simple activeUsers) dayRequest,
+            buildSQL (Simple activeUsers) weekRequest,
+            buildSQL (Simple pageViews) dayRequest,
+            buildSQL (Simple pageViews) routeRequest,
+            buildSQL (Simple events) dayRequest,
+            buildSQL (requiredMetric "new_users") dayRequest,
+            buildSQL (requiredMetric "revenue") dayRequest,
+            buildSQL (Ratioed conversionRate) dayRequest,
+            buildSessionsSQL dayRequest,
+            buildRetentionSQL dayRequest [1, 7],
+            buildFunnelSQL dayRequest 604800 (sqlName <$> ["signup_started", "signup_completed"])
+          ]
+    traverse_ (`shouldContainText` "account_id = {account_id:String}") sqlBuilders
+    traverse_ (`shouldNotContainText` "acct_query") sqlBuilders
+
   it "keeps ClickHouse ORDER BY as the sole ordering authority for every builder" $
     traverse_
       (`shouldContainText` "ORDER BY")
@@ -101,11 +123,18 @@ spec = describe "Kansoku.Query.buildSQL" $ do
 dayRequest :: QueryRequest
 dayRequest =
   QueryRequest
-    { from = fromGregorian 2026 6 1,
+    { accountId = AccountId "acct_query",
+      from = fromGregorian 2026 6 1,
       to = fromGregorian 2026 6 8,
       groupBy = Nothing,
       timeGrain = Just Day
     }
+
+weekRequest :: QueryRequest
+weekRequest = dayRequest {timeGrain = Just Week}
+
+routeRequest :: QueryRequest
+routeRequest = dayRequest {groupBy = Just ["route"]}
 
 shouldContainText :: Text -> Text -> Expectation
 shouldContainText haystack needle =

@@ -46,7 +46,8 @@ spec = describe "Kansoku.Query integration" $ do
             queryPool
             metric
             Query.QueryRequest
-              { from = fromGregorian 2026 7 1,
+              { accountId = AccountId "acct_query",
+                from = fromGregorian 2026 7 1,
                 to = fromGregorian 2026 7 2,
                 groupBy = Just ["event_name"],
                 timeGrain = Just Day
@@ -70,7 +71,30 @@ spec = describe "Kansoku.Query integration" $ do
             queryPool
             metric
             Query.QueryRequest
-              { from = fromGregorian 2026 7 1,
+              { accountId = AccountId "acct_query",
+                from = fromGregorian 2026 7 1,
+                to = fromGregorian 2026 7 2,
+                groupBy = Nothing,
+                timeGrain = Just Day
+              }
+      sum (fmap (^. #value) (result ^. #points)) `shouldBe` 1
+
+  it "passes opaque account ids through native query parameters" $
+    withClickHouse $ \conn -> do
+      resetTable conn
+      let opaqueAccount = AccountId "acct_'opaque"
+          event = sampleEvent "evt_account_parameter_1" "account_parameter" & #accountId .~ Just opaqueAccount
+      insertEvents conn [event]
+      queryPool <- (`newQueryPool` 2) . clickHouseConfigFromConfig =<< requireConfig
+      metric <- requireBuiltinMetric "events"
+      result <-
+        runEff $
+          Query.run
+            queryPool
+            metric
+            Query.QueryRequest
+              { accountId = opaqueAccount,
+                from = fromGregorian 2026 7 1,
                 to = fromGregorian 2026 7 2,
                 groupBy = Nothing,
                 timeGrain = Just Day
@@ -95,7 +119,8 @@ spec = describe "Kansoku.Query integration" $ do
           Query.runFunnel
             queryPool
             Query.QueryRequest
-              { from = fromGregorian 2026 6 1,
+              { accountId = AccountId "acct_funnel",
+                from = fromGregorian 2026 6 1,
                 to = fromGregorian 2026 6 8,
                 groupBy = Nothing,
                 timeGrain = Nothing
