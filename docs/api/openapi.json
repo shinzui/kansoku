@@ -1,0 +1,1631 @@
+{
+  "components": {
+    "schemas": {
+      "AccountId": {
+        "type": "string"
+      },
+      "AnalyticsEvent": {
+        "properties": {
+          "accountId": {
+            "$ref": "#/components/schemas/AccountId"
+          },
+          "anonymousId": {
+            "$ref": "#/components/schemas/AnonymousId"
+          },
+          "causationId": {
+            "$ref": "#/components/schemas/CausationId"
+          },
+          "context": {
+            "$ref": "#/components/schemas/Object"
+          },
+          "correlationId": {
+            "$ref": "#/components/schemas/CorrelationId"
+          },
+          "eventId": {
+            "$ref": "#/components/schemas/EventId"
+          },
+          "eventName": {
+            "$ref": "#/components/schemas/EventName"
+          },
+          "occurredAt": {
+            "$ref": "#/components/schemas/UTCTime"
+          },
+          "organizationId": {
+            "$ref": "#/components/schemas/OrganizationId"
+          },
+          "properties": {
+            "$ref": "#/components/schemas/Object"
+          },
+          "receivedAt": {
+            "$ref": "#/components/schemas/UTCTime"
+          },
+          "referrer": {
+            "type": "string"
+          },
+          "sessionId": {
+            "$ref": "#/components/schemas/SessionId"
+          },
+          "source": {
+            "$ref": "#/components/schemas/EventSource"
+          },
+          "sourceEventId": {
+            "$ref": "#/components/schemas/SourceEventId"
+          },
+          "sourceGlobalPosition": {
+            "format": "int64",
+            "maximum": 9223372036854775807,
+            "minimum": -9223372036854775808,
+            "type": "integer"
+          },
+          "sourceService": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "userId": {
+            "$ref": "#/components/schemas/UserId"
+          },
+          "utmCampaign": {
+            "type": "string"
+          },
+          "utmContent": {
+            "type": "string"
+          },
+          "utmMedium": {
+            "type": "string"
+          },
+          "utmSource": {
+            "type": "string"
+          },
+          "utmTerm": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "eventId",
+          "eventName",
+          "source",
+          "occurredAt",
+          "receivedAt",
+          "properties",
+          "context"
+        ],
+        "type": "object"
+      },
+      "AnonymousId": {
+        "type": "string"
+      },
+      "BatchAck": {
+        "properties": {
+          "accepted": {
+            "maximum": 9223372036854775807,
+            "minimum": -9223372036854775808,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "accepted"
+        ],
+        "type": "object"
+      },
+      "CausationId": {
+        "type": "string"
+      },
+      "CorrelationId": {
+        "type": "string"
+      },
+      "ErrorEnvelopeWire": {
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "retryable": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "retryable"
+        ],
+        "type": "object"
+      },
+      "EventId": {
+        "type": "string"
+      },
+      "EventName": {
+        "type": "string"
+      },
+      "EventSource": {
+        "enum": [
+          "web",
+          "app",
+          "service",
+          "worker",
+          "email",
+          "agent"
+        ],
+        "type": "string"
+      },
+      "IngestAck": {
+        "properties": {
+          "accepted": {
+            "maximum": 9223372036854775807,
+            "minimum": -9223372036854775808,
+            "type": "integer"
+          },
+          "eventId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "accepted",
+          "eventId"
+        ],
+        "type": "object"
+      },
+      "MetricPoint": {
+        "properties": {
+          "bucket": {
+            "type": "string"
+          },
+          "group": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "value": {
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "group",
+          "value"
+        ],
+        "type": "object"
+      },
+      "MetricResult": {
+        "properties": {
+          "metric": {
+            "type": "string"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/MetricPoint"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "metric",
+          "points"
+        ],
+        "type": "object"
+      },
+      "Object": {
+        "additionalProperties": true,
+        "description": "Arbitrary JSON object.",
+        "type": "object"
+      },
+      "OrganizationId": {
+        "type": "string"
+      },
+      "SessionId": {
+        "type": "string"
+      },
+      "SourceEventId": {
+        "type": "string"
+      },
+      "UTCTime": {
+        "example": "2016-07-22T00:00:00Z",
+        "format": "yyyy-mm-ddThh:MM:ssZ",
+        "type": "string"
+      },
+      "UserId": {
+        "type": "string"
+      }
+    }
+  },
+  "info": {
+    "description": "HTTP ingestion and typed metrics query API for the Kansoku analytics service.",
+    "title": "Kansoku Analytics API",
+    "version": "1.0.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/metrics/acquisition": {
+      "get": {
+        "operationId": "getMetricsAcquisition",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "groupBy",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "timeGrain",
+            "required": false,
+            "schema": {
+              "enum": [
+                "hour",
+                "day",
+                "week",
+                "month"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricResult"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricResult"
+                }
+              }
+            },
+            "description": "Metric result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Malformed request or `timeGrain` or `groupBy` or `to` or `from`"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Storage unavailable"
+          }
+        },
+        "tags": [
+          "ingestion",
+          "metrics"
+        ]
+      }
+    },
+    "/metrics/conversion": {
+      "get": {
+        "operationId": "getMetricsConversion",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "groupBy",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "timeGrain",
+            "required": false,
+            "schema": {
+              "enum": [
+                "hour",
+                "day",
+                "week",
+                "month"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricResult"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricResult"
+                }
+              }
+            },
+            "description": "Metric result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Malformed request or `timeGrain` or `groupBy` or `to` or `from`"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Storage unavailable"
+          }
+        },
+        "tags": [
+          "ingestion",
+          "metrics"
+        ]
+      }
+    },
+    "/metrics/custom": {
+      "get": {
+        "operationId": "getMetricsCustom",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "groupBy",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "timeGrain",
+            "required": false,
+            "schema": {
+              "enum": [
+                "hour",
+                "day",
+                "week",
+                "month"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricResult"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricResult"
+                }
+              }
+            },
+            "description": "Metric result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Malformed request or `timeGrain` or `groupBy` or `to` or `from`"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Storage unavailable"
+          }
+        },
+        "tags": [
+          "ingestion",
+          "metrics"
+        ]
+      }
+    },
+    "/metrics/events": {
+      "get": {
+        "operationId": "getMetricsEvents",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "groupBy",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "timeGrain",
+            "required": false,
+            "schema": {
+              "enum": [
+                "hour",
+                "day",
+                "week",
+                "month"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricResult"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricResult"
+                }
+              }
+            },
+            "description": "Metric result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Malformed request or `timeGrain` or `groupBy` or `to` or `from`"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Storage unavailable"
+          }
+        },
+        "tags": [
+          "ingestion",
+          "metrics"
+        ]
+      }
+    },
+    "/metrics/feature-adoption": {
+      "get": {
+        "operationId": "getMetricsFeatureAdoption",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "groupBy",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "timeGrain",
+            "required": false,
+            "schema": {
+              "enum": [
+                "hour",
+                "day",
+                "week",
+                "month"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricResult"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricResult"
+                }
+              }
+            },
+            "description": "Metric result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Malformed request or `timeGrain` or `groupBy` or `to` or `from`"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Storage unavailable"
+          }
+        },
+        "tags": [
+          "ingestion",
+          "metrics"
+        ]
+      }
+    },
+    "/metrics/funnel": {
+      "get": {
+        "operationId": "getMetricsFunnel",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "steps",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricResult"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricResult"
+                }
+              }
+            },
+            "description": "Metric result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Malformed request or `steps` or `to` or `from`"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Storage unavailable"
+          }
+        },
+        "tags": [
+          "ingestion",
+          "metrics"
+        ]
+      }
+    },
+    "/metrics/organizations": {
+      "get": {
+        "operationId": "getMetricsOrganizations",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "groupBy",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "timeGrain",
+            "required": false,
+            "schema": {
+              "enum": [
+                "hour",
+                "day",
+                "week",
+                "month"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricResult"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricResult"
+                }
+              }
+            },
+            "description": "Metric result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Malformed request or `timeGrain` or `groupBy` or `to` or `from`"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Storage unavailable"
+          }
+        },
+        "tags": [
+          "ingestion",
+          "metrics"
+        ]
+      }
+    },
+    "/metrics/page-views": {
+      "get": {
+        "operationId": "getMetricsPageViews",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "groupBy",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "timeGrain",
+            "required": false,
+            "schema": {
+              "enum": [
+                "hour",
+                "day",
+                "week",
+                "month"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricResult"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricResult"
+                }
+              }
+            },
+            "description": "Metric result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Malformed request or `timeGrain` or `groupBy` or `to` or `from`"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Storage unavailable"
+          }
+        },
+        "tags": [
+          "ingestion",
+          "metrics"
+        ]
+      }
+    },
+    "/metrics/retention": {
+      "get": {
+        "operationId": "getMetricsRetention",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricResult"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricResult"
+                }
+              }
+            },
+            "description": "Metric result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Malformed request or `days` or `to` or `from`"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Storage unavailable"
+          }
+        },
+        "tags": [
+          "ingestion",
+          "metrics"
+        ]
+      }
+    },
+    "/metrics/sessions": {
+      "get": {
+        "operationId": "getMetricsSessions",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "groupBy",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "timeGrain",
+            "required": false,
+            "schema": {
+              "enum": [
+                "hour",
+                "day",
+                "week",
+                "month"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricResult"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricResult"
+                }
+              }
+            },
+            "description": "Metric result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Malformed request or `timeGrain` or `groupBy` or `to` or `from`"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Storage unavailable"
+          }
+        },
+        "tags": [
+          "ingestion",
+          "metrics"
+        ]
+      }
+    },
+    "/metrics/users": {
+      "get": {
+        "operationId": "getMetricsUsers",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "groupBy",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "timeGrain",
+            "required": false,
+            "schema": {
+              "enum": [
+                "hour",
+                "day",
+                "week",
+                "month"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricResult"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricResult"
+                }
+              }
+            },
+            "description": "Metric result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Malformed request or `timeGrain` or `groupBy` or `to` or `from`"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Storage unavailable"
+          }
+        },
+        "tags": [
+          "ingestion",
+          "metrics"
+        ]
+      }
+    },
+    "/v1/batch": {
+      "post": {
+        "operationId": "postV1Batch",
+        "requestBody": {
+          "content": {
+            "application/json;charset=utf-8": {
+              "schema": {
+                "items": {
+                  "$ref": "#/components/schemas/AnalyticsEvent"
+                },
+                "type": "array"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchAck"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchAck"
+                }
+              }
+            },
+            "description": "Batch accepted"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Malformed request or `body`"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Storage unavailable"
+          }
+        },
+        "tags": [
+          "ingestion",
+          "metrics"
+        ]
+      }
+    },
+    "/v1/events": {
+      "post": {
+        "operationId": "postV1Events",
+        "requestBody": {
+          "content": {
+            "application/json;charset=utf-8": {
+              "schema": {
+                "$ref": "#/components/schemas/AnalyticsEvent"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestAck"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestAck"
+                }
+              }
+            },
+            "description": "Event accepted"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Malformed request or `body`"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Storage unavailable"
+          }
+        },
+        "tags": [
+          "ingestion",
+          "metrics"
+        ]
+      }
+    }
+  },
+  "tags": [
+    {
+      "description": "Event ingestion endpoints",
+      "name": "ingestion"
+    },
+    {
+      "description": "Typed metric query endpoints",
+      "name": "metrics"
+    }
+  ]
+}

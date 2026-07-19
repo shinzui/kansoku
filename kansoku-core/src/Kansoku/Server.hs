@@ -9,6 +9,7 @@ module Kansoku.Server
     kansokuServer,
     pgmqReady,
     startServer,
+    waiWrapper,
   )
 where
 
@@ -20,6 +21,7 @@ import Effectful.Error.Static qualified as Error
 import Effectful.Reader.Static (Reader, asks)
 import Hasql.Pool qualified as Pool
 import Kansoku.Api (KansokuAPI (..), kansokuAPI)
+import Kansoku.Api.OpenApi (kansokuOpenApi)
 import Kansoku.Api.Response (ErrorEnvelopeWire, badRequest)
 import Kansoku.Api.Response qualified as Response
 import Kansoku.ClickHouse (QueryPool)
@@ -27,7 +29,6 @@ import Kansoku.Config (Config)
 import Kansoku.Ingest.Handler (ingestServer)
 import Kansoku.Logging (Log, logInfo)
 import Kansoku.Metrics.Handler (metricsServer)
-import Kansoku.OpenApi (openApiDoc)
 import Kansoku.Prelude
 import Network.HTTP.Types (status200, status404, status503)
 import Network.HTTP.Types.Header (hContentType)
@@ -70,37 +71,49 @@ kansokuServer pool queueName queryPool =
     }
 
 kansokuApp :: ReadyProbe -> Pool.Pool -> QueueName -> QueryPool -> Application
-kansokuApp probe pool queueName queryPool req respond =
-  case pathInfo req of
-    ["health"] ->
-      healthApp req respond
-    ["ready"] -> do
-      isWriterAlive <- probe ^. #writerAlive
-      postgresResult <- probe ^. #pgmqReachable
-      let failingDependencies :: [Text]
-          failingDependencies =
-            ["writer" | not isWriterAlive]
-              <> either (const ["postgres"]) (const []) postgresResult
-          body
-            | null failingDependencies = Aeson.object ["status" Aeson..= ("ready" :: Text)]
-            | otherwise =
-                Aeson.object
-                  [ "status" Aeson..= ("unavailable" :: Text),
-                    "failing" Aeson..= failingDependencies
-                  ]
-          status
-            | null failingDependencies = status200
-            | otherwise = status503
-      respond (responseLBS status [(hContentType, "application/json")] (Aeson.encode body))
-    ["openapi.json"] ->
-      respond (responseLBS status200 [(hContentType, "application/json")] (Aeson.encode openApiDoc))
-    _ ->
-      serveWithContext
+kansokuApp probe pool queueName queryPool =
+  waiWrapper
+    probe
+    ( serveWithContext
         kansokuAPI
         (envelopeFormatters :. EmptyContext)
         (kansokuServer pool queueName queryPool)
-        req
-        respond
+    )
+
+-- | Operational/meta routes stay at WAI level; all analytics routes delegate
+-- to the one Servant application. Taking the inner app keeps this wrapper
+-- testable without database connections.
+waiWrapper :: ReadyProbe -> Application -> Application
+waiWrapper probe inner req respond =
+  case pathInfo req of
+    ["health"] ->
+      healthApp req respond
+    ["ready"] ->
+      readyApp probe req respond
+    ["openapi.json"] ->
+      respond (responseLBS status200 [(hContentType, "application/json")] (Aeson.encode kansokuOpenApi))
+    _ ->
+      inner req respond
+
+readyApp :: ReadyProbe -> Application
+readyApp probe _req respond = do
+  isWriterAlive <- probe ^. #writerAlive
+  postgresResult <- probe ^. #pgmqReachable
+  let failingDependencies :: [Text]
+      failingDependencies =
+        ["writer" | not isWriterAlive]
+          <> either (const ["postgres"]) (const []) postgresResult
+      body
+        | null failingDependencies = Aeson.object ["status" Aeson..= ("ready" :: Text)]
+        | otherwise =
+            Aeson.object
+              [ "status" Aeson..= ("unavailable" :: Text),
+                "failing" Aeson..= failingDependencies
+              ]
+      status
+        | null failingDependencies = status200
+        | otherwise = status503
+  respond (responseLBS status [(hContentType, "application/json")] (Aeson.encode body))
 
 -- | Make Servant's pre-handler rejections use the same envelope as typed
 -- handler results. Servant raises 405 and 415 outside ErrorFormatters; those

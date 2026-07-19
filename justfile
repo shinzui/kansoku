@@ -17,6 +17,15 @@ build:
 test:
     cabal test all
 
+# Regenerate the checked-in OpenAPI document from the served route types.
+openapi:
+    cabal run kansoku-openapi
+
+# Fail if the checked-in OpenAPI document is stale.
+openapi-check:
+    cabal run kansoku-openapi
+    git diff --exit-code docs/api/openapi.json
+
 # Apply unapplied ClickHouse migrations in filename order, recording each in
 # analytics.schema_migrations. Migration files are immutable once applied.
 ch-migrate:

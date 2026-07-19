@@ -1,12 +1,13 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Kansoku.OpenApi
-  ( openApiDoc,
+module Kansoku.Api.OpenApi
+  ( kansokuOpenApi,
   )
 where
 
-import Data.Char (toLower)
+import Data.Char (toLower, toUpper)
 import Data.OpenApi qualified as O
+import Data.Text qualified as Text
 import Kansoku.Api (kansokuAPI)
 import Kansoku.Api.Response (ErrorEnvelopeWire)
 import Kansoku.Event
@@ -104,8 +105,8 @@ lowerEnumOptions =
     { O.constructorTagModifier = map toLower
     }
 
-openApiDoc :: O.OpenApi
-openApiDoc =
+kansokuOpenApi :: O.OpenApi
+kansokuOpenApi =
   toOpenApi kansokuAPI
     & O.info
     . O.title
@@ -120,3 +121,39 @@ openApiDoc =
       [ O.Tag "ingestion" (Just "Event ingestion endpoints") Nothing,
         O.Tag "metrics" (Just "Typed metric query endpoints") Nothing
       ]
+    & withOperationIds
+
+-- | Assign deterministic operation identifiers from method and path. They are
+-- derived rather than authored, so a path rename intentionally changes the id.
+-- Existing explicit identifiers always win.
+withOperationIds :: O.OpenApi -> O.OpenApi
+withOperationIds =
+  O.paths %~ imap setForPath
+  where
+    setForPath path item =
+      item
+        & O.get
+        . _Just
+        . O.operationId
+        %~ orSet ("get" <> key)
+        & O.post
+        . _Just
+        . O.operationId
+        %~ orSet ("post" <> key)
+      where
+        key = camel path
+
+    orSet identifier = Just . fromMaybe identifier
+
+-- | Turn @/metrics/feature-adoption@ into @MetricsFeatureAdoption@.
+-- Capture braces are separators, so future captures remain stable identifier
+-- fragments without punctuation.
+camel :: FilePath -> Text
+camel =
+  Text.concat . fmap capitalize . filter (not . Text.null) . Text.split isSeparator . Text.pack
+  where
+    isSeparator char = char `elem` ("/-{}" :: String)
+    capitalize segment =
+      case Text.uncons segment of
+        Just (first, rest) -> Text.cons (toUpper first) rest
+        Nothing -> segment

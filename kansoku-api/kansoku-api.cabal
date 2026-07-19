@@ -27,6 +27,7 @@ library
   hs-source-dirs:  src
   exposed-modules:
     Kansoku.Api
+    Kansoku.Api.OpenApi
     Kansoku.Api.Response
     Kansoku.Event
     Kansoku.Event.Registry
@@ -38,13 +39,27 @@ library
 
   build-depends:
     , aeson
-    , base           >=4.21 && <5
+    , base                >=4.21 && <5
     , containers
-    , generic-lens   >=2.2  && <2.4
+    , generic-lens        >=2.2  && <2.4
     , http-api-data
-    , lens           ^>=5.3
+    , lens                ^>=5.3
+    , openapi-hs
     , servant
+    , servant-openapi-hs
     , sop-core
     , text
     , time
     , uuid
+
+-- Writes docs/api/openapi.json deterministically from the served route type.
+executable kansoku-openapi
+  import:         common
+  main-is:        OpenApi.hs
+  hs-source-dirs: app
+  build-depends:
+    , aeson-pretty
+    , base          >=4.21 && <5
+    , bytestring
+    , directory
+    , kansoku-api

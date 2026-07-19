@@ -140,14 +140,15 @@ route.
       and every handler return a `KansokuResult`. Install `ErrorFormatters` so pre-handler
       rejections carry the same envelope. `cabal build all` and both suites pass: 39 core
       examples and 8 client examples, with only dependency-backed/live checks pending.
-- [ ] Milestone 5: adopt the OpenAPI-from-types recipe. Relocate the generator into `kansoku-api`
+- [x] Milestone 5 (completed 2026-07-18): adopt the OpenAPI-from-types recipe. Relocate the generator into `kansoku-api`
       as `Kansoku.Api.OpenApi`, deriving the document from the served `Proxy (NamedRoutes
       KansokuAPI)`; assign stable `operationId`s; add a `kansoku-openapi` executable that writes
       `docs/api/openapi.json` (aeson-pretty, sorted keys, trailing newline); check the artifact
       in; add the `cabal run kansoku-openapi && git diff --exit-code` regeneration check; and add
       the conformance tests — exact path set, every operation declares its error responses, every
       DTO's `ToJSON` validates against its `ToSchema`, and the served-path-set-equals-documented-
-      path-set guard.
+      path-set guard. The generator is byte-stable across consecutive runs, `just openapi-check`
+      passes, and all six OpenAPI/WAI examples are green without live databases.
 - [ ] Milestone 6: amend the plans of record (`docs/plans/4`, `6`, `7`, `8`) whose code blocks
       specify the `:<|>` shapes this plan removes, and note plan 8's OpenAPI executable and
       conformance tests.
@@ -290,6 +291,18 @@ implementation. Provide concise evidence.
   result value while transport and decoding failures stay in the outer `ClientError`.
   The SDK retry loop now retries transport failures and retryable 503 envelopes, rejects
   400/404 values without retrying, and has tests for both application paths.
+
+- Discovery (Milestone 5, 2026-07-18): `cabal.project` constrains the fork package names
+  `openapi-hs ==4.1.0` and `servant-openapi-hs ==4.1.0`; it contains neither `openapi3` nor
+  `servant-openapi3`. Mori source inspection confirmed the latter fork's MultiVerb instance,
+  and the conformance suite observes 400/404/503 on every generated operation. Relocating the
+  dependencies from `kansoku-core` to `kansoku-api` required no pin or bound change.
+
+- Discovery (Milestone 5, 2026-07-18): two consecutive `cabal run kansoku-openapi`
+  executions produced the same SHA-256,
+  `bf9c48a78c82ad1b92b4df9a8d70dd91fdc603cd8e0fc60e3f0ac33e9b547dde`.
+  The artifact reports OpenAPI 3.1.0, contains exactly thirteen paths, and carries the
+  deterministic identifiers `postV1Events` and `getMetricsUsers` at representative endpoints.
 
 
 ## Decision Log
@@ -1991,3 +2004,10 @@ holds the four conformance tests, all pure of ClickHouse.
   after Mori/source inspection showed that `Data.SOP` requires an explicit `sop-core` dependency
   and that the SDK must preserve MultiVerb's outer transport versus inner application-result
   channels. The client now tests retryable 503 and non-retryable 400 behavior explicitly.
+
+- 2026-07-18, Milestone 5 — Relocated the generator and OpenAPI fork dependencies into
+  `kansoku-api`, added deterministic operation identifiers and the `kansoku-openapi` executable,
+  checked in its byte-stable artifact, and added the local regeneration gate. Factored
+  `waiWrapper` so the conformance suite proves the exact thirteen-path Servant surface and the
+  `/health`, `/ready`, `/openapi.json` WAI allowlist without database handles. Recorded the
+  confirmed fork pins and the artifact's repeatable SHA-256.

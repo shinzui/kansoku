@@ -42,7 +42,6 @@ library
     Kansoku.Metrics.Query
     Kansoku.Metrics.Registry
     Kansoku.Migrations
-    Kansoku.OpenApi
     Kansoku.Postgres
     Kansoku.Runtime
     Kansoku.Server
@@ -65,7 +64,6 @@ library
     , hs-opentelemetry-api
     , http-types
     , kansoku-api
-    , openapi-hs
     , pg-migrate
     , pgmq-core
     , pgmq-effectful
@@ -73,7 +71,6 @@ library
     , pgmq-migration
     , resource-pool
     , servant
-    , servant-openapi-hs
     , servant-server
     , shibuya-core
     , shibuya-pgmq-adapter
