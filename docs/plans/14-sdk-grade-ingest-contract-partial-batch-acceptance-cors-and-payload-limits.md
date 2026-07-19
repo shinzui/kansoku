@@ -78,9 +78,13 @@ even if it requires splitting a partially completed task into two ("done" vs. "r
       pending). Live preflight returned 200 with `*`, POST/GET/HEAD, auth/content headers, and
       max-age 3600; an actual ingest response carried `*`; metrics carried no CORS header; a
       disallowed configured origin returned 400 without an allow-origin header.
-- [ ] Milestone 3: 5 MiB body cap via wai-extra's request-size-limit middleware; 500-event batch
-      cap in the handler with a 413 JSON response; `KANSOKU_INGEST_MAX_BODY_BYTES` and
-      `KANSOKU_INGEST_MAX_BATCH_LENGTH` config fields; 413 transcripts verified; tests green.
+- [x] Milestone 3 (completed 2026-07-19T15:39Z): added wai-extra 3.1.18's request-size-limit
+      middleware, a 500-event handler cap, positive-only configurable limits, the shared
+      `KansokuTooLarge`/413 response alternative, client handling, specs, and regenerated
+      OpenAPI. `cabal build all` and `cabal test all` passed (62 core examples, 0 failures;
+      10 client examples, 1 opt-in live pending). Live HTTP returned a CORS-readable 413 for a
+      chunked 6 MiB body, exact 413/202 results at 501/500 events, a configured limit of 2 in a
+      3-event rejection, and the documented `413` OpenAPI response.
 - [ ] MasterPlan registry row for EP-14 flipped to Complete; MasterPlan Progress ticks updated.
 
 
@@ -123,6 +127,18 @@ implementation. Provide concise evidence.
   package's plain-text diagnostic and no allow-origin header. Tests assert the required subset
   rather than freezing library-owned order or extras, and the transcript below records the
   observed release behavior.
+
+- Discovery (Milestone 3, 2026-07-19): Mori has no registered `wai-extra` project. Hackage and
+  upstream release metadata identify 3.1.18 as the current release; its source was acquired with
+  `cabal get` and the request-size-limit implementation was inspected before use. Cabal resolved
+  the direct dependency to that release without a compatibility workaround.
+
+- Discovery (Milestone 3, 2026-07-19): wai-extra rejects an oversized declared
+  `Content-Length` before invoking the inner application, but a chunked request crosses the
+  limit while the inner application consumes `requestBody`. The sentinel middleware spec must
+  therefore read the body to prove the streaming path. A piped 6 MiB chunked live request
+  returned the expected 413 envelope with `Access-Control-Allow-Origin: *`, confirming both the
+  incremental guard and the deliberate CORS-outside-size-limit composition.
 
 
 ## Decision Log
@@ -211,6 +227,14 @@ Record every decision made while working on the plan.
   call-site change in `kansoku-server/app/Main.hs` explicit and narrow.
   Date: 2026-07-19
 
+- Decision: Parse both ingest limits with `parsePositiveInt`, rejecting zero and negative
+  values, rather than using the plan's original `parseInt` sketch.
+  Rationale: Neither a nonpositive byte cap nor a nonpositive batch cap has useful operational
+  meaning, and converting a negative `Int` to wai-extra's `Word64` limit would wrap to a huge
+  value and silently disable the intended protection. Failing configuration loading with the
+  same positive-integer convention already used by other bounded settings is safer and total.
+  Date: 2026-07-19
+
 
 ## Outcomes & Retrospective
 
@@ -227,6 +251,13 @@ Milestone 2 made the ingest API usable from browsers without opening the metrics
 default is unrestricted origins, operators may supply an exact allowlist, future EP-15 auth
 headers are already preflight-approved, and live evidence covers preflight, actual response,
 metrics exclusion, and refusal of an unlisted origin.
+
+Milestone 3 bounded both transport and semantic batch size without breaking the SDK contract.
+Oversized bodies and batches now return non-retryable typed 413 envelopes, the browser-visible
+body-limit response retains CORS headers, configuration rejects unsafe nonpositive values, and
+the shared response algebra plus checked OpenAPI artifact advertise 413 consistently. Tests and
+live verification covered both sides of the 500-event boundary, a chunked body over 5 MiB, and a
+runtime batch-limit override.
 
 
 ## Context and Orientation
@@ -797,9 +828,9 @@ ExecPlan: docs/plans/14-sdk-grade-ingest-contract-partial-batch-acceptance-cors-
 ### Milestone 3 — Payload and batch limits
 
 Scope: a single global request-body size cap (default 5 MiB) enforced by WAI middleware before
-any body is read into memory, and a batch-length cap (default 500 events) enforced in the batch
-handler after parsing, both answering HTTP 413 ("Payload Too Large") with a JSON body naming the
-limit, both configurable.
+Servant can accept and parse the full body (and incrementally as chunked bodies are read), and a
+batch-length cap (default 500 events) enforced in the batch handler after parsing, both answering
+HTTP 413 ("Payload Too Large") with a JSON body naming the limit, both configurable.
 
 **Step 1 — dependency.** Add `wai-extra` to `kansoku-core`'s library `build-depends`. It is
 almost certainly already in the project's transitive closure (warp's ecosystem), but per policy
@@ -818,9 +849,10 @@ existing writer settings:
     ingestMaxBatchLength :: !Int,
 ```
 
-parsed with the existing `parseInt` helper, defaults `5242880` (5 MiB = 5 * 1024 * 1024) and
-`500`. Add named constants `defaultIngestMaxBodyBytes` / `defaultIngestMaxBatchLength` next to
-`defaultServerPort` so tests and docs reference one source of truth.
+parsed with the existing positive-integer helper so zero and negative limits fail configuration
+loading, defaults `5242880` (5 MiB = 5 * 1024 * 1024) and `500`. Add named constants
+`defaultIngestMaxBodyBytes` / `defaultIngestMaxBatchLength` next to `defaultServerPort` so tests
+and docs reference one source of truth.
 
 **Step 3 — the body-size middleware.** In `kansoku-core/src/Kansoku/Server.hs`:
 
@@ -944,7 +976,7 @@ and `"500"` (test the exported pure guard or the handler via a sentinel server �
 size-limit middleware test in `kansoku-core/test/Kansoku/CorsSpec.hs`'s style (or a small
 `LimitsSpec`): a `POST /v1/events` with a body of `ingestMaxBodyBytes + 1` bytes against
 `bodySizeLimit` over a sentinel app returns 413 with `code = "payload_too_large"`, and the
-sentinel is never reached.
+sentinel cannot finish consuming the oversized body.
 
 Acceptance: `cabal build all && cabal test all` green; `just openapi-check` clean (413 now
 documented per operation); both 413 curl transcripts in Validation reproduce. Commit message
@@ -1323,3 +1355,8 @@ Revision note (2026-07-19, third revision): Milestone 2 completed. Progress, dis
 outcomes, and the CORS transcript now record the verified `wai-cors` 0.2.7 dependency, additive
 origin configuration, ingest-only middleware, release-owned simple method/header union, and live
 open/restricted-origin behavior.
+
+Revision note (2026-07-19, fourth revision): Milestone 3 completed. Progress, discoveries,
+decisions, outcomes, dependency notes, and validation evidence now record the request and batch
+limits, positive-only configuration, wai-extra's declared/chunked enforcement behavior,
+CORS-readable 413 response, shared response-algebra widening, and live boundary checks.

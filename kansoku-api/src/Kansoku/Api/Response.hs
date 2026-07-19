@@ -9,6 +9,7 @@ module Kansoku.Api.Response
     OkResponses,
     badRequest,
     notFound,
+    tooLarge,
     unavailable,
   )
 where
@@ -33,6 +34,7 @@ data KansokuResult a
   = KansokuOk a
   | KansokuBadRequest !ErrorEnvelopeWire
   | KansokuNotFound !ErrorEnvelopeWire
+  | KansokuTooLarge !ErrorEnvelopeWire
   | KansokuUnavailable !ErrorEnvelopeWire
   deriving stock (Generic, Eq, Show)
 
@@ -40,6 +42,7 @@ type OkResponses (desc :: Symbol) a =
   '[ Respond 200 desc a,
      Respond 400 "Malformed request" ErrorEnvelopeWire,
      Respond 404 "Not found" ErrorEnvelopeWire,
+     Respond 413 "Payload too large" ErrorEnvelopeWire,
      Respond 503 "Storage unavailable" ErrorEnvelopeWire
    ]
 
@@ -47,6 +50,7 @@ type AcceptedResponses (desc :: Symbol) a =
   '[ Respond 202 desc a,
      Respond 400 "Malformed request" ErrorEnvelopeWire,
      Respond 404 "Not found" ErrorEnvelopeWire,
+     Respond 413 "Payload too large" ErrorEnvelopeWire,
      Respond 503 "Storage unavailable" ErrorEnvelopeWire
    ]
 
@@ -58,6 +62,7 @@ instance
     '[ Respond 200 desc a,
        Respond 400 "Malformed request" ErrorEnvelopeWire,
        Respond 404 "Not found" ErrorEnvelopeWire,
+       Respond 413 "Payload too large" ErrorEnvelopeWire,
        Respond 503 "Storage unavailable" ErrorEnvelopeWire
      ]
     (KansokuResult a)
@@ -66,19 +71,22 @@ instance
     KansokuOk value -> Z (I value)
     KansokuBadRequest err -> S (Z (I err))
     KansokuNotFound err -> S (S (Z (I err)))
-    KansokuUnavailable err -> S (S (S (Z (I err))))
+    KansokuTooLarge err -> S (S (S (Z (I err))))
+    KansokuUnavailable err -> S (S (S (S (Z (I err)))))
   fromUnion = \case
     Z (I value) -> KansokuOk value
     S (Z (I err)) -> KansokuBadRequest err
     S (S (Z (I err))) -> KansokuNotFound err
-    S (S (S (Z (I err)))) -> KansokuUnavailable err
-    S (S (S (S impossible))) -> case impossible of {}
+    S (S (S (Z (I err)))) -> KansokuTooLarge err
+    S (S (S (S (Z (I err))))) -> KansokuUnavailable err
+    S (S (S (S (S impossible)))) -> case impossible of {}
 
 instance
   AsUnion
     '[ Respond 202 desc a,
        Respond 400 "Malformed request" ErrorEnvelopeWire,
        Respond 404 "Not found" ErrorEnvelopeWire,
+       Respond 413 "Payload too large" ErrorEnvelopeWire,
        Respond 503 "Storage unavailable" ErrorEnvelopeWire
      ]
     (KansokuResult a)
@@ -87,19 +95,24 @@ instance
     KansokuOk value -> Z (I value)
     KansokuBadRequest err -> S (Z (I err))
     KansokuNotFound err -> S (S (Z (I err)))
-    KansokuUnavailable err -> S (S (S (Z (I err))))
+    KansokuTooLarge err -> S (S (S (Z (I err))))
+    KansokuUnavailable err -> S (S (S (S (Z (I err)))))
   fromUnion = \case
     Z (I value) -> KansokuOk value
     S (Z (I err)) -> KansokuBadRequest err
     S (S (Z (I err))) -> KansokuNotFound err
-    S (S (S (Z (I err)))) -> KansokuUnavailable err
-    S (S (S (S impossible))) -> case impossible of {}
+    S (S (S (Z (I err)))) -> KansokuTooLarge err
+    S (S (S (S (Z (I err))))) -> KansokuUnavailable err
+    S (S (S (S (S impossible)))) -> case impossible of {}
 
 badRequest :: Text -> Text -> ErrorEnvelopeWire
 badRequest code message = ErrorEnvelopeWire {code, message, retryable = False}
 
 notFound :: Text -> Text -> ErrorEnvelopeWire
 notFound code message = ErrorEnvelopeWire {code, message, retryable = False}
+
+tooLarge :: Text -> Text -> ErrorEnvelopeWire
+tooLarge code message = ErrorEnvelopeWire {code, message, retryable = False}
 
 unavailable :: Text -> Text -> ErrorEnvelopeWire
 unavailable code message = ErrorEnvelopeWire {code, message, retryable = True}

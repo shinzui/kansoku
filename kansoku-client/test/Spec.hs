@@ -15,7 +15,7 @@ import Kansoku.Api.Response (ErrorEnvelopeWire (..))
 import Kansoku.Client
 import Kansoku.Event
 import Kansoku.Prelude
-import Network.HTTP.Types (Status, status202, status400, status503)
+import Network.HTTP.Types (Status, status202, status400, status413, status503)
 import Network.Wai (Application, Request, pathInfo, requestMethod, responseLBS, strictRequestBody)
 import Network.Wai.Handler.Warp qualified as Warp
 import System.Environment (lookupEnv)
@@ -113,6 +113,15 @@ spec = describe "Kansoku.Client" $ do
       droppedCount client `shouldReturn` 1
       close client
 
+  it "does not retry an oversized-batch API rejection" $
+    withRecorder (const (pure status413)) $ \port _ attempts -> do
+      client <- newClient ((testConfig port) & #maxRetries .~ 3 & #retryBaseDelayMicros .~ 1_000)
+      trackEvent client emptyIds "oversized_batch" []
+      flush client
+      readTVarIO attempts `shouldReturn` 1
+      droppedCount client `shouldReturn` 1
+      close client
+
   it "drops newest events on buffer overflow" $
     withRecorder (const (pure status202)) $ \port _ _ -> do
       client <- newClient ((testConfig port) & #bufferCapacity .~ 2 & #batchMaxIntervalMicros .~ 10000000)
@@ -164,6 +173,8 @@ responseBodyFor status _request _body
       Aeson.encode ErrorEnvelopeWire {code = "validation_failed", message = "validation failed", retryable = False}
   | status == status503 =
       Aeson.encode ErrorEnvelopeWire {code = "queue_unavailable", message = "analytics queue is unavailable", retryable = True}
+  | status == status413 =
+      Aeson.encode ErrorEnvelopeWire {code = "batch_too_large", message = "batch exceeds limit", retryable = False}
 responseBodyFor _status request body
   | pathInfo request == ["v1", "events"] = "{\"accepted\":1,\"eventId\":\"test\"}"
   | otherwise =

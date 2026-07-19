@@ -246,6 +246,7 @@ deliverWithRetry cfg env events =
           | otherwise -> pure (Left (DeliveryRejected envelope))
         Right (KansokuBadRequest envelope) -> pure (Left (DeliveryRejected envelope))
         Right (KansokuNotFound envelope) -> pure (Left (DeliveryRejected envelope))
+        Right (KansokuTooLarge envelope) -> pure (Left (DeliveryRejected envelope))
         Left err
           | attempt >= cfg ^. #maxRetries -> pure (Left (DeliveryFailed err))
           | otherwise -> do

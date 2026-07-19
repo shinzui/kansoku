@@ -2,7 +2,8 @@
 
 -- | Servant handlers for HTTP ingestion.
 module Kansoku.Ingest.Handler
-  ( ingestServer,
+  ( batchLengthError,
+    ingestServer,
     partitionBatch,
   )
 where
@@ -13,8 +14,10 @@ import Effectful (Eff, IOE, runEff)
 import Effectful.Error.Static qualified as Error
 import Hasql.Pool qualified as Pool
 import Kansoku.Api.Response
-  ( KansokuResult (..),
+  ( ErrorEnvelopeWire,
+    KansokuResult (..),
     badRequest,
+    tooLarge,
     unavailable,
   )
 import Kansoku.Event
@@ -44,8 +47,8 @@ type HandlerEff =
      IOE
    ]
 
-ingestServer :: Pool.Pool -> QueueName -> IngestRoutes (AsServerT Handler)
-ingestServer pool queueName =
+ingestServer :: Int -> Pool.Pool -> QueueName -> IngestRoutes (AsServerT Handler)
+ingestServer maxBatchLength pool queueName =
   IngestRoutes
     { postEvent = postEventHandler,
       postBatch = postBatchHandler
@@ -66,12 +69,30 @@ ingestServer pool queueName =
                 }
 
     postBatchHandler :: [AnalyticsEvent] -> Handler (KansokuResult BatchAck)
-    postBatchHandler raw = do
-      now <- liftIO getCurrentTime
-      let (events, rejectedEvents) = partitionBatch ((& #receivedAt .~ now) <$> raw)
-      effToHandler pool $ do
-        _ <- enqueueMany queueName events
-        pure BatchAck {accepted = length events, rejected = rejectedEvents}
+    postBatchHandler raw =
+      case batchLengthError maxBatchLength (length raw) of
+        Just err -> pure (KansokuTooLarge err)
+        Nothing -> do
+          now <- liftIO getCurrentTime
+          let (events, rejectedEvents) = partitionBatch ((& #receivedAt .~ now) <$> raw)
+          effToHandler pool $ do
+            _ <- enqueueMany queueName events
+            pure BatchAck {accepted = length events, rejected = rejectedEvents}
+
+-- | Build the non-retryable 413 envelope for an overlong batch.
+batchLengthError :: Int -> Int -> Maybe ErrorEnvelopeWire
+batchLengthError maxBatchLength actualLength
+  | actualLength > maxBatchLength =
+      Just
+        ( tooLarge
+            "batch_too_large"
+            ( "batch of "
+                <> Text.pack (show actualLength)
+                <> " events exceeds the limit of "
+                <> Text.pack (show maxBatchLength)
+            )
+        )
+  | otherwise = Nothing
 
 -- | Partition a received-at-stamped batch while preserving submission order.
 -- Rejection indices refer to the original zero-based positions.

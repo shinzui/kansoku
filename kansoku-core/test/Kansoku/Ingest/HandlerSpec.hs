@@ -7,9 +7,10 @@ import Data.Aeson.Key qualified as Key
 import Data.Aeson.KeyMap qualified as KeyMap
 import Data.Generics.Labels ()
 import Data.List qualified as List
+import Kansoku.Api.Response (ErrorEnvelopeWire (..))
 import Kansoku.Event
 import Kansoku.Ingest.Api (BatchAck (..), RejectedEvent (..))
-import Kansoku.Ingest.Handler (partitionBatch)
+import Kansoku.Ingest.Handler (batchLengthError, partitionBatch)
 import Kansoku.Prelude
 import Test.Hspec
 
@@ -56,6 +57,16 @@ spec = describe "Kansoku.Ingest.Handler" $ do
       Just (Aeson.Object object) ->
         List.sort (Key.toText <$> KeyMap.keys object) `shouldBe` ["accepted", "rejected"]
       decoded -> expectationFailure ("expected object, got " <> show decoded)
+
+  it "rejects only batches above the configured length" $ do
+    batchLengthError 500 500 `shouldBe` Nothing
+    batchLengthError 500 501
+      `shouldBe` Just
+        ErrorEnvelopeWire
+          { code = "batch_too_large",
+            message = "batch of 501 events exceeds the limit of 500",
+            retryable = False
+          }
 
   it "renders every validation error as human-readable text" $ do
     renderValidationError EmptyEventId `shouldBe` "eventId must not be empty"

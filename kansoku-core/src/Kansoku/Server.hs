@@ -3,6 +3,7 @@
 -- | The minimal HTTP server for EP-1: a single /health route returning 200 OK.
 module Kansoku.Server
   ( ReadyProbe (..),
+    bodySizeLimit,
     envelopeFormatters,
     healthApp,
     ingestCors,
@@ -24,7 +25,7 @@ import Effectful.Reader.Static (Reader, asks)
 import Hasql.Pool qualified as Pool
 import Kansoku.Api (KansokuAPI (..), kansokuAPI)
 import Kansoku.Api.OpenApi (kansokuOpenApi)
-import Kansoku.Api.Response (ErrorEnvelopeWire, badRequest)
+import Kansoku.Api.Response (ErrorEnvelopeWire, badRequest, tooLarge)
 import Kansoku.Api.Response qualified as Response
 import Kansoku.ClickHouse (QueryPool)
 import Kansoku.Config (Config)
@@ -32,11 +33,12 @@ import Kansoku.Ingest.Handler (ingestServer)
 import Kansoku.Logging (Log, logInfo)
 import Kansoku.Metrics.Handler (metricsServer)
 import Kansoku.Prelude
-import Network.HTTP.Types (status200, status404, status503)
+import Network.HTTP.Types (status200, status404, status413, status503)
 import Network.HTTP.Types.Header (hContentType)
-import Network.Wai (Application, Middleware, pathInfo, responseLBS)
+import Network.Wai (Application, Middleware, Response, pathInfo, responseLBS)
 import Network.Wai.Handler.Warp qualified as Warp
 import Network.Wai.Middleware.Cors qualified as Cors
+import Network.Wai.Middleware.RequestSizeLimit qualified as SizeLimit
 import Pgmq.Effectful (QueueName, queueMetrics, runPgmq)
 import Pgmq.Effectful.Interpreter (PgmqRuntimeError)
 import Servant
@@ -66,10 +68,10 @@ healthApp req respond =
     _ ->
       respond (responseLBS status404 [(hContentType, "text/plain")] "Not Found")
 
-kansokuServer :: Pool.Pool -> QueueName -> QueryPool -> KansokuAPI (AsServerT Handler)
-kansokuServer pool queueName queryPool =
+kansokuServer :: Int -> Pool.Pool -> QueueName -> QueryPool -> KansokuAPI (AsServerT Handler)
+kansokuServer maxBatchLength pool queueName queryPool =
   KansokuAPI
-    { ingest = ingestServer pool queueName,
+    { ingest = ingestServer maxBatchLength pool queueName,
       metrics = metricsServer queryPool
     }
 
@@ -79,10 +81,13 @@ kansokuApp config probe pool queueName queryPool =
     probe
     ( ingestCors
         (config ^. #corsAllowedOrigins)
-        ( serveWithContext
-            kansokuAPI
-            (envelopeFormatters :. EmptyContext)
-            (kansokuServer pool queueName queryPool)
+        ( bodySizeLimit
+            (config ^. #ingestMaxBodyBytes)
+            ( serveWithContext
+                kansokuAPI
+                (envelopeFormatters :. EmptyContext)
+                (kansokuServer (config ^. #ingestMaxBatchLength) pool queueName queryPool)
+            )
         )
     )
 
@@ -103,6 +108,31 @@ ingestCors allowedOrigins inner req respond =
           Cors.corsRequestHeaders = ["Content-Type", "X-Api-Key", "Authorization"],
           Cors.corsMaxAge = Just 3600
         }
+
+-- | Bound request bodies before Servant parses them. CORS wraps this
+-- middleware in 'kansokuApp', so browser callers can read the JSON 413.
+bodySizeLimit :: Int -> Middleware
+bodySizeLimit maxBytes =
+  SizeLimit.requestSizeLimitMiddleware
+    ( SizeLimit.setOnLengthExceeded
+        (\_maxLength _inner _request respond -> respond (payloadTooLarge maxBytes))
+        ( SizeLimit.setMaxLengthForRequest
+            (\_request -> pure (Just (fromIntegral maxBytes)))
+            SizeLimit.defaultRequestSizeLimitSettings
+        )
+    )
+
+payloadTooLarge :: Int -> Response
+payloadTooLarge maxBytes =
+  responseLBS
+    status413
+    [(hContentType, "application/json")]
+    ( Aeson.encode
+        ( tooLarge
+            "payload_too_large"
+            ("request body exceeds the " <> Text.pack (show maxBytes) <> "-byte limit")
+        )
+    )
 
 -- | Operational/meta routes stay at WAI level; all analytics routes delegate
 -- to the one Servant application. Taking the inner app keeps this wrapper

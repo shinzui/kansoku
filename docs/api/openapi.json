@@ -360,6 +360,21 @@
             },
             "description": "Not found"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Payload too large"
+          },
           "503": {
             "content": {
               "application/json": {
@@ -472,6 +487,21 @@
               }
             },
             "description": "Not found"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Payload too large"
           },
           "503": {
             "content": {
@@ -586,6 +616,21 @@
             },
             "description": "Not found"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Payload too large"
+          },
           "503": {
             "content": {
               "application/json": {
@@ -698,6 +743,21 @@
               }
             },
             "description": "Not found"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Payload too large"
           },
           "503": {
             "content": {
@@ -812,6 +872,21 @@
             },
             "description": "Not found"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Payload too large"
+          },
           "503": {
             "content": {
               "application/json": {
@@ -921,6 +996,21 @@
               }
             },
             "description": "Not found"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Payload too large"
           },
           "503": {
             "content": {
@@ -1035,6 +1125,21 @@
             },
             "description": "Not found"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Payload too large"
+          },
           "503": {
             "content": {
               "application/json": {
@@ -1148,6 +1253,21 @@
             },
             "description": "Not found"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Payload too large"
+          },
           "503": {
             "content": {
               "application/json": {
@@ -1247,6 +1367,21 @@
               }
             },
             "description": "Not found"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Payload too large"
           },
           "503": {
             "content": {
@@ -1361,6 +1496,21 @@
             },
             "description": "Not found"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Payload too large"
+          },
           "503": {
             "content": {
               "application/json": {
@@ -1474,6 +1624,21 @@
             },
             "description": "Not found"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Payload too large"
+          },
           "503": {
             "content": {
               "application/json": {
@@ -1557,6 +1722,21 @@
             },
             "description": "Not found"
           },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Payload too large"
+          },
           "503": {
             "content": {
               "application/json": {
@@ -1636,6 +1816,21 @@
               }
             },
             "description": "Not found"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                }
+              }
+            },
+            "description": "Payload too large"
           },
           "503": {
             "content": {

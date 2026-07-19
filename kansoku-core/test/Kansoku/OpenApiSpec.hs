@@ -186,7 +186,7 @@ assertStatuses :: OperationValue -> Expectation
 assertStatuses (path, method, operation) = do
   let actual = List.sort (Key.toText <$> KeyMap.keys (objectAt ["responses"] operation))
       success = if method == "post" then "202" else "200"
-  actual `shouldBe` List.sort [success, "400", "404", "503"]
+  actual `shouldBe` List.sort [success, "400", "404", "413", "503"]
   path `shouldSatisfy` (`elem` expectedServedPaths)
 
 conforms :: (ToJSON a, ToSchema a) => String -> a -> Expectation

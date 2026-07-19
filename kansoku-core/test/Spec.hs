@@ -6,6 +6,7 @@ import Kansoku.CorsSpec qualified
 import Kansoku.EventSpec qualified
 import Kansoku.Ingest.HandlerSpec qualified
 import Kansoku.Ingest.QueueSpec qualified
+import Kansoku.LimitsSpec qualified
 import Kansoku.Metrics.HandlerSpec qualified
 import Kansoku.Metrics.RoutingSpec qualified
 import Kansoku.MigrationsSpec qualified
@@ -23,6 +24,7 @@ main = hspec $ do
   Kansoku.EventSpec.spec
   Kansoku.Ingest.HandlerSpec.spec
   Kansoku.Ingest.QueueSpec.spec
+  Kansoku.LimitsSpec.spec
   Kansoku.MigrationsSpec.spec
   Kansoku.Metrics.HandlerSpec.spec
   Kansoku.Metrics.RoutingSpec.spec

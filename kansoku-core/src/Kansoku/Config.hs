@@ -4,6 +4,8 @@ module Kansoku.Config
   ( Config (..),
     ConfigError (..),
     defaultEventsQueueName,
+    defaultIngestMaxBatchLength,
+    defaultIngestMaxBodyBytes,
     defaultServerPort,
     loadConfig,
   )
@@ -22,6 +24,12 @@ defaultServerPort = 8080
 defaultEventsQueueName :: Text
 defaultEventsQueueName = "kansoku_events"
 
+defaultIngestMaxBodyBytes :: Int
+defaultIngestMaxBodyBytes = 5 * 1024 * 1024
+
+defaultIngestMaxBatchLength :: Int
+defaultIngestMaxBatchLength = 500
+
 -- | All configuration the service needs at startup. Later plans extend this
 -- record with ClickHouse, pgmq, queue, and metrics-query settings.
 data Config = Config
@@ -39,6 +47,8 @@ data Config = Config
     writerVisibilityTimeoutSec :: !Int32,
     writerAdapterBatchSize :: !Int32,
     corsAllowedOrigins :: !(Maybe [Text]),
+    ingestMaxBodyBytes :: !Int,
+    ingestMaxBatchLength :: !Int,
     serverPort :: !Int
   }
   deriving stock (Generic, Eq, Show)
@@ -65,6 +75,8 @@ loadConfig = do
   writerVt <- lookupEnv "KANSOKU_WRITER_VT_SEC"
   writerAdapterBatch <- lookupEnv "KANSOKU_WRITER_ADAPTER_BATCH"
   corsOrigins <- lookupEnv "KANSOKU_CORS_ORIGINS"
+  ingestBodyBytes <- lookupEnv "KANSOKU_INGEST_MAX_BODY_BYTES"
+  ingestBatchLength <- lookupEnv "KANSOKU_INGEST_MAX_BATCH_LENGTH"
   srv <- lookupEnv "KANSOKU_SERVER_PORT"
   pure $ do
     tcp <- parsePort "CLICKHOUSE_TCP_PORT" 9000 chTcp
@@ -74,6 +86,8 @@ loadConfig = do
     visibility <- parseInt32 "KANSOKU_WRITER_VT_SEC" 60 writerVt
     adapterBatch <- parseInt32 "KANSOKU_WRITER_ADAPTER_BATCH" 1000 writerAdapterBatch
     queryPoolSize <- parsePositiveInt "KANSOKU_CH_QUERY_POOL_SIZE" 4 chQueryPoolSize
+    maxBodyBytes <- parsePositiveInt "KANSOKU_INGEST_MAX_BODY_BYTES" defaultIngestMaxBodyBytes ingestBodyBytes
+    maxBatchLength <- parsePositiveInt "KANSOKU_INGEST_MAX_BATCH_LENGTH" defaultIngestMaxBatchLength ingestBatchLength
     port <- parsePort "KANSOKU_SERVER_PORT" defaultServerPort srv
     Right
       Config
@@ -91,6 +105,8 @@ loadConfig = do
           writerVisibilityTimeoutSec = visibility,
           writerAdapterBatchSize = adapterBatch,
           corsAllowedOrigins = parseCorsOrigins corsOrigins,
+          ingestMaxBodyBytes = maxBodyBytes,
+          ingestMaxBatchLength = maxBatchLength,
           serverPort = port
         }
   where

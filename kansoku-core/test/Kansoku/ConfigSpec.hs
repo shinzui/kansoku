@@ -25,6 +25,8 @@ clearEnv =
       "KANSOKU_WRITER_VT_SEC",
       "KANSOKU_WRITER_ADAPTER_BATCH",
       "KANSOKU_CORS_ORIGINS",
+      "KANSOKU_INGEST_MAX_BODY_BYTES",
+      "KANSOKU_INGEST_MAX_BATCH_LENGTH",
       "KANSOKU_SERVER_PORT"
     ]
 
@@ -49,6 +51,8 @@ spec = describe "Kansoku.Config.loadConfig" $ do
         (cfg ^. #writerVisibilityTimeoutSec) `shouldBe` 60
         (cfg ^. #writerAdapterBatchSize) `shouldBe` 1000
         (cfg ^. #corsAllowedOrigins) `shouldBe` Nothing
+        (cfg ^. #ingestMaxBodyBytes) `shouldBe` 5242880
+        (cfg ^. #ingestMaxBatchLength) `shouldBe` 500
         (cfg ^. #serverPort) `shouldBe` 8080
 
   it "parses values from the environment" $ do
@@ -66,6 +70,8 @@ spec = describe "Kansoku.Config.loadConfig" $ do
     setEnv "KANSOKU_WRITER_VT_SEC" "90"
     setEnv "KANSOKU_WRITER_ADAPTER_BATCH" "250"
     setEnv "KANSOKU_CORS_ORIGINS" "https://app.example.com, https://admin.example.com,"
+    setEnv "KANSOKU_INGEST_MAX_BODY_BYTES" "1048576"
+    setEnv "KANSOKU_INGEST_MAX_BATCH_LENGTH" "250"
     setEnv "KANSOKU_SERVER_PORT" "9999"
     result <- loadConfig
     clearEnv
@@ -86,6 +92,8 @@ spec = describe "Kansoku.Config.loadConfig" $ do
         (cfg ^. #writerAdapterBatchSize) `shouldBe` 250
         (cfg ^. #corsAllowedOrigins)
           `shouldBe` Just ["https://app.example.com", "https://admin.example.com"]
+        (cfg ^. #ingestMaxBodyBytes) `shouldBe` 1048576
+        (cfg ^. #ingestMaxBatchLength) `shouldBe` 250
         (cfg ^. #serverPort) `shouldBe` 9999
 
   it "treats an explicit wildcard CORS origin as unrestricted" $ do
@@ -108,6 +116,13 @@ spec = describe "Kansoku.Config.loadConfig" $ do
     result <- loadConfig
     clearEnv
     result `shouldBe` Left (ConfigError "KANSOKU_CH_QUERY_POOL_SIZE: must be at least 1")
+
+  it "rejects non-positive ingest limits" $ do
+    clearEnv
+    setEnv "KANSOKU_INGEST_MAX_BODY_BYTES" "0"
+    result <- loadConfig
+    clearEnv
+    result `shouldBe` Left (ConfigError "KANSOKU_INGEST_MAX_BODY_BYTES: must be at least 1")
   where
     isLeft (Left _) = True
     isLeft _ = False
