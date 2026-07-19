@@ -4,6 +4,7 @@ slug: event-schema-governance-versioned-registry-and-portfolio-event-contracts
 title: "Event schema governance: versioned registry and portfolio event contracts"
 kind: exec-plan
 created_at: 2026-07-15T21:43:59Z
+intention: intention_01kxxscv06exbvqdtefzqnf9h5
 master_plan: "docs/masterplans/3-kansoku-analytics-extensions-queryable-properties-multi-signal-identity-and-experiment-analytics.md"
 ---
 
@@ -61,9 +62,9 @@ Use a checklist to summarize granular steps. Every stopping point must be docume
 even if it requires splitting a partially completed task into two ("done" vs. "remaining").
 This section must always reflect the actual current state of the work.
 
-- [ ] M0: verify the post-MasterPlan-2 baseline (NamedRoutes record, migration runner,
-      auth, committed `docs/api/openapi.json`) and record any deviation in Surprises &
-      Discoveries
+- [x] (2026-07-19 14:43 PDT) M0: verified the post-MasterPlan-2 baseline (NamedRoutes
+      record, migration runner, auth, committed `docs/api/openapi.json`) and recorded the
+      landed EP-17/EP-18/EP-19 deviations below
 - [ ] M1: `EventRegistry` remodeled as `Map EventName (NonEmpty EventSchema)`;
       `EventSchema` gains `schemaVersion :: Int` and `schemaNote :: Text`; `PropertySpec`
       gains `propDescription :: Maybe Text`; lookup helpers added
@@ -102,7 +103,26 @@ This section must always reflect the actual current state of the work.
 Document unexpected behaviors, bugs, optimizations, or insights discovered during
 implementation. Provide concise evidence.
 
-(None yet.)
+- 2026-07-19: The landed registry has eight, not five, schemas. EP-17 added
+  `payment_completed` and `feature_used`, and EP-19 added `experiment_viewed` plus the
+  generic `propPattern :: Maybe PropertyPattern` field and `SqlNamePattern`. Versioning
+  must preserve all eight schemas and every pattern exactly; `propDescription` is a new
+  fifth `PropertySpec` field rather than a replacement for the pattern field.
+
+- 2026-07-19: The root `KansokuAPI` is a NamedRoutes record, but it currently contains only
+  authenticated `ingest` and `metrics` sub-records. `/health`, `/ready`,
+  `/internal/metrics`, and `/openapi.json` remain deliberately WAI-level per ADR 0001.
+  The public catalog can join the root record as an unauthenticated `schemas` field without
+  moving those operational routes or changing either auth family.
+
+- 2026-07-19: EP-18's optional `identifiers` field and ClickHouse column are landed, so
+  `schemaVersion` has no naming collision and `schema_version` appends after `identifiers`.
+  The migration ledger is occupied through EP-19's immutable `0015`; this plan claims
+  `0016_events_raw_schema_version.sql`.
+
+- 2026-07-19: The fully live baseline is green: `just build`, deterministic
+  `just openapi-check`, 120 core examples, and 11 client examples passed with zero failures;
+  the one client test requiring `KANSOKU_SERVER_URL` remains intentionally pending.
 
 
 ## Decision Log
@@ -208,6 +228,22 @@ Record every decision made while working on the plan.
   artifact exists and belongs to the repos that own those docs.
   Date: 2026-07-15
 
+- Decision: Migrate all eight landed schemas into immutable version 1 and retain
+  `PropertyPattern` beside the new descriptions. Existing property-query compilation uses
+  `latestSchema` after the registry remodel.
+  Rationale: EP-17 and EP-19 have completed, so dropping their declarations or pattern
+  constraints would be a semantic regression. Choosing the latest schema preserves today's
+  one-shape lookup behavior and makes newly declared properties available to metrics; explicit
+  schema-version dimensions for metric compilation are separate future scope.
+  Date: 2026-07-19
+
+- Decision: Add `/v1/schemas` as a public field on the landed root `KansokuAPI` NamedRoutes
+  record; keep the four operational/meta endpoints in `waiWrapper`.
+  Rationale: This makes the published catalog part of the served, client-derived, and OpenAPI
+  contract while preserving ADR 0001's intentional separation of operational routes and
+  ADR 0003's auth boundaries around only ingest and metrics.
+  Date: 2026-07-19
+
 
 ## Outcomes & Retrospective
 
@@ -244,7 +280,7 @@ is a numbered SQL file under `db/clickhouse/migrations/` applied in order by `ju
 ch-migrate`. NamedRoutes is servant's style of declaring an API as a Haskell record — one
 field per route — instead of a positional chain; plan 9 converts kansoku to it.
 
-### The registry today
+### The registry at implementation start
 
 `kansoku-api/src/Kansoku/Event/Registry.hs` defines the whole artifact this plan versions:
 
@@ -254,7 +290,8 @@ data PropertyType = PTString | PTNumber | PTBool | PTObject | PTArray | PTAny
 data PropertySpec = PropertySpec
   { propName :: !Text,
     propType :: !PropertyType,
-    propRequired :: !Bool
+    propRequired :: !Bool,
+    propPattern :: !(Maybe PropertyPattern)
   }
 
 data EventSchema = EventSchema
@@ -267,10 +304,14 @@ newtype EventRegistry = EventRegistry (Map EventName EventSchema)
 
 with `emptyRegistry`, `registerSchema :: EventSchema -> EventRegistry -> EventRegistry`,
 `lookupSchema :: EventName -> EventRegistry -> Maybe EventSchema`, and `defaultRegistry`
-declaring five events: `page_view` (required string `url`), `session_start` (required string
-`sessionId`), `identify` (no declared properties), `user_registered` (required string
-`userId`), and `subscription_started` (required string `plan`, optional number `amount`).
-Note that one event name maps to exactly one schema — there is no version anywhere.
+declaring eight events. The original five are `page_view` (required string `url`),
+`session_start` (required string `sessionId`), `identify` (no declared properties),
+`user_registered` (required string `userId`), and `subscription_started` (required string
+`plan`, optional number `amount`). EP-17 added `payment_completed` (required number
+`amount`, optional string `plan`) and `feature_used` (required string `feature`). EP-19
+added `experiment_viewed` with required string `experiment` and `variant` properties whose
+`SqlNamePattern` admits only `[a-z0-9_.:-]{1,128}`. One event name still maps to exactly one
+schema — there is no version anywhere.
 
 ### Validation today
 
@@ -279,17 +320,18 @@ Note that one event name maps to exactly one schema — there is no version anyw
 and `validateEvent = validateEventWith defaultRegistry`. Structural checks reject an empty
 event id, an empty event name, and `receivedAt < occurredAt`. Then, if `lookupSchema` finds
 the event name, each declared property is checked against the event's `properties` object
-(`MissingRequiredProperty`, `WrongPropertyType`); if the name is unknown, no schema errors
-are produced — unknown event names pass. The ingest handler
+(`MissingRequiredProperty`, `WrongPropertyType`, `InvalidPropertyValue`); if the name is
+unknown, no schema errors are produced — unknown event names pass. The ingest handler
 (`kansoku-core/src/Kansoku/Ingest/Handler.hs`) calls `validateEvent` and turns a `Left` into
 HTTP 400 with body `{"error":"validation failed","details":[...]}` where each detail is the
-`show` of a `ValidationError`.
+stable human-readable output of `renderValidationError`.
 
 ### The wire type today
 
-`kansoku-api/src/Kansoku/Event/Types.hs` defines `AnalyticsEvent` with 24 fields (ids,
-source, timestamps, identity fields, URL/UTM attribution, correlation ids, and two open JSON
-objects `properties` and `context`). JSON instances are generically derived with
+`kansoku-api/src/Kansoku/Event/Types.hs` defines `AnalyticsEvent` with 25 fields (ids,
+source, timestamps, identity fields, URL/UTM attribution, correlation ids, two open JSON
+objects `properties` and `context`, and EP-18's optional `identifiers`). JSON instances are
+generically derived with
 `omitNothingFields = True` and `rejectUnknownFields = False`, so field names are the wire
 keys and optional fields disappear when absent. `kansoku-api/src/Kansoku/Event.hs` re-exports
 the event modules and provides `baseEvent :: EventId -> EventName -> EventSource -> UTCTime
@@ -307,15 +349,14 @@ EventRow`. The table `analytics.events_raw` is created by
 `db/clickhouse/migrations/0001_events_raw.sql`. MP-2 EP-12
 (`docs/plans/12-clickhouse-schema-v2-sort-key-final-free-resolution-join-free-rollups.md`)
 replaces "apply every file in filename order" with a runner that records applied filenames in
-`analytics.schema_migrations` and treats applied migration files as immutable; it also
-rewrites `events_raw` (migrations 0004–0007). All ClickHouse DDL goes through numbered files
-under `db/clickhouse/migrations/` — never through Haskell code.
+`analytics.schema_migrations` and treats applied migration files as immutable. The landed
+ledger runs through EP-19's `0015`, and EP-18 added `identifiers` after `context`. All
+ClickHouse DDL goes through numbered files under `db/clickhouse/migrations/` — never through
+Haskell code.
 
 ### OpenAPI and the client today
 
-`kansoku-core/src/Kansoku/OpenApi.hs` builds the OpenAPI document from the servant API type
-and the server serves it at `GET /openapi.json`. Plan 9 moves this to
-`kansoku-api/src/Kansoku/Api/OpenApi.hs`, derives it from the served
+`kansoku-api/src/Kansoku/Api/OpenApi.hs` builds the OpenAPI document from the served
 `Proxy (NamedRoutes KansokuAPI)`, adds a `kansoku-openapi` executable
 (`kansoku-api/app/OpenApi.hs`) that writes the committed `docs/api/openapi.json` with
 aeson-pretty (sorted keys, trailing newline), and adds the regeneration check
@@ -324,11 +365,11 @@ aeson-pretty (sorted keys, trailing newline), and adds the regeneration check
 `trackEvent`, `identify`, `group`, `alias`, `flush`) whose HTTP calls are servant-client
 functions derived from the shared API type.
 
-### The MasterPlan 2 baseline this plan assumes
+### The verified MasterPlan 2 baseline
 
 MasterPlan 2
 (`docs/masterplans/2-kansoku-production-hardening-review-fixes-and-portfolio-service-readiness.md`)
-is complete before this plan runs. Concretely this plan assumes: the API is one NamedRoutes
+is complete. M0 verified that the API is one NamedRoutes
 record served by a single servant application (plan 9), with vertical-slice modules
 (`Kansoku/Ingest/Api.hs`, `Kansoku/Metrics/Api.hs`, `Kansoku/Api/OpenApi.hs` in
 `kansoku-api`); the OpenAPI artifact `docs/api/openapi.json` is committed and regenerated by
@@ -336,12 +377,10 @@ record served by a single servant application (plan 9), with vertical-slice modu
 ingest returns partial acceptance (EP-14, per-event rejections rather than all-or-nothing —
 single-event `POST /v1/events` still returns 400 on validation failure); and authentication
 exists (EP-15: write keys for ingest, service tokens, read auth for metrics) with `/health`,
-`/ready`, and `/openapi.json` public. The first working step of this plan (M0 in Progress)
-is to verify this baseline in the actual tree — module names or record shapes may differ in
-detail from the plans' predictions — and record deviations in Surprises & Discoveries. If
-some MP-2 piece is genuinely absent (for example the tree still serves the pre-plan-9 WAI
-router), stop and land the prerequisite first; do not fork this plan around it. Where this
-plan names post-plan-9 module paths, the pre-move paths (current tree) are given too.
+`/ready`, and `/openapi.json` public. The API record itself currently contains only the two
+authenticated sub-records; the operational routes remain in the intentional WAI wrapper.
+The live build, deterministic OpenAPI check, and both package test suites are green as
+recorded in Surprises & Discoveries.
 
 ### Sibling MasterPlan 3 plans and integration points
 
@@ -350,13 +389,11 @@ MasterPlan 3's Integration Points bind this plan in two places. The event regist
 reads the registry to know which properties are declared and may add property declarations
 to support aggregation; EP-19
 (`docs/plans/19-experiment-analytics-assignment-events-variant-rollups-and-per-variant-metrics.md`)
-adds experiment assignment event schemas (for example `experiment_viewed`). Both are written
-against the unversioned registry if they land first, and this plan must migrate whatever
-entries exist at implementation time as version 1 with no semantic change — same properties,
-same types, same requiredness. The `AnalyticsEvent` wire type: EP-18 adds an optional
-identifier-signals field (expected name `identifiers`); this plan adds `schemaVersion`. Both
-are additive and optional; the naming coordination is recorded in this plan's Decision Log
-and must be reflected in MasterPlan 3's Integration Points section when either merges.
+adds the `experiment_viewed` schema. Both have landed: the registry now contains eight
+events, and EP-19's two experiment properties carry a `SqlNamePattern`. This plan migrates
+all eight entries as version 1 with no semantic change — same properties, types,
+requiredness, and patterns. EP-18's optional `identifiers` wire field and column have also
+landed; this plan appends the independent optional `schemaVersion` field and storage column.
 
 ### Portfolio context
 
@@ -387,12 +424,13 @@ of immutable schema versions; an event may declare `"schemaVersion": N` and is v
 against exactly version N of its schema; an unknown version of a known event is a 400 naming
 the known versions; a versionless event validates as version 1; unknown event names still
 pass; and every accepted event lands in ClickHouse with a `schema_version` column value. The
-Haskell SDK can emit a pinned version. Nothing about the five existing schemas changes
-semantically — they all become version 1 verbatim.
+Haskell SDK can emit a pinned version. Nothing about the existing schemas changes
+semantically — all eight landed schemas become version 1 verbatim.
 
-Remodel the registry in `kansoku-api/src/Kansoku/Event/Registry.hs`. `PropertySpec` gains
-`propDescription :: !(Maybe Text)` — a human-readable sentence for the published contract
-(the contract JSON exposes it; `Nothing` renders as JSON `null`). `EventSchema` gains
+Remodel the registry in `kansoku-api/src/Kansoku/Event/Registry.hs`. `PropertySpec` retains
+`propPattern :: !(Maybe PropertyPattern)` and gains `propDescription :: !(Maybe Text)` — a
+human-readable sentence for the published contract (the contract JSON exposes it; `Nothing`
+renders as JSON `null`). `EventSchema` gains
 `schemaVersion :: !Int` and `schemaNote :: !Text` (a one-line changelog note explaining what
 this version introduced). `EventRegistry` becomes:
 
@@ -431,12 +469,12 @@ defaultRegistry =
         (EventName "page_view")
         1
         "Initial schema (kansoku MVP)."
-        [PropertySpec "url" PTString True (Just "Full URL of the viewed page.")],
+        [PropertySpec "url" PTString True Nothing (Just "Full URL of the viewed page.")],
       EventSchema
         (EventName "session_start")
         1
         "Initial schema (kansoku MVP)."
-        [PropertySpec "sessionId" PTString True (Just "Client-generated session identifier.")],
+        [PropertySpec "sessionId" PTString True Nothing (Just "Client-generated session identifier.")],
       EventSchema
         (EventName "identify")
         1
@@ -446,25 +484,22 @@ defaultRegistry =
         (EventName "user_registered")
         1
         "Initial schema (kansoku MVP)."
-        [PropertySpec "userId" PTString True (Just "Identifier of the newly registered user.")],
+        [PropertySpec "userId" PTString True Nothing (Just "Identifier of the newly registered user.")],
       EventSchema
         (EventName "subscription_started")
         1
         "Initial schema (kansoku MVP)."
-        [ PropertySpec "plan" PTString True (Just "Plan identifier the subscription started on."),
-          PropertySpec "amount" PTNumber False (Just "Monetary amount of the subscription, in the account's currency.")
+        [ PropertySpec "plan" PTString True Nothing (Just "Plan identifier the subscription started on."),
+          PropertySpec "amount" PTNumber False Nothing (Just "Monetary amount of the subscription, in the account's currency.")
         ]
     ]
 ```
 
-If EP-17 or EP-19 landed first, `defaultRegistry` will contain more entries or more
-properties than shown above (EP-19 adds experiment assignment schemas such as
-`experiment_viewed`; EP-17 may add aggregation-related property declarations). Migrate every
-entry that actually exists in the tree as version 1 with identical name, type, and
-requiredness — semantic change is forbidden here — supplying a `propDescription` (or
-`Nothing` if none is obvious) and the same version-1 note. The Milestone 2 artifact then
-reflects whatever the real registry holds; the JSON excerpts in this plan show only the five
-MVP events.
+The excerpt shows the five original MVP events; the implementation must also migrate the
+landed `payment_completed`, `feature_used`, and `experiment_viewed` declarations. Preserve
+every existing name, type, requiredness, and pattern — especially `SqlNamePattern` on the
+experiment and variant properties — while supplying descriptions and the same version-1
+note. The Milestone 2 artifact reflects all eight real registry entries.
 
 Add the wire field in `kansoku-api/src/Kansoku/Event/Types.hs`: insert
 `schemaVersion :: !(Maybe Int),` into `AnalyticsEvent` between `sourceGlobalPosition` and
@@ -501,17 +536,15 @@ name's versions; if absent, produce nothing (permissive, unchanged); if present,
 report `UnknownSchemaVersion` or run the existing per-property checks against that version's
 `schemaProperties`. Skip the schema lookup entirely when the declared version is structurally
 invalid (the `InvalidSchemaVersion` error already tells the caller what is wrong). The
-ingest handler needs no change: it already maps `Left` to a 400 whose `details` are the
-`show` of each error.
+ingest handler needs no change: it already maps `Left` to a 400 whose `details` use
+`renderValidationError`.
 
-Persist the version. Add a migration — the running example uses `0008`, but use the next
-unused number in `db/clickhouse/migrations/` at implementation time, and never renumber or
-edit an applied file (EP-12's immutability rule) —
-`db/clickhouse/migrations/0008_events_raw_schema_version.sql`:
+Persist the version. Add the next unused immutable migration,
+`db/clickhouse/migrations/0016_events_raw_schema_version.sql`:
 
 ```sql
 ALTER TABLE analytics.events_raw
-    ADD COLUMN IF NOT EXISTS schema_version UInt16 DEFAULT 1;
+    ADD COLUMN IF NOT EXISTS schema_version UInt16 DEFAULT 1 AFTER identifiers;
 ```
 
 `ADD COLUMN ... DEFAULT 1` is instant metadata-only DDL in ClickHouse; existing rows read as
@@ -840,7 +873,7 @@ Milestone 1 edits, in dependency order: `kansoku-api/src/Kansoku/Event/Registry.
 field), `kansoku-api/src/Kansoku/Event.hs` (`baseEvent`),
 `kansoku-api/src/Kansoku/Event/Validation.hs` (version resolution + new errors), then
 `cabal build kansoku-api` and fix every call site the compiler reports (the removed
-`lookupSchema` and the extended constructors will surface them all, including any EP-17/EP-19
+`lookupSchemaVersion` and the extended constructors will surface them all, including every EP-17/EP-19
 code). Then `kansoku-core/src/Kansoku/ClickHouse/EventRow.hs`, the new migration file,
 `kansoku-client/src/Kansoku/Client.hs`, tests in `kansoku-core/test/Kansoku/EventSpec.hs`.
 
@@ -848,7 +881,7 @@ code). Then `kansoku-core/src/Kansoku/ClickHouse/EventRow.hs`, the new migration
 just build
 just test
 just up                                    # separate terminal; postgres + clickhouse
-just ch-migrate                            # applies 0008_events_raw_schema_version.sql
+just ch-migrate                            # applies 0016_events_raw_schema_version.sql
 just run                                   # separate terminal; server on :8080
 # then run the three ingest transcripts from Validation and Acceptance
 cabal run kansoku-openapi                  # regenerate docs/api/openapi.json (post-plan-9)
@@ -967,7 +1000,7 @@ $ curl -s -w '\nHTTP %{http_code}\n' -X POST localhost:8080/v1/events \
 HTTP 400
 ```
 
-(The `details` strings are the `show` of each `ValidationError`; exact spacing may differ.
+(The `details` strings come from `renderValidationError`; exact spacing may differ.
 The load-bearing assertions: status 400, the detail names the event, the requested version 2,
 and the known-version list `[1]`.)
 
@@ -1010,7 +1043,7 @@ $ clickhouse-client --port $CLICKHOUSE_TCP_PORT --query \
 (Both the versionless and the pinned-v1 event report `schema_version = 1`.)
 
 Golden-test drift guard, demonstrated. Make an illegal in-place edit — add
-`PropertySpec "title" PTString False (Just "Page title.")` to the released `page_view`
+`PropertySpec "title" PTString False Nothing (Just "Page title.")` to the released `page_view`
 version 1 in `kansoku-api/src/Kansoku/Event/Registry.hs` — then:
 
 ```console
@@ -1062,7 +1095,7 @@ contract cleanly — reverting Milestone 1 also reverts the client and OpenAPI i
 step, which is the point of the same-commit discipline. The `schema_version` column can be
 left in place after a revert (it is additive and defaulted; a follow-up migration `ALTER
 TABLE analytics.events_raw DROP COLUMN schema_version` is possible but destructive — do not
-run it against a database whose rows you care about, and never edit the applied 0008 file).
+run it against a database whose rows you care about, and never edit the applied 0016 file).
 If the golden test fails unexpectedly mid-work, the fix is always one of two commands: change
 the registry back, or `cabal run kansoku-contracts` and commit — the failure message says so.
 If `cabal test` cannot find `../docs/contracts/events.json`, the working-directory assumption
@@ -1089,7 +1122,8 @@ At the end of Milestone 1, these exist with these signatures:
 data PropertyType = PTString | PTNumber | PTBool | PTObject | PTArray | PTAny
 data PropertySpec = PropertySpec
   { propName :: !Text, propType :: !PropertyType,
-    propRequired :: !Bool, propDescription :: !(Maybe Text) }
+    propRequired :: !Bool, propPattern :: !(Maybe PropertyPattern),
+    propDescription :: !(Maybe Text) }
 data EventSchema = EventSchema
   { schemaEventName :: !EventName, schemaVersion :: !Int,
     schemaNote :: !Text, schemaProperties :: ![PropertySpec] }
@@ -1156,3 +1190,9 @@ MasterPlan 3. Scope fixed as versioning + publication + process (no standalone r
 service); design decisions seeded in the Decision Log (in-source registry, immutable
 versions, absence-means-1, public `/v1/schemas`, golden-artifact drift guard); client/OpenAPI
 work folded into Milestones 1–2 to honor MasterPlan 2's same-commit wire-change discipline.
+
+Revision note (2026-07-19): Reconciled the plan with the completed EP-17, EP-18, and EP-19
+tree before implementation. The registry now has eight declarations and property patterns,
+the wire/storage model already includes identifiers, the immutable migration ledger reaches
+0015, validation renders stable messages, and the public catalog joins the root NamedRoutes
+record without moving the WAI-level operational endpoints.
