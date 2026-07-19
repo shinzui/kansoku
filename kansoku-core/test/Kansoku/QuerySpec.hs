@@ -1,10 +1,20 @@
 module Kansoku.QuerySpec (spec) where
 
 import Data.Foldable (traverse_)
+import Data.Map.Strict qualified as Map
 import Data.Text qualified as Text
 import Data.Time (fromGregorian)
-import Kansoku.Event (AccountId (..))
+import Kansoku.Event
+  ( AccountId (..),
+    EventName (..),
+    EventSchema (..),
+    PropertySpec (..),
+    PropertyType (..),
+    defaultRegistry,
+    lookupSchema,
+  )
 import Kansoku.Metrics.Api (TimeGrain (..))
+import Kansoku.Metrics.Definition (Aggregation (Average, Sum))
 import Kansoku.Metrics.Query
 import Kansoku.Metrics.Query.Validate (SqlName, mkSqlName)
 import Kansoku.Metrics.Registry
@@ -120,6 +130,9 @@ spec = describe "Kansoku.Query.buildSQL" $ do
         buildFunnelSQL dayRequest 604800 (sqlName <$> ["signup_started", "signup_completed"])
       ]
 
+  it "requires every Sum or Average builtin to declare a numeric aggregation property" $
+    traverse_ assertAggregationProperty (Map.elems builtinMetrics)
+
 dayRequest :: QueryRequest
 dayRequest =
   QueryRequest
@@ -155,3 +168,22 @@ requiredMetric name =
   case builtinMetric name of
     Just metric -> metric
     Nothing -> error ("missing built-in metric fixture: " <> Text.unpack name)
+
+assertAggregationProperty :: BuiltinMetric -> Expectation
+assertAggregationProperty = \case
+  Simple def
+    | def ^. #aggregation == Sum || def ^. #aggregation == Average ->
+        case def ^. #aggregationProperty of
+          Nothing -> expectationFailure ("missing aggregation property for " <> Text.unpack (def ^. #name))
+          Just property -> traverse_ (assertNumericDeclaration property) (def ^. #eventNames)
+  _ -> pure ()
+
+assertNumericDeclaration :: Text -> Text -> Expectation
+assertNumericDeclaration property event =
+  case lookupSchema (EventName event) defaultRegistry of
+    Nothing -> expectationFailure ("missing event schema for " <> Text.unpack event)
+    Just EventSchema {schemaProperties} ->
+      case [propType | PropertySpec {propName, propType} <- schemaProperties, propName == property] of
+        [PTNumber] -> pure ()
+        [PTAny] -> pure ()
+        _ -> expectationFailure ("aggregation property is not numeric: " <> Text.unpack event <> "." <> Text.unpack property)

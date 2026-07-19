@@ -71,7 +71,9 @@ featureAdoption =
 
 revenue :: MetricDefinition
 revenue =
-  metric "revenue" "Revenue summed from payment event amount properties." ["payment_completed"] Sum [] (Just Day)
+  (metric "revenue" "Revenue summed from payment event amount properties." ["payment_completed"] Sum [] (Just Day))
+    { aggregationProperty = Just "amount"
+    }
 
 conversionRate :: RatioMetric
 conversionRate =
@@ -125,6 +127,7 @@ metric name description eventNames aggregation groupBy timeGrain =
       description = Just description,
       eventNames,
       aggregation,
+      aggregationProperty = Nothing,
       filters = Map.empty,
       groupBy,
       timeGrain

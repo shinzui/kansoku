@@ -66,5 +66,13 @@ defaultRegistry =
         (EventName "subscription_started")
         [ PropertySpec "plan" PTString True,
           PropertySpec "amount" PTNumber False
-        ]
+        ],
+      EventSchema
+        (EventName "payment_completed")
+        [ PropertySpec "amount" PTNumber True,
+          PropertySpec "plan" PTString False
+        ],
+      EventSchema
+        (EventName "feature_used")
+        [PropertySpec "feature" PTString True]
     ]

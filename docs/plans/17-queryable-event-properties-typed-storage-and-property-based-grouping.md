@@ -60,9 +60,12 @@ This section must always reflect the actual current state of the work.
       Integration Points ("Properties storage representation") updated
 - [x] (2026-07-19 18:29Z) M1: versioned migration for the chosen representation written,
       applied via `just ch-migrate`, ledger-recorded; bench table dropped
-- [ ] M2: `feature_used` and `payment_completed` schemas added to `defaultRegistry`
-- [ ] M2: `MetricDefinition.aggregationProperty` added; `revenue` declares `"amount"`;
-      compiler uses it; builtin-registry unit test asserts every Sum/Average declares one
+- [x] (2026-07-19 18:37Z) M2: `feature_used` and `payment_completed` schemas added to
+      `defaultRegistry`
+- [x] (2026-07-19 18:37Z) M2: `MetricDefinition.aggregationProperty` added; `revenue`
+      declares `"amount"`; builtin-registry unit test asserts every Sum/Average declares a
+      numeric property
+- [ ] M2: Sum/Average compiler uses `aggregationProperty` instead of a hardcoded `amount`
 - [ ] M2: property group-by (`prop:<name>`) parsing + registry validation + SQL rendering
 - [ ] M2: `MetricDefinition.filters` wired into compiled WHERE clauses
 - [ ] M2: `feature_adoption` definition groupBy honored as default grouping; endpoint

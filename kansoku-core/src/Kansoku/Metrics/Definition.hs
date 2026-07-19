@@ -46,6 +46,7 @@ data MetricDefinition = MetricDefinition
     description :: !(Maybe Text),
     eventNames :: ![Text],
     aggregation :: !Aggregation,
+    aggregationProperty :: !(Maybe Text),
     filters :: !(Map Text Value),
     groupBy :: ![Text],
     timeGrain :: !(Maybe TimeGrain)
