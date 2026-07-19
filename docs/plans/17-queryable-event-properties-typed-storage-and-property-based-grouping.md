@@ -21,7 +21,7 @@ Kansoku events carry a free-form `properties` JSON object — a payment event ca
 today those properties are capturable and not analyzable. They are stored in ClickHouse as a
 raw JSON string, so every property-dependent question pays to string-parse the JSON of every
 scanned row, and the query layer cannot even express the question: the group-by whitelist in
-`kansoku-core/src/Kansoku/Query.hs` admits only `event_name`, `source`, and `route`; the
+`kansoku-core/src/Kansoku/Metrics/Query.hs` admits only `event_name`, `source`, and `route`; the
 `filters` field on `MetricDefinition` is completely ignored by the query compiler; and the
 `Sum`/`Average` aggregations hardcode the property name `'amount'` into their SQL, so a
 metric summing anything else is impossible to declare. The `feature_adoption` builtin metric
@@ -48,8 +48,8 @@ Use a checklist to summarize granular steps. Every stopping point must be docume
 even if it requires splitting a partially completed task into two ("done" vs. "remaining").
 This section must always reflect the actual current state of the work.
 
-- [ ] M0: reconciled this plan against the post-MasterPlan-2 tree (see "Reconcile at start"
-      in Context and Orientation); recorded deltas in the Decision Log
+- [x] (2026-07-19 18:17Z) M0: reconciled this plan against the post-MasterPlan-2 tree (see
+      "Reconcile at start" in Context and Orientation); recorded deltas in the Decision Log
 - [ ] M1: benchmark fixture table `analytics.prop_bench_raw` created and populated (10M rows)
 - [ ] M1: candidate expressions validated on the pinned server (exact working SQL for
       string group, float aggregate, equality filter per candidate recorded in Decision Log)
@@ -165,6 +165,22 @@ Record every decision made while working on the plan.
   them. This also means zero risk to the ingest hot path.
   Date: 2026-07-15
 
+- Decision: Reconcile EP-17 to the landed vertical-slice names and migration ledger. The
+  query compiler is `Kansoku.Metrics.Query` in
+  `kansoku-core/src/Kansoku/Metrics/Query.hs`, its validation module is
+  `Kansoku.Metrics.Query.Validate`, the served contract is
+  `kansoku-api/src/Kansoku/Metrics/Api.hs`, and the property boundary will be
+  `Kansoku.Metrics.Query.Property`. Migration `0008_account_scoped_metrics.sql` is already
+  applied by EP-15, so the typed-properties migration takes `0009`. The landed compiler
+  uses typed ClickHaskell result rows, native `{account_id:String}` parameters, and the
+  frozen six-column `analytics.events_resolved` contract exactly as expected. The clean
+  baseline is `cabal build all` plus `cabal test all`: 92 core examples with 0 failures
+  and 12 ClickHouse-dependent pending examples; 10 client examples with 0 failures and
+  1 live-server pending example.
+  Rationale: M0 must make the ExecPlan's paths and migration claims match the actual
+  post-MasterPlan-2 working tree before implementation begins.
+  Date: 2026-07-19
+
 - Decision: (placeholder — to be filled by Milestone 1) Chosen storage representation:
   TBD. Record the winning candidate, the measured numbers, and the exact SQL expressions
   the query compiler will emit; copy the decision into MasterPlan 3's Integration Points.
@@ -219,13 +235,13 @@ Ratio`. `kansoku-core/src/Kansoku/Metrics/Registry.hs` declares the builtin metr
 notably `revenue` (Sum over `payment_completed`, today with no way to say which property to
 sum) and `featureAdoption` (UniqueCount over `feature_used` with `groupBy ["feature"]`,
 which the compiler ignores — the latent bug this plan fixes). The query compiler
-(`kansoku-core/src/Kansoku/Query.hs`) builds SQL text per metric; its `groupExpr` maps only
+(`kansoku-core/src/Kansoku/Metrics/Query.hs`) builds SQL text per metric; its `groupExpr` maps only
 `event_name`/`source`/`route` to fixed expressions and everything else to `''`; its
 `propertyAggregateSQL` hardcodes `JSONExtractFloat(properties, 'amount')`; nothing reads
 `filters`. Handlers live in `kansoku-core/src/Kansoku/Metrics/Handler.hs` (the
 `feature-adoption`, `acquisition`, `organizations`, and `custom` endpoints are HTTP 501
 stubs; this plan un-stubs `feature-adoption` only). The route types are in
-`kansoku-api/src/Kansoku/Api/Metrics.hs`. Golden SQL tests are in
+`kansoku-api/src/Kansoku/Metrics/Api.hs`. Golden SQL tests are in
 `kansoku-core/test/Kansoku/QuerySpec.hs`.
 
 Terms used below. A "materialized column" is a ClickHouse column whose value is computed by
@@ -252,11 +268,11 @@ this plan's Decision Log. The contracts, with the plan files that establish them
   in filename order, recording each in `analytics.schema_migrations` (MergeTree, `ORDER BY
   filename`); `just ch-migrate` invokes it; applied files are immutable — new DDL means a
   new numbered file. EP-12 plans files 0004–0007, so this plan's migrations are expected to
-  start at `0008` (check `ls db/clickhouse/migrations/` and take the next unused number).
+  start at `0009` (check `ls db/clickhouse/migrations/` and take the next unused number).
   EP-12's v2 `analytics.events_raw` keeps `properties String` and has sort key
   `ORDER BY (account_id, event_name, occurred_at, event_id)`.
 - Rewritten validated query builders — `docs/plans/13-safe-and-correct-metric-sql-validated-inputs-ordered-funnels-honest-failures.md`.
-  Module `Kansoku.Query.Validate` exists with an opaque `SqlName` smart constructor
+  Module `Kansoku.Metrics.Query.Validate` exists with an opaque `SqlName` smart constructor
   (`mkSqlName :: Text -> Either Text SqlName`, charset `^[a-z0-9_.:-]{1,128}$`); user
   inputs that reach SQL are validated or parameterized, and invalid input yields HTTP 400
   with a JSON body naming the offending value. This plan extends that discipline to
@@ -276,7 +292,7 @@ this plan's Decision Log. The contracts, with the plan files that establish them
   `docs/plans/9-convert-kansoku-to-namedroutes-vertical-slices-and-multiverb.md` and
   `docs/plans/14-sdk-grade-ingest-contract-partial-batch-acceptance-cors-and-payload-limits.md`.
   The metrics routes are a `MetricsRoutes mode` record in
-  `kansoku-api/src/Kansoku/Api/Metrics.hs` (fields like `featureAdoption :: mode :-
+  `kansoku-api/src/Kansoku/Metrics/Api.hs` (fields like `featureAdoption :: mode :-
   "metrics" :> "feature-adoption" :> MetricQuery`); the OpenAPI document is generated from
   the served type by the `kansoku-openapi` executable into `docs/api/openapi.json`, with a
   CI check `cabal run kansoku-openapi && git diff --exit-code docs/api/openapi.json`. Any
@@ -367,7 +383,7 @@ which compiler role). If a candidate fails criterion (iii) outright, it is out r
 of speed.
 
 Promotion: write the winning representation as the next-numbered migration under
-`db/clickhouse/migrations/` (expected `0008_typed_properties.sql`), apply it with `just
+`db/clickhouse/migrations/` (`0009_typed_properties.sql`), apply it with `just
 ch-migrate`, verify the ledger row exists and that a freshly ingested event materializes
 the column(s). If the decision is (b), also add the generator (a small executable or
 script, `db/clickhouse/gen-property-columns.hs` or similar, reading `defaultRegistry`) and
@@ -418,13 +434,13 @@ EventSchema
   [PropertySpec "feature" PTString True]
 ```
 
-Property name validation: create `kansoku-core/src/Kansoku/Query/Property.hs`. It owns the
+Property name validation: create `kansoku-core/src/Kansoku/Metrics/Query/Property.hs`. It owns the
 boundary between "a Text that claims to be a property" and "a property the compiler may
 splice into SQL". Contents (names indicative; align with post-EP-13 conventions found in
 the tree):
 
 ```haskell
-module Kansoku.Query.Property
+module Kansoku.Metrics.Query.Property
   ( PropertyName,        -- opaque; constructor not exported
     PropertyError (..),
     propertyNameText,
@@ -454,7 +470,7 @@ values through EP-13's escaping-safe string rendering, `Number` as a numeric lit
 `Bool` as `true`/`false` (compared against the representation's typed read), and rejects
 `Object`/`Array`/`Null` values with `PropertyErrorUnsupportedFilterValue`.
 
-Group-by parsing (`kansoku-core/src/Kansoku/Query.hs`, adapting to its post-EP-13 shape):
+Group-by parsing (`kansoku-core/src/Kansoku/Metrics/Query.hs`, adapting to its post-EP-13 shape):
 introduce a closed dimension type and parse the request's `groupBy` into it before any SQL
 is built:
 
@@ -535,7 +551,7 @@ Scope: document property grouping in the served contract, regenerate the publish
 artifacts in the same commits, and prove the whole path with live transcripts. At the end,
 a novice can reproduce the Purpose section's story with curl.
 
-Contract: in `kansoku-api/src/Kansoku/Api/Metrics.hs` (the post-plan-9 `MetricsRoutes`
+Contract: in `kansoku-api/src/Kansoku/Metrics/Api.hs` (the post-plan-9 `MetricsRoutes`
 record), extend the `groupBy` query parameter's servant `Description` on the shared
 `MetricQuery` alias to state the full grammar: built-in dimensions `event_name`, `source`,
 `route`; declared-property grouping as `prop:<name>` where `<name>` must be declared in the
@@ -579,9 +595,10 @@ All commands run from the repository root
 services started by `process-compose up` in another terminal. `clickhouse-client` below
 means `clickhouse-client --port $CLICKHOUSE_TCP_PORT`.
 
-Milestone 0 — reconcile. Read the post-MP-2 versions of `kansoku-core/src/Kansoku/Query.hs`
-(and `Kansoku/Query/Validate.hs` if EP-13 created it), `Kansoku/Metrics/Handler.hs` (or its
-vertical-slice successor), `kansoku-api/src/Kansoku/Api/Metrics.hs`, `db/clickhouse/
+Milestone 0 — reconcile. Read the post-MP-2 versions of
+`kansoku-core/src/Kansoku/Metrics/Query.hs` and
+`kansoku-core/src/Kansoku/Metrics/Query/Validate.hs`,
+`kansoku-core/src/Kansoku/Metrics/Handler.hs`, `kansoku-api/src/Kansoku/Metrics/Api.hs`, `db/clickhouse/
 migrations/`, and `db/clickhouse/migrate.sh`. Confirm each contract bullet in Context and
 Orientation; record deltas in the Decision Log. Run `just build && just test` to confirm a
 green baseline.
@@ -695,11 +712,11 @@ migration (adjust to the winning candidate; shown here for (a)):
 
 ```bash
 clickhouse-client --port $CLICKHOUSE_TCP_PORT --query "DROP TABLE analytics.prop_bench_raw"
-ls db/clickhouse/migrations/   # take the next unused number, expected 0008
+ls db/clickhouse/migrations/   # take the next unused number, expected 0009
 ```
 
 ```sql
--- db/clickhouse/migrations/0008_typed_properties.sql
+-- db/clickhouse/migrations/0009_typed_properties.sql
 -- EP-17 Milestone 1 decision: <candidate> (see docs/plans/17-…md Decision Log).
 -- properties is always valid JSON (written by Kansoku.ClickHouse.EventRow.objectBytes
 -- from a parsed aeson Object), so the CAST cannot fail on ingested rows.
@@ -709,7 +726,7 @@ ALTER TABLE analytics.events_raw MATERIALIZE COLUMN properties_json;
 ```
 
 ```bash
-just ch-migrate     # applies 0008, records it in analytics.schema_migrations
+just ch-migrate     # applies 0009, records it in analytics.schema_migrations
 just ch-migrate     # second run must print it as already applied / skip it
 ```
 
@@ -728,8 +745,9 @@ the same commit — keep plan updates and the code they describe together.)
 Milestone 2 — in order: registry additions (`kansoku-api/src/Kansoku/Event/Registry.hs`);
 `aggregationProperty` field + `revenue` declaration + registry unit test
 (`kansoku-core/src/Kansoku/Metrics/Definition.hs`, `Registry.hs`, new spec); new module
-`kansoku-core/src/Kansoku/Query/Property.hs` (add to `kansoku-core.cabal` exposed-modules
-and the test stanza's build path); compiler changes in `kansoku-core/src/Kansoku/Query.hs`
+`kansoku-core/src/Kansoku/Metrics/Query/Property.hs` (add to `kansoku-core.cabal`
+exposed-modules and the test stanza's build path); compiler changes in
+`kansoku-core/src/Kansoku/Metrics/Query.hs`
 (GroupDimension parsing, filters, Sum/Average, Either plumbing); handler 400 mapping and
 feature-adoption un-stub; golden tests in `kansoku-core/test/Kansoku/QuerySpec.hs`. After
 each coherent step: `just build && just test`. Suggested commits:
@@ -742,7 +760,7 @@ fix(metrics): honor feature_adoption declared groupBy; un-stub feature-adoption 
 ```
 
 Milestone 3 — contract + proof: edit the `groupBy` `Description` in
-`kansoku-api/src/Kansoku/Api/Metrics.hs`; `cabal run kansoku-openapi`; `cabal build
+`kansoku-api/src/Kansoku/Metrics/Api.hs`; `cabal run kansoku-openapi`; `cabal build
 kansoku-client`; commit together:
 
 ```text
@@ -762,7 +780,7 @@ builtin-registry test must fail if anyone adds a Sum/Average builtin without
 `aggregationProperty`. Expected tail of a green run:
 
 ```text
-Kansoku.Query
+Kansoku.Metrics.Query
   compileMetricSQL
     groups revenue by the plan property using the typed representation
     honors feature_adoption's declared feature grouping when the request has none
@@ -887,7 +905,7 @@ Module contracts at the end of the plan (signatures indicative; reconcile names 
 post-EP-11/EP-13 tree and record the final forms here):
 
 ```haskell
-module Kansoku.Query.Property
+module Kansoku.Metrics.Query.Property
   ( PropertyName,               -- opaque validated property; constructor not exported
     PropertyError (..),         -- Undeclared {property, event} | BadCharset | UnscopedMetric
                                 -- | NotNumeric | UnsupportedFilterValue | MissingAggregationProperty
@@ -903,7 +921,7 @@ module Kansoku.Metrics.Definition
   -- MetricDefinition gains: aggregationProperty :: !(Maybe Text)
   -- filters :: Map Text Value is now consumed by the compiler (no longer dead)
 
-module Kansoku.Query
+module Kansoku.Metrics.Query
   ( QueryRequest (..),          -- post-EP-13/EP-15 shape, unchanged by this plan except use
     GroupDimension (..),        -- GroupByEventName | GroupBySource | GroupByRoute | GroupByProperty PropertyName
     QueryCompileError (..),     -- wraps PropertyError and any EP-13 validation errors
@@ -914,7 +932,7 @@ module Kansoku.Query
 ```
 
 Wire contract at end of plan: the `groupBy` query parameter on the metrics routes
-(`kansoku-api/src/Kansoku/Api/Metrics.hs`, `MetricsRoutes` record / `MetricQuery` alias)
+(`kansoku-api/src/Kansoku/Metrics/Api.hs`, `MetricsRoutes` record / `MetricQuery` alias)
 accepts exactly one of `event_name`, `source`, `route`, or `prop:<declared property>`;
 its servant `Description` states this grammar; errors are the EP-13 JSON 400 shape naming
 the offending value. `MetricPoint`/`MetricResult` DTOs are unchanged — property groupings
