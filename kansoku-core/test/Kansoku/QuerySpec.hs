@@ -140,8 +140,8 @@ spec = describe "Kansoku.Query.buildSQL" $ do
     Query.buildSQL defaultRegistry (Simple revenueDefinition) planRequest
       `shouldBe` Right
         ( Text.unlines
-            [ "SELECT toString(toDate(occurred_at)) AS bucket, toString(properties_json.plan) AS group_key,",
-              "       toFloat64(sum(CAST(properties_json.amount, 'Float64'))) AS value",
+            [ "SELECT toString(toDate(occurred_at)) AS bucket, toString(getSubcolumn(properties_json, 'plan')) AS group_key,",
+              "       toFloat64(sum(CAST(getSubcolumn(properties_json, 'amount'), 'Float64'))) AS value",
               "FROM analytics.events_raw",
               "WHERE account_id = {account_id:String}",
               "  AND occurred_at >= '2026-06-01 00:00:00' AND occurred_at < '2026-06-08 00:00:00'",
@@ -153,7 +153,7 @@ spec = describe "Kansoku.Query.buildSQL" $ do
 
   it "honors feature_adoption's declared property grouping by default" $
     buildSQL (requiredMetric "feature_adoption") dayRequest
-      `shouldContainText` "toString(properties_json.feature) AS group_key"
+      `shouldContainText` "toString(getSubcolumn(properties_json, 'feature')) AS group_key"
 
   it "compiles declared metric filters through typed property expressions" $ do
     let filteredMetric =
@@ -161,7 +161,7 @@ spec = describe "Kansoku.Query.buildSQL" $ do
             & #filters
             .~ Map.fromList [("plan", Aeson.String "pro")]
     buildSQL (Simple filteredMetric) dayRequest
-      `shouldContainText` "AND toString(properties_json.plan) = 'pro'"
+      `shouldContainText` "AND toString(getSubcolumn(properties_json, 'plan')) = 'pro'"
 
   it "rejects undeclared, cross-event, hostile, and multi-dimension property groups" $ do
     Query.buildSQL defaultRegistry (Simple revenueDefinition) (dayRequest {groupBy = Just ["prop:nope"]})

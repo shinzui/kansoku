@@ -80,9 +80,10 @@ This section must always reflect the actual current state of the work.
       metrics route record; `/metrics/revenue` exposed; OpenAPI document regenerated and
       client compiles in the same commit
 - [x] (2026-07-19 18:58Z) M3: account scoping verified present in every new SQL shape
-- [ ] M3: end-to-end transcripts captured (revenue by plan, feature adoption by feature,
-      400 for undeclared property) and pasted into Validation and Acceptance
-- [ ] Outcomes & Retrospective written
+- [x] (2026-07-19 19:14Z) M3: real-network HTTP integration captured and asserted
+      revenue by plan, feature adoption by feature, account isolation, and 400 for an
+      undeclared property; transcripts pasted into Validation and Acceptance
+- [x] (2026-07-19 19:14Z) Outcomes & Retrospective written
 
 
 ## Surprises & Discoveries
@@ -171,6 +172,25 @@ Implementation findings (2026-07-19, Milestone 1):
   record did not expose it. Because this plan's required demonstration is
   `GET /metrics/revenue?groupBy=prop:plan`, Milestone 3 adds the first-class
   `/metrics/revenue` route and regenerates the OpenAPI document (now 14 analytics paths).
+- The first live HTTP request for `feature_adoption` found a ClickHouse expression-boundary
+  edge case: direct `properties_json.feature` access failed when the JSON column came from
+  the `events_resolved` view expression, even though the same path worked on the base
+  table. ClickHouse's `getSubcolumn` function is the supported way to access a JSON
+  subcolumn through an expression. Changing the renderer to
+  `getSubcolumn(properties_json, '<name>')` made the fresh-view probe and the real HTTP
+  query succeed without retrying.
+- A follow-up 10-million-row comparison kept the adopted representation inside the
+  original performance criterion. Five-run medians for direct dot syntax versus
+  `getSubcolumn` were: grouped sum 0.042/0.051 seconds, filter 0.011/0.017 seconds, and
+  group-count 0.024/0.040 seconds. The final grouped-sum expression remains 5.3 times
+  faster than the raw-JSON baseline of 0.272 seconds and below its one-third threshold of
+  0.091 seconds. The scratch `analytics.prop_bench_getsubcolumn` table was dropped.
+- The existing process-compose PostgreSQL volume had PGMQ objects that were absent from its
+  migration ledger, so `just migrate` stopped when it encountered an already-existing
+  `message_record` type. No local data was reset or repaired. The repeatable HTTP proof
+  instead uses the repository's `pg-migrate-test-support` to start a fresh ephemeral
+  PostgreSQL instance, apply and verify the real migration plan, issue a service token,
+  and run the real Warp application against live ClickHouse.
 
 
 ## Decision Log
@@ -245,9 +265,9 @@ Record every decision made while working on the plan.
 
 - Decision: Choose candidate (a), one server-side native `JSON` materialized column:
   `properties_json JSON MATERIALIZED CAST(properties, 'JSON')`. The compiler emits
-  `toString(properties_json.<name>)` for group keys and string equality,
-  `CAST(properties_json.<name>, 'Float64')` for numeric aggregation, and compares the
-  typed expression directly for numeric and boolean filters. On 10 million rows the
+  `toString(getSubcolumn(properties_json, '<name>'))` for group keys and string equality,
+  `CAST(getSubcolumn(properties_json, '<name>'), 'Float64')` for numeric aggregation, and
+  compares the typed expression directly for numeric and boolean filters. On 10 million rows the
   five-run median grouped aggregate was 0.043 seconds versus 0.272 seconds for raw
   `JSONExtract*` (6.3 times faster), and the column added 1.49 MiB versus the raw
   `properties` column's 4.38 MiB (34%). Registry-driven typed columns were faster at
@@ -276,13 +296,41 @@ Record every decision made while working on the plan.
   DTOs, generated client, and OpenAPI contract as the other builtin metrics.
   Date: 2026-07-19
 
+- Decision: Render every native-JSON property access with
+  `getSubcolumn(properties_json, '<name>')` before `toString` or `CAST`, rather than direct
+  `properties_json.<name>` syntax.
+  Rationale: direct dot syntax is correct for a base JSON column but failed at the
+  `events_resolved` view's expression boundary. `getSubcolumn` works for both base columns
+  and expressions, preserves columnar subcolumn reads, and passed the original 10-million-
+  row adoption threshold. Property names remain registry-validated before the quoted
+  constant is rendered.
+  Date: 2026-07-19
+
 
 ## Outcomes & Retrospective
 
 Summarize outcomes, gaps, and lessons learned at major milestones or at completion.
 Compare the result against the original purpose.
 
-(To be filled during and after implementation.)
+EP-17 is complete. Event properties are materialized once as native ClickHouse JSON,
+validated against the event registry before becoming SQL, and available to group, filter,
+and aggregate metrics. `revenue` declares its numeric `amount` input and is now public at
+`GET /metrics/revenue`; `feature_adoption` serves canonical distinct users grouped by its
+declared `feature` property. The public `groupBy=prop:<name>` grammar, generated client,
+and OpenAPI document moved together.
+
+The final suite has 103 core examples and 10 client examples with zero failures. Its new
+HTTP integration starts a migrated ephemeral PostgreSQL database and a real Warp listener,
+authenticates with a freshly issued service token, queries live ClickHouse, proves a second
+account's 999-unit payment is excluded, and verifies the 400 envelope. The opted-in client
+test remains pending because `KANSOKU_SERVER_URL` is intentionally unset; the new server
+integration covers this plan without that external prerequisite.
+
+The most useful lesson was that native JSON dot syntax is not interchangeable with
+`getSubcolumn` at expression boundaries. A real HTTP query through `events_resolved` found
+the distinction; the measured `getSubcolumn` form preserves the representation's
+performance threshold and is now the downstream contract for EP-19. The pre-existing
+local PostgreSQL ledger mismatch remains untouched and is not an EP-17 product gap.
 
 
 ## Context and Orientation
@@ -339,8 +387,8 @@ the server from an expression over other columns at insert time (and backfilled 
 rows by `ALTER TABLE … MATERIALIZE COLUMN`); it is not sent by inserting clients and is not
 returned by `SELECT *`. The "native JSON type" is ClickHouse's `JSON` column type
 (production-ready since 24.8): it shreds JSON documents into typed subcolumns at insert
-time, so reading one path (`properties_json.plan`) reads only that subcolumn's data, not the
-whole document. A "subcolumn read" is that path access; on the pinned server a subcolumn of
+time, so reading one path (`getSubcolumn(properties_json, 'plan')`) reads only that
+subcolumn's data, not the whole document. A "subcolumn read" is that path access; on the pinned server a subcolumn of
 `JSON` has type `Dynamic` and is converted with `toString(…)` / `CAST(…, 'Float64')` (exact
 forms are pinned by the Milestone 1 prototype). The "migration ledger" is the
 `analytics.schema_migrations` table introduced by MP-2 EP-12 (below).
@@ -552,8 +600,9 @@ and EVERY queried event's schema declares the property (`lookupSchema` for each
 `EventName`; a missing schema or missing `PropertySpec` yields
 `PropertyErrorUndeclared { property, event }`). The SQL-rendering functions
 (`propertyGroupExpr` etc.) emit the Milestone 1 representation's expressions — e.g. for
-candidate (a) something like `toString(properties_json.plan)` and
-`CAST(properties_json.amount, 'Float64')`, for candidate (b) `prop_plan` and `prop_amount`
+candidate (a) something like `toString(getSubcolumn(properties_json, 'plan'))` and
+`CAST(getSubcolumn(properties_json, 'amount'), 'Float64')`, for candidate (b) `prop_plan`
+and `prop_amount`
 — using exactly the syntax the Milestone 1 prototype validated (copy it from the Decision
 Log; do not improvise new expressions here). `propertyEqualsPredicate` renders `String`
 values through EP-13's escaping-safe string rendering, `Number` as a numeric literal,
@@ -745,7 +794,8 @@ output, because Milestone 2's `propertyGroupExpr`/`propertyFloatExpr` emit it ve
 26.5 a `JSON` subcolumn is `Dynamic`; try, in order, and record what works:
 
 ```sql
-SELECT toString(properties_json.plan), CAST(properties_json.amount, 'Float64')
+SELECT toString(getSubcolumn(properties_json, 'plan')),
+       CAST(getSubcolumn(properties_json, 'amount'), 'Float64')
 FROM analytics.prop_bench_raw LIMIT 3;
 ```
 
@@ -759,8 +809,8 @@ clickhouse-client --port $CLICKHOUSE_TCP_PORT --time --query "
   FROM analytics.prop_bench_raw GROUP BY plan FORMAT Null"
 
 clickhouse-client --port $CLICKHOUSE_TCP_PORT --time --query "
-  SELECT toString(properties_json.plan) AS plan,
-         sum(CAST(properties_json.amount, 'Float64'))
+  SELECT toString(getSubcolumn(properties_json, 'plan')) AS plan,
+         sum(CAST(getSubcolumn(properties_json, 'amount'), 'Float64'))
   FROM analytics.prop_bench_raw GROUP BY plan FORMAT Null"
 
 clickhouse-client --port $CLICKHOUSE_TCP_PORT --time --query "
@@ -870,21 +920,24 @@ builtin-registry test must fail if anyone adds a Sum/Average builtin without
 `aggregationProperty`. Expected tail of a green run:
 
 ```text
-Kansoku.Metrics.Query
-  compileMetricSQL
+Kansoku.Query.buildSQL
     groups revenue by the plan property using the typed representation
     honors feature_adoption's declared feature grouping when the request has none
     compiles filters into equality predicates over declared properties
     rejects undeclared properties naming the property and event
     rejects Sum metrics without an aggregation property
 ...
-N examples, 0 failures
+103 examples, 0 failures
 ```
 
 End to end (services via `process-compose up`, migrations via `just ch-migrate`,
-authentication per EP-15 — shown as `-H "Authorization: Bearer $KANSOKU_KEY"`; adjust to
-the landed header/scheme). Ingest fixtures (repeat with varied `event_id`/`user_id`; two
-pro payments, one free; then the three `feature_used` events):
+authentication per EP-15 — shown as `-H "Authorization: Bearer $KANSOKU_KEY"`). The
+repeatable proof is `Kansoku.HttpIntegrationSpec`: it applies the actual PostgreSQL
+migration plan to an ephemeral database, issues a service token, inserts the fixtures into
+live ClickHouse, starts the real Warp application on a free port, and sends these requests
+with `http-client`. This is the captured HTTP exchange; equivalent curl commands are shown
+for manual reproduction. Ingest fixtures (repeat with varied `event_id`/`user_id`; two pro
+payments, one free; then the three `feature_used` events):
 
 ```bash
 curl -s -X POST http://localhost:8080/v1/events \
@@ -905,11 +958,11 @@ curl -s -H "Authorization: Bearer $KANSOKU_KEY" \
   'http://localhost:8080/metrics/revenue?from=2026-07-10&to=2026-07-11&groupBy=prop:plan'
 ```
 
-```json
-{ "metric": "revenue",
-  "points": [
-    { "bucket": "2026-07-10", "group": { "plan": "free" }, "value": 9.0 },
-    { "bucket": "2026-07-10", "group": { "plan": "pro" }, "value": 98.0 } ] }
+```http
+HTTP/1.1 200 OK
+content-type: application/json;charset=utf-8
+
+{"metric":"revenue","points":[{"bucket":"2026-07-10","group":{"plan":"free"},"value":9},{"bucket":"2026-07-10","group":{"plan":"pro"},"value":98}]}
 ```
 
 ```bash
@@ -917,11 +970,11 @@ curl -s -H "Authorization: Bearer $KANSOKU_KEY" \
   'http://localhost:8080/metrics/feature-adoption?from=2026-07-10&to=2026-07-11&groupBy=prop:feature'
 ```
 
-```json
-{ "metric": "feature_adoption",
-  "points": [
-    { "bucket": "2026-07-10", "group": { "feature": "export" }, "value": 1.0 },
-    { "bucket": "2026-07-10", "group": { "feature": "search" }, "value": 2.0 } ] }
+```http
+HTTP/1.1 200 OK
+content-type: application/json;charset=utf-8
+
+{"metric":"feature_adoption","points":[{"bucket":"2026-07-10","group":{"feature":"export"},"value":1},{"bucket":"2026-07-10","group":{"feature":"search"},"value":2}]}
 ```
 
 (Values are distinct users; exact numbers depend on the fixture users — assert the shape
@@ -940,7 +993,22 @@ curl -s -i -H "Authorization: Bearer $KANSOKU_KEY" \
 HTTP/1.1 400 Bad Request
 content-type: application/json
 
-{"error":"unknown property","details":{"property":"nope","event":"payment_completed"}}
+{"code":"unknown_property","message":"unknown property nope for event payment_completed","retryable":false}
+```
+
+The revenue fixture also includes a 999-unit `pro` payment under `acct_ep17_other`; its
+absence from the 98-unit authenticated-account result is the account-scope assertion. The
+full validation run ended with:
+
+```text
+Kansoku property metrics HTTP integration
+  serves account-scoped revenue and feature groups and rejects undeclared properties [✔]
+...
+103 examples, 0 failures
+
+Kansoku.Client
+...
+10 examples, 0 failures, 1 pending
 ```
 
 Storage-level spot check (proves the query really used the typed representation): run the
@@ -991,14 +1059,13 @@ Hard constraint restated: ClickHaskell speaks no `JSON`/`Map` column types, so t
 must exist only server-side (MATERIALIZED), and every value crossing the client wire in
 query results must be a String/Float64 produced by `toString`/`CAST` in the SQL itself.
 
-Module contracts at the end of the plan (signatures indicative; reconcile names with the
-post-EP-11/EP-13 tree and record the final forms here):
+Module contracts at the end of the plan:
 
 ```haskell
 module Kansoku.Metrics.Query.Property
   ( PropertyName,               -- opaque validated property; constructor not exported
-    PropertyError (..),         -- Undeclared {property, event} | BadCharset | UnscopedMetric
-                                -- | NotNumeric | UnsupportedFilterValue | MissingAggregationProperty
+    PropertyError (..),         -- BadName | UnscopedMetric | Undeclared | NotNumeric
+                                -- | UnsupportedFilterValue
     propertyNameText,           -- :: PropertyName -> Text
     resolveProperty,            -- :: EventRegistry -> [EventName] -> Text -> Either PropertyError PropertyName
     resolveNumericProperty,     -- :: EventRegistry -> [EventName] -> Text -> Either PropertyError PropertyName
@@ -1015,9 +1082,12 @@ module Kansoku.Metrics.Query
   ( QueryRequest (..),          -- post-EP-13/EP-15 shape, unchanged by this plan except use
     GroupDimension (..),        -- GroupByEventName | GroupBySource | GroupByRoute | GroupByProperty PropertyName
     QueryCompileError (..),     -- wraps PropertyError and any EP-13 validation errors
-    compileMetricSQL,           -- :: EventRegistry -> BuiltinMetric -> QueryRequest -> Either QueryCompileError Text
-    -- run/runSessions/runRetention/runFunnel keep their post-MP-2 signatures; the metric
-    -- run path threads the Either through to the handler's 400 mapping
+    buildSQL,                   -- :: EventRegistry -> BuiltinMetric -> QueryRequest -> Either QueryCompileError Text
+    run,                        -- :: (IOE :> es) => EventRegistry -> QueryPool -> BuiltinMetric
+                                --    -> QueryRequest -> Eff es (Either QueryCompileError MetricResult)
+    runSessions,
+    runRetention,
+    runFunnel,
   )
 ```
 
@@ -1027,8 +1097,9 @@ accepts exactly one of `event_name`, `source`, `route`, or `prop:<declared prope
 its servant `Description` states this grammar; errors are the EP-13 JSON 400 shape naming
 the offending value. `MetricPoint`/`MetricResult` DTOs are unchanged — property groupings
 reuse `MetricPoint.group :: Map Text Text` keyed by the property name. The
-`feature-adoption` route serves real data (no longer 501). `docs/api/openapi.json` and
-`kansoku-client` move in the same commits as any of these changes.
+`feature-adoption` route serves real data (no longer 501), and the existing revenue builtin
+is public at `GET /metrics/revenue`. `docs/api/openapi.json` and `kansoku-client` move in
+the same commits as any of these changes.
 
 Downstream consumers of this plan's outputs: EP-19
 (`docs/plans/19-experiment-analytics-assignment-events-variant-rollups-and-per-variant-metrics.md`)

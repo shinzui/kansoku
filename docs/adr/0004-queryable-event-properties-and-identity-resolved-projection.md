@@ -32,10 +32,13 @@ metric declares the name in `defaultRegistry`. HTTP grouping uses `prop:<name>` 
 names cannot collide with built-in dimensions. Metric definitions name default property
 groups without the prefix and declare Sum/Average inputs through
 `aggregationProperty`. SQL reads group strings with
-`toString(properties_json.<name>)` and numeric values with
-`CAST(properties_json.<name>, 'Float64')`; it never applies `JSONExtract*` to the raw
-column. The existing `revenue` builtin is exposed through the additive
-`GET /metrics/revenue` route so this contract is available through the public metrics API.
+`toString(getSubcolumn(properties_json, '<name>'))` and numeric values with
+`CAST(getSubcolumn(properties_json, '<name>'), 'Float64')`; it never applies
+`JSONExtract*` to the raw column. `getSubcolumn` is used instead of direct dot syntax so
+the same compiled expression works when `properties_json` crosses the
+`analytics.events_resolved` view boundary. The existing `revenue` builtin is exposed
+through the additive `GET /metrics/revenue` route so this contract is available through
+the public metrics API.
 
 `analytics.events_resolved` extends its stable projection with a seventh,
 server-only `properties_json` column. This lets unique-user property metrics keep canonical

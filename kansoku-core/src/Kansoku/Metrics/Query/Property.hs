@@ -55,10 +55,10 @@ resolveNumericProperty registry events value = do
   pure property
 
 propertyGroupExpr :: PropertyName -> Text
-propertyGroupExpr property = "toString(properties_json." <> propertyNameText property <> ")"
+propertyGroupExpr property = "toString(" <> propertySubcolumnExpr property <> ")"
 
 propertyFloatExpr :: PropertyName -> Text
-propertyFloatExpr property = "CAST(properties_json." <> propertyNameText property <> ", 'Float64')"
+propertyFloatExpr property = "CAST(" <> propertySubcolumnExpr property <> ", 'Float64')"
 
 propertyEqualsPredicate :: PropertyName -> Aeson.Value -> Either PropertyError Text
 propertyEqualsPredicate property = \case
@@ -66,8 +66,8 @@ propertyEqualsPredicate property = \case
   Aeson.Number value -> Right (propertyFloatExpr property <> " = " <> Text.pack (show value))
   Aeson.Bool value ->
     Right
-      ( "CAST(properties_json."
-          <> propertyNameText property
+      ( "CAST("
+          <> propertySubcolumnExpr property
           <> ", 'Bool') = "
           <> if value then "true" else "false"
       )
@@ -105,3 +105,8 @@ findProperty property EventSchema {schemaProperties} =
 sqlString :: Text -> Text
 sqlString value =
   "'" <> Text.replace "\\" "\\\\" (Text.replace "'" "\\'" value) <> "'"
+
+propertySubcolumnExpr :: PropertyName -> Text
+propertySubcolumnExpr property =
+  -- Unlike dot syntax, getSubcolumn also works when the JSON value crosses a view expression.
+  "getSubcolumn(properties_json, " <> sqlString (propertyNameText property) <> ")"

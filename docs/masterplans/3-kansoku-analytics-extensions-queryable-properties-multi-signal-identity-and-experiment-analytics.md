@@ -77,7 +77,7 @@ it non-trivial; recorded as future scope.
 
 | # | Title | Path | Hard Deps | Soft Deps | Status |
 |----|-------|------|-----------|-----------|--------|
-| 17 | Queryable event properties: typed storage and property-based grouping | docs/plans/17-queryable-event-properties-typed-storage-and-property-based-grouping.md | None (external: MP-2) | EP-20 | In Progress |
+| 17 | Queryable event properties: typed storage and property-based grouping | docs/plans/17-queryable-event-properties-typed-storage-and-property-based-grouping.md | None (external: MP-2) | EP-20 | Complete |
 | 18 | Multi-signal identity: identifier kinds, fingerprints, and confidence-aware stitching | docs/plans/18-multi-signal-identity-identifier-kinds-fingerprints-and-confidence-aware-stitching.md | None (external: MP-2) | None | Not Started |
 | 19 | Experiment analytics: assignment events, variant rollups, and per-variant metrics | docs/plans/19-experiment-analytics-assignment-events-variant-rollups-and-per-variant-metrics.md | EP-17 | EP-18, EP-20 | Not Started |
 | 20 | Event schema governance: versioned registry and portfolio event contracts | docs/plans/20-event-schema-governance-versioned-registry-and-portfolio-event-contracts.md | None (external: MP-2) | None | Not Started |
@@ -128,10 +128,13 @@ Properties storage representation — defined by EP-17, consumed by EP-19. EP-17
 server-side `properties_json JSON MATERIALIZED CAST(properties, 'JSON')` column after a
 10-million-row benchmark: the grouped aggregate median was 0.043 seconds versus 0.272
 seconds for raw `JSONExtract*`, and compressed storage was 34% of the raw properties
-column. Group keys use `toString(properties_json.<name>)`; numeric aggregates use
-`CAST(properties_json.<name>, 'Float64')`. EP-19's variant grouping and rollup MVs must use
-those expressions, never `JSONExtract*` over the raw string. Full evidence and alternatives
-are in EP-17's Decision Log.
+column. Group keys use
+`toString(getSubcolumn(properties_json, '<name>'))`; numeric aggregates use
+`CAST(getSubcolumn(properties_json, '<name>'), 'Float64')`. `getSubcolumn` is required
+because identity-resolved views expose the JSON value as an expression, for which direct
+dot syntax is not reliable. EP-19's variant grouping and rollup MVs must use those
+expressions, never `JSONExtract*` over the raw string. Full evidence and alternatives are
+in EP-17's Decision Log.
 
 Event registry (`kansoku-api/src/Kansoku/Event/Registry.hs`) — EP-17 reads it to know which
 properties are declared (and, if it chooses materialized columns, to drive them); EP-19 adds
@@ -242,6 +245,11 @@ interactions between child plans. Provide concise evidence.
   - The `revenue` builtin existed in the registry and compiler but had no HTTP route.
     EP-17 exposes it additively as `GET /metrics/revenue`; the generated OpenAPI contract
     now contains 14 analytics paths.
+  - A first property read through `analytics.events_resolved` failed because direct JSON
+    dot syntax did not survive the view expression boundary. EP-17 now renders
+    `getSubcolumn(properties_json, '<name>')`; a repeated 10-million-row benchmark kept the
+    grouped-sum median within the adoption threshold (0.051 seconds versus the original
+    raw-JSON baseline of 0.272 seconds).
 
 
 ## Decision Log
@@ -271,13 +279,27 @@ interactions between child plans. Provide concise evidence.
   Rationale: Better implemented once property grouping exists; recorded as future scope.
   Date: 2026-07-15
 
+- Decision: EP-17's cross-plan property-storage contract is one server-materialized native
+  JSON column, read with registry-validated
+  `getSubcolumn(properties_json, '<name>')` expressions.
+  Rationale: the 10-million-row benchmark met the latency and storage thresholds without
+  per-property DDL. `getSubcolumn` also works through the identity-resolved view expression,
+  unlike direct dot access. EP-19 must reuse this contract for variant dimensions and
+  numeric inputs.
+  Date: 2026-07-19
+
 
 ## Outcomes & Retrospective
 
 Summarize outcomes, gaps, and lessons learned at major milestones or at completion.
 Compare the result against the original vision.
 
-(To be filled during and after implementation.)
+EP-17 completed on 2026-07-19. It delivered benchmark-selected native JSON property
+storage, registry-gated grouping/filtering/aggregation, the public revenue route, generated
+client/OpenAPI updates, and a real-network HTTP integration over fresh PostgreSQL plus live
+ClickHouse. Its two downstream contracts are now stable: EP-18 must preserve the seventh
+`properties_json` column on `analytics.events_resolved`, and EP-19 must render property
+reads through `getSubcolumn`. EP-18, EP-19, and EP-20 remain to complete the initiative.
 
 ---
 

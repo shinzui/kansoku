@@ -6,6 +6,7 @@ import Kansoku.ClickHouseSpec qualified
 import Kansoku.ConfigSpec qualified
 import Kansoku.CorsSpec qualified
 import Kansoku.EventSpec qualified
+import Kansoku.HttpIntegrationSpec qualified
 import Kansoku.Ingest.HandlerSpec qualified
 import Kansoku.Ingest.QueueSpec qualified
 import Kansoku.LimitsSpec qualified
@@ -32,6 +33,7 @@ main = hspec $ do
   Kansoku.EventSpec.spec
   Kansoku.Ingest.HandlerSpec.spec
   Kansoku.Ingest.QueueSpec.spec
+  Kansoku.HttpIntegrationSpec.spec
   Kansoku.LimitsSpec.spec
   Kansoku.MigrationsSpec.spec
   Kansoku.Metrics.HandlerSpec.spec
