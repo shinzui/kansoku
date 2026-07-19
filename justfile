@@ -45,6 +45,14 @@ ch-fixtures-ep5:
 ch-fixtures-ep6:
     clickhouse-client --port $CLICKHOUSE_TCP_PORT --multiquery < db/clickhouse/fixtures/ep6_fixtures.sql
 
+# Load the EP-18 multi-signal identity fixtures.
+ch-fixtures-ep18:
+    clickhouse-client --port $CLICKHOUSE_TCP_PORT --multiquery < db/clickhouse/fixtures/ep18_fixtures.sql
+
+# Load the EP-18 conflict phase after ch-fixtures-ep18.
+ch-fixtures-ep18-conflict:
+    clickhouse-client --port $CLICKHOUSE_TCP_PORT --multiquery < db/clickhouse/fixtures/ep18_conflict.sql
+
 # Run the HTTP server.
 run: migrate
     cabal run kansoku-server:exe:kansoku-server

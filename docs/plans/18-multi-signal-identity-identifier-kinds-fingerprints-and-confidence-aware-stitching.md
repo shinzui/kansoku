@@ -72,13 +72,13 @@ This section must always reflect the actual current state of the work.
 - [x] (2026-07-19 13:14 PDT) M1: `kansoku-client` (`EventIds`, `buildEvent`) and the OpenAPI document updated in
       the same commit as the wire type
 - [x] (2026-07-19 13:14 PDT) M1: `just build` and `just test` green; authenticated curl ingest transcript captured
-- [ ] M2: `analytics.identity_signals` table + `mv_identity_signals` + backfill migration
+- [x] (2026-07-19 13:20 PDT) M2: `analytics.identity_signals` table + `mv_identity_signals` + backfill migration
       applied
-- [ ] M2: `analytics.identity_bindings` (confidence policy) and confidence-aware
+- [x] (2026-07-19 13:20 PDT) M2: `analytics.identity_bindings` (confidence policy) and confidence-aware
       `analytics.events_resolved` replacement live; output columns verified identical
-- [ ] M2: `analytics.identity_conflicts` view live; conflict fixture appears in it and
+- [x] (2026-07-19 13:20 PDT) M2: `analytics.identity_conflicts` view live; conflict fixture appears in it and
       resolves by the documented ranking
-- [ ] M2: fixture story transcripts captured (with-fingerprints counts 1, without counts 2)
+- [x] (2026-07-19 13:20 PDT) M2: fixture story transcripts captured (with-fingerprints counts 1, without counts 2)
 - [ ] M3: fingerprint TTL on `identity_signals` verified (aged fingerprint row deleted by
       TTL, aged cookie row survives)
 - [ ] M3: deletion runbook written at `docs/runbooks/identity-data-deletion.md` and
@@ -110,6 +110,12 @@ implementation. Provide concise evidence.
   HTTP proof used a fresh `kansoku_ep18` development database instead; all three
   application migrations applied there without weakening migration verification or
   altering the stale database.
+
+- 2026-07-19: EP-18's authored fixture omitted the raw `properties` column. After EP-17,
+  that omission supplies an empty string and the materialized `CAST(properties, 'JSON')`
+  correctly fails with ClickHouse error 117. Both EP-18 fixtures now write explicit
+  `'{}'` values for `properties` and `context`; the production Haskell writer already
+  always emits valid objects.
 
 
 ## Decision Log
@@ -253,6 +259,13 @@ The test suites passed with 109 core examples and 10 client examples (one opt-in
 client test pending), and the authenticated HTTP proof accepted a fingerprint/device
 event while rejecting an unknown kind with the complete allowed vocabulary.
 
+Milestone 2 completed on 2026-07-19. A fresh ClickHouse reset replayed all twelve
+migrations, the identity fixture produced cookie and fingerprint evidence, anonymous
+sessions converged to one canonical user, and the cookie-only control remained two users.
+The conflict fixture retained both users and resolved equal-confidence fingerprint
+bindings by recency. `DESCRIBE analytics.events_resolved` remained identical to the
+pre-milestone seven-column contract.
+
 
 ## Context and Orientation
 
@@ -296,6 +309,13 @@ This plan runs strictly AFTER MasterPlan 2
 (`docs/masterplans/2-kansoku-production-hardening-review-fixes-and-portfolio-service-readiness.md`)
 is complete. The MP-2 contracts this plan builds on, stated so you can verify them before
 starting (Concrete Steps, step 0):
+
+Relevant durable context is recorded in
+`docs/adr/0004-queryable-event-properties-and-identity-resolved-projection.md`, which
+owns the seven-column resolved-event projection, and
+`docs/adr/0005-evidence-based-multi-signal-identity-resolution.md`, which owns the signal
+vocabulary, evidence semantics, ranking policy, conflict visibility, and fingerprint
+retention boundary.
 
 - Post EP-12, `analytics.events_raw` identity columns are plain `String DEFAULT ''`
   (empty string means absent — NOT `Nullable`), the sort key is
@@ -1223,6 +1243,45 @@ s-v	user-V
 The unique-users count for `acct-1` is now `2` — honest: the evidence genuinely supports
 two people on that shared fingerprint.
 
+Implementation transcript (2026-07-19, fresh reset through migration `0012`):
+
+```text
+identity_signals acct-1
+cookie       anon-A  user-U
+fingerprint  fp-F    user-U
+
+events_resolved acct-1 before conflict
+s-a1  user-U
+s-a2  user-U
+s-b1  user-U
+s-b2  user-U
+s-id  user-U
+
+unique users
+acct-1    1
+acct-ctl  2
+
+identity_conflicts after conflict fixture
+fingerprint  fp-F  ['user-U','user-V']  2  2
+
+events_resolved acct-1 after conflict
+s-a1  user-U
+s-a2  user-U
+s-b1  user-V
+s-b2  user-V
+s-id  user-U
+s-v   user-V
+
+DESCRIBE analytics.events_resolved
+event_id String
+event_name LowCardinality(String)
+occurred_at DateTime64(3, 'UTC')
+url String
+account_id String
+canonical_user String
+properties_json JSON
+```
+
 ### M3: TTL, runbook, stability
 
 TTL demonstration (deterministic — pre-aged rows, forced merge):
@@ -1343,3 +1402,8 @@ Revision note (2026-07-19): implementation-start reconciliation updated the stal
 six-column `events_resolved` assumption to EP-17's landed seven-column contract, assigned
 the next free migration numbers (`0011`–`0013`), linked the active intention in
 frontmatter, and recorded the successful baseline build/test evidence.
+
+Revision note (2026-07-19, Milestones 1-2): recorded the completed wire, validation,
+storage, client, OpenAPI, evidence-store, conflict, and resolution work; added live HTTP
+and ClickHouse transcripts; documented the EP-17 fixture interaction; and linked ADR 0005
+as the durable owner of the identity model and ranking policy.
