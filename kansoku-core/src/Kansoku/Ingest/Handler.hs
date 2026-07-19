@@ -3,10 +3,10 @@
 -- | Servant handlers for HTTP ingestion.
 module Kansoku.Ingest.Handler
   ( ingestServer,
+    partitionBatch,
   )
 where
 
-import Data.Either (partitionEithers)
 import Data.Generics.Labels ()
 import Data.Text qualified as Text
 import Effectful (Eff, IOE, runEff)
@@ -21,12 +21,14 @@ import Kansoku.Event
   ( AnalyticsEvent,
     EventId (..),
     ValidationError,
+    renderValidationError,
     validateEvent,
   )
 import Kansoku.Ingest.Api
   ( BatchAck (..),
     IngestAck (..),
     IngestRoutes (..),
+    RejectedEvent (..),
   )
 import Kansoku.Ingest.Producer (enqueueMany, enqueueOne)
 import Kansoku.Logging (logError, runLogStderr)
@@ -66,12 +68,31 @@ ingestServer pool queueName =
     postBatchHandler :: [AnalyticsEvent] -> Handler (KansokuResult BatchAck)
     postBatchHandler raw = do
       now <- liftIO getCurrentTime
-      let (validationErrs, events) = partitionEithers (validateEvent . (& #receivedAt .~ now) <$> raw)
-      if null validationErrs
-        then effToHandler pool $ do
-          _ <- enqueueMany queueName events
-          pure BatchAck {accepted = length events}
-        else pure (validationFailure (concat validationErrs))
+      let (events, rejectedEvents) = partitionBatch ((& #receivedAt .~ now) <$> raw)
+      effToHandler pool $ do
+        _ <- enqueueMany queueName events
+        pure BatchAck {accepted = length events, rejected = rejectedEvents}
+
+-- | Partition a received-at-stamped batch while preserving submission order.
+-- Rejection indices refer to the original zero-based positions.
+partitionBatch :: [AnalyticsEvent] -> ([AnalyticsEvent], [RejectedEvent])
+partitionBatch events =
+  foldr verdict ([], []) (zip [0 ..] events)
+  where
+    verdict (eventIndex, event) (acceptedEvents, rejectedEvents) =
+      case validateEvent event of
+        Right acceptedEvent -> (acceptedEvent : acceptedEvents, rejectedEvents)
+        Left validationErrs ->
+          ( acceptedEvents,
+            RejectedEvent
+              { index = eventIndex,
+                eventId =
+                  let rawEventId = unEventId (event ^. #eventId)
+                   in if Text.null rawEventId then Nothing else Just rawEventId,
+                errors = renderValidationError <$> validationErrs
+              }
+              : rejectedEvents
+          )
 
 effToHandler :: Pool.Pool -> Eff HandlerEff a -> Handler (KansokuResult a)
 effToHandler pool action = do
@@ -93,8 +114,5 @@ validationFailure validationErrs =
   KansokuBadRequest
     ( badRequest
         "validation_failed"
-        ("validation failed: " <> Text.intercalate "; " (validationErrorText <$> validationErrs))
+        ("validation failed: " <> Text.intercalate "; " (renderValidationError <$> validationErrs))
     )
-
-validationErrorText :: ValidationError -> Text
-validationErrorText = Text.pack . show

@@ -102,10 +102,17 @@
             "maximum": 9223372036854775807,
             "minimum": -9223372036854775808,
             "type": "integer"
+          },
+          "rejected": {
+            "items": {
+              "$ref": "#/components/schemas/RejectedEvent"
+            },
+            "type": "array"
           }
         },
         "required": [
-          "accepted"
+          "accepted",
+          "rejected"
         ],
         "type": "object"
       },
@@ -215,6 +222,29 @@
       },
       "OrganizationId": {
         "type": "string"
+      },
+      "RejectedEvent": {
+        "properties": {
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "eventId": {
+            "type": "string"
+          },
+          "index": {
+            "maximum": 9223372036854775807,
+            "minimum": -9223372036854775808,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "index",
+          "errors"
+        ],
+        "type": "object"
       },
       "SessionId": {
         "type": "string"

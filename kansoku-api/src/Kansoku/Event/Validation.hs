@@ -1,6 +1,7 @@
 -- | Pure validation for analytics events.
 module Kansoku.Event.Validation
   ( ValidationError (..),
+    renderValidationError,
     validateEvent,
     validateEventWith,
   )
@@ -9,6 +10,8 @@ where
 import Data.Aeson (Value (..))
 import Data.Aeson.Key qualified as Key
 import Data.Aeson.KeyMap qualified as KeyMap
+import Data.Text qualified as Text
+import Data.Time.Format (defaultTimeLocale, formatTime)
 import Kansoku.Event.Registry
 import Kansoku.Event.Types
 import Kansoku.Prelude
@@ -53,6 +56,46 @@ validateEventWith registry event =
 
 validateEvent :: AnalyticsEvent -> Either [ValidationError] AnalyticsEvent
 validateEvent = validateEventWith defaultRegistry
+
+-- | Render a validation failure for logs and rejection responses. Callers may
+-- show this text to people, but must use a rejected event's index for machine
+-- correlation rather than parsing this prose.
+renderValidationError :: ValidationError -> Text
+renderValidationError = \case
+  EmptyEventId ->
+    "eventId must not be empty"
+  EmptyEventName ->
+    "eventName must not be empty"
+  ReceivedBeforeOccurred occurred received ->
+    "receivedAt ("
+      <> renderTimestamp received
+      <> ") precedes occurredAt ("
+      <> renderTimestamp occurred
+      <> "); occurredAt is in the future relative to the server clock"
+  MissingRequiredProperty name propertyName ->
+    "event '"
+      <> unEventName name
+      <> "': missing required property '"
+      <> propertyName
+      <> "'"
+  WrongPropertyType name propertyName expected ->
+    "event '"
+      <> unEventName name
+      <> "': property '"
+      <> propertyName
+      <> "' must be of type "
+      <> renderPropertyType expected
+  where
+    renderTimestamp = Text.pack . formatTime defaultTimeLocale "%FT%T%QZ"
+
+renderPropertyType :: PropertyType -> Text
+renderPropertyType = \case
+  PTString -> "string"
+  PTNumber -> "number"
+  PTBool -> "boolean"
+  PTObject -> "object"
+  PTArray -> "array"
+  PTAny -> "any"
 
 propertyMatches :: PropertyType -> Value -> Bool
 propertyMatches expected value =

@@ -129,8 +129,9 @@ assertIngestRoutes manager port = do
   batchResponse <- postJson manager port "/v1/batch" (Aeson.encode [sampleEvent])
   HTTP.responseStatus batchResponse `shouldBe` status202
   batchAck <- decodeBody @Ingest.BatchAck (HTTP.responseBody batchResponse)
-  let Ingest.BatchAck batchAccepted = batchAck
+  let Ingest.BatchAck batchAccepted batchRejected = batchAck
   batchAccepted `shouldBe` 2
+  batchRejected `shouldBe` []
 
 postJson :: HTTP.Manager -> Warp.Port -> String -> BSL.ByteString -> IO (HTTP.Response BSL.ByteString)
 postJson manager port path body = do
@@ -179,7 +180,7 @@ sentinelIngestServer :: Ingest.IngestRoutes (AsServerT Handler)
 sentinelIngestServer =
   Ingest.IngestRoutes
     { Ingest.postEvent = \_event -> pure (Response.KansokuOk Ingest.IngestAck {Ingest.accepted = 1, Ingest.eventId = "events"}),
-      Ingest.postBatch = \_events -> pure (Response.KansokuOk Ingest.BatchAck {Ingest.accepted = 2})
+      Ingest.postBatch = \_events -> pure (Response.KansokuOk Ingest.BatchAck {Ingest.accepted = 2, Ingest.rejected = []})
     }
 
 sentinelMetricsServer :: Metrics.MetricsRoutes (AsServerT Handler)

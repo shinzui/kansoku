@@ -63,10 +63,14 @@ even if it requires splitting a partially completed task into two ("done" vs. "r
       assembly. Updated the server signatures and sketches below. Baseline `cabal build all`
       and `cabal test all` passed (50 core examples, 11 ClickHouse-dependent pending; 8 client
       examples, 1 opt-in live pending).
-- [ ] Milestone 1: `RejectedEvent` + new `BatchAck` wire types; `renderValidationError`; partial
-      acceptance in the batch handler (`partitionBatch`); `kansoku-client` and its tests updated;
-      OpenAPI document regenerated; `OpenApiSpec` and routing-test expectations updated;
-      handler/DTO specs added; `cabal build all && cabal test all` green.
+- [x] Milestone 1 (completed 2026-07-19T15:18Z): added `RejectedEvent`, the new `BatchAck`,
+      `renderValidationError`, order-preserving `partitionBatch`, partial enqueueing, SDK rejection
+      accounting, DTO/handler/client/OpenAPI coverage, and the regenerated artifact. `cabal build
+      all` and `cabal test all` passed with live dependencies (55 core examples, 0 failures or
+      pending; 9 client examples, 1 opt-in SDK integration pending); live HTTP returned 3
+      accepted plus indices 1/3
+      rejected, all-invalid returned 202/0, malformed JSON and invalid single events returned 400,
+      the accepted subset reached ClickHouse, and `kansoku-client-example` exited 0.
 - [ ] Milestone 2: `wai-cors` middleware on the ingest paths only; `KANSOKU_CORS_ORIGINS` config
       field; preflight verified end-to-end with the curl transcript; tests green.
 - [ ] Milestone 3: 5 MiB body cap via wai-extra's request-size-limit middleware; 500-event batch
@@ -87,6 +91,20 @@ implementation. Provide concise evidence.
   into `waiWrapper`; it no longer accepts a single ClickHouse `Connection`. EP-14 therefore adds
   `Config` while preserving `ReadyProbe`, `QueryPool`, the envelope formatter context, and all
   three WAI-level operational routes.
+
+- Discovery (Milestone 1, 2026-07-19): the authored curl fixtures omitted required
+  `AnalyticsEvent.properties` and `AnalyticsEvent.context` objects, and the `page_view` registry
+  additionally requires `properties.url`. The live server correctly returned typed 400
+  `malformed_request` before those fields were added. The Validation fixtures below now match the
+  checked OpenAPI schema and registry, so they exercise partial validation rather than JSON
+  decoding failure.
+
+- Discovery (Milestone 1, 2026-07-19): after the accepted subset reached `events_raw`, the
+  original proof query filtered only the trailing `event_id` sort-key column and returned 0 on
+  the local ClickHouse, while the same query with `FINAL` returned 3 and an equality query with
+  `use_skip_indexes=0` returned the expected row. The acceptance query now uses `FINAL` to make
+  this event-id-only diagnostic reliable; production metric queries retain their account/event/
+  time predicates and are outside this plan.
 
 
 ## Decision Log
@@ -181,7 +199,11 @@ Record every decision made while working on the plan.
 Summarize outcomes, gaps, and lessons learned at major milestones or at completion.
 Compare the result against the original purpose.
 
-(To be filled during and after implementation.)
+Milestone 1 completed the breaking batch wire change coherently across the API package, server,
+Haskell SDK, tests, and checked OpenAPI artifact. Parsed batches now finish exactly once: valid
+events enqueue, invalid events return indexed human-readable rejections, and the SDK accounts for
+those rejections without retrying. The live proof covered mixed, all-invalid, malformed, and
+single-invalid requests and observed the accepted subset in ClickHouse.
 
 
 ## Context and Orientation
@@ -997,11 +1019,11 @@ NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
 # 3 valid + 2 invalid (index 1: empty eventId; index 3: empty eventName)
 jq -n --arg now "$NOW" '[
-  {eventId: "evt-ok-0", eventName: "page_view", source: "web", occurredAt: $now, receivedAt: $now},
-  {eventId: "",         eventName: "page_view", source: "web", occurredAt: $now, receivedAt: $now},
-  {eventId: "evt-ok-2", eventName: "page_view", source: "web", occurredAt: $now, receivedAt: $now},
-  {eventId: "evt-bad-3", eventName: "",         source: "web", occurredAt: $now, receivedAt: $now},
-  {eventId: "evt-ok-4", eventName: "page_view", source: "web", occurredAt: $now, receivedAt: $now}
+  {eventId: "evt-ok-0", eventName: "page_view", source: "web", occurredAt: $now, receivedAt: $now, properties: {url: "/0"}, context: {}},
+  {eventId: "",         eventName: "page_view", source: "web", occurredAt: $now, receivedAt: $now, properties: {url: "/1"}, context: {}},
+  {eventId: "evt-ok-2", eventName: "page_view", source: "web", occurredAt: $now, receivedAt: $now, properties: {url: "/2"}, context: {}},
+  {eventId: "evt-bad-3", eventName: "",         source: "web", occurredAt: $now, receivedAt: $now, properties: {}, context: {}},
+  {eventId: "evt-ok-4", eventName: "page_view", source: "web", occurredAt: $now, receivedAt: $now, properties: {url: "/4"}, context: {}}
 ]' > /tmp/kansoku-partial-batch.json
 
 curl -s -w '\n%{http_code}\n' -X POST "$BASE/v1/batch" \
@@ -1024,7 +1046,7 @@ re-formatted):
 with status `202` on the following line. The all-invalid case:
 
 ```bash
-jq -n --arg now "$NOW" '[{eventId: "", eventName: "", source: "web", occurredAt: $now, receivedAt: $now}]' \
+jq -n --arg now "$NOW" '[{eventId: "", eventName: "", source: "web", occurredAt: $now, receivedAt: $now, properties: {}, context: {}}]' \
   | curl -s -w '\n%{http_code}\n' -X POST "$BASE/v1/batch" -H 'content-type: application/json' --data-binary @-
 # -> {"accepted":0,"rejected":[{"index":0,"eventId":null,"errors":["eventId must not be empty","eventName must not be empty"]}]}
 # -> 202
@@ -1040,7 +1062,7 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST "$BASE/v1/batch" -H 'content-ty
 The single-event endpoint keeps its 400-on-invalid behavior:
 
 ```bash
-jq -n --arg now "$NOW" '{eventId: "", eventName: "page_view", source: "web", occurredAt: $now, receivedAt: $now}' \
+jq -n --arg now "$NOW" '{eventId: "", eventName: "page_view", source: "web", occurredAt: $now, receivedAt: $now, properties: {url: "/single"}, context: {}}' \
   | curl -s -w '\n%{http_code}\n' -X POST "$BASE/v1/events" -H 'content-type: application/json' --data-binary @-
 # -> a JSON error envelope whose message contains "eventId must not be empty"
 # -> 400
@@ -1051,7 +1073,7 @@ with ClickHouse up,
 
 ```bash
 clickhouse-client --port "$CLICKHOUSE_TCP_PORT" \
-  --query "SELECT count() FROM analytics.events_raw WHERE event_id IN ('evt-ok-0','evt-ok-2','evt-ok-4')"
+  --query "SELECT count() FROM analytics.events_raw FINAL WHERE event_id IN ('evt-ok-0','evt-ok-2','evt-ok-4')"
 # -> 3 (within a few seconds; the writer's max latency defaults to 5000 ms)
 ```
 
@@ -1095,7 +1117,7 @@ Access-Control-Max-Age: 3600
 The actual cross-origin POST then carries the allow-origin header on its 202:
 
 ```bash
-jq -n --arg now "$NOW" '[{eventId: "evt-cors", eventName: "page_view", source: "web", occurredAt: $now, receivedAt: $now}]' \
+jq -n --arg now "$NOW" '[{eventId: "evt-cors", eventName: "page_view", source: "web", occurredAt: $now, receivedAt: $now, properties: {url: "/cors"}, context: {}}]' \
   | curl -s -i -X POST "$BASE/v1/batch" -H 'content-type: application/json' -H 'Origin: https://app.example.com' --data-binary @- \
   | grep -i 'access-control-allow-origin'
 # -> Access-Control-Allow-Origin: * (or the echoed origin)
@@ -1127,7 +1149,7 @@ python3 -c "
 import json
 e = {'eventId':'evt-big','eventName':'page_view','source':'web',
      'occurredAt':'2026-07-15T00:00:00Z','receivedAt':'2026-07-15T00:00:00Z',
-     'properties':{'blob':'x'*6291456}}
+     'properties':{'url':'/big','blob':'x'*6291456},'context':{}}
 open('/tmp/kansoku-big.json','w').write(json.dumps(e))
 "
 curl -s -w '\n%{http_code}\n' -X POST "$BASE/v1/events" \
@@ -1140,7 +1162,7 @@ A 501-event batch (each event tiny, so only the length cap can fire):
 
 ```bash
 jq -n --arg now "$NOW" \
-  '[range(0; 501) | {eventId: ("evt-\(.)"), eventName: "page_view", source: "web", occurredAt: $now, receivedAt: $now}]' \
+  '[range(0; 501) | {eventId: ("evt-\(.)"), eventName: "page_view", source: "web", occurredAt: $now, receivedAt: $now, properties: {url: "/batch"}, context: {}}]' \
   > /tmp/kansoku-batch-501.json
 curl -s -w '\n%{http_code}\n' -X POST "$BASE/v1/batch" \
   -H 'content-type: application/json' --data-binary @/tmp/kansoku-batch-501.json
@@ -1152,7 +1174,7 @@ A 500-event batch still passes (the cap is exclusive above 500):
 
 ```bash
 jq -n --arg now "$NOW" \
-  '[range(0; 500) | {eventId: ("evt-cap-\(.)"), eventName: "page_view", source: "web", occurredAt: $now, receivedAt: $now}]' \
+  '[range(0; 500) | {eventId: ("evt-cap-\(.)"), eventName: "page_view", source: "web", occurredAt: $now, receivedAt: $now, properties: {url: "/cap"}, context: {}}]' \
   | curl -s -o /dev/null -w '%{http_code}\n' -X POST "$BASE/v1/batch" -H 'content-type: application/json' --data-binary @-
 # -> 202
 ```
@@ -1268,3 +1290,8 @@ Revision note (2026-07-19): Milestone 0 reconciled the plan with the completed E
 EP-11 working tree. The server context and code sketches now preserve `ReadyProbe`, `QueryPool`,
 `serveWithContext`, envelope formatters, and the `/ready` WAI route while adding `Config` for
 EP-14 middleware settings. The baseline build and test evidence is recorded in Progress.
+
+Revision note (2026-07-19, second revision): Milestone 1 completed. Progress, discoveries,
+outcomes, and live Validation fixtures now record the partial-acceptance implementation, SDK and
+OpenAPI synchronization, required event object fields, and the reliable `FINAL` diagnostic used
+to observe the accepted subset in ClickHouse.

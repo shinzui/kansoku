@@ -104,6 +104,15 @@ spec = describe "Kansoku.Client" $ do
       droppedCount client `shouldReturn` 1
       close client
 
+  it "counts a per-event batch rejection as dropped without retrying" $
+    withRecorder (const (pure status202)) $ \port _ attempts -> do
+      client <- newClient ((testConfig port) & #maxRetries .~ 3 & #retryBaseDelayMicros .~ 1_000)
+      trackEvent client emptyIds "server_rejected_event" []
+      flush client
+      readTVarIO attempts `shouldReturn` 1
+      droppedCount client `shouldReturn` 1
+      close client
+
   it "drops newest events on buffer overflow" $
     withRecorder (const (pure status202)) $ \port _ _ -> do
       client <- newClient ((testConfig port) & #bufferCapacity .~ 2 & #batchMaxIntervalMicros .~ 10000000)
@@ -159,8 +168,22 @@ responseBodyFor _status request body
   | pathInfo request == ["v1", "events"] = "{\"accepted\":1,\"eventId\":\"test\"}"
   | otherwise =
       case Aeson.decode body :: Maybe [AnalyticsEvent] of
-        Just events -> Aeson.encode (Aeson.object ["accepted" Aeson..= length events])
-        Nothing -> "{\"accepted\":0}"
+        Just events
+          | any ((== EventName "server_rejected_event") . (^. #eventName)) events ->
+              Aeson.encode
+                ( Aeson.object
+                    [ "accepted" Aeson..= (length events - 1),
+                      "rejected"
+                        Aeson..= [ Aeson.object
+                                     [ "index" Aeson..= (0 :: Int),
+                                       "eventId" Aeson..= Aeson.Null,
+                                       "errors" Aeson..= ["rejected by test" :: Text]
+                                     ]
+                                 ]
+                    ]
+                )
+          | otherwise -> Aeson.encode (Aeson.object ["accepted" Aeson..= length events, "rejected" Aeson..= ([] :: [Aeson.Value])])
+        Nothing -> "{\"accepted\":0,\"rejected\":[]}"
 
 failNTimes :: Int -> TVar Int -> IO Status
 failNTimes n attempts = do

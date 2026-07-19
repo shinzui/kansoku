@@ -24,7 +24,7 @@ import Kansoku.Event
     SourceEventId,
     UserId,
   )
-import Kansoku.Ingest.Api (BatchAck, IngestAck)
+import Kansoku.Ingest.Api (BatchAck, IngestAck, RejectedEvent)
 import Kansoku.Metrics.Api (MetricPoint, MetricResult, TimeGrain)
 import Kansoku.Prelude
 import Servant.OpenApi (toOpenApi)
@@ -64,6 +64,8 @@ instance O.ToSchema EventSource where
 instance O.ToSchema ErrorEnvelopeWire
 
 instance O.ToSchema IngestAck
+
+instance O.ToSchema RejectedEvent
 
 instance O.ToSchema MetricPoint
 

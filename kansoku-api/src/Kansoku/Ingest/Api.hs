@@ -3,6 +3,7 @@ module Kansoku.Ingest.Api
   ( BatchAck (..),
     IngestAck (..),
     IngestRoutes (..),
+    RejectedEvent (..),
   )
 where
 
@@ -32,8 +33,21 @@ data IngestAck = IngestAck
   deriving stock (Generic, Eq, Show)
   deriving anyclass (FromJSON, ToJSON)
 
-newtype BatchAck = BatchAck
-  { accepted :: Int
+-- | One rejected event in a batch. The zero-based index is the stable
+-- machine-usable correlation key; the error text is for people, not parsers.
+data RejectedEvent = RejectedEvent
+  { index :: !Int,
+    eventId :: !(Maybe Text),
+    errors :: ![Text]
+  }
+  deriving stock (Generic, Eq, Show)
+  deriving anyclass (FromJSON, ToJSON)
+
+-- | A parsed batch is always acknowledged with HTTP 202. Valid events are
+-- enqueued and invalid events are reported here so clients never retry them.
+data BatchAck = BatchAck
+  { accepted :: !Int,
+    rejected :: ![RejectedEvent]
   }
   deriving stock (Generic, Eq, Show)
   deriving anyclass (FromJSON, ToJSON)

@@ -66,7 +66,14 @@ spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
   it "keeps every wire DTO's ToJSON representation within its ToSchema" $ do
     conforms "AnalyticsEvent" sampleEvent
     conforms "IngestAck" Ingest.IngestAck {Ingest.accepted = 1, Ingest.eventId = "evt_openapi"}
-    conforms "BatchAck" Ingest.BatchAck {Ingest.accepted = 1}
+    conforms "BatchAck" Ingest.BatchAck {Ingest.accepted = 1, Ingest.rejected = []}
+    conforms
+      "RejectedEvent"
+      Ingest.RejectedEvent
+        { Ingest.index = 0,
+          Ingest.eventId = Nothing,
+          Ingest.errors = ["eventId must not be empty"]
+        }
     conforms "MetricPoint" sampleMetricPoint
     conforms "MetricResult" Metrics.MetricResult {Metrics.metric = "events", Metrics.points = [sampleMetricPoint]}
     conforms "TimeGrain" Metrics.Hour
@@ -81,6 +88,12 @@ spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
     conforms "CorrelationId" (CorrelationId "corr_openapi")
     conforms "CausationId" (CausationId "cause_openapi")
     conforms "SourceEventId" (SourceEventId "source_openapi")
+
+  it "documents the partial batch acknowledgement components" $ do
+    List.sort (Key.toText <$> KeyMap.keys (objectAt ["components", "schemas", "BatchAck", "properties"] documentValue))
+      `shouldBe` ["accepted", "rejected"]
+    List.sort (Key.toText <$> KeyMap.keys (objectAt ["components", "schemas", "RejectedEvent", "properties"] documentValue))
+      `shouldBe` ["errors", "eventId", "index"]
 
   it "keeps the Servant-routed and documented path sets equal" $
     Warp.testWithApplication (pure sentinelApplication) $ \port -> do

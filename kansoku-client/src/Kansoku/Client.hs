@@ -132,6 +132,8 @@ flush clientHandle = do
     (deliverBatch (clientHandle ^. #config) (clientHandle ^. #env) (clientHandle ^. #dropped))
     (chunksOf (max 1 (clientHandle ^. #config . #batchMaxSize)) events)
 
+-- | Count events lost to buffer overflow, permanent delivery failure, or a
+-- server-side per-event batch rejection.
 droppedCount :: Client -> IO Int
 droppedCount clientHandle =
   readTVarIO (clientHandle ^. #dropped)
@@ -225,7 +227,8 @@ deliverBatch _ _ _ [] = pure ()
 deliverBatch cfg env dropped events = do
   result <- deliverWithRetry cfg env events
   case result of
-    Right _ -> pure ()
+    Right ack ->
+      atomically (modifyTVar' dropped (+ length (ack ^. #rejected)))
     Left _ -> atomically (modifyTVar' dropped (+ length events))
 
 deliverWithRetry :: ClientConfig -> ClientEnv -> [AnalyticsEvent] -> IO (Either ClientError BatchAck)
