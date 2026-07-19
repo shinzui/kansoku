@@ -4,6 +4,7 @@ slug: multi-signal-identity-identifier-kinds-fingerprints-and-confidence-aware-s
 title: "Multi-signal identity: identifier kinds, fingerprints, and confidence-aware stitching"
 kind: exec-plan
 created_at: 2026-07-15T21:43:59Z
+intention: intention_01kxxscv06exbvqdtefzqnf9h5
 master_plan: "docs/masterplans/3-kansoku-analytics-extensions-queryable-properties-multi-signal-identity-and-experiment-analytics.md"
 ---
 
@@ -87,6 +88,9 @@ This section must always reflect the actual current state of the work.
 - [ ] M3: MP-2-era resolution query battery re-run; `canonical_user` output-shape
       stability recorded (the EP-19 invariant)
 - [ ] MasterPlan 3 Progress and Integration Points updated (field-name claim recorded)
+- [x] (2026-07-19 13:08 PDT) Reconciled the plan with EP-17's landed native-JSON
+      projection, migration ledger through `0010`, and the live seven-column
+      `analytics.events_resolved` contract; baseline `just build` and `just test` passed.
 
 
 ## Surprises & Discoveries
@@ -94,7 +98,12 @@ This section must always reflect the actual current state of the work.
 Document unexpected behaviors, bugs, optimizations, or insights discovered during
 implementation. Provide concise evidence.
 
-(None yet.)
+- 2026-07-19: EP-17 landed before implementation and extended
+  `analytics.events_resolved` with a seventh `properties_json JSON` column. Live
+  `DESCRIBE TABLE analytics.events_resolved` confirmed the ordered contract recorded in
+  ADR 0004, so every M2/M3 shape-stability check in this plan now includes that column.
+  The migration ledger is occupied through `0010`; EP-18 therefore claims `0011` through
+  `0013`.
 
 
 ## Decision Log
@@ -202,13 +211,21 @@ Record every decision made while working on the plan.
 
 - Decision: The `analytics.events_resolved` output contract is FROZEN: name
   `analytics.events_resolved`, columns exactly `event_id`, `event_name`, `occurred_at`,
-  `url`, `account_id`, `canonical_user`. This plan swaps the resolution *underneath* that
-  contract and proves stability by re-running the MP-2-era query battery (Milestone 3).
+  `url`, `account_id`, `canonical_user`, `properties_json`. This plan swaps the
+  resolution *underneath* that contract and proves stability by re-running the
+  MP-2-era query battery plus EP-17's property-query integration (Milestone 3).
   Rationale: MasterPlan 3's "Identity resolution" integration point: EP-19's rollups and
   every `Kansoku.Query` builder consume `canonical_user` opaquely; if EP-19 lands first,
   its rollups must remain correct when this plan swaps resolution. Resolution stays
   FINAL-free per MP-2 EP-12's discipline.
   Date: 2026-07-15
+
+- Decision: Preserve EP-17's server-only `properties_json JSON` projection when replacing
+  `analytics.events_resolved`, and use migrations `0011`, `0012`, and `0013` for EP-18.
+  Rationale: ADR 0004 makes the seventh column a downstream contract for property-grouped
+  unique-user metrics and EP-19. The live migration ledger is already occupied through
+  `0010`; applied files are immutable.
+  Date: 2026-07-19
 
 - Decision: `identity_map`/`mv_identity_map` are retired in a *separate* follow-up
   migration, applied only after the stability battery passes — not in the migration that
@@ -299,11 +316,10 @@ Two terms used throughout: a **signal** is one (kind, value) identifier observat
 `("fingerprint", "fp-F")`; a **binding** is evidence that a signal was seen on the same
 event as a `user_id`, i.e. a row "signal → user".
 
-Migration numbering caveat: MP-2's EP-12 claims files 0004–0007 and EP-15 adds at least
-one more; EP-17 runs in parallel with this plan and also adds migrations. The filenames
-below (`0008_…`, `0009_…`, `0010_…`) are illustrative. At implementation time run
-`ls db/clickhouse/migrations/` and use the next unclaimed numbers, coordinating with
-EP-17's author on who takes which; keep the descriptive suffixes.
+Migration numbering was reconciled at implementation start. MP-2 occupies files
+`0004`–`0008` and EP-17 occupies `0009`–`0010`, so this plan uses
+`0011_events_raw_identifiers.sql`, `0012_identity_signals.sql`, and
+`0013_retire_identity_map.sql`. Applied migration files are immutable.
 
 
 ## Plan of Work
@@ -426,8 +442,7 @@ validation error becomes an HTTP response follows the MP-2 EP-14 ingest contract
 there, only adds error constructors, so whatever rendering exists picks them up; if the
 error-rendering code enumerates constructors exhaustively, extend it in the same commit.
 
-Storage column, new migration `db/clickhouse/migrations/0008_events_raw_identifiers.sql`
-(number illustrative — see the numbering caveat in Context and Orientation):
+Storage column, new migration `db/clickhouse/migrations/0011_events_raw_identifiers.sql`:
 
 ```sql
 -- EP-18 M1: persist the identifiers map (kind -> value) on raw events.
@@ -541,13 +556,14 @@ clickhouse-client --port $CLICKHOUSE_TCP_PORT --query \
   "DESCRIBE TABLE analytics.events_resolved" | tee /tmp/events_resolved_columns_before.txt
 ```
 
-Expected (post-MP-2): exactly `event_id`, `event_name`, `occurred_at`, `url`,
-`account_id`, `canonical_user` (types `String`, `LowCardinality(String)`,
-`DateTime64(3,'UTC')`, `String`, `String`, `String`). If what you see differs, STOP and
-reconcile with EP-15's actual landing before proceeding — the replacement view below must
-reproduce the incumbent's column list verbatim.
+Expected after EP-17: exactly `event_id`, `event_name`, `occurred_at`, `url`,
+`account_id`, `canonical_user`, `properties_json` (types `String`,
+`LowCardinality(String)`, `DateTime64(3,'UTC')`, `String`, `String`, `String`, `JSON`).
+If what you see differs, stop and reconcile with ADR 0004 and the actual landed tree before
+proceeding — the replacement view below must reproduce the incumbent's column list
+verbatim.
 
-New migration `db/clickhouse/migrations/0009_identity_signals.sql` (number illustrative):
+New migration `db/clickhouse/migrations/0012_identity_signals.sql`:
 
 ```sql
 -- EP-18 M2: evidence-based identity.
@@ -667,9 +683,9 @@ GROUP BY account_id, signal_kind, signal_value
 HAVING user_count > 1;
 
 -- Confidence-aware resolution. OUTPUT CONTRACT FROZEN: name and columns
--- (event_id, event_name, occurred_at, url, account_id, canonical_user) must
--- match the incumbent view exactly — every Kansoku.Query builder and EP-19's
--- rollups consume canonical_user opaquely.
+-- (event_id, event_name, occurred_at, url, account_id, canonical_user,
+-- properties_json) must match the incumbent view exactly. Property-grouped
+-- unique-user metrics and EP-19 consume the server-only JSON projection.
 --
 -- canonical_user =
 --   1. the event's explicit user_id, if present (confidence 1.0 by fiat);
@@ -725,7 +741,8 @@ SELECT
     multiIf(
         e.user_id != '', e.user_id,
         r.stitched_user != '', r.stitched_user,
-        e.anonymous_id) AS canonical_user
+        e.anonymous_id) AS canonical_user,
+    e.properties_json AS properties_json
 FROM analytics.events_raw AS e
 LEFT JOIN event_signal_users AS r
     ON r.account_id = e.account_id AND r.event_id = e.event_id;
@@ -894,8 +911,8 @@ with zero query-side changes. This demonstrates precisely the MasterPlan 3 integ
 guarantee: rollups and builders keyed on `canonical_user` are correct before and after
 the resolution swap.
 
-Retirement, new migration `db/clickhouse/migrations/0010_retire_identity_map.sql`
-(number illustrative), applied ONLY after the battery passes:
+Retirement, new migration `db/clickhouse/migrations/0013_retire_identity_map.sql`,
+applied ONLY after the battery passes:
 
 ```sql
 -- EP-18 M3: identity_map is superseded by identity_signals + identity_bindings.
@@ -945,7 +962,7 @@ just build && just test                 # green before you touch anything
 ```
 
 Expect: `anonymous_id String DEFAULT ''` (post-EP-12; if you see `Nullable(String)`,
-MP-2 is not complete — stop), no `identifiers` column yet, and the six
+MP-2 is not complete — stop), no `identifiers` column yet, and the seven
 `events_resolved` columns listed in Milestone 2. If `analytics.schema_migrations` does
 not exist, EP-12 has not landed — stop.
 
@@ -955,7 +972,7 @@ Step 1 — Milestone 1 edits, in this order: `Types.hs` (kind vocabulary + field
 tests. Then:
 
 ```bash
-just ch-migrate     # applies 0008_events_raw_identifiers.sql only
+just ch-migrate     # applies 0011_events_raw_identifiers.sql only
 just build
 just test
 ```
@@ -965,7 +982,7 @@ transcript from Validation and Acceptance and commit (one commit — wire type, 
 OpenAPI together).
 
 Step 2 — Milestone 2: capture the `DESCRIBE` baseline, write
-`0009_identity_signals.sql`, the two fixture files, and the justfile recipes. Then:
+`0012_identity_signals.sql`, the two fixture files, and the justfile recipes. Then:
 
 ```bash
 just ch-reset && just ch-migrate
@@ -990,7 +1007,7 @@ clickhouse-client --port $CLICKHOUSE_TCP_PORT --query "
 just test
 ```
 
-Then add `0010_retire_identity_map.sql`, `just ch-migrate`, re-run the two queries above
+Then add `0013_retire_identity_map.sql`, `just ch-migrate`, re-run the two queries above
 (same numbers — nothing read the map anymore), update MasterPlan 3, update this plan's
 living sections, commit.
 
@@ -1275,7 +1292,7 @@ DateTime64(3,'UTC'), event_id String)`; materialized view
 Float64`), `analytics.identity_conflicts(account_id, signal_kind, signal_value,
 user_ids, user_count, observation_count, last_observed_at)`,
 `analytics.events_resolved_v3`, and `analytics.events_resolved` with the frozen columns
-`event_id, event_name, occurred_at, url, account_id, canonical_user`.
+`event_id, event_name, occurred_at, url, account_id, canonical_user, properties_json`.
 
 Contracts consumed (must hold before starting — verified in Concrete Steps step 0): MP-2
 EP-12's migration ledger and post-0004 `events_raw` shape; EP-15's account stamping and
@@ -1289,3 +1306,10 @@ Contracts provided (consumed by others): the frozen `events_resolved` output con
 (String JSON aligned with today's `properties` — re-align if EP-17 changes the
 properties representation first, per the Decision Log); the closed `IdentifierKind`
 vocabulary (client SDKs and EP-19/EP-20 event schemas must use these strings).
+
+---
+
+Revision note (2026-07-19): implementation-start reconciliation updated the stale
+six-column `events_resolved` assumption to EP-17's landed seven-column contract, assigned
+the next free migration numbers (`0011`–`0013`), linked the active intention in
+frontmatter, and recorded the successful baseline build/test evidence.
