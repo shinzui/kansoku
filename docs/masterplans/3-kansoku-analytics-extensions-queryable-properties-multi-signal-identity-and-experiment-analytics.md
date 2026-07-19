@@ -4,6 +4,7 @@ slug: kansoku-analytics-extensions-queryable-properties-multi-signal-identity-an
 title: "Kansoku analytics extensions: queryable properties, multi-signal identity, and experiment analytics"
 kind: master-plan
 created_at: 2026-07-15T21:43:50Z
+intention: intention_01kxxscv06exbvqdtefzqnf9h5
 ---
 
 # Kansoku analytics extensions: queryable properties, multi-signal identity, and experiment analytics
@@ -76,7 +77,7 @@ it non-trivial; recorded as future scope.
 
 | # | Title | Path | Hard Deps | Soft Deps | Status |
 |----|-------|------|-----------|-----------|--------|
-| 17 | Queryable event properties: typed storage and property-based grouping | docs/plans/17-queryable-event-properties-typed-storage-and-property-based-grouping.md | None (external: MP-2) | EP-20 | Not Started |
+| 17 | Queryable event properties: typed storage and property-based grouping | docs/plans/17-queryable-event-properties-typed-storage-and-property-based-grouping.md | None (external: MP-2) | EP-20 | In Progress |
 | 18 | Multi-signal identity: identifier kinds, fingerprints, and confidence-aware stitching | docs/plans/18-multi-signal-identity-identifier-kinds-fingerprints-and-confidence-aware-stitching.md | None (external: MP-2) | None | Not Started |
 | 19 | Experiment analytics: assignment events, variant rollups, and per-variant metrics | docs/plans/19-experiment-analytics-assignment-events-variant-rollups-and-per-variant-metrics.md | EP-17 | EP-18, EP-20 | Not Started |
 | 20 | Event schema governance: versioned registry and portfolio event contracts | docs/plans/20-event-schema-governance-versioned-registry-and-portfolio-event-contracts.md | None (external: MP-2) | None | Not Started |

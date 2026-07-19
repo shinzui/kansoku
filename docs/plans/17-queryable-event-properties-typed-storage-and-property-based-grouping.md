@@ -4,6 +4,7 @@ slug: queryable-event-properties-typed-storage-and-property-based-grouping
 title: "Queryable event properties: typed storage and property-based grouping"
 kind: exec-plan
 created_at: 2026-07-15T21:43:59Z
+intention: intention_01kxxscv06exbvqdtefzqnf9h5
 master_plan: "docs/masterplans/3-kansoku-analytics-extensions-queryable-properties-multi-signal-identity-and-experiment-analytics.md"
 ---
 
