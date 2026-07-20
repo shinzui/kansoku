@@ -1,0 +1,45 @@
+# Kansoku documentation
+
+Kansoku is a self-hosted analytics service with authenticated event ingestion, a durable
+PostgreSQL queue, ClickHouse storage, identity resolution, and an account-scoped metrics API.
+Start with the quickstart, then use the guides for the part of Kansoku you are integrating.
+
+## Adopt Kansoku
+
+1. [Run Kansoku locally](guides/getting-started.md) — start the dependencies, migrate both
+   databases, issue credentials, send an event, and query it.
+2. [Send events](guides/send-events.md) — use the HTTP contract, versioned event schemas,
+   batches, identity signals, and retry semantics correctly.
+3. [Query metrics](guides/query-metrics.md) — call the live product, funnel, retention,
+   property, revenue, and experiment endpoints.
+4. [Use the Haskell SDK](guides/haskell-sdk.md) — add the client package, buffer events,
+   flush safely, pin schema versions, and use typed experiment clients.
+5. [Configure Kansoku](guides/configuration.md) — set database, writer, CORS, ingest,
+   readiness, telemetry, and server options.
+6. [Operate Kansoku](guides/operations.md) — use health, readiness, Prometheus metrics,
+   traces, migration commands, credential revocation, and recovery procedures.
+
+## Contract references
+
+- [OpenAPI 3 document](api/openapi.json) is generated from the served route types and is also
+  available from a running server at `GET /openapi.json`.
+- [Event schema catalog](contracts/events.json) is generated from Kansoku's versioned event
+  registry and is also available without credentials at `GET /v1/schemas`.
+- [Event schema governance](event-schema-governance.md) explains how maintainers add and
+  version event contracts.
+
+Regenerate the references with `just openapi` and `just contracts`. CI-style checks are
+available as `just openapi-check` and `just contracts-check`. Do not edit either generated JSON
+file by hand.
+
+## Operations and project records
+
+- [Identity data deletion and fingerprint retention](runbooks/identity-data-deletion.md) is the
+  destructive-data runbook for identity erasure and fingerprint retention.
+- [Product vision](initial-spec.md) describes Kansoku's direction. It is not a list of shipped
+  APIs; the guides and generated references above describe the current release.
+- [Architecture decisions](adr/) capture durable design constraints.
+- [MasterPlans](masterplans/) and [ExecPlans](plans/) are implementation history. Completed
+  plans can describe an earlier state and are not user documentation.
+
+[Back to the repository README](../README.md)

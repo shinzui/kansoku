@@ -1,167 +1,151 @@
 # 観測 · Kansoku
 
-**A first-party, self-hostable, ClickHouse-native analytics service.**
+**A first-party, self-hosted, ClickHouse-native analytics service.**
 
-Kansoku is the observation layer for modern applications — it observes how users,
-applications, services, campaigns, and systems behave over time, and answers product,
-web, and business questions from a single unified event stream.
+Kansoku (観測, “observation”) accepts browser and backend events into one account-scoped event
+model, writes them through a durable PostgreSQL queue to ClickHouse, resolves user identity at
+query time, and serves reusable metrics through a typed HTTP API.
 
----
+## What ships today
 
-## The name
+- Authenticated single and partial-batch ingestion at `POST /v1/events` and `POST /v1/batch`.
+- Write keys for producers and service tokens for account-scoped metric reads.
+- A versioned event registry published at `GET /v1/schemas` and
+  [`docs/contracts/events.json`](docs/contracts/events.json).
+- At-least-once PostgreSQL PGMQ delivery with a supervised Shibuya batch writer and ClickHouse
+  event-ID idempotency.
+- Multi-signal identity evidence for cookies, devices, hashed email, and expiring fingerprints,
+  with conflict visibility and query-time resolution.
+- Product, session, ordered-funnel, retention, property, revenue, and exposure-based experiment
+  metrics.
+- OpenAPI at `GET /openapi.json`, readiness at `GET /ready`, Prometheus metrics at
+  `GET /internal/metrics`, and opt-in OpenTelemetry trace export.
+- A buffered Haskell producer SDK and typed Haskell metrics clients.
 
-**観測（かんそく / _Kansoku_）** is Japanese for **"observation."**
+Browser and React SDKs, a dashboard UI, and hosted/container distributions are not yet shipped.
+Non-Haskell producers use the documented HTTP API.
 
-The name is the thesis. Kansoku does not run your business logic, own your users, or
-send your email. It *observes* — it watches what your product and its supporting
-systems actually do and turns that into answerable questions:
+## Start here
 
-> Are users activating? Which features engage them? Which channels convert? Where do
-> users drop off? Which experiments move the needle? How do backend events correlate
-> with what users see?
+The [documentation index](docs/README.md) separates adopter guides, generated contracts,
+operations, and internal project records.
 
-Other services emit facts. Kansoku observes them.
+- [Run Kansoku locally](docs/guides/getting-started.md)
+- [Send events](docs/guides/send-events.md)
+- [Query metrics](docs/guides/query-metrics.md)
+- [Use the Haskell SDK](docs/guides/haskell-sdk.md)
+- [Configure Kansoku](docs/guides/configuration.md)
+- [Operate Kansoku](docs/guides/operations.md)
 
-## Vision
+The shortest local path is:
 
-Most analytics is bolted on from the outside: a third-party script tells you what a
-browser *attempted*, disconnected from what your backend knows actually *happened*.
-Kansoku collapses that gap.
+```bash
+nix develop
+just up
+```
 
-- **First-party.** You self-host it. Your events, your ClickHouse, your data — no
-  third-party pixel, no sampling, no data leaving your infrastructure.
-- **Event-first, both sides of the wire.** Client-side analytics tells you what a user
-  *tried*. Server-side analytics tells you what actually *committed*. Kansoku ingests
-  both — browser SDK events *and* authoritative backend/domain events — into one
-  canonical event model, so product behavior and business facts live in the same table.
-- **ClickHouse-native.** A columnar store is the system of record. Raw events are
-  append-only truth; materialized views and rollups make common metrics cheap.
-- **Typed, not a BI tool.** Instead of exposing arbitrary SQL, Kansoku offers a
-  semantic metrics layer and a typed `GET /metrics/*` query API. Metrics stay
-  consistent across dashboards, product widgets, reports, and automated summaries.
-- **Simple to self-host, friendly to microservices and agents.** One binary
-  (`kansoku-server`), a durable queue, and ClickHouse. Opinionated enough to be
-  useful out of the box; generic enough to open source.
+In another `nix develop` shell, apply both databases' migrations, issue credentials, and start
+the service:
 
-Kansoku observes the system without becoming part of the business domain.
+```bash
+just migrate
+just ch-migrate
+just issue-key write dev "local writer"
+just issue-key service dev "local reader"
+just run
+```
 
-### What Kansoku owns — and doesn't
-
-| Kansoku **owns** | Kansoku does **not** own |
-| --- | --- |
-| Event ingestion & validation | Business workflows |
-| Event schema registry | User / account / org source of truth |
-| Identity stitching | Billing source of truth |
-| ClickHouse writes & raw storage | Email sending |
-| Materialized views & rollups | Authorization |
-| Semantic metrics & typed query API | CRM state |
-| Product, web, and campaign analytics | |
+Credential issuance prints each token exactly once. See the
+[quickstart](docs/guides/getting-started.md) for a complete accepted event and metric query.
 
 ## Architecture
 
-The defining decision: **the write path is deliberately _not_ event-sourced.** Analytics
-ingestion is throughput-bound — enormous write volume, no need for per-aggregate ordering
-or replay. So Kansoku ingests through a durable queue and a **batched** writer, amortizing
-each ClickHouse `INSERT` across thousands of rows.
-
-```txt
- Browser SDK ─┐
- Backend      │
- Workers      ├──▶  Ingestion API  ──▶  pgmq durable queue  ──▶  batched writer  ──▶  ClickHouse
- Email/agents │     POST /v1/events      (PostgreSQL, via         (shibuya, one         ├─ events_raw (source of truth)
-              ┘     POST /v1/batch        pgmq-hs)                 INSERT / batch,       ├─ materialized views
-                                                                   via ClickHaskell)     └─ rollups
-                                                                                              │
-                                          Typed query API  ◀───────────────────────────────┘
-                                          GET /metrics/*   ──▶ dashboards · product widgets · reports
+```text
+Browser / backend / worker
+          │
+          ▼
+Authenticated ingestion API
+POST /v1/events · POST /v1/batch
+          │
+          ▼
+PostgreSQL PGMQ durable queue
+          │
+          ▼
+Supervised Shibuya batch writer
+          │
+          ▼
+ClickHouse events_raw · identity evidence · materialized rollups
+          │
+          ▼
+Account-scoped typed metrics API
 ```
 
-- **Ingest** enqueues onto a PostgreSQL-backed [pgmq] queue via [`pgmq-hs`]. Producing
-  is direct; no event-sourcing log.
-- **Write** is a [shibuya] consumer (`shibuya-pgmq-adapter`) that pulls events in
-  batches and performs one ClickHouse insert per batch via [ClickHaskell]. The
-  ClickHouse↔queue boundary is at-least-once, so `events_raw` is a `ReplacingMergeTree`
-  keyed on `event_id` and ClickHouse owns idempotency.
-- **Read** resolves anonymous→known identity at query time and serves reusable metrics
-  through a typed API — no raw SQL exposed.
+Kansoku deliberately does not use event sourcing for its write path. Analytics ingestion is
+throughput-oriented and does not need aggregate ordering, so the writer amortizes one ClickHouse
+insert across a batch. Raw event identity is retained while user identity is resolved from
+account-scoped evidence when exact user metrics are queried.
 
-[pgmq]: https://github.com/tembo-io/pgmq
-[`pgmq-hs`]: https://github.com/shinzui/pgmq-hs
-[shibuya]: https://github.com/shinzui/shibuya
-[ClickHaskell]: https://github.com/KovalevDima/ClickHaskell
+PostgreSQL migrations explicitly install the vendored PGMQ schema without requiring the upstream
+PostgreSQL extension, followed by Kansoku's API-key table. ClickHouse has a separate forward-only
+migration ledger. Normal server startup performs neither schema migration.
 
-### Packages
+## API status
 
-A Haskell (GHC 9.12, effectful + servant + warp) codebase split by role:
+Implemented metric routes are:
+
+```text
+GET /metrics/events
+GET /metrics/page-views
+GET /metrics/sessions
+GET /metrics/funnel
+GET /metrics/retention
+GET /metrics/feature-adoption
+GET /metrics/conversion
+GET /metrics/users
+GET /metrics/revenue
+GET /metrics/experiments
+GET /metrics/experiments/conversion
+GET /metrics/experiments/funnel
+```
+
+`GET /metrics/acquisition`, `GET /metrics/organizations`, and `GET /metrics/custom` remain
+contract placeholders and return HTTP 404 with `not_implemented`. See
+[Query metrics](docs/guides/query-metrics.md) for semantics and accuracy boundaries.
+
+## Packages
 
 | Package | Role |
 | --- | --- |
-| `kansoku-api` | Shared prelude, canonical event model, wire DTOs, and servant route *types* — the drift-proof API contract. |
-| `kansoku-core` | Runtime, storage adapters, ingestion, batched writer, metrics, OpenAPI generation, HTTP app assembly. |
-| `kansoku-server` | The `kansoku-server` executable — servant/warp HTTP application. |
-| `kansoku-client` | Typed Haskell client derived from `kansoku-api` via `servant-client`. |
+| `kansoku-api` | Canonical event and schema types, response algebra, and Servant route types. |
+| `kansoku-core` | Configuration, migrations, authentication, queue/writer, ClickHouse queries, telemetry, and HTTP assembly. |
+| `kansoku-server` | `kansoku-server` and the administrative `kansoku-migrate` executable. |
+| `kansoku-client` | Buffered Haskell producer SDK and typed metrics clients. |
 
-## Roadmap
+The codebase uses GHC 9.12, Effectful, Servant/Warp, PostgreSQL, PGMQ, Shibuya, and ClickHouse.
 
-### ✅ MVP — delivered
+## Development
 
-The MVP is coordinated by a MasterPlan (`docs/masterplans/`) decomposed into eight
-ExecPlans (`docs/plans/`), all implemented:
+Run common tasks inside `nix develop`:
 
-1. **Foundation** — project skeleton & runtime; canonical event model + schema registry.
-2. **Write path** — ClickHouse `analytics.events_raw` schema + batched writer;
-   HTTP ingestion (`POST /v1/events`, `/v1/batch`) → pgmq queue → shibuya batched writer.
-3. **Read path** — identity stitching + materialized-view rollups; semantic metrics
-   layer + typed `GET /metrics/*` query API.
-4. **Client & contract** — Haskell server SDK (`kansoku-client`); OpenAPI schema
-   generation serving `GET /openapi.json`.
-
-**Metrics endpoints:** seven are live — `events`, `page-views`, `sessions`, `funnel`,
-`retention`, `conversion`, `users`. Four are typed routes present in the contract and
-OpenAPI document but returning `501 Not Implemented` in the MVP — `acquisition`,
-`feature-adoption`, `organizations`, `custom`.
-
-### 🔜 Next — frontend & SDKs
-
-The MVP ships the Haskell core and server SDK. Deferred to the next initiative:
-
-- Browser / Web SDK (`kansoku-js`)
-- React SDK (`kansoku-react`)
-- A dashboard UI over the metrics API
-
-### 🌌 Later scope
-
-From the product spec (`docs/initial-spec.md`) — candidates, not commitments:
-
-- Experimentation & feature-flag exposure tracking
-- Anomaly detection & automated analytics summaries
-- Natural-language metric queries
-- Path analysis · richer retention cohorts · session-replay metadata
-- OpenTelemetry bridge · integration-event (outbox) bridge
-- Data-quality checks · privacy controls · tenant-level retention policies
-
-## Getting started
-
-Everything runs locally via Nix + `process-compose` (PostgreSQL + ClickHouse). Common
-tasks are in the `justfile`:
-
-```sh
-nix develop            # enter the dev shell
-just up                # start postgres, clickhouse, create the db
-just create-database   # create the `kansoku` database (if needed)
-just ch-migrate        # apply and record unapplied ClickHouse migrations
-just build             # cabal build all
-just test              # run the test suite
-just run               # run the kansoku-server executable
+```bash
+just build
+just test
+just openapi-check
+just contracts-check
+nix fmt
 ```
 
-## Documentation
+`just openapi` and `just contracts` regenerate the committed machine-readable references. Do not
+hand-edit generated JSON. The local database processes and their state live inside the checkout;
+`just ch-reset` is development-only and destroys all local ClickHouse analytics data.
 
-- **Product spec:** [`docs/initial-spec.md`](docs/initial-spec.md) — the full vision.
-- **MasterPlan:** [`docs/masterplans/1-kansoku-analytics-service-mvp.md`](docs/masterplans/1-kansoku-analytics-service-mvp.md)
-- **ExecPlans:** [`docs/plans/`](docs/plans/) — the eight child plans.
+## Scope
 
----
+Kansoku owns event validation and ingestion, analytics credentials and account boundaries,
+identity evidence, ClickHouse analytics storage, derived rollups, and semantic metrics. It does
+not own application authorization, business workflows, user/account source-of-truth records,
+billing, email delivery, or CRM state.
 
-_Kansoku observes user behavior, application behavior, and business events through one
-unified layer — while staying independent of any specific product or workflow._
+The original [product vision](docs/initial-spec.md) describes longer-term direction. Current
+behavior is defined by the guides, the [OpenAPI document](docs/api/openapi.json), and the
+[event schema catalog](docs/contracts/events.json).

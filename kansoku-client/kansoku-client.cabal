@@ -55,8 +55,6 @@ executable kansoku-client-example
   build-depends:
     , aeson
     , base            >=4.21 && <5
-    , generic-lens
-    , kansoku-api
     , kansoku-client
     , text
 

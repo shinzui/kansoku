@@ -1,5 +1,11 @@
 # 観測（Kansoku） — Product and Web Analytics Service
 
+> **Status: product vision, not an API reference.** This document preserves Kansoku's product
+> thesis and longer-term direction. For shipped behavior, start at the
+> [documentation index](README.md), then use the generated [OpenAPI document](api/openapi.json)
+> and [event schema catalog](contracts/events.json). Sections phrased as “should” are
+> aspirational unless a current guide says otherwise.
+
 ## Name
 
 **観測（かんそく / Kansoku）** means **observation**.
@@ -48,10 +54,10 @@ Email/webhook processors
 Agent systems
         |
         v
-Kansoku ingestion API
+Authenticated Kansoku ingestion API
         |
         v
-Durable queue / Pub/Sub
+PostgreSQL PGMQ durable queue
         |
         v
 Kansoku writer
@@ -143,39 +149,16 @@ Used for:
 
 ## Canonical Event Model
 
-```ts
-type AnalyticsEvent = {
-  eventId: string
-  eventName: string
-  source: "web" | "app" | "service" | "worker" | "email" | "agent"
-  sourceService?: string
+The implemented wire type is `AnalyticsEvent` in the generated
+[OpenAPI document](api/openapi.json). Its required fields are `eventId`, `eventName`, `source`,
+`occurredAt`, `receivedAt`, `properties`, and `context`. It also supports schema versions,
+campaign and causation fields, organization and session IDs, and an `identifiers` map for the
+closed signal set `cookie`, `device`, `fingerprint`, and `email_sha256`.
 
-  occurredAt: string
-  receivedAt: string
-
-  anonymousId?: string
-  userId?: string
-  organizationId?: string
-  accountId?: string
-  sessionId?: string
-
-  url?: string
-  referrer?: string
-  utmSource?: string
-  utmMedium?: string
-  utmCampaign?: string
-  utmContent?: string
-  utmTerm?: string
-
-  correlationId?: string
-  causationId?: string
-  sourceEventId?: string
-  sourceGlobalPosition?: number
-
-  properties: Record<string, unknown>
-  context: Record<string, unknown>
-}
-```
+Ingestion replaces `receivedAt` with server time and replaces any caller-supplied `accountId`
+with the account authenticated by the write key or service token. Declared event property shapes
+are immutable, versioned contracts published in the [event schema catalog](contracts/events.json).
+See [Send events](guides/send-events.md) for a complete current payload.
 
 ## Ingestion Modes
 
@@ -229,37 +212,25 @@ This ensures analytics reflects committed system facts, not just attempted actio
 
 ### Raw Events Table
 
-Kansoku stores all events in an append-only raw events table.
+Kansoku stores accepted events in:
 
 ```sql
 analytics.events_raw
 ```
 
-Suggested ordering:
-
-```sql
-ORDER BY (account_id, user_id, event_name, occurred_at)
-PARTITION BY toYYYYMM(occurred_at)
-```
-
-The raw table is the source of truth.
+The table is a partitioned `ReplacingMergeTree` whose event-ID key makes at-least-once queue
+delivery idempotent. `account_id` leads metric isolation, and accepted rows retain their effective
+schema version. The ClickHouse migrations under `db/clickhouse/migrations/`—not this vision
+document—are the schema source of truth.
 
 ## Derived Tables and Rollups
 
 Use ClickHouse materialized views for common metrics.
 
-Examples:
-
-* daily event counts
-* daily active users
-* weekly active users
-* page views by route
-* campaign conversions
-* feature adoption
-* account activation
-* organization activity
-* funnel step counts
-* retention cohorts
+The current schema materializes daily and weekly active-user states, page views by route,
+identity evidence/conflicts, and experiment exposures. Other metrics read raw or
+identity-resolved events at query time. See [Query metrics](guides/query-metrics.md) for the live
+endpoint and accuracy map.
 
 ## Identity Stitching
 
@@ -286,7 +257,12 @@ alias
 group
 ```
 
-The service should avoid mutating raw historical events unless absolutely necessary. Identity can be resolved in query-time views or derived tables.
+Current resolution uses account-scoped evidence from cookies, device IDs, hashed email, and
+lower-confidence fingerprints. Explicit `userId` wins; otherwise matching signals are ranked by
+confidence and recency, with the event's anonymous cookie as fallback. Conflicts remain
+queryable, and exact user metrics resolve identity at query time. See
+[Send events](guides/send-events.md#identity) and the
+[identity deletion runbook](runbooks/identity-data-deletion.md).
 
 ## Semantic Metrics Layer
 
@@ -325,7 +301,7 @@ The semantic layer keeps analytics consistent across dashboards, reports, produc
 
 Kansoku should expose typed APIs instead of arbitrary SQL.
 
-Initial endpoints:
+Current implemented endpoints:
 
 ```txt
 GET /metrics/events
@@ -333,15 +309,18 @@ GET /metrics/page-views
 GET /metrics/sessions
 GET /metrics/funnel
 GET /metrics/retention
-GET /metrics/acquisition
 GET /metrics/feature-adoption
 GET /metrics/conversion
 GET /metrics/users
-GET /metrics/organizations
-GET /metrics/custom
+GET /metrics/revenue
+GET /metrics/experiments
+GET /metrics/experiments/conversion
+GET /metrics/experiments/funnel
 ```
 
-The goal is to expose useful product and business metrics without becoming a generic BI tool.
+`/metrics/acquisition`, `/metrics/organizations`, and `/metrics/custom` are present as contract
+placeholders but return `not_implemented`. The goal remains to expose useful product and business
+metrics without becoming a generic BI tool.
 
 ## Initial Product Metrics
 
@@ -469,50 +448,32 @@ Kansoku is designed to be useful for SaaS products, internal business applicatio
 
 The core project provides generic analytics infrastructure. Product-specific metrics should be implemented by applications built on top of Kansoku.
 
-## Initial Components
+## Current Components
 
-```txt
-kansoku-server
-kansoku-collector
-kansoku-writer
-kansoku-clickhouse
-kansoku-js
-kansoku-haskell
-kansoku-react
-```
+- `kansoku-api`: shared wire types, event contracts, and route types;
+- `kansoku-core`: authentication, ingestion, writer, storage, metrics, and telemetry;
+- `kansoku-server`: the HTTP server and PostgreSQL migration executable;
+- `kansoku-client`: the buffered Haskell producer and typed metrics client.
 
-## MVP Scope
-
-The first version should include:
-
-1. HTTP event ingestion
-2. batch ingestion
-3. browser SDK
-4. backend/server SDK
-5. raw ClickHouse event table
-6. identity events
-7. page views
-8. sessions
-9. UTM attribution
-10. product events
-11. materialized views for daily metrics
-12. semantic metrics layer
-13. typed query API
-14. simple dashboard integration
+The server process contains the collector, writer, and query surface. PostgreSQL and ClickHouse
+remain external durable services. A browser SDK, React SDK, and dashboard UI have not shipped;
+browser and non-Haskell producers currently use HTTP directly.
 
 ## Later Scope
 
 Possible future additions:
 
-* experimentation support
-* feature flag exposure tracking
+* browser and React SDKs
+* dashboard UI and deployment/container examples
+* implemented acquisition, organization, and custom metric routes
+* statistical significance and sample-adequacy policy for experiments
 * anomaly detection
 * automated analytics summaries
 * natural-language metric queries
-* retention cohorts
+* lifetime-first-seen and richer retention cohorts
 * path analysis
 * session replay metadata
-* OpenTelemetry bridge
+* OpenTelemetry event bridge (trace export already exists)
 * integration-event bridge
 * data quality checks
 * privacy controls
@@ -532,4 +493,3 @@ Kansoku should be:
 * generic enough to open source
 
 Kansoku observes the system without becoming part of the business domain. It provides a unified observation layer for user behavior, application behavior, and business events while remaining independent of any specific product or workflow.
-

@@ -40,8 +40,11 @@ This section must always reflect the actual current state of the work.
   and current dependency documentation located through Mori.
 - [x] (2026-07-20 14:21Z) Created this ExecPlan and recorded the documentation structure,
   corrections, validation criteria, and implementation decisions.
-- [ ] Milestone 1: add the user-documentation index and the end-to-end adoption guides.
-- [ ] Milestone 2: correct stale root/product documentation and the invalid Haskell example.
+- [x] (2026-07-20 14:32Z) Milestone 1: added the user-documentation index and six end-to-end
+  guides covering local startup, HTTP ingestion, metrics, the Haskell SDK, configuration, and
+  operations.
+- [x] (2026-07-20 14:32Z) Milestone 2: corrected the stale root README and product-vision status,
+  and repaired the checked-in Haskell example so it emits the required `userId` property.
 - [ ] Milestone 3: validate generated artifacts, examples, links, formatting, build, and tests;
   then complete this plan's evidence and retrospective.
 
@@ -63,6 +66,11 @@ implementation. Provide concise evidence.
 - PostgreSQL no longer needs the upstream PGMQ extension. Kansoku's explicit `kansoku-migrate`
   plan installs the vendored PGMQ schema through `pgmq-migration`, then installs the
   application-owned `kansoku.api_keys` table. Normal server startup only provisions the queue.
+- The migration CLI exposes more read-only inspection commands than the older user prose named.
+  Evidence: `kansoku-migrate --help` lists `plan`, `status`, `verify`, `list`, and `check`, while
+  mutating commands are separated under Execution and Authoring.
+- The identity-retention runbook's ClickHouse version statement is still current. Evidence:
+  `nix develop -c clickhouse-client --version` reports `26.5.1.882`.
 
 
 ## Decision Log
