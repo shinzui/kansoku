@@ -44,6 +44,11 @@ schema migration.
 Both commands are safe to repeat after a successful run. Do not use `just ch-reset` for ordinary
 startup: it is a destructive development command that drops all ClickHouse analytics data.
 
+This is the fresh-install path. If a reused checkout already has a PGMQ schema from a Kansoku
+version that predates the current pg-migrate ledger, preserve that database and follow the
+[legacy migration note](operations.md#legacy-postgresql-installations) instead of retrying or
+dropping it.
+
 ## 3. Issue credentials
 
 Create a browser/backend write key and a service token for the same account:

@@ -32,6 +32,21 @@ test migrations against a restored copy before a production rollout.
 `just ch-reset` drops the entire `analytics` database and replays every ClickHouse migration. It
 is development-only and destroys all analytics data.
 
+### Legacy PostgreSQL installations
+
+The standard `up` path is for a fresh database or one already tracked by the current pg-migrate
+ledger. A database containing a PGMQ schema installed by an older Kansoku/`pgmq-migration`
+release but no current ledger is not auto-classified. `up` refuses to claim that history and can
+fail when the baseline encounters an existing PGMQ object. This is intentional evidence
+protection, not an idempotent success.
+
+Do not drop, edit, or repeatedly replay that database. Preserve it, inspect both the old
+`public.schema_migrations` history and current pg-migrate status, and plan an explicit history
+import or a data cutover using the pinned `pgmq-migration` package's schema-migration guidance.
+Kansoku's CLI does not currently automate that legacy import. A development database with no
+valuable data may instead be replaced deliberately after confirming its exact path and backup
+requirements.
+
 ## Credentials and accounts
 
 Issue credentials only after the PostgreSQL plan is applied:

@@ -45,8 +45,12 @@ This section must always reflect the actual current state of the work.
   operations.
 - [x] (2026-07-20 14:32Z) Milestone 2: corrected the stale root README and product-vision status,
   and repaired the checked-in Haskell example so it emits the required `userId` property.
-- [ ] Milestone 3: validate generated artifacts, examples, links, formatting, build, and tests;
-  then complete this plan's evidence and retrospective.
+- [x] (2026-07-20 14:44Z) Milestone 3: validated generated artifacts, formatting, 62 local
+  Markdown links, seven JSON examples, the SDK example build, the fresh migration path, the live
+  HTTP adoption flow, 133 core examples, and 13 client examples including the live integration.
+- [x] (2026-07-20 14:44Z) Completed the ADR distillation pass; this documentation structure and
+  the discovered legacy-ledger warning do not change Kansoku's durable architecture, so no ADR
+  was added or revised.
 
 
 ## Surprises & Discoveries
@@ -71,6 +75,15 @@ implementation. Provide concise evidence.
   mutating commands are separated under Execution and Authoring.
 - The identity-retention runbook's ClickHouse version statement is still current. Evidence:
   `nix develop -c clickhouse-client --version` reports `26.5.1.882`.
+- The checkout's existing local `kansoku` database contains a PGMQ schema that predates the
+  current pg-migrate history. Evidence: `just migrate` refused to replay the baseline with
+  PostgreSQL error `42710 type "message_record" already exists`. The database was preserved;
+  a separate temporary database applied all three migrations, and its second `up` reported every
+  migration `already_applied`.
+- The guide's accepted-event-to-query delay cannot be asserted only from configuration; it must
+  be observed with the running writer. Evidence: the end-to-end test received HTTP 202, then
+  `/metrics/events` returned the dated point for the authenticated test account while `/ready`
+  reported all four checks healthy.
 
 
 ## Decision Log
@@ -104,6 +117,12 @@ Record every decision made while working on the plan.
   Rationale: An adoption guide must not point to an executable example that the current schema
   rejects.
   Date: 2026-07-20
+- Decision: Document current PostgreSQL migration commands as a fresh/current-ledger path and add
+  an explicit legacy-installation warning.
+  Rationale: pg-migrate correctly refuses to infer old PGMQ history. Calling `up` idempotent
+  without that qualification would encourage operators to replay or drop a database whose
+  provenance has not been verified.
+  Date: 2026-07-20
 
 
 ## Outcomes & Retrospective
@@ -113,7 +132,27 @@ Compare the result against the original purpose. Before marking the plan complet
 distill durable project context from the Decision Log, Surprises & Discoveries, and
 this section into docs/adr/. Keep task-local execution details here.
 
-(To be filled during and after implementation.)
+Kansoku now has one adopter-oriented entry point and six task guides spanning installation
+through production operations. The root README reports the current product rather than the
+pre-hardening MVP: it includes mandatory authentication, separate database migrations,
+multi-signal identity, schema versions, property/revenue metrics, experiment analytics, and
+operational telemetry; it also names the three stub metric routes honestly. The product spec is
+retained as vision with an explicit current-contract boundary. The checked-in Haskell example now
+conforms to the published `user_registered` schema and has a smaller direct dependency set.
+
+Validation went beyond prose inspection. Generated OpenAPI and event catalogs remained clean;
+all local Markdown targets resolved; JSON examples parsed; the Haskell example compiled; a fresh
+PostgreSQL database applied and reapplied the documented migration plan; the live server returned
+healthy readiness, accepted the documented page view, exposed it through an account-scoped
+metric, and served the expected eight-event catalog and eighteen-path OpenAPI document. With
+ClickHouse running, all 133 core examples passed, and all 13 client examples passed with the live
+integration enabled.
+
+No requested adoption surface remains undocumented. Browser/React SDKs, container distribution,
+and a dashboard remain product gaps, but the docs now state those gaps rather than implying that
+they ship. The only operational caveat found was an older local PGMQ installation without current
+ledger provenance; the operations guide now stops users from treating that as a normal fresh
+install. No architecture decision changed, so no ADR promotion was necessary.
 
 
 ## Context and Orientation
@@ -198,12 +237,39 @@ cabal test all
 Expected result: every command exits zero and both generated checks leave
 `docs/api/openapi.json` and `docs/contracts/events.json` unchanged.
 
+Final evidence on 2026-07-20:
+
+```text
+just openapi-check: passed; generated artifact unchanged
+just contracts-check: passed; generated artifact unchanged
+cabal build kansoku-client:exe:kansoku-client-example: passed
+cabal test all with ClickHouse running: kansoku-core 133 examples, 0 failures;
+  kansoku-client 13 examples, 0 failures, 1 pending without live-server variables
+cabal test kansoku-client:test:kansoku-client-test with KANSOKU_SERVER_URL and
+  KANSOKU_API_KEY: passed, including the live integration
+```
+
+The fresh-install and live HTTP proof used an isolated PostgreSQL database and port 18080. The
+temporary database was removed after validation; the repository's older local `kansoku` database
+was not dropped or imported. The observed API evidence was:
+
+```text
+PostgreSQL up #1: pgmq/0001, pgmq/0002, kansoku/0001 applied_now
+PostgreSQL up #2: all three already_applied
+GET /health: OK
+GET /ready: ready; writer_alive, pgmq_reachable, queue_depth, writer_flush_stale all true
+POST /v1/events: {"accepted":1,"eventId":"docs-e2e-page-view-20260720-long"}
+GET /metrics/events: one 2026-07-20 point with value 1 for the isolated account
+GET /v1/schemas: catalogVersion 1, 8 events
+GET /openapi.json: OpenAPI 3.1.0, 18 paths
+```
+
 Check local Markdown links using a repository-scoped script that extracts relative link targets,
 removes optional fragments, resolves them against the source document, and reports only missing
 paths. The expected transcript is:
 
 ```text
-checked Markdown links: no missing local targets
+checked 62 local Markdown links: no missing targets
 ```
 
 Inspect the final diff and worktree:
@@ -215,6 +281,9 @@ git status --short
 
 Expected result: `git diff --check` is silent; status lists only this plan, the user-documentation
 changes, and the corrected client example.
+
+Final formatting/example evidence was `nix fmt` with zero changed files, seven parsed JSON
+examples, and a silent `git diff --check`.
 
 
 ## Validation and Acceptance
@@ -271,3 +340,7 @@ the PostgreSQL extension and is composed into a `pg-migrate` plan. The registere
 `shinzui/shibuya` source defines the supervised batch-processing role. Kansoku's own migration,
 queue, writer, and server modules remain the final authority for how those libraries are used in
 this application.
+
+Revision note (2026-07-20): implemented and completed the documentation refresh. The completed
+plan incorporates the fresh-install migration evidence, legacy-ledger caveat, live HTTP proof,
+test results, and ADR distillation outcome discovered during validation.
