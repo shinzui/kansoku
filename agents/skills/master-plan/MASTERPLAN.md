@@ -25,13 +25,22 @@ Every child ExecPlan must be independently implementable. A contributor should b
 
 ## Relationship to ADRs
 
-Architecture Decision Records (ADRs) live in `docs/adr/`. ADRs are durable project memory: architectural decisions, rejected alternatives, cross-cutting constraints, and lessons that remain useful after one plan is complete.
+Architecture Decision Records (ADRs) are durable project memory: architectural decisions, rejected alternatives, cross-cutting constraints, and lessons that remain useful after one plan is complete. The shared operational contract is in `agents/skills/exec-plan/ADR.md`.
 
-A MasterPlan is active coordination memory. It should include enough ADR context to explain why the initiative is decomposed and coordinated the way it is, but durable project judgment belongs in ADRs. During MasterPlan creation, inspect `docs/adr/` when it exists, scan filenames and headings, and read only ADRs relevant to the initiative. Do not bulk-load unrelated ADRs. Summarize relevant ADRs by repository-relative path, or state that no relevant ADR exists.
+A MasterPlan is active coordination memory. It should include enough ADR context to explain why the initiative is decomposed and coordinated the way it is, but durable project judgment belongs in ADRs. During MasterPlan creation, follow the shared ADR guide, scan local filenames and headings, search Mori when cross-repository decisions may apply, and read only relevant records. Summarize local ADRs by repository-relative path and cross-repository ADRs by Mori's exact project-and-bundle-scoped handle, or state that no relevant ADR exists.
 
-MasterPlans should identify cross-plan decisions that deserve ADR records: architecture boundaries, decomposition rationale that will matter later, shared interface ownership, durable integration constraints, and deliberate exclusions. During implementation and update, revise or create ADRs whenever those durable decisions change.
+MasterPlans should identify cross-plan decisions that deserve ADR records: architecture boundaries, decomposition rationale that will matter later, shared interface ownership, durable integration constraints, and deliberate exclusions. During implementation and update, revise or create ADRs whenever those durable decisions change. When the repository has a profile-governed ADR bundle, preserve or allocate its stable handle and run strict profile enforcement through the shared guide.
 
 At completion, distill durable context from the MasterPlan and child ExecPlans. Review Decision Logs, Surprises & Discoveries, and Outcomes & Retrospectives, then promote project-level decisions, constraints, gotchas, and architectural lessons into `docs/adr/`. Leave task-local execution notes and transient coordination details in the plans.
+
+
+## Provenance
+
+Every MasterPlan and every child ExecPlan should record who wrote it and who has looked at it since, using the same frontmatter contract as ExecPlans (see `agents/skills/exec-plan/PLANS.md`): an optional `provenance` key holding a single `created_by` record, an append-only `revisions` list, and an append-only `reviews` list. Entries are written by `agents/skills/exec-plan/record-provenance.ts`, never by hand, so that reviews by several models accumulate instead of overwriting one another.
+
+A MasterPlan's provenance is coordination provenance: it says which model produced the decomposition. Each child plan carries its own, which matters most when child plans are drafted in parallel by different agents — the model that drafted a child plan is the one recorded in that child's `created_by`, not the model coordinating the initiative.
+
+Provenance is optional and its absence carries no meaning. Documents created before provenance existed have no `provenance` block, and that is not a defect to repair. Never backfill a `created_by` record for work you did not do.
 
 
 ## Decomposition Principles

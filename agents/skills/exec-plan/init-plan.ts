@@ -2,6 +2,7 @@
 import { parseArgs } from "node:util";
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { modelHelp, modelOptions, resolveModel } from "./provenance-model.ts";
 
 const USAGE = `Usage: bun init-plan.ts --title "<title>" [options]
 
@@ -12,6 +13,7 @@ Options:
   --title <text>          (required) Human-readable plan title.
   --intention <id>        Intention ID to record in frontmatter.
   --master-plan <path>    Path to the parent MasterPlan, recorded in frontmatter.
+${modelHelp}
   --dir <path>            Directory to write into. Defaults to docs/plans.
   -h, --help              Show this message.
 
@@ -33,6 +35,7 @@ const { values } = (() => {
         title: { type: "string" },
         intention: { type: "string" },
         "master-plan": { type: "string" },
+        ...modelOptions,
         dir: { type: "string", default: "docs/plans" },
         help: { type: "boolean", short: "h" },
       },
@@ -55,6 +58,14 @@ if (!title || !title.trim()) {
   console.error(USAGE);
   die("--title is required");
 }
+
+const identity = (() => {
+  try {
+    return resolveModel(values);
+  } catch (e) {
+    die((e as Error).message);
+  }
+})();
 
 const dir = values.dir!;
 
@@ -99,6 +110,12 @@ fm.push(`kind: exec-plan`);
 fm.push(`created_at: ${createdAt}`);
 if (values.intention) fm.push(`intention: ${yamlString(values.intention)}`);
 if (values["master-plan"]) fm.push(`master_plan: ${yamlString(values["master-plan"])}`);
+fm.push("provenance:");
+fm.push("  created_by:");
+fm.push(`    model: ${yamlString(identity.model)}`);
+if (identity.harness) fm.push(`    harness: ${yamlString(identity.harness)}`);
+fm.push(`    at: ${createdAt}`);
+if (identity.note) fm.push(`    note: ${yamlString(identity.note)}`);
 fm.push("---");
 fm.push("");
 fm.push("");
@@ -157,9 +174,10 @@ this section into docs/adr/. Keep task-local execution details here.
 Describe the current state relevant to this task as if the reader knows nothing. Name the
 key files and modules by full path. Define any non-obvious term you will use. Do not refer
 to prior plans unless they are checked into the repository, in which case reference them by
-path. If docs/adr/ exists, scan filenames and headings, read only ADRs relevant to this
-work, and summarize the relevant ADR context here with repository-relative links. If no
-relevant ADR exists, say so.
+path. Follow the skill's ADR.md workflow: scan local filenames and headings, read only ADRs
+relevant to this work, and summarize them here with repository-relative links. Cite a
+cross-repository ADR only with the exact canonical handle returned by Mori. If no relevant
+ADR exists, say so.
 
 
 ## Plan of Work

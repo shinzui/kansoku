@@ -2,6 +2,7 @@
 import { parseArgs } from "node:util";
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { modelHelp, modelOptions, resolveModel } from "../exec-plan/provenance-model.ts";
 
 const USAGE = `Usage: bun init-masterplan.ts --title "<title>" [options]
 
@@ -11,6 +12,7 @@ skeleton, then prints the created file path to stdout.
 Options:
   --title <text>          (required) Human-readable initiative title.
   --intention <id>        Intention ID to record in frontmatter.
+${modelHelp}
   --dir <path>            Directory to write into. Defaults to docs/masterplans.
   -h, --help              Show this message.
 
@@ -31,6 +33,7 @@ const { values } = (() => {
       options: {
         title: { type: "string" },
         intention: { type: "string" },
+        ...modelOptions,
         dir: { type: "string", default: "docs/masterplans" },
         help: { type: "boolean", short: "h" },
       },
@@ -53,6 +56,14 @@ if (!title || !title.trim()) {
   console.error(USAGE);
   die("--title is required");
 }
+
+const identity = (() => {
+  try {
+    return resolveModel(values);
+  } catch (e) {
+    die((e as Error).message);
+  }
+})();
 
 const dir = values.dir!;
 
@@ -96,6 +107,12 @@ fm.push(`title: ${yamlString(title)}`);
 fm.push(`kind: master-plan`);
 fm.push(`created_at: ${createdAt}`);
 if (values.intention) fm.push(`intention: ${yamlString(values.intention)}`);
+fm.push("provenance:");
+fm.push("  created_by:");
+fm.push(`    model: ${yamlString(identity.model)}`);
+if (identity.harness) fm.push(`    harness: ${yamlString(identity.harness)}`);
+fm.push(`    at: ${createdAt}`);
+if (identity.note) fm.push(`    note: ${yamlString(identity.note)}`);
 fm.push("---");
 fm.push("");
 fm.push("");
@@ -119,9 +136,10 @@ boundary: what is included and what is explicitly excluded.
 Explain how and why the initiative was decomposed into these specific work streams.
 Describe the principles that guided the decomposition (functional concerns, dependency
 minimization, independent verifiability). State alternatives considered and why they
-were rejected. If docs/adr/ exists, scan filenames and headings, read only ADRs relevant
-to this initiative, and cite the relevant ADRs here by repository-relative path. If no
-relevant ADR exists, say so.
+were rejected. Follow the exec-plan skill's ADR.md workflow: scan local filenames and
+headings, read only ADRs relevant to this initiative, and cite them by repository-relative
+path. Cite a cross-repository ADR only with the exact canonical handle returned by Mori.
+If no relevant ADR exists, say so.
 
 
 ## Exec-Plan Registry
