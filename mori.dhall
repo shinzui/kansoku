@@ -1,6 +1,6 @@
 let Schema =
-      https://raw.githubusercontent.com/shinzui/mori-schema/06588f0a31e97784398f1260bc88321684219908/package.dhall
-        sha256:4f9f90bd930eb8d27e8bce70e504d7d366bc302d58a139c9b6874b8c51c952e4
+      https://raw.githubusercontent.com/shinzui/mori-schema/3522f4a51181d73c9c90fc27a7c0838bd29ae95f/package.dhall
+        sha256:dcb19e2312e790bad14e622cc98a1281cd2298c5b564a2f0d0534d3c718d8803
 
 in  Schema.Project::{
     , project = Schema.ProjectIdentity::{
@@ -61,5 +61,14 @@ in  Schema.Project::{
       , "shinzui/servant-openapi-hs"
       , "shinzui/shibuya"
       , "shinzui/shibuya-pgmq-adapter"
+      ]
+    , okfBundles =
+      [ Schema.OkfBundle::{
+        , name = "adrs"
+        , path = "docs/adr"
+        , profile = Some "docs/adr/profile.dhall"
+        , okfVersion = "0.1"
+        , description = Some "Durable architecture decisions"
+        }
       ]
     }

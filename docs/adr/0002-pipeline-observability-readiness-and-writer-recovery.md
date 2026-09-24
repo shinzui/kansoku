@@ -1,7 +1,18 @@
+---
+type: Architecture Decision Record
+title: Pipeline observability, readiness, and writer recovery
+description: Add OpenTelemetry tracing, Prometheus pipeline metrics, ordered readiness checks, and logical writer-connection recovery for the PGMQ-to-ClickHouse pipeline.
+timestamp: 2026-07-19T00:00:00Z
+generated:
+  by: human:kansoku-maintainers
+  at: 2026-07-19T00:00:00Z
+docId: ADR-2
+status: Accepted
+date: 2026-07-19
+---
+
 # ADR 0002: Pipeline observability, readiness, and writer recovery
 
-- Status: Accepted
-- Date: 2026-07-19
 - Deciders: Kansoku maintainers
 
 ## Context

@@ -1,7 +1,18 @@
+---
+type: Architecture Decision Record
+title: API-key authentication and account-scoped analytics
+description: Require write-key or service-token bearer authentication on ingest and metrics routes, scoped to an account, via SHA-256-hashed credentials.
+timestamp: 2026-07-19T00:00:00Z
+generated:
+  by: human:kansoku-maintainers
+  at: 2026-07-19T00:00:00Z
+docId: ADR-3
+status: Accepted
+date: 2026-07-19
+---
+
 # ADR 0003: API-key authentication and account-scoped analytics
 
-- Status: Accepted
-- Date: 2026-07-19
 - Deciders: Kansoku maintainers
 
 ## Context

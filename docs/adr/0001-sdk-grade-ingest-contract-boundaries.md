@@ -1,7 +1,18 @@
+---
+type: Architecture Decision Record
+title: SDK-grade ingest contract boundaries
+description: Accept syntactically valid ingest batches partially, cap request size and count, and scope CORS to /v1/* so SDKs get stable retry semantics.
+timestamp: 2026-07-19T00:00:00Z
+generated:
+  by: human:kansoku-maintainers
+  at: 2026-07-19T00:00:00Z
+docId: ADR-1
+status: Accepted
+date: 2026-07-19
+---
+
 # ADR 0001: SDK-grade ingest contract boundaries
 
-- Status: Accepted
-- Date: 2026-07-19
 - Deciders: Kansoku maintainers
 
 ## Context

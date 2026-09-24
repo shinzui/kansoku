@@ -1,7 +1,18 @@
+---
+type: Architecture Decision Record
+title: Evidence-based multi-signal identity resolution
+description: Resolve identity at query time from evidence-based multi-signal identifier bindings instead of a latest-wins cookie-to-user map.
+timestamp: 2026-07-19T00:00:00Z
+generated:
+  by: human:kansoku-maintainers
+  at: 2026-07-19T00:00:00Z
+docId: ADR-5
+status: Accepted
+date: 2026-07-19
+---
+
 # ADR 0005: Evidence-based multi-signal identity resolution
 
-- Status: Accepted
-- Date: 2026-07-19
 - Deciders: Kansoku maintainers
 
 ## Context

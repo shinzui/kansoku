@@ -1,0 +1,18 @@
+---
+okf_version: "0.2"
+---
+
+# Files
+
+- [profile.dhall](profile.dhall)
+
+# Architecture Decision Record
+
+- [SDK-grade ingest contract boundaries](0001-sdk-grade-ingest-contract-boundaries.md) - Accept syntactically valid ingest batches partially, cap request size and count, and scope CORS to /v1/* so SDKs get stable retry semantics.
+- [Pipeline observability, readiness, and writer recovery](0002-pipeline-observability-readiness-and-writer-recovery.md) - Add OpenTelemetry tracing, Prometheus pipeline metrics, ordered readiness checks, and logical writer-connection recovery for the PGMQ-to-ClickHouse pipeline.
+- [API-key authentication and account-scoped analytics](0003-api-key-authentication-and-account-scoped-analytics.md) - Require write-key or service-token bearer authentication on ingest and metrics routes, scoped to an account, via SHA-256-hashed credentials.
+- [Queryable event properties and identity-resolved projection](0004-queryable-event-properties-and-identity-resolved-projection.md) - Store event properties as native ClickHouse JSON and expose them for metric grouping only after registry declaration.
+- [Evidence-based multi-signal identity resolution](0005-evidence-based-multi-signal-identity-resolution.md) - Resolve identity at query time from evidence-based multi-signal identifier bindings instead of a latest-wins cookie-to-user map.
+- [Exposure-based experiment analytics](0006-exposure-based-experiment-analytics.md) - Define exposure-based experiment analytics using an approximate daily rollup for exposure counts and exact query-time resolution for conversion and funnels.
+- [Versioned event schema governance and publication](0007-versioned-event-schema-governance-and-publication.md) - Govern event schemas as immutable, contiguous versions authored in the Haskell registry, with accepted events recording the schema version they matched.
+

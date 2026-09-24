@@ -35,6 +35,10 @@ contracts-check:
     cabal run kansoku-contracts
     git diff --exit-code docs/contracts/events.json
 
+# Enforce the shared architecture-decision profile and log freshness for docs/adr.
+adr-check:
+    okf validate docs/adr --profile docs/adr/profile.dhall --profile-enforce --log-enforce
+
 # Apply unapplied ClickHouse migrations in filename order, recording each in
 # analytics.schema_migrations. Migration files are immutable once applied.
 ch-migrate:

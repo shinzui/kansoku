@@ -1,7 +1,18 @@
+---
+type: Architecture Decision Record
+title: Exposure-based experiment analytics
+description: Define exposure-based experiment analytics using an approximate daily rollup for exposure counts and exact query-time resolution for conversion and funnels.
+timestamp: 2026-07-19T00:00:00Z
+generated:
+  by: human:kansoku-maintainers
+  at: 2026-07-19T00:00:00Z
+docId: ADR-6
+status: Accepted
+date: 2026-07-19
+---
+
 # ADR 0006: Exposure-based experiment analytics
 
-- Status: Accepted
-- Date: 2026-07-19
 - Deciders: Kansoku maintainers
 
 ## Context

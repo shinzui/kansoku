@@ -1,7 +1,18 @@
+---
+type: Architecture Decision Record
+title: Versioned event schema governance and publication
+description: Govern event schemas as immutable, contiguous versions authored in the Haskell registry, with accepted events recording the schema version they matched.
+timestamp: 2026-07-19T00:00:00Z
+generated:
+  by: human:kansoku-maintainers
+  at: 2026-07-19T00:00:00Z
+docId: ADR-7
+status: Accepted
+date: 2026-07-19
+---
+
 # ADR 0007: Versioned event schema governance and publication
 
-- Status: Accepted
-- Date: 2026-07-19
 - Deciders: Kansoku maintainers
 
 ## Context

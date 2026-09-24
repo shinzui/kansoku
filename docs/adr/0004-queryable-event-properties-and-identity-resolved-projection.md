@@ -1,7 +1,18 @@
+---
+type: Architecture Decision Record
+title: Queryable event properties and identity-resolved projection
+description: Store event properties as native ClickHouse JSON and expose them for metric grouping only after registry declaration.
+timestamp: 2026-07-19T00:00:00Z
+generated:
+  by: human:kansoku-maintainers
+  at: 2026-07-19T00:00:00Z
+docId: ADR-4
+status: Accepted
+date: 2026-07-19
+---
+
 # ADR 0004: Queryable event properties and identity-resolved projection
 
-- Status: Accepted
-- Date: 2026-07-19
 - Deciders: Kansoku maintainers
 
 ## Context
