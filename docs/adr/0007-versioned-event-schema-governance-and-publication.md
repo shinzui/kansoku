@@ -2,7 +2,7 @@
 type: Architecture Decision Record
 title: Versioned event schema governance and publication
 description: Govern event schemas as immutable, contiguous versions authored in the Haskell registry, with accepted events recording the schema version they matched.
-timestamp: 2026-07-19T00:00:00Z
+timestamp: 2026-10-15T16:24:04Z
 generated:
   by: human:kansoku-maintainers
   at: 2026-07-19T00:00:00Z
@@ -82,3 +82,16 @@ Every released change consumes a version and duplicates the full property list, 
 intentional clarity. Removing support for an old version requires an explicit future policy;
 this ADR does not authorize deletion. The in-source registry still requires a Kansoku code
 change, and property metrics do not yet distinguish multiple schema versions of one event.
+
+## Initial SDK lifecycle schemas
+
+The registry declares alias v1 with nonempty previousId/newId matching top-level anonymousId
+and userId. Alias binds an anonymous identifier to a user. Group v1 requires nonempty
+top-level organizationId and stamps organization context. Page-leave v1 requires nonnegative
+numeric durationMs and is a lifecycle event. Helpers reserve alias identity properties against
+custom-property overrides. These declarations create new event names without mutating the
+earlier eight version-1 schemas.
+
+Catalog version 2 adds optional string minLength and numeric minimum constraints. Pattern
+continues to mean a regular expression, rather than being overloaded with numeric predicates.
+The generated contract and OpenAPI documents move with this document-shape change.

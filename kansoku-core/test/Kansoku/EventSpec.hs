@@ -48,6 +48,23 @@ spec = describe "Kansoku.Event" $ do
       let pinned = expectedSample & #schemaVersion ?~ 1
       decode (encode pinned) `shouldBe` Just pinned
 
+  describe "governed SDK events" $ do
+    let at = read "2026-10-15 12:00:00 UTC"
+        validAlias = aliasEvent (EventId "alias") Web at at (Just (AnonymousId "anon")) (Just (UserId "user")) mempty
+    it "fills and reserves alias properties from top-level identifiers" $ do
+      validateEvent validAlias `shouldBe` Right validAlias
+      validateEvent (validAlias & #properties .~ KeyMap.fromList [("previousId", "wrong"), ("newId", "user")]) `shouldSatisfy` isLeft
+      validateEvent (aliasEvent (EventId "alias") Web at at (Just (AnonymousId "")) (Just (UserId "user")) mempty) `shouldSatisfy` isLeft
+    it "requires organization context for group" $ do
+      validateEvent (groupEvent (EventId "group") Web at at Nothing Nothing mempty) `shouldSatisfy` isLeft
+      let validGroup = groupEvent (EventId "group") Web at at Nothing (Just (OrganizationId "org")) mempty
+      validateEvent validGroup `shouldBe` Right validGroup
+    it "requires nonnegative numeric page duration" $ do
+      let page value = baseEvent (EventId "leave") (EventName "page_leave") Web at at & #properties .~ KeyMap.singleton "durationMs" value
+      validateEvent (page (Aeson.Number 0)) `shouldBe` Right (page (Aeson.Number 0))
+      validateEvent (page (Aeson.Number (-1))) `shouldSatisfy` isLeft
+      validateEvent (page (Aeson.String "100")) `shouldSatisfy` isLeft
+
   describe "schema registry" $ do
     it "finds seeded versions and reports them in ascending order" $ do
       lookupSchemaVersion (EventName "page_view") 1 defaultRegistry `shouldSatisfy` isJust
@@ -201,6 +218,7 @@ expectedSample =
       sourceService = Just "marketing-site",
       occurredAt = read "2026-07-01 12:00:00 UTC",
       receivedAt = read "2026-07-01 12:00:01 UTC",
+      sentAt = Nothing,
       anonymousId = Just (AnonymousId "anon_abc123"),
       userId = Just (UserId "user_42"),
       identifiers = Nothing,

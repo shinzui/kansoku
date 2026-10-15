@@ -13,6 +13,7 @@ import urllib.error
 import urllib.request
 import uuid
 
+from ingest_acceptance import verify_ingest
 from isolated_clickhouse import isolated_clickhouse, apply_migrations, free_port
 from test_support import binary, execute, hspec, probes
 
@@ -212,7 +213,7 @@ def main():
                     seed(env)
                     env.update(KANSOKU_QUEUE_NAME='acceptance_events', KANSOKU_WRITER_MAX_LATENCY_MS='100',
                                KANSOKU_QUEUE_POLL_INTERVAL_SEC='1', KANSOKU_INGEST_MAX_BODY_BYTES='4096',
-                               KANSOKU_CORS_ORIGINS='https://allowed.example', OTEL_TRACES_EXPORTER='console',
+                               KANSOKU_CORS_ORIGINS='https://allowed.example', KANSOKU_INGEST_QUARANTINE='true', OTEL_TRACES_EXPORTER='console',
                                OTEL_METRICS_EXPORTER='none', OTEL_BSP_SCHEDULE_DELAY='100', OTEL_TRACES_SAMPLER='always_on')
                     credentials = {}
                     for name, kind, account in [('service_token', 'service', 'mp4_metrics'), ('write_token', 'write', 'mp4_metrics'),
@@ -244,6 +245,7 @@ def main():
                             if not mode:
                                 hurl(['health.hurl', 'openapi.hurl', 'schemas.hurl', 'metrics.hurl'], env, 'hurl-safe', variables)
                                 hurl(['ingest.hurl', 'perimeter/perimeter.hurl'], env, 'hurl-stateful', variables)
+                                verify_ingest(base, credentials['client_token'], env)
                                 live = dict(settings, KANSOKU_SERVER_URL=base, KANSOKU_API_KEY=credentials['client_token'])
                                 hspec([binary('kansoku-client:test:kansoku-client-test')], env=live, log=ROOT / 'client-tests.log')
                             for path in ('/health', '/ready', '/health/live', '/health/ready'):

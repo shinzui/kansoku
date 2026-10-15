@@ -2,7 +2,7 @@
 type: Architecture Decision Record
 title: SDK-grade ingest contract boundaries
 description: Accept syntactically valid ingest batches partially, cap request size and count, and scope CORS to /v1/* so SDKs get stable retry semantics.
-timestamp: 2026-10-15T05:24:16Z
+timestamp: 2026-10-15T16:24:04Z
 generated:
   by: human:kansoku-maintainers
   at: 2026-07-19T00:00:00Z
@@ -86,3 +86,24 @@ this ADR together.
 
 The coordinated problem migration is recorded in [ADR-8](0008-rfc9457-problem-details-and-generated-client-media.md).
 It changes error media and fields while preserving partial 202 batches, permanent 413s and CORS ordering.
+
+## Ingest normalization and diagnostic ownership
+
+Before validation, the authenticated account and server receive time override client values.
+Past occurrences remain unchanged. Future events with `sentAt >= occurredAt` preserve client
+elapsed time by storing `receivedAt - (sentAt - occurredAt)`. Otherwise offsets within a
+nonnegative configurable tolerance (default one day) clamp to server time; zero disables
+clamping. Larger offsets fail validation. The resulting occurrence and receive timestamps
+must be in `[1970-01-01, 2100-01-01)` UTC. This conservative range avoids the native driver's
+unsigned negative-epoch representation and fits the deployed timestamp/partition types; native
+boundary roundtrips protect it. Send timestamps are consumed before queue serialization.
+
+The HTTP request representation preserves the original event object independently of its
+parsed, normalized queue record. Optional quarantine stores only declared-schema rejections,
+with authenticated account, fixed reason codes and transport. It never stores request
+credentials or a transport envelope. One separate 250 ms operation bounds all diagnostic
+writes for a request; diagnostic failure cannot undo accepted queue work, and asynchronous
+cancellation escapes. Payloads larger than the configured byte cap become an empty object
+with truncation/size metadata. The supervised cleanup runs at startup and hourly, enforcing
+14-day default retention and a 10000-row default per-account cap, including after capture is
+disabled. Failed cleanup retries each minute; expiry is eventual, not a hard deadline.

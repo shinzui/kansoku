@@ -71,7 +71,7 @@ data KansokuResult a
   | KansokuNotFound !ProblemDetails
   | KansokuTooLarge !ProblemDetails
   | KansokuUnavailable !ProblemDetails
-  deriving stock (Generic, Eq, Show)
+  deriving stock (Generic, Eq, Show, Functor)
 
 type OkResponses (desc :: Symbol) a =
   '[ RespondAs JSON 200 desc a,

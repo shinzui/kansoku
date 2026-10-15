@@ -45,6 +45,11 @@ exit brings down the server rather than leaving a write-only or read-only partia
 | `KANSOKU_CORS_ORIGINS` | unset / `*` | Allow all browser origins. Otherwise, a comma-separated exact origin allowlist. |
 | `KANSOKU_INGEST_MAX_BODY_BYTES` | `5242880` | Positive maximum request body size; default is 5 MiB. |
 | `KANSOKU_INGEST_MAX_BATCH_LENGTH` | `500` | Positive maximum events in one parsed batch. |
+| `KANSOKU_INGEST_FUTURE_TOLERANCE_SEC` | `86400` | Nonnegative future offset clamped when no usable `sentAt` exists; zero disables clamping. |
+| `KANSOKU_INGEST_QUARANTINE` | `false` | Enable best-effort capture of declared-schema rejections. |
+| `KANSOKU_INGEST_QUARANTINE_RETENTION_DAYS` | `14` | Positive diagnostic retention in days. |
+| `KANSOKU_INGEST_QUARANTINE_MAX_ROWS` | `10000` | Positive per-account row cap, enforced by hourly cleanup. |
+| `KANSOKU_INGEST_QUARANTINE_MAX_PAYLOAD_BYTES` | `16384` | Payload cap of at least 2 bytes; oversized payloads become `{}` with truncation and byte-count metadata. |
 
 For production browser ingestion, set exact scheme/host/port origins, for example:
 

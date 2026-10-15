@@ -49,6 +49,11 @@ data Config = Config
     corsAllowedOrigins :: !(Maybe [Text]),
     ingestMaxBodyBytes :: !Int,
     ingestMaxBatchLength :: !Int,
+    ingestFutureToleranceSec :: !Int,
+    ingestQuarantine :: !Bool,
+    quarantineRetentionDays :: !Int,
+    quarantineMaxRows :: !Int,
+    quarantineMaxPayloadBytes :: !Int,
     queuePollIntervalSec :: !Int,
     internalMetricsEnabled :: !Bool,
     readyMaxQueueDepth :: !Int64,
@@ -81,6 +86,11 @@ loadConfig = do
   corsOrigins <- lookupEnv "KANSOKU_CORS_ORIGINS"
   ingestBodyBytes <- lookupEnv "KANSOKU_INGEST_MAX_BODY_BYTES"
   ingestBatchLength <- lookupEnv "KANSOKU_INGEST_MAX_BATCH_LENGTH"
+  quarantineEnabled <- lookupEnv "KANSOKU_INGEST_QUARANTINE"
+  quarantineRetention <- lookupEnv "KANSOKU_INGEST_QUARANTINE_RETENTION_DAYS"
+  quarantineRows <- lookupEnv "KANSOKU_INGEST_QUARANTINE_MAX_ROWS"
+  quarantineBytes <- lookupEnv "KANSOKU_INGEST_QUARANTINE_MAX_PAYLOAD_BYTES"
+  futureTolerance <- lookupEnv "KANSOKU_INGEST_FUTURE_TOLERANCE_SEC"
   queuePollInterval <- lookupEnv "KANSOKU_QUEUE_POLL_INTERVAL_SEC"
   metricsEnabled <- lookupEnv "KANSOKU_INTERNAL_METRICS_ENABLED"
   maxQueueDepth <- lookupEnv "KANSOKU_READY_MAX_QUEUE_DEPTH"
@@ -96,6 +106,12 @@ loadConfig = do
     queryPoolSize <- parsePositiveInt "KANSOKU_CH_QUERY_POOL_SIZE" 4 chQueryPoolSize
     maxBodyBytes <- parsePositiveInt "KANSOKU_INGEST_MAX_BODY_BYTES" defaultIngestMaxBodyBytes ingestBodyBytes
     maxBatchLength <- parsePositiveInt "KANSOKU_INGEST_MAX_BATCH_LENGTH" defaultIngestMaxBatchLength ingestBatchLength
+    enableQuarantine <- parseBool "KANSOKU_INGEST_QUARANTINE" False quarantineEnabled
+    retentionDays <- parsePositiveInt "KANSOKU_INGEST_QUARANTINE_RETENTION_DAYS" 14 quarantineRetention
+    maxRows <- parsePositiveInt "KANSOKU_INGEST_QUARANTINE_MAX_ROWS" 10000 quarantineRows
+    maxPayloadBytes <- parsePositiveInt "KANSOKU_INGEST_QUARANTINE_MAX_PAYLOAD_BYTES" 16384 quarantineBytes
+    unless (maxPayloadBytes >= 2) (Left (ConfigError "KANSOKU_INGEST_QUARANTINE_MAX_PAYLOAD_BYTES: must be at least 2"))
+    futureToleranceSec <- parseNonNegativeInt "KANSOKU_INGEST_FUTURE_TOLERANCE_SEC" 86400 futureTolerance
     pollInterval <- parsePositiveInt "KANSOKU_QUEUE_POLL_INTERVAL_SEC" 15 queuePollInterval
     enableMetrics <- parseBool "KANSOKU_INTERNAL_METRICS_ENABLED" True metricsEnabled
     readyQueueDepth <- parseNonNegativeInt64 "KANSOKU_READY_MAX_QUEUE_DEPTH" 100000 maxQueueDepth
@@ -119,6 +135,11 @@ loadConfig = do
           corsAllowedOrigins = parseCorsOrigins corsOrigins,
           ingestMaxBodyBytes = maxBodyBytes,
           ingestMaxBatchLength = maxBatchLength,
+          ingestQuarantine = enableQuarantine,
+          quarantineRetentionDays = retentionDays,
+          quarantineMaxRows = maxRows,
+          quarantineMaxPayloadBytes = maxPayloadBytes,
+          ingestFutureToleranceSec = futureToleranceSec,
           queuePollIntervalSec = pollInterval,
           internalMetricsEnabled = enableMetrics,
           readyMaxQueueDepth = readyQueueDepth,
@@ -183,6 +204,13 @@ parseInt64 name _ (Just raw) =
 parseNonNegativeInt64 :: Text -> Int64 -> Maybe String -> Either ConfigError Int64
 parseNonNegativeInt64 name def raw = do
   value <- parseInt64 name def raw
+  if value >= 0
+    then Right value
+    else Left (ConfigError (name <> ": must be at least 0"))
+
+parseNonNegativeInt :: Text -> Int -> Maybe String -> Either ConfigError Int
+parseNonNegativeInt name def raw = do
+  value <- parseInt name def raw
   if value >= 0
     then Right value
     else Left (ConfigError (name <> ": must be at least 0"))

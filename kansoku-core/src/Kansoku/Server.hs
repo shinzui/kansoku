@@ -45,6 +45,7 @@ import Kansoku.Health (probeApplication)
 import Kansoku.Ingest.Handler (ingestServer)
 import Kansoku.Logging (Log, logError, logInfo, runLogStderr)
 import Kansoku.Metrics.Handler (metricsServer)
+import Kansoku.Observability (PipelineMetrics)
 import Kansoku.Prelude
 import Kansoku.Readiness (ReadyCheckFailure (..), checkName)
 import Network.HTTP.Types (status200, status404, status413, status500, status503, statusCode)
@@ -89,23 +90,23 @@ healthApp req respond =
     _ ->
       respond (responseLBS status404 [(hContentType, "text/plain")] "Not Found")
 
-kansokuServer :: Int -> Pool.Pool -> QueueName -> QueryPool -> KansokuAPI (AsServerT Handler)
-kansokuServer maxBatchLength pool queueName queryPool =
+kansokuServer :: Config -> PipelineMetrics -> Pool.Pool -> QueueName -> QueryPool -> KansokuAPI (AsServerT Handler)
+kansokuServer config pipelineMetrics pool queueName queryPool =
   KansokuAPI
-    { ingest = ingestServer maxBatchLength pool queueName,
+    { ingest = ingestServer config pipelineMetrics pool queueName,
       metrics = metricsServer queryPool,
       schemas = pure (schemaCatalog defaultRegistry)
     }
 
-kansokuApp :: Config -> ReadyProbe -> Pool.Pool -> QueueName -> QueryPool -> IO Application
-kansokuApp config probe pool queueName queryPool = do
+kansokuApp :: PipelineMetrics -> Config -> ReadyProbe -> Pool.Pool -> QueueName -> QueryPool -> IO Application
+kansokuApp pipelineMetrics config probe pool queueName queryPool = do
   (liveCheck, readyCheck) <- newProbeChecks probe
-  pure (kansokuAppWithChecks liveCheck readyCheck config probe pool queueName queryPool)
+  pure (kansokuAppWithChecks liveCheck readyCheck pipelineMetrics config probe pool queueName queryPool)
 
 -- | Production assembly with independently injectable checks. The conformance kit
 -- uses this same builder; analytics dependencies stay unevaluated for probes.
-kansokuAppWithChecks :: ProbeCheck -> ProbeCheck -> Config -> ReadyProbe -> Pool.Pool -> QueueName -> QueryPool -> Application
-kansokuAppWithChecks liveCheck readyCheck config probe pool queueName queryPool =
+kansokuAppWithChecks :: ProbeCheck -> ProbeCheck -> PipelineMetrics -> Config -> ReadyProbe -> Pool.Pool -> QueueName -> QueryPool -> Application
+kansokuAppWithChecks liveCheck readyCheck pipelineMetrics config probe pool queueName queryPool =
   operational liveCheck readyCheck $
     waiWrapper
       probe
@@ -123,7 +124,7 @@ kansokuAppWithChecks liveCheck readyCheck config probe pool queueName queryPool 
                             :. metricsAuthHandler pool
                             :. EmptyContext
                         )
-                        (kansokuServer (config ^. #ingestMaxBatchLength) pool queueName queryPool)
+                        (kansokuServer config pipelineMetrics pool queueName queryPool)
                     )
               )
           )

@@ -120,7 +120,7 @@ spec = describe "Kansoku analytics route dispatch" $ do
       url <- parseBaseUrl (baseUrl port)
       let client = genericClient @Api.KansokuAPI @ClientM
           credential = mkAuthenticatedRequest @IngestAuth () (const id)
-      result <- runClientM (Ingest.postEvent (Api.ingest client) credential sampleEvent) (mkClientEnv manager url)
+      result <- runClientM (Ingest.postEvent (Api.ingest client) credential (Ingest.ingestEvent sampleEvent)) (mkClientEnv manager url)
       result `shouldBe` Right (Response.KansokuBadRequest problem)
       success <- runClientM (Ingest.postBatch (Api.ingest client) credential []) (mkClientEnv manager url)
       success `shouldBe` Right (Response.KansokuOk Ingest.BatchAck {Ingest.accepted = 2, Ingest.rejected = []})

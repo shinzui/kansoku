@@ -132,6 +132,7 @@ data AnalyticsEvent = AnalyticsEvent
     sourceService :: !(Maybe Text),
     occurredAt :: !UTCTime,
     receivedAt :: !UTCTime,
+    sentAt :: !(Maybe UTCTime),
     anonymousId :: !(Maybe AnonymousId),
     userId :: !(Maybe UserId),
     identifiers :: !(Maybe (Map Text Text)),

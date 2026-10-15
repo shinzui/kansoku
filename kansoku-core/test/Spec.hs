@@ -12,6 +12,8 @@ import Kansoku.HttpIntegrationSpec qualified
 import Kansoku.HttpTelemetrySpec qualified
 import Kansoku.Ingest.HandlerSpec qualified
 import Kansoku.Ingest.QueueSpec qualified
+import Kansoku.Ingest.ServiceSpec qualified
+import Kansoku.Ingest.TimestampSpec qualified
 import Kansoku.LimitsSpec qualified
 import Kansoku.Metrics.HandlerSpec qualified
 import Kansoku.Metrics.LimitsSpec qualified
@@ -50,6 +52,8 @@ normalTests = hspec $ do
   Kansoku.HealthSpec.spec
   Kansoku.Ingest.HandlerSpec.spec
   Kansoku.Ingest.QueueSpec.spec
+  Kansoku.Ingest.TimestampSpec.spec
+  Kansoku.Ingest.ServiceSpec.spec metrics
   Kansoku.HttpIntegrationSpec.spec
   Kansoku.LimitsSpec.spec
   Kansoku.MigrationsSpec.spec

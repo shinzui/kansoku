@@ -8,7 +8,9 @@ producer repository.
 
 The catalog's top-level `catalogVersion` versions the JSON document shape. Each event's
 `versions` array independently versions that event's properties. A property publishes its
-name, JSON type, requiredness, validation pattern, and description.
+name, JSON type, requiredness, validation pattern, and description. Catalog version 2 also
+publishes optional `minLength` and `minimum` for string and numeric constraints. Patterns
+remain regular expressions; a numeric minimum is never encoded as a pattern.
 
 ## Declaring a new event
 

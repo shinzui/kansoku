@@ -29,6 +29,11 @@ configVariables =
     "KANSOKU_CORS_ORIGINS",
     "KANSOKU_INGEST_MAX_BODY_BYTES",
     "KANSOKU_INGEST_MAX_BATCH_LENGTH",
+    "KANSOKU_INGEST_FUTURE_TOLERANCE_SEC",
+    "KANSOKU_INGEST_QUARANTINE",
+    "KANSOKU_INGEST_QUARANTINE_RETENTION_DAYS",
+    "KANSOKU_INGEST_QUARANTINE_MAX_ROWS",
+    "KANSOKU_INGEST_QUARANTINE_MAX_PAYLOAD_BYTES",
     "KANSOKU_QUEUE_POLL_INTERVAL_SEC",
     "KANSOKU_INTERNAL_METRICS_ENABLED",
     "KANSOKU_READY_MAX_QUEUE_DEPTH",
@@ -141,6 +146,15 @@ spec = around_ preserveConfigEnvironment $ describe "Kansoku.Config.loadConfig" 
     result <- loadConfig
     clearEnv
     result `shouldBe` Left (ConfigError "KANSOKU_INGEST_MAX_BODY_BYTES: must be at least 1")
+
+  it "accepts zero future tolerance and rejects negative tolerance" $ do
+    clearEnv
+    setEnv "KANSOKU_INGEST_FUTURE_TOLERANCE_SEC" "0"
+    zero <- loadConfig
+    (zero <&> (^. #ingestFutureToleranceSec)) `shouldBe` Right 0
+    setEnv "KANSOKU_INGEST_FUTURE_TOLERANCE_SEC" "-1"
+    negative <- loadConfig
+    negative `shouldBe` Left (ConfigError "KANSOKU_INGEST_FUTURE_TOLERANCE_SEC: must be at least 0")
 
   it "rejects a non-positive queue poll interval" $ do
     clearEnv

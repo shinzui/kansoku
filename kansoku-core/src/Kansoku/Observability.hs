@@ -45,7 +45,12 @@ data PipelineMetrics = PipelineMetrics
     writerEventsWrittenTotal :: !Prometheus.Counter,
     writerBatchFlushSeconds :: !Prometheus.Histogram,
     writerInsertFailuresTotal :: !Prometheus.Counter,
-    writerDeadLettersTotal :: !Prometheus.Counter
+    writerDeadLettersTotal :: !Prometheus.Counter,
+    ingestEventsTotal :: !(Prometheus.Vector (Text, Text) Prometheus.Counter),
+    ingestRejectionsTotal :: !(Prometheus.Vector (Text, Text) Prometheus.Counter),
+    ingestTimestampAdjustmentsTotal :: !(Prometheus.Vector (Text, Text) Prometheus.Counter),
+    quarantineFailuresTotal :: !Prometheus.Counter,
+    quarantineCleanupLagSeconds :: !Prometheus.Gauge
   }
   deriving stock (Generic)
 
@@ -84,6 +89,26 @@ registerPipelineMetrics = do
       Prometheus.Info
         "kansoku_writer_dead_letters_total"
         "Messages dead-lettered because their payload could not be decoded."
+  ingestEventsTotal <-
+    Prometheus.register $
+      Prometheus.vector ("outcome", "transport") $
+        Prometheus.counter (Prometheus.Info "kansoku_ingest_events_total" "Validated ingest outcomes; acceptance follows queue commit.")
+  ingestRejectionsTotal <-
+    Prometheus.register $
+      Prometheus.vector ("reason", "transport") $
+        Prometheus.counter (Prometheus.Info "kansoku_ingest_rejections_total" "Distinct validation reasons per rejected event.")
+  ingestTimestampAdjustmentsTotal <-
+    Prometheus.register $
+      Prometheus.vector ("adjustment", "transport") $
+        Prometheus.counter (Prometheus.Info "kansoku_ingest_timestamp_adjustments_total" "Ingest timestamp adjustments.")
+  quarantineFailuresTotal <-
+    Prometheus.register $
+      Prometheus.counter $
+        Prometheus.Info "kansoku_ingest_quarantine_failures_total" "Failed or timed-out quarantine writes and cleanup operations."
+  quarantineCleanupLagSeconds <-
+    Prometheus.register $
+      Prometheus.gauge $
+        Prometheus.Info "kansoku_ingest_quarantine_cleanup_lag_seconds" "Seconds since last successful quarantine cleanup; sampled each minute."
   pure
     PipelineMetrics
       { queueLength,
@@ -92,7 +117,12 @@ registerPipelineMetrics = do
         writerEventsWrittenTotal,
         writerBatchFlushSeconds,
         writerInsertFailuresTotal,
-        writerDeadLettersTotal
+        writerDeadLettersTotal,
+        ingestEventsTotal,
+        ingestRejectionsTotal,
+        ingestTimestampAdjustmentsTotal,
+        quarantineFailuresTotal,
+        quarantineCleanupLagSeconds
       }
 
 newtype WriterHeartbeat = WriterHeartbeat (IORef (Maybe UTCTime))

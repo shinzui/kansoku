@@ -58,7 +58,7 @@ spec = describe "Kansoku.Health production checks" $ do
     now <- getCurrentTime
     let failed = pure (Unhealthy "injected" now)
         unused = error "probe touched analytics dependency"
-        app = kansokuAppWithChecks failed failed cfg unused unused unused unused
+        app = kansokuAppWithChecks failed failed unused cfg unused unused unused unused
     Warp.testWithApplication (pure app) $ \port -> do
       manager <- Http.newManager Http.defaultManagerSettings
       mapM_ (assertFailure manager port) ["/health/live", "/health/ready"]

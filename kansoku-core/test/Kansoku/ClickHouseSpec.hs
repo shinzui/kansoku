@@ -1,6 +1,6 @@
 module Kansoku.ClickHouseSpec (spec) where
 
-import ClickHaskell (ChString, ClickHaskell, ClientError (UnmatchedResult), Column, Float64, Select, UInt8, command, select, unsafeMkSelect)
+import ClickHaskell (ChString, ClickHaskell, ClientError (UnmatchedResult), Column, DateTime64, Float64, Select, UInt8, command, select, unsafeMkSelect)
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (wait, withAsync)
 import Data.Aeson.KeyMap qualified as KeyMap
@@ -26,6 +26,16 @@ spec = describe "Kansoku.ClickHouse" $ do
       rows <- selectEventProjections conn
       rows `shouldContain` [expectedProjection "evt_storage_1" "page_view"]
       rows `shouldContain` [expectedProjectionWithSource "evt_storage_2" "signup" "app"]
+
+  it "round-trips supported timestamp boundaries through the native driver" $
+    withClickHouse $ \conn -> do
+      resetTable conn
+      let lower = read "1970-01-01 00:00:00 UTC"
+          upper = read "2099-12-31 23:59:59.999 UTC"
+          boundary eid time = sampleEvent eid "boundary" & #occurredAt .~ time & #receivedAt .~ time
+      insertEvents conn [boundary "lower" lower, boundary "upper" upper]
+      rows <- concat <$> select timestampSelect conn pure
+      rows `shouldMatchList` [TimestampRow lower, TimestampRow upper]
 
   it "collapses replayed events after a final ReplacingMergeTree merge" $
     withClickHouse $ \conn -> do
@@ -130,3 +140,12 @@ expectedProjectionWithSource eid name sourceName =
       account_id = "acct_storage",
       user_id = "user_storage"
     }
+
+type TimestampColumns = '[Column "occurred_at" (DateTime64 3 "UTC")]
+
+newtype TimestampRow = TimestampRow {occurred_at :: UTCTime}
+  deriving stock (Generic, Eq, Show)
+  deriving anyclass (ClickHaskell TimestampColumns)
+
+timestampSelect :: Select TimestampColumns TimestampRow
+timestampSelect = unsafeMkSelect (const "SELECT occurred_at FROM analytics.events_raw ORDER BY occurred_at")

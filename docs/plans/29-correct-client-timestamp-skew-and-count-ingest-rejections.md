@@ -22,6 +22,11 @@ provenance:
       at: 2026-10-15T15:43:15Z
       mode: "update"
       note: "Reconcile first-release APIs, domain semantics, dependencies and acceptance with the source-validated MP-5 review."
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-10-15T16:12:47Z
+      mode: "implement"
+      note: "Implement timestamp policy, governed SDK events, ingest outcomes and bounded rejection quarantine."
   reviews:
     - model: "gpt-6-astra"
       harness: "codex-cli"
@@ -43,16 +48,32 @@ normalization and validation path shared by single, batch and beacon delivery.
 ## Progress
 
 
-- [ ] M1: Timestamp normalization and supported storage range pass pure and native HTTP tests.
-- [ ] M2: Durable acceptance and rejection counters cover single, batch and all-invalid paths.
-- [ ] M3: Alias, group and page-leave schemas validate real SDK payloads.
-- [ ] M4: Quarantine records useful rejected payloads and automatically expires/caps them.
+- [x] (2026-10-15) M1: Future-only normalization, zero tolerance and the supported UTC range pass pure/native HTTP checks; driver boundary timestamps round-trip exactly to milliseconds.
+- [x] (2026-10-15) M2: Shared single/batch outcome counters follow queue commit; real PostgreSQL failure leaves acceptance unchanged and all-invalid batches acknowledge zero.
+- [x] (2026-10-15) M3: Alias/group/page-leave v1 pass packaged HTTP fixtures; alias helpers reserve IDs and generated catalog v2 publishes typed constraints.
+- [x] (2026-10-15) M4: Original-object quarantine, disablement, failures, payload caps, startup expiry/row caps, blocked-store cancellation and stalled-handshake socket closure pass owned-store checks.
 
 ## Surprises & Discoveries
 
 
 The original timestamp test used `sentAt < occurredAt` but expected subtraction in the opposite
 direction. `Config.hs`'s positive parser also cannot accept the documented disable value zero.
+Native timestamp boundaries round-tripped exactly, but the driver returned blocks in reverse
+order, as previously documented by ADR-9. The boundary test compares the row multiset instead
+of assuming driver block order.
+
+Locked-store acceptance exposed blocking libpq result reads and Hasql cancellation cleanup
+draining results before cancelling. A 250 ms timeout hung for over two minutes until the owned
+fixture was released. Released Hasql 1.10.3.7 and 2.0.1.0 retain this behavior. A vendored
+repair proved the lock/handshake tests, but the final implementation localizes that lifetime
+to the quarantine adapter's dedicated nonblocking libpq connection. No shared pool or Hasql
+source change is needed. It uses released postgresql-libpq 0.11.0.0, verified against Hackage
+and upstream tag v0.11.0.0 at `a9122f8ecc11365a26a5489b3a2e1cdf64c0c661`.
+The intended dependency handle is `mori://haskellari/postgresql-libpq/packages/postgresql-libpq`
+(registry coverage pending). All database values use a JSONB parameter, not SQL interpolation.
+Native lock, cancellation, handshake and socket-close proofs remain required for the localized
+implementation before acceptance.
+
 The handler currently loses original rejected payloads when `partitionBatch` returns only
 `RejectedEvent`; preserve a private rejection record rather than reconstructing payloads.
 
@@ -63,10 +84,36 @@ On 2026-10-15 retain the specified future-only correction policy: never change a
 A usable send timestamp corrects a future event; otherwise the configured tolerance clamps it.
 Quarantine is bounded automatically, not merely by an optional manual purge invocation.
 
+On 2026-10-15 use `[1970-01-01, 2100-01-01)` UTC as the supported range: the vendored
+native DateTime64 codec uses an unsigned representation, and derived timestamp types also
+need a conservative bound. Preserve the exact original JSON object in an HTTP-only wrapper;
+normalized queue records consume `sentAt`. Catalog v2 publishes numeric minimum/string
+minLength without overloading regular-expression patterns. Quarantine uses one 250 ms
+request budget and supervised startup/hourly cleanup, including when capture is disabled.
+
 ## Outcomes & Retrospective
 
 
-Planning review complete; implementation and native evidence remain outstanding.
+The shared ingest path now corrects future-clock skew before validation, rejects unsupported
+storage dates before queueing, counts committed queue outcomes and fixed rejection reasons,
+and governs the SDK lifecycle events. Opt-in quarantine preserves original event objects,
+including unknown fields, within payload/row/retention bounds. Dedicated nonblocking libpq
+connections make its 250 ms request budget independent of credential/queue pool lifetime.
+The diagnostic cleanup is supervised and catches up on startup; expiry remains eventual.
+
+Acceptance on 2026-10-15: `nix develop -c just check` passed. The packaged
+`nix develop -c just acceptance` run passed 180 core examples, 16 client examples (including
+the configured live case), four probe checks, the additional native recovery/limit checks,
+45 Hurl requests and all three telemetry modes, with no required skips or pending cases.
+The EP-29 HTTP proof verified stored milliseconds, conservative boundaries, schema rejections
+and exact original quarantine objects. Sanitized evidence is under
+`.dev/acceptance/run-t5l2tg2o/sanitized` (private generated evidence, not a committed artifact).
+
+The locked-store test was essential: a plain Haskell timeout around the released driver did
+not enforce the intended deadline. The final small libpq adapter solves that boundary locally;
+no dependency fork remains. ADRs 1, 2 and 7 now retain the durable contracts. EP-30 owns durable
+logical event deduplication, and EP-39 owns execution of these same contracts through beacon.
+
 
 ## Context and Orientation
 
@@ -149,8 +196,10 @@ Future tests use receive time T: occurred/send both T+90 yields T; occurred T+90
 yields T-10; send earlier than occurred falls back to tolerance. A past event remains unchanged.
 Test tolerance zero and extreme normalized dates. Verify stored milliseconds, not just 202.
 Queue failure returns 503 and leaves accepted unchanged; all-invalid batch returns 202 with
-accepted zero. Quarantine tests cover single/batch/beacon, store failure, disabled mode, caps,
-automatic expiry and absence of keys in database payloads/logs. Both SDK alias/group fixtures
+accepted zero. Quarantine tests cover single/batch, store failure, disabled mode, caps,
+automatic expiry and absence of keys in database payloads/logs. EP-39 owns the beacon-route
+execution of these same guarantees once that route exists; requiring it to pass before EP-29
+would contradict EP-39's hard dependency on this child. Both SDK alias/group fixtures
 and page-leave payloads pass the generated catalog. Empty alias IDs and inconsistent top-level
 bindings fail validation before producing identity evidence.
 

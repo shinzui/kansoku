@@ -26,8 +26,13 @@ The machine-readable field reference is the `AnalyticsEvent` schema in
 - `occurredAt` and `receivedAt`: JSON UTC timestamps;
 - `properties` and `context`: JSON objects, including `{}` when empty.
 
-Kansoku replaces `receivedAt` with its clock at ingest. It rejects an `occurredAt` later than
-that server-stamped time. The remaining optional fields describe source service, user and
+Kansoku replaces `receivedAt` with its clock at ingest. Past occurrences remain unchanged.
+For a future occurrence, optional `sentAt` corrects clock skew when `sentAt >= occurredAt`:
+the stored occurrence is `receivedAt - (sentAt - occurredAt)`. Otherwise a future offset up to
+`KANSOKU_INGEST_FUTURE_TOLERANCE_SEC` (86400 seconds by default) is clamped to server time.
+Larger offsets are rejected; zero disables clamping. `sentAt` is consumed at ingest and is not
+stored in the event queue or ClickHouse. Resulting timestamps must be in the conservative UTC
+range `[1970-01-01T00:00:00Z, 2100-01-01T00:00:00Z)`; persistence keeps millisecond precision. The remaining optional fields describe source service, user and
 session identity, URL and campaign attribution, event causation, source-stream position, and
 schema version. Unknown JSON fields are currently ignored, but producers should not rely on
 them being stored.
@@ -72,7 +77,14 @@ Unknown versions and versions outside `1..65535` are rejected.
 
 Undeclared event names are accepted without property-schema checks, provided their optional
 schema version is in range. Declaring an event in Kansoku is the point at which its published
-property types, required fields, and patterns become enforced. See
+property types, required fields, and constraints become enforced. Catalog version 2 publishes
+string `minLength` and numeric `minimum` alongside regular-expression `pattern`.
+
+`alias` v1 requires nonempty `properties.previousId` and `properties.newId` matching top-level
+`anonymousId` and `userId`. It binds an anonymous identifier to a user. `group` v1 requires
+a nonempty top-level `organizationId` and stamps organization context. `page_leave` v1
+requires numeric `properties.durationMs >= 0`; it is a lifecycle event, with the page URL
+at top level. See
 [event schema governance](../event-schema-governance.md) before changing a released schema.
 
 ## Single-event responses

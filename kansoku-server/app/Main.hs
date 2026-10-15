@@ -21,6 +21,7 @@ import Kansoku.ClickHouse
   )
 import Kansoku.Config (loadConfig)
 import Kansoku.Event (AccountId (..))
+import Kansoku.Ingest.Quarantine (runQuarantineCleanup)
 import Kansoku.Ingest.Queue (eventsQueueName, provisionQueue)
 import Kansoku.Observability
   ( lastWriterBeat,
@@ -121,13 +122,14 @@ runServer = do
                                         now
                                 }
                          in do
-                              app <- kansokuApp cfg probe pool queueName queryPool
-                              race_
-                                (wait writerAsync)
-                                ( race_
-                                    (wait pollerAsync)
-                                    (runApp cfg (startServer ((telemetry ^. #httpMiddleware) app)))
-                                )
+                              app <- kansokuApp metrics cfg probe pool queueName queryPool
+                              race_ (runQuarantineCleanup cfg metrics) $
+                                race_
+                                  (wait writerAsync)
+                                  ( race_
+                                      (wait pollerAsync)
+                                      (runApp cfg (startServer ((telemetry ^. #httpMiddleware) app)))
+                                  )
                     )
               )
 

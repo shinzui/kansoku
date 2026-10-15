@@ -21,7 +21,9 @@ data ContractProperty = ContractProperty
     propertyType :: !Text,
     required :: !Bool,
     validationPattern :: !(Maybe Text),
-    description :: !(Maybe Text)
+    description :: !(Maybe Text),
+    minimum :: !(Maybe Int),
+    minLength :: !(Maybe Int)
   }
   deriving stock (Generic, Eq, Show)
 
@@ -50,7 +52,8 @@ data SchemaCatalog = SchemaCatalog
 contractPropertyOptions :: Options
 contractPropertyOptions =
   defaultOptions
-    { fieldLabelModifier = \case
+    { omitNothingFields = True,
+      fieldLabelModifier = \case
         "propertyType" -> "type"
         "validationPattern" -> "pattern"
         field -> field
@@ -74,7 +77,7 @@ propertyTypeText = \case
 schemaCatalog :: EventRegistry -> SchemaCatalog
 schemaCatalog (EventRegistry registry) =
   SchemaCatalog
-    { catalogVersion = 1,
+    { catalogVersion = 2,
       service = "kansoku",
       events =
         Map.fromList
@@ -97,6 +100,8 @@ toContractProperty PropertySpec {name, propertyType, required, validationPattern
     { name = name,
       propertyType = propertyTypeText propertyType,
       required = required,
-      validationPattern = propertyPatternText <$> validationPattern,
-      description = description
+      validationPattern = case validationPattern of Just SqlNamePattern -> Just (propertyPatternText SqlNamePattern); _ -> Nothing,
+      description = description,
+      minimum = case validationPattern of Just NonNegativeNumberPattern -> Just 0; _ -> Nothing,
+      minLength = case validationPattern of Just NonEmptyStringPattern -> Just 1; _ -> Nothing
     }

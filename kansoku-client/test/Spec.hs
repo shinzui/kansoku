@@ -206,6 +206,16 @@ spec = describe "Kansoku.Client" $ do
         other -> expectationFailure (show other)
       readTVarIO attempts `shouldReturn` 1
 
+  it "reserves alias IDs against custom property overrides" $
+    withRecorder (const (pure status202)) $ \port received _ -> do
+      withClient (testConfig port) $ \client -> do
+        alias client "anon" "user" ["previousId" Aeson..= ("spoof" :: Text), "newId" Aeson..= ("spoof" :: Text)]
+        flush client
+      events <- readEvents received
+      case events of
+        [event] -> validateEvent event `shouldBe` Right event
+        other -> expectationFailure (show other)
+
   it "fetches the public schema catalog through the shared route type" $
     Warp.testWithApplication (pure schemaRecorderApp) $ \port ->
       withClient (testConfig port) $ \client ->

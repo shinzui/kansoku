@@ -2,7 +2,7 @@
 type: Architecture Decision Record
 title: Pipeline observability, readiness, and writer recovery
 description: Add OpenTelemetry tracing, Prometheus pipeline metrics, ordered readiness checks, and logical writer-connection recovery for the PGMQ-to-ClickHouse pipeline.
-timestamp: 2026-10-15T05:12:00Z
+timestamp: 2026-10-15T16:45:37Z
 generated:
   by: human:kansoku-maintainers
   at: 2026-07-19T00:00:00Z
@@ -41,7 +41,7 @@ supports collector-free validation, while configured OTLP remains the production
 Its JSON snapshot includes name, trace/span IDs, attributes, events and status so executable
 privacy checks inspect the complete captured span rather than only its name.
 
-Prometheus owns seven Kansoku-specific pipeline instruments: queue length, oldest queued-message
+Prometheus owns seven writer/backlog instruments plus the ingest instruments below: queue length, oldest queued-message
 age, writer batches, successfully written events, batch insert duration, insert failures, and
 decode dead letters. `GET /internal/metrics` is an exact WAI-level operational route on the main
 port. It stays outside Servant/OpenAPI, ingest CORS, and body-size handling, and can be disabled
@@ -164,3 +164,37 @@ change that established delivery policy.
 Changes to operational route placement, readiness semantics, writer connection ownership, or
 trace/metric export boundaries must update the server, conformance and readiness tests, EP-16,
 and this ADR together.
+
+## Ingest outcomes
+
+The same process-owned `PipelineMetrics` instance reaches the shared ingest service.
+`kansoku_ingest_events_total{outcome,transport}` counts acceptance only after queue commit
+and rejection once per event. `kansoku_ingest_rejections_total{reason,transport}` counts each
+distinct constructor-derived reason once per event. Timestamp adjustments use
+`kansoku_ingest_timestamp_adjustments_total{adjustment,transport}` with `skew_corrected` and
+`clamped`. All label vocabularies are fixed; payload, account and credential values never
+become labels. Single and batch routes share this path; beacon integration extends it.
+
+Quarantine failures and cleanup lag have dedicated instruments. Queue depth and oldest age
+remain the backlog signals; accepted and written counters are not an exact equality invariant
+because retries and replay affect writer attempts. Queue failures log a constant diagnostic,
+so statement/parameter dumps cannot expose payloads.
+
+## PostgreSQL diagnostic lifetime
+
+Quarantine owns short-lived dedicated PostgreSQL connections rather than borrowing from the
+credential/queue pool. Its deadline covers connection setup and the database operation. A
+blocked-query regression exposed blocking libpq result reads and Hasql's result-draining
+exception cleanup: timeout and cancellation could hang behind a lock. Released Hasql
+1.10.3.7 and 2.0.1.0 still perform that cleanup. Kansoku therefore owns the small nonblocking
+libpq path in `Kansoku.Ingest.Quarantine`: asynchronous connect/poll, parameterized JSONB
+commands, explicit output flush, IO-manager waits before results, and local socket closure on
+failure or cancellation. This path uses dedicated connections and never changes pool state.
+The credential/queue driver remains the normal released dependency.
+
+The libpq dependency is released postgresql-libpq 0.11.0.0 (upstream v0.11.0.0, commit
+`a9122f8ecc11365a26a5489b3a2e1cdf64c0c661`), verified against Hackage and upstream tags.
+Its intended source handle is `mori://haskellari/postgresql-libpq/packages/postgresql-libpq`;
+Mori registry coverage is pending. The Hasql source is `mori://hasql/hasql/packages/hasql`.
+Owned blocked-query, cancellation, stalled-handshake, socket-close and recovery tests protect
+this lifetime boundary.

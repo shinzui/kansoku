@@ -28,12 +28,14 @@ data PropertyType = PTString | PTNumber | PTBool | PTObject | PTArray | PTAny
   deriving stock (Generic, Eq, Show)
 
 -- | A syntactic constraint applied after a property's JSON type is validated.
-data PropertyPattern = SqlNamePattern
+data PropertyPattern = SqlNamePattern | NonEmptyStringPattern | NonNegativeNumberPattern
   deriving stock (Generic, Eq, Show)
 
 propertyPatternText :: PropertyPattern -> Text
 propertyPatternText = \case
   SqlNamePattern -> "[a-z0-9_.:-]{1,128}"
+  NonEmptyStringPattern -> "nonempty string"
+  NonNegativeNumberPattern -> "number >= 0"
 
 data PropertySpec = PropertySpec
   { name :: !Text,
@@ -98,6 +100,19 @@ defaultRegistry =
     registerSchema
     emptyRegistry
     [ EventSchema
+        (EventName "alias")
+        1
+        "Bind an anonymous identifier to a user; top-level IDs must match. Works with SDK alias helpers."
+        [ PropertySpec "previousId" PTString True (Just NonEmptyStringPattern) (Just "Anonymous identifier; must equal anonymousId."),
+          PropertySpec "newId" PTString True (Just NonEmptyStringPattern) (Just "User identifier; must equal userId.")
+        ],
+      EventSchema (EventName "group") 1 "Stamp organization context; requires a nonempty top-level organizationId." [],
+      EventSchema
+        (EventName "page_leave")
+        1
+        "Page lifecycle event; not engagement. Top-level URL identifies the page."
+        [PropertySpec "durationMs" PTNumber True (Just NonNegativeNumberPattern) (Just "Observed page duration in milliseconds.")],
+      EventSchema
         (EventName "page_view")
         1
         initialSchemaNote

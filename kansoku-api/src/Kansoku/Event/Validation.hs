@@ -2,6 +2,8 @@
 module Kansoku.Event.Validation
   ( ValidationError (..),
     renderValidationError,
+    validationReason,
+    declaredSchemaError,
     validateEvent,
     validateEventWith,
   )
@@ -23,6 +25,7 @@ data ValidationError
   = EmptyEventId
   | EmptyEventName
   | ReceivedBeforeOccurred UTCTime UTCTime
+  | UnsupportedTimestamp Text UTCTime
   | InvalidSchemaVersion Int
   | UnknownSchemaVersion EventName Int [Int]
   | UnknownIdentifierKind Text [Text]
@@ -32,13 +35,14 @@ data ValidationError
   | MissingRequiredProperty EventName Text
   | WrongPropertyType EventName Text PropertyType
   | InvalidPropertyValue EventName Text Text
+  | InvalidIdentityBinding Text
   deriving stock (Generic, Eq, Show)
 
 -- | Validate against an explicit registry. Unknown event names are allowed; the
 -- registry adds stricter property checks for names it knows.
 validateEventWith :: EventRegistry -> AnalyticsEvent -> Either [ValidationError] AnalyticsEvent
 validateEventWith registry event =
-  case structuralErrors <> identifierErrors <> schemaErrors of
+  case structuralErrors <> identifierErrors <> schemaErrors <> identityErrors of
     [] -> Right event
     errs -> Left errs
   where
@@ -47,6 +51,10 @@ validateEventWith registry event =
         <> [EmptyEventName | unEventName ((event ^. #eventName)) == ""]
         <> [ ReceivedBeforeOccurred ((event ^. #occurredAt)) ((event ^. #receivedAt))
            | (event ^. #receivedAt) < (event ^. #occurredAt)
+           ]
+        <> [ UnsupportedTimestamp field value
+           | (field, value) <- [("occurredAt", event ^. #occurredAt), ("receivedAt", event ^. #receivedAt)],
+             value < read "1970-01-01 00:00:00 UTC" || value >= read "2100-01-01 00:00:00 UTC"
            ]
         <> [ InvalidSchemaVersion version
            | Just version <- [event ^. #schemaVersion],
@@ -81,6 +89,17 @@ validateEventWith registry event =
                     Nothing -> [UnknownSchemaVersion ((event ^. #eventName)) requested (knownVersions ((event ^. #eventName)) registry)]
                     Just schema -> concatMap validateProperty ((schema ^. #properties))
 
+    identityErrors = case unEventName (event ^. #eventName) of
+      "alias" ->
+        [ InvalidIdentityBinding field
+        | (field, top) <- [("previousId", unAnonymousId <$> event ^. #anonymousId), ("newId", unUserId <$> event ^. #userId)],
+          case (top, KeyMap.lookup (Key.fromText field) (event ^. #properties)) of
+            (Just value, Just (String property)) -> Text.null value || value /= property
+            _ -> True
+        ]
+      "group" -> [InvalidIdentityBinding "organizationId" | maybe True (Text.null . unOrganizationId) (event ^. #organizationId)]
+      _ -> []
+
     validateProperty :: PropertySpec -> [ValidationError]
     validateProperty spec =
       case KeyMap.lookup (Key.fromText ((spec ^. #name))) ((event ^. #properties)) of
@@ -91,7 +110,7 @@ validateEventWith registry event =
           | not (propertyMatches ((spec ^. #propertyType)) value) ->
               [WrongPropertyType ((event ^. #eventName)) ((spec ^. #name)) ((spec ^. #propertyType))]
           | not (propertyPatternMatches ((spec ^. #validationPattern)) value) ->
-              [InvalidPropertyValue ((event ^. #eventName)) ((spec ^. #name)) sqlNamePatternRule]
+              [InvalidPropertyValue ((event ^. #eventName)) ((spec ^. #name)) ("expected " <> maybe "valid value" propertyPatternText (spec ^. #validationPattern))]
           | otherwise -> []
 
 validateEvent :: AnalyticsEvent -> Either [ValidationError] AnalyticsEvent
@@ -112,6 +131,10 @@ renderValidationError = \case
       <> ") precedes occurredAt ("
       <> renderTimestamp occurred
       <> "); occurredAt is in the future relative to the server clock"
+  InvalidIdentityBinding field ->
+    "invalid top-level identity binding for " <> field
+  UnsupportedTimestamp field _ ->
+    field <> " must be in the supported UTC range [1970-01-01, 2100-01-01)"
   InvalidSchemaVersion version ->
     "schemaVersion "
       <> Text.pack (show version)
@@ -204,11 +227,10 @@ propertyMatches expected value =
 
 propertyPatternMatches :: Maybe PropertyPattern -> Value -> Bool
 propertyPatternMatches Nothing _ = True
+propertyPatternMatches (Just NonEmptyStringPattern) (String value) = not (Text.null value)
+propertyPatternMatches (Just NonNegativeNumberPattern) (Number value) = value >= 0
 propertyPatternMatches (Just SqlNamePattern) (String value) = isSqlSafeName value
-propertyPatternMatches (Just SqlNamePattern) _ = False
-
-sqlNamePatternRule :: Text
-sqlNamePatternRule = "expected " <> propertyPatternText SqlNamePattern
+propertyPatternMatches (Just _) _ = False
 
 -- Keep this predicate aligned with Kansoku.Metrics.Query.Validate.mkSqlName.
 -- It lives in kansoku-api because this package cannot depend on kansoku-core.
@@ -222,3 +244,31 @@ isSqlSafeName value =
       isAsciiLower char
         || isDigit char
         || char `elem` ("_.:-" :: String)
+
+-- | Finite reason codes: never derive telemetry labels from payload values.
+validationReason :: ValidationError -> Text
+validationReason = \case
+  EmptyEventId -> "empty_event_id"
+  EmptyEventName -> "empty_event_name"
+  ReceivedBeforeOccurred {} -> "future_timestamp"
+  UnsupportedTimestamp {} -> "unsupported_timestamp"
+  InvalidSchemaVersion {} -> "invalid_schema_version"
+  UnknownSchemaVersion {} -> "unknown_schema_version"
+  UnknownIdentifierKind {} -> "unknown_identifier_kind"
+  EmptyIdentifierValue {} -> "empty_identifier_value"
+  IdentifierValueTooLong {} -> "identifier_value_too_long"
+  IdentifierValueBadCharset {} -> "identifier_value_bad_charset"
+  MissingRequiredProperty {} -> "missing_required_property"
+  WrongPropertyType {} -> "wrong_property_type"
+  InvalidPropertyValue {} -> "invalid_property_value"
+  InvalidIdentityBinding {} -> "invalid_identity_binding"
+
+declaredSchemaError :: ValidationError -> Bool
+declaredSchemaError = \case
+  UnknownSchemaVersion {} -> True
+  InvalidSchemaVersion {} -> True
+  MissingRequiredProperty {} -> True
+  WrongPropertyType {} -> True
+  InvalidPropertyValue {} -> True
+  InvalidIdentityBinding {} -> True
+  _ -> False

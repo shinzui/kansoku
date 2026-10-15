@@ -53,6 +53,9 @@
             "minimum": -9223372036854775808,
             "type": "integer"
           },
+          "sentAt": {
+            "$ref": "#/components/schemas/UTCTime"
+          },
           "sessionId": {
             "$ref": "#/components/schemas/SessionId"
           },
@@ -134,6 +137,16 @@
         "properties": {
           "description": {
             "type": "string"
+          },
+          "minLength": {
+            "maximum": 9223372036854775807,
+            "minimum": -9223372036854775808,
+            "type": "integer"
+          },
+          "minimum": {
+            "maximum": 9223372036854775807,
+            "minimum": -9223372036854775808,
+            "type": "integer"
           },
           "name": {
             "type": "string"

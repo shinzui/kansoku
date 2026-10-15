@@ -32,7 +32,7 @@ import Kansoku.Event
     UserId,
     VersionedEventSchema,
   )
-import Kansoku.Ingest.Api (BatchAck, IngestAck, RejectedEvent)
+import Kansoku.Ingest.Api (BatchAck, IngestAck, IngestEvent, RejectedEvent)
 import Kansoku.Metrics.Api (MetricPoint, MetricResult, TimeGrain)
 import Kansoku.Metrics.Limits (maxMetricPoints)
 import Kansoku.Prelude
@@ -58,6 +58,9 @@ instance (HasOpenApi sub) => HasOpenApi (AuthProtect "kansoku-metrics" :> sub) w
 instance O.ToSchema AccountId where
   declareNamedSchema =
     O.genericDeclareNamedSchema textNewtypeOptions
+
+instance O.ToSchema IngestEvent where
+  declareNamedSchema _ = O.declareNamedSchema (Proxy @AnalyticsEvent)
 
 instance O.ToSchema AnalyticsEvent
 

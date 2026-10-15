@@ -47,7 +47,9 @@ library
     Kansoku.Health
     Kansoku.Ingest.Handler
     Kansoku.Ingest.Producer
+    Kansoku.Ingest.Quarantine
     Kansoku.Ingest.Queue
+    Kansoku.Ingest.Timestamp
     Kansoku.Logging
     Kansoku.Metrics.Definition
     Kansoku.Metrics.Handler
@@ -92,6 +94,7 @@ library
     pgmq-effectful,
     pgmq-hasql,
     pgmq-migration,
+    postgresql-libpq >=0.11 && <0.12,
     prometheus-client,
     resource-pool,
     servant,
@@ -128,6 +131,8 @@ test-suite kansoku-core-test
     Kansoku.HttpTelemetrySpec
     Kansoku.Ingest.HandlerSpec
     Kansoku.Ingest.QueueSpec
+    Kansoku.Ingest.ServiceSpec
+    Kansoku.Ingest.TimestampSpec
     Kansoku.LimitsSpec
     Kansoku.Metrics.HandlerSpec
     Kansoku.Metrics.LimitsSpec
@@ -135,6 +140,7 @@ test-suite kansoku-core-test
     Kansoku.MigrationsSpec
     Kansoku.ObservabilitySpec
     Kansoku.OpenApiSpec
+    Kansoku.PostgresTestSupport
     Kansoku.ProblemSpec
     Kansoku.Query.ValidateSpec
     Kansoku.QueryIntegrationSpec

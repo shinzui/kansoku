@@ -26,6 +26,11 @@ provenance:
       at: 2026-10-15T16:02:57Z
       mode: "update"
       note: "Select released Shibuya and PGMQ upgrades for fresh deployment without rollout coordination."
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-10-15T16:12:47Z
+      mode: "implement"
+      note: "Begin EP-29 shared ingest normalization, outcomes and bounded quarantine."
   reviews:
     - model: "gpt-6-astra"
       harness: "codex-cli"
@@ -105,7 +110,7 @@ is `mori://shinzui/kansoku-ts/okf/adrs/concepts/ADR-2`.
 
 | # | Title | Path | Hard Deps | Soft Deps | Status |
 |---|-------|------|-----------|-----------|--------|
-| 29 | Correct client timestamp skew and count ingest rejections | docs/plans/29-correct-client-timestamp-skew-and-count-ingest-rejections.md | None | None | Not Started |
+| 29 | Correct client timestamp skew and count ingest rejections | docs/plans/29-correct-client-timestamp-skew-and-count-ingest-rejections.md | None | None | Complete |
 | 30 | Pipeline backpressure and storage-outage resilience | docs/plans/30-pipeline-backpressure-and-storage-outage-resilience.md | EP-29 | None | Not Started |
 | 31 | Metric property filters and dual grouping | docs/plans/31-metric-property-filters-and-dual-grouping.md | EP-26; EP-30; EP-32 | None | Not Started |
 | 32 | Time-aware identity bindings and bounded resolution cost | docs/plans/32-time-aware-identity-bindings-and-bounded-resolution-cost.md | EP-29; EP-30 | None | Not Started |
@@ -120,7 +125,7 @@ is `mori://shinzui/kansoku-ts/okf/adrs/concepts/ADR-2`.
 
 EP-26 is `docs/plans/26-bound-analytics-query-inputs-and-result-cardinality.md`, Complete in
 `docs/masterplans/4-align-kansoku-with-relevant-haskell-jitsurei-practices.md` on review day.
-Statuses remain Not Started: this change reviews and revises plans, not implementation.
+EP-29 is Complete with owned native/HTTP acceptance; the other children retain their reviewed prerequisites.
 
 ## Dependency Graph
 
@@ -139,6 +144,12 @@ against obsolete metric semantics. Whole-child hard dependencies cannot be weake
 
 ## Integration Points
 
+
+**PostgreSQL diagnostic lifetime — EP-29 owner.** A locked quarantine write exposed
+unbounded Hasql/libpq result handling. EP-29 owns a small dedicated nonblocking libpq adapter
+for diagnostics, with lock/cancellation/handshake proofs. It does not change the credential or
+queue pool's dependency source. Later children consume this quarantine boundary without
+borrowing diagnostic connections from the ingest pool.
 
 **Queue-processing dependencies — EP-30 M0 owner.** Adopt shibuya-core 0.10.0.1,
 shibuya-pgmq-adapter 0.16.1.0 and pgmq-core/hasql/effectful/migration 0.6.1.1 together in
@@ -201,9 +212,10 @@ the migration ledger; unsafe append-backfills are replaced with verified rebuild
 ## Progress
 
 
-Twelve server children remain Not Started. EP-26 is already Complete, so it is not a blocker.
-EP-29 is ready; subsequent work follows the corrected dependencies. This planning update changes
-initial API/domain semantics deliberately because no production consumer exists.
+EP-29 is Complete; eleven children remain Not Started. Its packaged acceptance passed 180 core
+examples, 16 client examples, four probes, extra native recovery/limit checks and 45 Hurl
+requests with no required skips or pending cases. EP-30 is the next eligible child and owns
+the released queue baseline, event uniqueness, outage recovery, admission and capacity proofs.
 
 Final integration gate (owned by EP-38): packaged server acceptance, generated API/catalog,
 SDK contracts and required live/browser cases all agree with zero feature skips. Performance,
@@ -211,6 +223,12 @@ geo dependency compatibility and external GrowthBook consumer acceptance remain 
 proofs, not results established by this document review.
 
 ## Surprises & Discoveries
+
+EP-29 implementation on 2026-10-15 established the supported UTC range
+`[1970-01-01, 2100-01-01)` and catalog v2 constraint fields (`minimum`, `minLength`). Later
+children consume these contracts. Beacon-specific executions of the shared ingest/quarantine
+acceptance belong to EP-39, when its route exists; this resolves the impossible requirement
+to test that route before its hard prerequisite EP-29 completes.
 
 
 Review on 2026-10-15 found the following material defects, ordered by impact. Each is corrected

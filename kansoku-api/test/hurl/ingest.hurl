@@ -52,3 +52,49 @@ HTTP 200
 header "Content-Type" contains "application/json"
 jsonpath "$.metric" == "events"
 jsonpath "$.points" count == 0
+
+# SDK alias/group envelopes and the page-exit lifecycle schema share validation.
+POST {{base_url}}/v1/batch
+Authorization: Bearer {{write_ingest_token}}
+Content-Type: application/json
+[
+  {
+    "eventId": "{{event_id}}_alias",
+    "eventName": "alias",
+    "schemaVersion": 1,
+    "source": "web",
+    "occurredAt": "2026-07-01T12:00:00Z",
+    "receivedAt": "2026-07-01T12:00:00Z",
+    "anonymousId": "sdk-anonymous",
+    "userId": "sdk-user",
+    "properties": {"previousId": "sdk-anonymous", "newId": "sdk-user"},
+    "context": {}
+  },
+  {
+    "eventId": "{{event_id}}_group",
+    "eventName": "group",
+    "schemaVersion": 1,
+    "source": "web",
+    "occurredAt": "2026-07-01T12:00:00Z",
+    "receivedAt": "2026-07-01T12:00:00Z",
+    "userId": "sdk-user",
+    "organizationId": "sdk-organization",
+    "properties": {},
+    "context": {}
+  },
+  {
+    "eventId": "{{event_id}}_leave",
+    "eventName": "page_leave",
+    "schemaVersion": 1,
+    "source": "web",
+    "occurredAt": "2026-07-01T12:00:00Z",
+    "receivedAt": "2026-07-01T12:00:00Z",
+    "url": "https://example.test/page",
+    "properties": {"durationMs": 1250},
+    "context": {}
+  }
+]
+HTTP 202
+[Asserts]
+jsonpath "$.accepted" == 3
+jsonpath "$.rejected" count == 0

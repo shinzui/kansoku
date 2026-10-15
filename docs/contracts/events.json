@@ -1,6 +1,30 @@
 {
-  "catalogVersion": 1,
+  "catalogVersion": 2,
   "events": {
+    "alias": {
+      "versions": [
+        {
+          "note": "Bind an anonymous identifier to a user; top-level IDs must match. Works with SDK alias helpers.",
+          "properties": [
+            {
+              "description": "Anonymous identifier; must equal anonymousId.",
+              "minLength": 1,
+              "name": "previousId",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "description": "User identifier; must equal userId.",
+              "minLength": 1,
+              "name": "newId",
+              "required": true,
+              "type": "string"
+            }
+          ],
+          "version": 1
+        }
+      ]
+    },
     "experiment_viewed": {
       "versions": [
         {
@@ -33,11 +57,19 @@
             {
               "description": "Stable identifier of the feature used.",
               "name": "feature",
-              "pattern": null,
               "required": true,
               "type": "string"
             }
           ],
+          "version": 1
+        }
+      ]
+    },
+    "group": {
+      "versions": [
+        {
+          "note": "Stamp organization context; requires a nonempty top-level organizationId.",
+          "properties": [],
           "version": 1
         }
       ]
@@ -51,6 +83,23 @@
         }
       ]
     },
+    "page_leave": {
+      "versions": [
+        {
+          "note": "Page lifecycle event; not engagement. Top-level URL identifies the page.",
+          "properties": [
+            {
+              "description": "Observed page duration in milliseconds.",
+              "minimum": 0,
+              "name": "durationMs",
+              "required": true,
+              "type": "number"
+            }
+          ],
+          "version": 1
+        }
+      ]
+    },
     "page_view": {
       "versions": [
         {
@@ -59,7 +108,6 @@
             {
               "description": "Full URL of the viewed page.",
               "name": "url",
-              "pattern": null,
               "required": true,
               "type": "string"
             }
@@ -76,14 +124,12 @@
             {
               "description": "Monetary amount of the completed payment, in the account's currency.",
               "name": "amount",
-              "pattern": null,
               "required": true,
               "type": "number"
             },
             {
               "description": "Plan associated with the completed payment.",
               "name": "plan",
-              "pattern": null,
               "required": false,
               "type": "string"
             }
@@ -100,7 +146,6 @@
             {
               "description": "Client-generated session identifier.",
               "name": "sessionId",
-              "pattern": null,
               "required": true,
               "type": "string"
             }
@@ -117,14 +162,12 @@
             {
               "description": "Plan identifier the subscription started on.",
               "name": "plan",
-              "pattern": null,
               "required": true,
               "type": "string"
             },
             {
               "description": "Monetary amount of the subscription, in the account's currency.",
               "name": "amount",
-              "pattern": null,
               "required": false,
               "type": "number"
             }
@@ -141,7 +184,6 @@
             {
               "description": "Identifier of the newly registered user.",
               "name": "userId",
-              "pattern": null,
               "required": true,
               "type": "string"
             }

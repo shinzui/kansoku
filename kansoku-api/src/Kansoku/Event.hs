@@ -15,7 +15,8 @@ module Kansoku.Event
   )
 where
 
-import Data.Aeson (Object)
+import Data.Aeson (Object, Value (String))
+import Data.Aeson.KeyMap qualified as KeyMap
 import Data.Generics.Labels ()
 import Kansoku.Event.Contract
 import Kansoku.Event.Registry
@@ -57,7 +58,12 @@ aliasEvent eid src occ recv anonId usr properties =
     & #userId
     .~ usr
     & #properties
-    .~ properties
+    .~ ( maybe
+           id
+           (KeyMap.insert "previousId" . String . unAnonymousId)
+           anonId
+           (maybe id (KeyMap.insert "newId" . String . unUserId) usr properties)
+       )
 
 groupEvent ::
   EventId ->
@@ -86,6 +92,7 @@ baseEvent eid name src occ recv =
       sourceService = Nothing,
       occurredAt = occ,
       receivedAt = recv,
+      sentAt = Nothing,
       anonymousId = Nothing,
       userId = Nothing,
       identifiers = Nothing,

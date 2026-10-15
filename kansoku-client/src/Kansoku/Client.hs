@@ -211,7 +211,7 @@ alias clientHandle previousId newId pairs =
     (clientHandle ^. #config)
     (emptyIds & #anonymousId ?~ previousId & #userId ?~ newId)
     "alias"
-    (("previousId" Aeson..= previousId) : ("newId" Aeson..= newId) : pairs)
+    (pairs <> ["previousId" Aeson..= previousId, "newId" Aeson..= newId])
     >>= track clientHandle
 
 buildEvent :: ClientConfig -> EventIds -> Text -> [Pair] -> IO AnalyticsEvent
@@ -283,7 +283,7 @@ deliverWithRetry cfg env events =
     go attempt = do
       result <-
         runClientM
-          (Ingest.postBatch ingestClient (kansokuCredential (cfg ^. #credential)) events)
+          (Ingest.postBatch ingestClient (kansokuCredential (cfg ^. #credential)) (Ingest.ingestEvent <$> events))
           env
       case result of
         Right (KansokuOk ack) -> pure (Right ack)

@@ -65,7 +65,7 @@ spec = describe "Kansoku property metrics HTTP integration" $ do
                       clickhouseReachable = pure True,
                       pipelineReady = pure []
                     }
-            app <- kansokuApp appConfig readyProbe pool (Queue.eventsQueueName "ep17_http_unused") queryPool
+            app <- kansokuApp (error "unused ingest metrics") appConfig readyProbe pool (Queue.eventsQueueName "ep17_http_unused") queryPool
             Warp.testWithApplication (pure app) $ \port -> do
               manager <- Http.newManager Http.defaultManagerSettings
 
