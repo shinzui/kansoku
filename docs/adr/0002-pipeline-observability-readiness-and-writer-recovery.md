@@ -2,7 +2,7 @@
 type: Architecture Decision Record
 title: Pipeline observability, readiness, and writer recovery
 description: Add OpenTelemetry tracing, Prometheus pipeline metrics, ordered readiness checks, and logical writer-connection recovery for the PGMQ-to-ClickHouse pipeline.
-timestamp: 2026-10-15T04:32:43Z
+timestamp: 2026-10-15T05:12:00Z
 generated:
   by: human:kansoku-maintainers
   at: 2026-07-19T00:00:00Z
@@ -38,6 +38,8 @@ initialization is opt-in through standard OpenTelemetry exporter variables; with
 development retains the no-op provider. The server owns the provider lifetime and shuts it down
 after writer/HTTP supervision unwinds, flushing buffered spans. A registered `console` exporter
 supports collector-free validation, while configured OTLP remains the production export path.
+Its JSON snapshot includes name, trace/span IDs, attributes, events and status so executable
+privacy checks inspect the complete captured span rather than only its name.
 
 Prometheus owns seven Kansoku-specific pipeline instruments: queue length, oldest queued-message
 age, writer batches, successfully written events, batch insert duration, insert failures, and

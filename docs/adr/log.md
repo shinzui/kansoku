@@ -1,6 +1,8 @@
 # Bundle Update Log
 
 ## 2026-10-15
+* **Update**: Accept executable isolation and cleanup evidence; clarify the existing disallowed-origin CORS boundary.
+* **Update**: Record owned executable acceptance environments and complete console span evidence.
 * **Update**: ADR-9: accept bounded complete aggregate responses with native boundary, numeric ordering, block-order repair and recovery evidence.
 * **Update**: ADR-9: propose bounded complete aggregate answers and the explicit pagination-standard exception.
 * **Update**: ADR-2: accept sanitized HTTP instrumentation, correlated access records and provider flush/shutdown ownership.

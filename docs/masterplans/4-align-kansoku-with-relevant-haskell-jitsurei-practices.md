@@ -105,7 +105,7 @@ silently imported into Kansoku's aggregate API.
 | 25 | HTTP tracing and safe access logs | [EP-25](../plans/25-trace-http-requests-and-emit-safe-correlated-access-logs.md) | EP-24 | EP-23 | Complete |
 | 26 | Bounded analytics queries and results | [EP-26](../plans/26-bound-analytics-query-inputs-and-result-cardinality.md) | EP-23; EP-24 M2 (accepted bounded checks and query-pool recovery) | None | Complete |
 | 27 | Core record and route conventions | [EP-27](../plans/27-enforce-core-record-and-route-construction-conventions.md) | None | EP-23, EP-24, EP-25, EP-26 | Complete |
-| 28 | Isolated Hurl acceptance and CI | [EP-28](../plans/28-gate-service-releases-with-isolated-hurl-acceptance-and-ci.md) | EP-23, EP-24, EP-25, EP-26, EP-27 | None | Not Started |
+| 28 | Isolated Hurl acceptance and CI | [EP-28](../plans/28-gate-service-releases-with-isolated-hurl-acceptance-and-ci.md) | EP-23, EP-24, EP-25, EP-26, EP-27 | None | Complete |
 
 Status values are Not Started, In Progress, Complete, and Cancelled. A hard dependency naming
 a whole child requires Complete status. EP-26's EP-24 M2 dependency requires that milestone's
@@ -173,21 +173,24 @@ ownership if not already covered. Allocate new handles using the profiled OKF wo
 
 ## Progress
 
-EP-23 and EP-24 are Complete, accepted on 2026-10-15. EP-24 passes the production
-probe kit, core suite, strict ADR validation, unchanged public OpenAPI and Nix server
-build. Its required isolated native regression passes four examples with no pending
-cases; stalled operations, cancellation and size-one pool recovery are accepted.
-EP-25 is Complete: six HTTP privacy/context cases pass in each semantic mode, four
-buffered lifecycle subprocesses pass, the full core/probe suites pass, and Cabal/Nix
-server builds and strict ADR validation pass. EP-26 is Complete: native boundary/order/failure checks, existing native query
-fixtures, generated-client tests, published OpenAPI bounds and Cabal/Nix builds pass.
-EP-27 is Complete: every local component builds with fatal omitted fields, the
-manual missing-handler proof fails as intended, and both generated artifacts remain
-byte-for-byte unchanged. EP-28 is the only remaining child, currently Not Started. The final required executable
-and isolated-storage integration gate remains owned by EP-28.
+All six children are Complete, accepted on 2026-10-15. The final isolated packaged
+acceptance and clean rerun pass with core 169, live SDK 15 and probe kit 4 cases,
+no pending required cases, native recovery/cardinality watchdogs, all Hurl families
+and exported privacy in three semantic modes. Deliberate artifact/startup/Hurl failures
+behave as required; owned processes stop and an unrelated listener remains responsive.
+`just check`, Nix server/client builds, local flake checks and strict ADR validation pass.
+The Linux CI workflow is committed for execution on push/pull requests.
 
 
 ## Surprises & Discoveries
+
+EP-28's combined suite exposed two fixture couplings: configuration tests must restore
+private endpoints, and native recovery must compare the starting count rather than
+assume an empty table. Required native/live mode now rejects missing prerequisites.
+The packaged console formatter includes complete captured span fields; privacy checks
+therefore inspect attributes/events/status as well as correlated access records.
+[ADR-10](../adr/0010-owned-executable-acceptance-environments.md) records disposable
+acceptance ownership, required evidence and sanitized CI retention.
 
 EP-23's released OpenAPI cohort builds under both Cabal and Nix. Its typed successes and
 problems decode through real generated clients, while 401/403 auth rejections decode from
@@ -244,5 +247,19 @@ titles. ADR-2 records the planned operational constraints without claiming imple
 
 ## Outcomes & Retrospective
 
-To be filled during implementation and at completion. Completion requires every child and its
-acceptance evidence, followed by ADR distillation across all six Decision Logs.
+The initiative is complete. Public failures and generated clients use one RFC 9457
+contract; shared typed probes and repaired native connection ownership are accepted;
+HTTP tracing and bounded access logs preserve privacy; metric queries return complete
+bounded answers with native ordering; every local component rejects omitted record
+fields; isolated executable acceptance and CI gates enforce these boundaries.
+
+The final distillation reviewed all six children's decisions, discoveries and outcomes.
+ADR-8 owns error/media behavior, ADR-2 owns probes, physical disposal and HTTP telemetry,
+ADR-9 owns complete-or-error aggregate bounds and the explicit pagination exception,
+and ADR-10 owns executable environment/test evidence. ADR-1/ADR-3 preserve ingest/auth
+boundaries and ADR-7 preserves immutable schema publication. Source conventions remain
+in the developer guide because they do not introduce another architecture decision.
+
+Acceptance logs and exact counts live in EP-28. Optional local integration runs are no
+longer mistaken for release evidence: the final private runs contain zero pending cases.
+Hosted Linux CI has been configured but has not been run remotely in this session.

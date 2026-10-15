@@ -212,11 +212,12 @@ spec = describe "Kansoku.Client" $ do
         fetchSchemaCatalog client `shouldReturn` Right (schemaCatalog defaultRegistry)
 
   it "skips the live integration test unless KANSOKU_SERVER_URL is set" $ do
+    required <- lookupEnv "KANSOKU_REQUIRED_INTEGRATION"
     server <- lookupEnv "KANSOKU_SERVER_URL"
     credential <- lookupEnv "KANSOKU_API_KEY"
     case (server, credential) of
-      (Nothing, _) -> pendingWith "KANSOKU_SERVER_URL is not set"
-      (_, Nothing) -> pendingWith "KANSOKU_API_KEY is not set"
+      (Nothing, _) -> if required == Just "1" then expectationFailure "required KANSOKU_SERVER_URL is not set" else pendingWith "KANSOKU_SERVER_URL is not set"
+      (_, Nothing) -> if required == Just "1" then expectationFailure "required KANSOKU_API_KEY is not set" else pendingWith "KANSOKU_API_KEY is not set"
       (Just url, Just apiKey) -> do
         now <- getCurrentTime
         let eventName = "kansoku_client_integration_" <> Text.pack (filter isAlphaNum (formatTime defaultTimeLocale "%FT%T%QZ" now))

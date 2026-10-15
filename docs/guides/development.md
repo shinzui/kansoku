@@ -42,3 +42,17 @@ The baseline conventions are documented at
 `mori://shinzui/haskell-jitsurei/docs/core-record-patterns`,
 `mori://shinzui/haskell-jitsurei/docs/core-custom-prelude`, and
 `mori://shinzui/haskell-jitsurei/docs/api-servant-routes`.
+
+Run `nix develop -c just check` for build-with-tests, source formatting, deterministic tests,
+probe tests, generated OpenAPI/schema drift, OpenAPI 3.1 lint, strict ADR validation and HTTP
+telemetry privacy/lifecycle checks. Deterministic subsets explicitly exclude native/live cases
+and reject zero or pending examples. Regenerate intentionally with `just openapi` and
+`just contracts`; the drift checks preserve the existing artifact bytes even when they fail.
+
+Run `nix develop -c just acceptance` for disposable database and Nix-packaged server acceptance.
+It runs all core tests, the probe kit and live SDK tests with prerequisites required, then Hurl
+resource families, native recovery/cardinality checks and exported telemetry privacy. It owns
+fresh processes and data rather than using development databases. See the
+[HTTP suite guide](../../kansoku-api/test/hurl/README.md) for fixture and private-log handling.
+`just hurl` runs the explicit safe subset against an already running loopback fixture server.
+CI runs both aggregate gates and Nix package/flake checks; it has no publishing step.

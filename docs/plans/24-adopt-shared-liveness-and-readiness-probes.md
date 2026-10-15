@@ -52,6 +52,11 @@ onset, demonstrated against actual application assembly with the library's test 
 
 ## Surprises & Discoveries
 
+EP-28's complete native suite found that the recovery fixture assumed an empty events table,
+while preceding native tests intentionally left twelve rows. Proxy setup now records the real
+initial count and recovery asserts that unchanged count through the same pool. The standalone
+empty-table proof and combined-suite proof therefore test the same lifetime invariant.
+
 Source review found that `withQueryConnection` catches exceptions inside its pool callback,
 so a failed opaque handle is returned for reuse before the exception is rethrown. The pinned
 driver also reconnects during exception cleanup, including timeout interruption. The native proof confirmed these defects and now passes with the minimal vendored

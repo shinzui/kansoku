@@ -57,7 +57,7 @@
               dontCheck (doJailbreak (self.callCabal2nix name (threadUtilsSrc + subdir) { }));
           in
           {
-            ClickHaskell = dontCheck (doJailbreak (self.callCabal2nix "ClickHaskell" "${inputs.self}/vendor/ClickHaskell" { }));
+            ClickHaskell = dontCheck (doJailbreak (self.callCabal2nix "ClickHaskell" (builtins.path { path = inputs.self + "/vendor/ClickHaskell"; name = "ClickHaskell-source"; }) { }));
             unicode-data = dontCheck super.unicode-data;
             warp = disableCabalFlag "x509" super.warp;
             hasql = dontCheck (doJailbreak (self.callHackageDirect
@@ -197,19 +197,30 @@
           };
       };
 
-      kansokuApi = haskellPackages.callCabal2nix "kansoku-api" "${inputs.self}/kansoku-api" { };
-      kansokuCore = pkgs.haskell.lib.dontCheck (haskellPackages.callCabal2nix "kansoku-core" "${inputs.self}/kansoku-core" {
+      # Package subtrees keep docs/harness edits from invalidating the compiled closure.
+      # Hurl is an external executable suite, not part of the API library's Cabal source.
+      kansokuApi = haskellPackages.callCabal2nix "kansoku-api" (builtins.path { path = inputs.self + "/kansoku-api"; name = "kansoku-api-source"; filter = path: _type: builtins.baseNameOf path != "hurl"; }) { };
+      kansokuCore = pkgs.haskell.lib.dontCheck (haskellPackages.callCabal2nix "kansoku-core" (builtins.path { path = inputs.self + "/kansoku-core"; name = "kansoku-core-source"; }) {
         kansoku-api = kansokuApi;
       });
-      kansokuClient = haskellPackages.callCabal2nix "kansoku-client" "${inputs.self}/kansoku-client" {
+      kansokuClient = haskellPackages.callCabal2nix "kansoku-client" (builtins.path { path = inputs.self + "/kansoku-client"; name = "kansoku-client-source"; }) {
         kansoku-api = kansokuApi;
       };
-      kansokuServer = haskellPackages.callCabal2nix "kansoku-server" "${inputs.self}/kansoku-server" {
+      kansokuServer = haskellPackages.callCabal2nix "kansoku-server" (builtins.path { path = inputs.self + "/kansoku-server"; name = "kansoku-server-source"; }) {
         kansoku-api = kansokuApi;
         kansoku-core = kansokuCore;
       };
     in
     {
+      haskellProject.extraDevPackages = [
+        pkgs.hurl
+        pkgs.vacuum-go
+        pkgs.python3
+        (pkgs.writeShellScriptBin "okf" ''
+          # Released mori://shinzui/okf/packages/okf-cli 0.10.0.0.
+          exec nix run github:shinzui/okf/b57510200f949a72d48cb009d932be1d1cc11888 -- "$@"
+        '')
+      ];
       treefmt.settings.global.excludes = [ "vendor/**" ];
       packages = {
         default = kansokuServer;

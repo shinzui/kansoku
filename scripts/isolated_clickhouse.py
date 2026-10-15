@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Own an isolated ClickHouse instance and watchdog the required native cases."""
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 import os
 from pathlib import Path
 import socket
@@ -16,10 +16,11 @@ def free_port():
 
 
 @contextmanager
-def isolated_clickhouse(block_size=65536):
+def isolated_clickhouse(block_size=65536, directory=None):
     tcp, http = free_port(), free_port()
-    with tempfile.TemporaryDirectory(prefix='kansoku-native-') as directory:
+    with (tempfile.TemporaryDirectory(prefix='kansoku-native-') if directory is None else nullcontext(directory)) as directory:
         root = Path(directory)
+        root.mkdir(mode=0o700, parents=True, exist_ok=True)
         config = root / 'config.xml'
         config.write_text(f'''<clickhouse>
 <path>{root}/data/</path><tmp_path>{root}/tmp/</tmp_path>
@@ -36,13 +37,14 @@ def isolated_clickhouse(block_size=65536):
 </clickhouse>''')
         with (root / 'console.log').open('w') as log:
             server = subprocess.Popen(['clickhouse-server', f'--config-file={config}'], cwd=root, stdout=log, stderr=log)
+            (root / 'pid').write_text(str(server.pid))
             try:
                 client = ['clickhouse-client', '--host', '127.0.0.1', '--port', str(tcp)]
                 for _ in range(100):
                     if server.poll() is not None:
                         raise RuntimeError((root / 'console.log').read_text())
-                    ready = subprocess.run(client + ['--query', 'SELECT 1'], capture_output=True)
-                    if ready.returncode == 0:
+                    ready = subprocess.run(client + ['--query', "SELECT value FROM system.server_settings WHERE name = 'path'"], capture_output=True, text=True, timeout=3)
+                    if ready.returncode == 0 and ready.stdout.strip().rstrip('/') == str(root / 'data'):
                         break
                     time.sleep(0.1)
                 else:

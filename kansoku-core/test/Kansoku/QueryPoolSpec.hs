@@ -27,7 +27,8 @@ data Proxy = Proxy
   { proxyPort :: String,
     fault :: IORef Fault,
     active :: IORef Int,
-    accepted :: IORef Int
+    accepted :: IORef Int,
+    expectedEvents :: Integer
   }
 
 spec :: Spec
@@ -106,7 +107,7 @@ recover proxy pool = do
   writeIORef (fault proxy) Pass
   queryReachable pool `shouldReturn` True
   -- Real analytics SELECT, independently of ping and without requiring an events schema.
-  withQueryConnection pool countEvents `shouldReturn` 0
+  (fromIntegral <$> withQueryConnection pool countEvents) `shouldReturn` expectedEvents proxy
   count <- readIORef (active proxy)
   count `shouldSatisfy` (<= 1)
 
@@ -147,8 +148,9 @@ withProxy cfg action = bracket newListener close $ \listener -> do
   mode <- newIORef Pass
   live <- newIORef 0
   total <- newIORef 0
+  baseline <- fromIntegral <$> bracket (openClickHouse cfg) closeConnection countEvents
   workers <- newIORef []
-  let proxy = Proxy (show port) mode live total
+  let proxy = Proxy (show port) mode live total baseline
       bump ref n = atomicModifyIORef' ref (\x -> (x + n, ()))
       serve client =
         bracket (connectUpstream cfg) close $ \upstream ->

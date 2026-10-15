@@ -8,9 +8,13 @@ module Kansoku.Telemetry
 where
 
 import Control.Exception (onException)
+import Data.Aeson qualified as Aeson
 import Data.ByteString qualified as BS
+import Data.IORef (readIORef)
 import Data.Text.Encoding (decodeUtf8With, encodeUtf8)
 import Data.Text.Encoding.Error (lenientDecode)
+import Data.Text.Lazy qualified as LazyText
+import Data.Text.Lazy.Encoding qualified as LazyEncoding
 import Kansoku.Api (kansokuAPI)
 import Kansoku.Health (operationalApi)
 import Kansoku.Prelude
@@ -25,6 +29,7 @@ import OpenTelemetry.Metric.Core qualified as MetricCore
 import OpenTelemetry.Registry qualified as Registry
 import OpenTelemetry.Trace qualified as TraceSdk
 import OpenTelemetry.Trace.Core qualified as OTel
+import OpenTelemetry.Trace.Id qualified as Id
 import System.Environment (lookupEnv)
 
 -- | The tracer and the matching provider shutdown action. Keeping them in one
@@ -54,7 +59,7 @@ makeTelemetry = do
         _registered <-
           Registry.registerSpanExporterFactoryIfAbsent
             "console"
-            (pure (Handle.stdoutExporter' Handle.defaultFormatter))
+            (pure (Handle.stdoutExporter' consoleFormatter))
         TraceSdk.initializeGlobalTracerProvider
   meter <-
     ( if isNothing metricsSelection
@@ -115,3 +120,20 @@ makeHttpMiddlewareWithSink provider sink = do
           openTelemetryServantMiddleware provider kansokuAPI
             . openTelemetryServantMiddleware provider operationalApi
      in instrumentation (\instrumented -> annotations (requestLogger sink app) (restore instrumented)) sanitized respond
+
+-- The default handle formatter prints only names/IDs. Export the complete bounded
+-- snapshot so collector-free acceptance can inspect attributes, events and status.
+consoleFormatter :: OTel.ImmutableSpan -> IO LazyText.Text
+consoleFormatter span' = do
+  hot <- readIORef (OTel.spanHot span')
+  let context = OTel.spanContext span'
+  pure . LazyEncoding.decodeUtf8 . Aeson.encode $
+    Aeson.object
+      [ "kind" Aeson..= ("span" :: Text),
+        "name" Aeson..= OTel.hotName hot,
+        "trace_id" Aeson..= Id.traceIdBaseEncodedText Id.Base16 (OTel.traceId context),
+        "span_id" Aeson..= Id.spanIdBaseEncodedText Id.Base16 (OTel.spanId context),
+        "attributes" Aeson..= show (OTel.hotAttributes hot),
+        "events" Aeson..= show (OTel.hotEvents hot),
+        "status" Aeson..= show (OTel.hotStatus hot)
+      ]

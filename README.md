@@ -149,3 +149,15 @@ billing, email delivery, or CRM state.
 The original [product vision](docs/initial-spec.md) describes longer-term direction. Current
 behavior is defined by the guides, the [OpenAPI document](docs/api/openapi.json), and the
 [event schema catalog](docs/contracts/events.json).
+
+Contributor gates run inside the locked Nix environment:
+
+```bash
+nix develop -c just check
+nix develop -c just acceptance
+```
+
+`check` validates deterministic tests, formatting, generated contracts, OpenAPI and ADRs.
+`acceptance` owns disposable databases and runs native/live tests and Hurl against the
+Nix-packaged executable. See [development](docs/guides/development.md) and the
+[HTTP acceptance suite](kansoku-api/test/hurl/README.md) for fixture and evidence handling.

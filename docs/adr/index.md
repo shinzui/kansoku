@@ -17,4 +17,5 @@ okf_version: "0.2"
 - [Versioned event schema governance and publication](0007-versioned-event-schema-governance-and-publication.md) - Govern event schemas as immutable, contiguous versions authored in the Haskell registry, with accepted events recording the schema version they matched.
 - [RFC 9457 problem details and generated-client media](0008-rfc9457-problem-details-and-generated-client-media.md) - Use one RFC 9457 error shape and explicit per-response media types across typed handlers, authentication, framework failures, and generated clients.
 - [Bounded complete aggregate responses](0009-bounded-complete-aggregate-responses.md) - Bound metric inputs and final aggregate cardinality, returning a complete answer or a permanent problem instead of cursor pages over changing aggregates.
+- [Owned executable acceptance environments](0010-owned-executable-acceptance-environments.md) - Gate service changes with deterministic checks and required integration against the Nix executable in fresh owned database processes.
 

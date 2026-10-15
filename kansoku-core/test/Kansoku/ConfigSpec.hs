@@ -1,41 +1,43 @@
 module Kansoku.ConfigSpec (spec) where
 
+import Control.Exception (bracket)
 import Data.Generics.Labels ()
 import Kansoku.Config (ConfigError (..), loadConfig)
 import Kansoku.Prelude
-import System.Environment (setEnv, unsetEnv)
-import Test.Hspec (Spec, describe, it, shouldBe, shouldSatisfy)
+import System.Environment (lookupEnv, setEnv, unsetEnv)
+import Test.Hspec (Spec, around_, describe, it, shouldBe, shouldSatisfy)
 
 -- | Ensure a clean slate for the variables loadConfig reads.
 clearEnv :: IO ()
-clearEnv =
-  mapM_
-    unsetEnv
-    [ "PG_CONNECTION_STRING",
-      "KANSOKU_CLICKHOUSE_HOST",
-      "KANSOKU_CLICKHOUSE_DATABASE",
-      "KANSOKU_CLICKHOUSE_USER",
-      "KANSOKU_CLICKHOUSE_PASSWORD",
-      "KANSOKU_CH_QUERY_POOL_SIZE",
-      "CLICKHOUSE_TCP_PORT",
-      "CLICKHOUSE_HTTP_PORT",
-      "KANSOKU_QUEUE_NAME",
-      "KANSOKU_WRITER_MAX_BATCH",
-      "KANSOKU_WRITER_MAX_LATENCY_MS",
-      "KANSOKU_WRITER_VT_SEC",
-      "KANSOKU_WRITER_ADAPTER_BATCH",
-      "KANSOKU_CORS_ORIGINS",
-      "KANSOKU_INGEST_MAX_BODY_BYTES",
-      "KANSOKU_INGEST_MAX_BATCH_LENGTH",
-      "KANSOKU_QUEUE_POLL_INTERVAL_SEC",
-      "KANSOKU_INTERNAL_METRICS_ENABLED",
-      "KANSOKU_READY_MAX_QUEUE_DEPTH",
-      "KANSOKU_READY_MAX_FLUSH_AGE_SEC",
-      "KANSOKU_SERVER_PORT"
-    ]
+clearEnv = mapM_ unsetEnv configVariables
+
+configVariables :: [String]
+configVariables =
+  [ "PG_CONNECTION_STRING",
+    "KANSOKU_CLICKHOUSE_HOST",
+    "KANSOKU_CLICKHOUSE_DATABASE",
+    "KANSOKU_CLICKHOUSE_USER",
+    "KANSOKU_CLICKHOUSE_PASSWORD",
+    "KANSOKU_CH_QUERY_POOL_SIZE",
+    "CLICKHOUSE_TCP_PORT",
+    "CLICKHOUSE_HTTP_PORT",
+    "KANSOKU_QUEUE_NAME",
+    "KANSOKU_WRITER_MAX_BATCH",
+    "KANSOKU_WRITER_MAX_LATENCY_MS",
+    "KANSOKU_WRITER_VT_SEC",
+    "KANSOKU_WRITER_ADAPTER_BATCH",
+    "KANSOKU_CORS_ORIGINS",
+    "KANSOKU_INGEST_MAX_BODY_BYTES",
+    "KANSOKU_INGEST_MAX_BATCH_LENGTH",
+    "KANSOKU_QUEUE_POLL_INTERVAL_SEC",
+    "KANSOKU_INTERNAL_METRICS_ENABLED",
+    "KANSOKU_READY_MAX_QUEUE_DEPTH",
+    "KANSOKU_READY_MAX_FLUSH_AGE_SEC",
+    "KANSOKU_SERVER_PORT"
+  ]
 
 spec :: Spec
-spec = describe "Kansoku.Config.loadConfig" $ do
+spec = around_ preserveConfigEnvironment $ describe "Kansoku.Config.loadConfig" $ do
   it "uses defaults when nothing is set" $ do
     clearEnv
     result <- loadConfig
@@ -177,3 +179,12 @@ spec = describe "Kansoku.Config.loadConfig" $ do
   where
     isLeft (Left _) = True
     isLeft _ = False
+
+-- Tests may clear their own configuration but must retain the private endpoints
+-- needed by subsequent required integration cases in the same process.
+preserveConfigEnvironment :: IO () -> IO ()
+preserveConfigEnvironment action = bracket (mapM lookupEnv configVariables) restore (const action)
+  where
+    restore values = mapM_ restoreVariable (zip configVariables values)
+    restoreVariable (name, Nothing) = unsetEnv name
+    restoreVariable (name, Just value) = setEnv name value

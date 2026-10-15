@@ -23,6 +23,11 @@ provenance:
       at: 2026-10-15T03:37:31Z
       mode: "update"
       note: "Cascade native pool-recovery and console-span privacy checks into executable acceptance."
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-10-15T05:00:56Z
+      mode: "implement"
+      note: "Implement resource-family Hurl, owned executable/database acceptance and repository CI gates."
 ---
 
 # Gate service releases with isolated Hurl acceptance and CI
@@ -41,16 +46,48 @@ and processes so it cannot truncate a developer's existing analytics data.
 
 ## Progress
 
-- [ ] M1: A documented resource-family Hurl suite asserts final public and operational HTTP contracts.
-- [ ] M2: A disposable harness starts the packaged executable and both private databases, runs required tests and cleans up reliably.
-- [ ] M3: Repository CI enforces checks and executable acceptance, including failure evidence and generated-contract drift detection.
+- [x] (2026-10-15) M1: A documented resource-family Hurl suite asserts final public and operational HTTP contracts.
+- [x] (2026-10-15) M2: A disposable harness starts the packaged executable and both private databases, runs required tests and cleans up reliably.
+- [x] (2026-10-15) M3: Repository CI enforces checks and executable acceptance, including failure evidence and generated-contract drift detection.
 
 
 ## Surprises & Discoveries
 
-None during implementation yet. Planning established that existing ClickHouse test helpers
-truncate `analytics.events_raw` and mark unavailable databases pending. The new harness must
-therefore own a private ClickHouse process and make required prerequisites fail explicitly.
+The Nix package inputs now copy each package subtree independently; API Hurl files are
+excluded from the compiled library source. Documentation/harness edits therefore do not
+invalidate the server dependency closure during repeated acceptance runs.
+
+Hurl 8 restricts file request bodies to its configured file root. Acceptance explicitly
+sets that root to the owned run directory and passes only the oversized fixture basename;
+no suite needs filesystem-wide read access.
+
+The safe Hurl family passes all 27 requests. The first perimeter run confirmed that
+wai-cors 0.2.7 rejects a blocked origin with 400 HTML before the inner problem boundary,
+rather than serving the schema without CORS headers. The suite now asserts that existing
+middleware contract, while allowed-origin API failures assert problem JSON and readable CORS.
+
+The first combined required run executed all 169 core examples and found three recovery
+assertions assuming zero existing events. EP-24's proxy now snapshots the starting count;
+recovery checks it unchanged. This was fixture coupling, not a production recovery failure.
+
+Configuration tests cleared inherited private database endpoints without restoring them.
+They now bracket each example's environment; required native runs cannot drift to ambient
+ClickHouse after the configuration suite. Required SDK mode also fails absent credentials.
+
+The default console span formatter showed only names and IDs. The production console exporter
+now emits a JSON snapshot of name, IDs, attributes, events and status; final privacy evidence
+therefore inspects the captured span contents. All three semantic-mode unit suites and four
+buffered lifecycle subprocesses pass with that formatter.
+
+The dev shell had no reproducible OKF CLI, although ADR validation used a host installation.
+An immutable released 0.10.0.0 launcher now delegates to the upstream locked flake. Hackage
+and upstream tags agree on that release. Hurl 8.0.1 and vacuum-go 0.30.3 come from the existing
+Nix lock; the latter supports OpenAPI 3.1 and passes with zero errors (existing documentation
+warnings remain advisory).
+
+A controlled dirty OpenAPI artifact fails the new generator check and retains its exact
+pre-check bytes. Existing ClickHouse helpers mutate their tables, so acceptance owns the
+entire process/data directory and runs Haskell fixtures before HTTP seeding.
 
 
 ## Decision Log
@@ -70,7 +107,33 @@ secrets. These consume the preceding children's production fixes rather than mas
 
 ## Outcomes & Retrospective
 
-Not implemented.
+All three milestones are accepted. Three complete isolated packaged runs pass, including
+core 169 examples, live SDK 15 examples, probe kit 4 cases and zero pending required cases.
+Native recovery reports 4 examples; query-limit watchdogs report 9/9/1/9 examples across
+large, small and tiny block settings plus existing native query fixtures. Hurl safe families
+execute 27 requests; ingest/perimeter execute 16 including bounded read retries; disabled
+metrics executes 1. Distinct numeric fixtures prove events, page views, sessions, users,
+feature adoption, conversion, revenue and funnel meanings alongside every metric name.
+
+Packaged console spans include attributes, events and status. Legacy, stable and duplicate
+modes pass query-sentinel/credential absence, path-only target or empty query, correct
+fixture revenue, span/access correlation and exact probe exclusion. Invalid startup
+configuration fails within ten seconds. A temporary health assertion expecting 299 fails
+with useful sanitized Hurl evidence; its three owned service PIDs stop. The restored clean
+rerun passes and stops all six service PIDs. An independently owned listener remains
+responsive across both failure and rerun. A separate required-SDK proof fails missing live
+configuration rather than reporting pending. Generated-artifact corruption fails while
+preserving the caller's dirty bytes; the controlled edits are restored.
+
+Evidence is retained locally in ignored private run directories, with shareable copies at
+`.dev/acceptance/run-6w_hff30/sanitized/`, `run-yy5tkdl9/sanitized/` (deliberate failure),
+`run-h6vkc9v8/sanitized/` (clean rerun), and `run-ci58ngy9/sanitized/` (closing run). The aggregate deterministic gate passes 144
+core/14 SDK/4 probe cases, three six-case semantic suites, four lifecycle subprocesses,
+artifact drift and strict ten-concept ADR validation. OpenAPI lint reports zero errors;
+291 existing warnings and 180 information notices remain advisory. Nix server/client builds
+and local flake checks pass. The pinned Linux workflow is implemented; hosted execution
+requires a future push and is not claimed here. ADR-10 records environment ownership and
+ADR-1/ADR-2 clarify CORS and complete console-span evidence.
 
 
 ## Context and Orientation

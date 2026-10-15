@@ -52,6 +52,11 @@ to work without an OpenTelemetry collector; existing Prometheus pipeline metrics
 
 ## Surprises & Discoveries
 
+EP-28 executable acceptance found that the console exporter default displayed only span names/IDs.
+The formatter now emits JSON including attributes, events and status, enabling complete exported-span
+privacy inspection. The six-case suite in all three semantics modes and four lifecycle subprocesses
+pass with this production formatter; ADR-2 records the durable collector-free evidence boundary.
+
 Dependency research found the catalog's compatibility commit
 on a feature branch while remote main had moved; verify source at the immutable pin, not the
 working checkout. This is a known input to M1, not evidence of a completed runtime check.

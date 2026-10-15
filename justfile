@@ -23,8 +23,7 @@ openapi:
 
 # Fail if the checked-in OpenAPI document is stale.
 openapi-check:
-    cabal run kansoku-openapi
-    git diff --exit-code docs/api/openapi.json
+    python3 scripts/check-generated.py openapi
 
 # Regenerate the committed event contract artifact from the registry.
 contracts:
@@ -32,8 +31,7 @@ contracts:
 
 # Fail if the committed event contract artifact is stale.
 contracts-check:
-    cabal run kansoku-contracts
-    git diff --exit-code docs/contracts/events.json
+    python3 scripts/check-generated.py contracts
 
 # Enforce the shared architecture-decision profile and log freshness for docs/adr.
 adr-check:
@@ -94,3 +92,32 @@ dev-keys: migrate
 # Start the local services (postgres, clickhouse, create_schema) via process-compose.
 up:
     process-compose up
+
+# Build every local component, including test executables.
+build-with-tests:
+    cabal build all --enable-tests
+
+# Non-mutating source formatting gate.
+format-check:
+    nix fmt -- --fail-on-change
+
+# Deterministic subsets explicitly exclude native/live families and fail pending cases.
+deterministic-test:
+    python3 scripts/deterministic-tests.py
+
+# Validate OpenAPI 3.1 with the linter pinned by flake.lock.
+openapi-lint:
+    vacuum lint --no-update-check --fail-severity error docs/api/openapi.json
+
+# Developer/CI gate without ambient database dependencies.
+check: build-with-tests format-check deterministic-test openapi-check contracts-check openapi-lint
+    okf validate docs/adr --strict --profile docs/adr/profile.dhall --profile-enforce --log-enforce
+    python3 scripts/http-telemetry.py
+
+# Safe, read-only resource families against an already-running loopback service.
+hurl:
+    bash kansoku-api/test/hurl/run.sh
+
+# Own private databases and exercise the Nix-packaged executable.
+acceptance:
+    bash scripts/acceptance.sh

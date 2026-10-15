@@ -2,7 +2,7 @@
 type: Architecture Decision Record
 title: SDK-grade ingest contract boundaries
 description: Accept syntactically valid ingest batches partially, cap request size and count, and scope CORS to /v1/* so SDKs get stable retry semantics.
-timestamp: 2026-10-15T03:43:15Z
+timestamp: 2026-10-15T05:24:16Z
 generated:
   by: human:kansoku-maintainers
   at: 2026-07-19T00:00:00Z
@@ -42,7 +42,9 @@ retried.
 CORS applies only to `/v1/*`. Origins are unrestricted by default and may be replaced by an exact
 operator allowlist. `Content-Type`, `X-Api-Key`, and `Authorization` are preflight-approved so the
 future authentication change does not require another browser contract migration. The metrics
-query surface is not CORS-opened.
+query surface is not CORS-opened. A disallowed origin is rejected by wai-cors with its
+400 HTML response and no allow-origin header, before the inner problem boundary.
+Allowed-origin API failures retain readable problem JSON and CORS headers.
 
 The analytics application has a configurable positive request-body cap, defaulting to 5 MiB, and
 the batch handler has a configurable positive event-count cap, defaulting to 500. Both violations
