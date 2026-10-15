@@ -179,7 +179,12 @@ unavailable = catalogProblem 503
 -- from 'problem'; human-readable detail is supplied by the failure producer.
 problemCatalog :: [(Text, Int)]
 problemCatalog =
-  [ ("malformed_request", 400),
+  [ ("invalid_date_range", 400),
+    ("query_range_too_large", 400),
+    ("too_many_funnel_steps", 400),
+    ("too_many_retention_days", 400),
+    ("metric_result_too_large", 400),
+    ("malformed_request", 400),
     ("validation_failed", 400),
     ("invalid_funnel_steps", 400),
     ("invalid_funnel_step", 400),

@@ -14,6 +14,7 @@ import Data.Map.Strict qualified as Map
 import Data.Text qualified as Text
 import Data.Time.Format (defaultTimeLocale, formatTime)
 import Kansoku.Api.Response (KansokuResult (..), problem)
+import Kansoku.Api.Response qualified as Response
 import Kansoku.Client
 import Kansoku.Client.Metrics
 import Kansoku.Event
@@ -188,6 +189,22 @@ spec = describe "Kansoku.Client" $ do
       case funnelResult of
         Right (KansokuOk result) -> metric result `shouldBe` "experiment_funnel"
         other -> expectationFailure ("unexpected funnel client result: " <> show other)
+
+  it "decodes permanent metric limit problems through the generated client" $ do
+    attempts <- newTVarIO (0 :: Int)
+    let app _ respond = do
+          atomically (modifyTVar' attempts (+ 1))
+          respond (responseLBS status400 [("content-type", "application/problem+json")] (Aeson.encode (problem 400 "metric_result_too_large" "narrow the query")))
+    Warp.testWithApplication (pure app) $ \port -> do
+      manager <- HTTP.newManager HTTP.defaultManagerSettings
+      base <- parseBaseUrl ("http://127.0.0.1:" <> show port)
+      result <- runClientM (experimentsClient (kansokuMetricsCredential "test-service-token") (read "2026-07-01") (read "2026-07-02") Nothing Nothing) (mkClientEnv manager base)
+      case result of
+        Right (KansokuBadRequest rejection) -> do
+          Response.code rejection `shouldBe` "metric_result_too_large"
+          Response.retryable rejection `shouldBe` False
+        other -> expectationFailure (show other)
+      readTVarIO attempts `shouldReturn` 1
 
   it "fetches the public schema catalog through the shared route type" $
     Warp.testWithApplication (pure schemaRecorderApp) $ \port ->

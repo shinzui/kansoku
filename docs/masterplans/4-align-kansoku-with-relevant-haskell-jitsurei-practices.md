@@ -103,7 +103,7 @@ silently imported into Kansoku's aggregate API.
 | 23 | Problem details and generated contract | [EP-23](../plans/23-standardize-problem-details-and-the-generated-api-contract.md) | None | None | Complete |
 | 24 | Shared liveness and readiness | [EP-24](../plans/24-adopt-shared-liveness-and-readiness-probes.md) | EP-23 | None | Complete |
 | 25 | HTTP tracing and safe access logs | [EP-25](../plans/25-trace-http-requests-and-emit-safe-correlated-access-logs.md) | EP-24 | EP-23 | Complete |
-| 26 | Bounded analytics queries and results | [EP-26](../plans/26-bound-analytics-query-inputs-and-result-cardinality.md) | EP-23; EP-24 M2 (accepted bounded checks and query-pool recovery) | None | In Progress |
+| 26 | Bounded analytics queries and results | [EP-26](../plans/26-bound-analytics-query-inputs-and-result-cardinality.md) | EP-23; EP-24 M2 (accepted bounded checks and query-pool recovery) | None | Complete |
 | 27 | Core record and route conventions | [EP-27](../plans/27-enforce-core-record-and-route-construction-conventions.md) | None | EP-23, EP-24, EP-25, EP-26 | Not Started |
 | 28 | Isolated Hurl acceptance and CI | [EP-28](../plans/28-gate-service-releases-with-isolated-hurl-acceptance-and-ci.md) | EP-23, EP-24, EP-25, EP-26, EP-27 | None | Not Started |
 
@@ -179,8 +179,9 @@ build. Its required isolated native regression passes four examples with no pend
 cases; stalled operations, cancellation and size-one pool recovery are accepted.
 EP-25 is Complete: six HTTP privacy/context cases pass in each semantic mode, four
 buffered lifecycle subprocesses pass, the full core/probe suites pass, and Cabal/Nix
-server builds and strict ADR validation pass. EP-26 is In Progress under the accepted
-EP-24 M2 handoff. EP-27 and EP-28 remain Not Started. The final required executable
+server builds and strict ADR validation pass. EP-26 is Complete: native boundary/order/failure checks, existing native query
+fixtures, generated-client tests, published OpenAPI bounds and Cabal/Nix builds pass.
+EP-27 is next; EP-27 and EP-28 remain Not Started. The final required executable
 and isolated-storage integration gate remains owned by EP-28.
 
 
@@ -200,6 +201,14 @@ is unchanged; native failures escape only after physical disposal. Both Cabal an
 consume the minimal v1.1.0 driver repair in `vendor/ClickHaskell`, documented in ADR-2.
 `nix develop -c python3 scripts/native-query-pool.py` is the required isolated fixture
 for the later query and acceptance children.
+
+EP-26 exposed reversed native block arrival order under small block sizes. The shared
+metric executor now restores the block list before concatenation while retaining its
+per-block field repair and SQL ordering. All execution functions return a typed
+`Either QueryExecutionError MetricResult`; HTTP successful shapes are unchanged.
+[ADR-9](../adr/0009-bounded-complete-aggregate-responses.md) records the fixed limits
+and aggregate pagination exception. `scripts/query-limits.py` supplies the required
+private native boundary and existing-fixture proof for EP-28.
 
 The catalog's prose is not sufficient dependency evidence. Hackage and upstream tags were
 checked: the selected OpenAPI releases are 5.0.0 and 5.1.0; servant-health 0.1.0.0 is released

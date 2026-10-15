@@ -1,12 +1,13 @@
 {-# LANGUAGE TypeApplications #-}
 
-module Kansoku.Metrics.HandlerSpec (spec) where
+module Kansoku.Metrics.HandlerSpec (spec, validationApplicationWithPool) where
 
 import Data.Aeson (eitherDecode)
 import Data.Foldable (traverse_)
 import Data.Text qualified as Text
 import Kansoku.Api qualified as Api
 import Kansoku.Api.Response qualified as Response
+import Kansoku.ClickHouse (QueryPool)
 import Kansoku.Event (defaultRegistry, schemaCatalog)
 import Kansoku.Metrics.Handler (metricsServer)
 import Kansoku.Metrics.RoutingSpec (sentinelContext, sentinelIngestServer)
@@ -143,12 +144,15 @@ assertBadRequest manager port path expectedCode messageFragment = do
   Response.detail envelope `shouldSatisfy` Text.isInfixOf messageFragment
 
 validationApplication :: Application
-validationApplication =
+validationApplication = validationApplicationWithPool (error "query pool must not be forced by validation")
+
+validationApplicationWithPool :: QueryPool -> Application
+validationApplicationWithPool pool =
   serveWithContext
     Api.kansokuAPI
     sentinelContext
     Api.KansokuAPI
       { Api.ingest = sentinelIngestServer,
-        Api.metrics = metricsServer (error "query pool must not be forced by validation"),
+        Api.metrics = metricsServer pool,
         Api.schemas = pure (schemaCatalog defaultRegistry)
       }

@@ -23,7 +23,7 @@ import Kansoku.Exception (trySynchronous)
 import Kansoku.Logging (logError, runLogStderr)
 import Kansoku.Metrics.Api (MetricResult, MetricsRoutes (..), TimeGrain (..))
 import Kansoku.Metrics.Query qualified as Query
-import Kansoku.Metrics.Query.Validate (mkSqlName, renderSqlName)
+import Kansoku.Metrics.Query.Validate (QueryLimitError (..), mkSqlName, renderSqlName, validateDateRange)
 import Kansoku.Metrics.Registry (builtinMetric)
 import Kansoku.Prelude
 import Servant (Handler)
@@ -63,24 +63,25 @@ metricsServer pool =
 
     funnelHandler :: MetricsPrincipal -> Day -> Day -> Text -> Maybe Int -> Handler (KansokuResult MetricResult)
     funnelHandler (MetricsPrincipal principal) fromDay toDay stepsParam requestedWindow =
-      case nonEmptyCsv stepsParam of
-        [] -> pure (KansokuBadRequest (badRequest "invalid_funnel_steps" ("invalid funnel steps: " <> stepsParam)))
-        rawSteps ->
-          case traverse mkSqlName rawSteps of
-            Left invalid ->
-              pure
-                ( KansokuBadRequest
-                    (badRequest "invalid_funnel_step" ("invalid funnel step: " <> invalid))
-                )
-            Right steps ->
-              case funnelWindow fromDay toDay requestedWindow of
-                Left invalid ->
-                  pure
-                    ( KansokuBadRequest
-                        (badRequest "invalid_funnel_window" ("invalid funnel window: " <> invalid <> "; expected 1..7776000 seconds"))
-                    )
-                Right window ->
-                  effToHandler (Query.runFunnel pool (queryRequest (principal ^. #accountId) fromDay toDay Nothing Nothing) window steps)
+      withDateRange fromDay toDay $
+        case nonEmptyCsv stepsParam of
+          [] -> pure (KansokuBadRequest (badRequest "invalid_funnel_steps" ("invalid funnel steps: " <> stepsParam)))
+          rawSteps ->
+            case traverse mkSqlName rawSteps of
+              Left invalid ->
+                pure
+                  ( KansokuBadRequest
+                      (badRequest "invalid_funnel_step" ("invalid funnel step: " <> invalid))
+                  )
+              Right steps ->
+                case funnelWindow fromDay toDay requestedWindow of
+                  Left invalid ->
+                    pure
+                      ( KansokuBadRequest
+                          (badRequest "invalid_funnel_window" ("invalid funnel window: " <> invalid <> "; expected 1..7776000 seconds"))
+                      )
+                  Right window ->
+                    effToHandler (Query.runFunnel pool (queryRequest (principal ^. #accountId) fromDay toDay Nothing Nothing) window steps)
 
     retentionHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Handler (KansokuResult MetricResult)
     retentionHandler (MetricsPrincipal principal) fromDay toDay daysParam =
@@ -143,38 +144,39 @@ metricsServer pool =
 
     experimentFunnelHandler :: MetricsPrincipal -> Text -> Text -> Day -> Day -> Maybe Int -> Handler (KansokuResult MetricResult)
     experimentFunnelHandler (MetricsPrincipal principal) experimentParam stepsParam fromDay toDay requestedWindow =
-      case mkSqlName experimentParam of
-        Left invalid ->
-          pure
-            ( KansokuBadRequest
-                (badRequest "invalid_experiment_name" ("invalid experiment name: " <> invalid))
-            )
-        Right experiment ->
-          case nonEmptyCsv stepsParam of
-            [] -> pure (KansokuBadRequest (badRequest "invalid_funnel_steps" ("invalid funnel steps: " <> stepsParam)))
-            rawSteps ->
-              case traverse mkSqlName rawSteps of
-                Left invalid ->
-                  pure
-                    ( KansokuBadRequest
-                        (badRequest "invalid_funnel_step" ("invalid funnel step: " <> invalid))
-                    )
-                Right steps ->
-                  case funnelWindow fromDay toDay requestedWindow of
-                    Left invalid ->
-                      pure
-                        ( KansokuBadRequest
-                            (badRequest "invalid_funnel_window" ("invalid funnel window: " <> invalid <> "; expected 1..7776000 seconds"))
-                        )
-                    Right window ->
-                      effToHandler
-                        ( Query.runExperimentFunnel
-                            pool
-                            (queryRequest (principal ^. #accountId) fromDay toDay Nothing Nothing)
-                            experiment
-                            window
-                            steps
-                        )
+      withDateRange fromDay toDay $
+        case mkSqlName experimentParam of
+          Left invalid ->
+            pure
+              ( KansokuBadRequest
+                  (badRequest "invalid_experiment_name" ("invalid experiment name: " <> invalid))
+              )
+          Right experiment ->
+            case nonEmptyCsv stepsParam of
+              [] -> pure (KansokuBadRequest (badRequest "invalid_funnel_steps" ("invalid funnel steps: " <> stepsParam)))
+              rawSteps ->
+                case traverse mkSqlName rawSteps of
+                  Left invalid ->
+                    pure
+                      ( KansokuBadRequest
+                          (badRequest "invalid_funnel_step" ("invalid funnel step: " <> invalid))
+                      )
+                  Right steps ->
+                    case funnelWindow fromDay toDay requestedWindow of
+                      Left invalid ->
+                        pure
+                          ( KansokuBadRequest
+                              (badRequest "invalid_funnel_window" ("invalid funnel window: " <> invalid <> "; expected 1..7776000 seconds"))
+                          )
+                      Right window ->
+                        effToHandler
+                          ( Query.runExperimentFunnel
+                              pool
+                              (queryRequest (principal ^. #accountId) fromDay toDay Nothing Nothing)
+                              experiment
+                              window
+                              steps
+                          )
 
     notImplemented :: Text -> MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> Handler (KansokuResult MetricResult)
     notImplemented name _principal _ _ _ _ =
@@ -208,8 +210,8 @@ parseOffsets (Just raw) =
   traverse parseOne (nonEmptyCsv raw)
   where
     parseOne piece =
-      case reads (Text.unpack piece) of
-        [(n, "")] | n > 0 -> Right n
+      case reads (Text.unpack piece) :: [(Integer, String)] of
+        [(n, "")] | n >= 1 && n <= 365 -> Right (fromInteger n)
         _ -> Left ("invalid day offset: " <> piece)
 
 funnelWindow :: Day -> Day -> Maybe Int -> Either Text Int
@@ -227,31 +229,28 @@ funnelWindow fromDay toDay requested =
 maxFunnelWindowSeconds :: Int
 maxFunnelWindowSeconds = 7776000
 
-effToHandler :: Eff '[IOE] MetricResult -> Handler (KansokuResult MetricResult)
+effToHandler :: Eff '[IOE] (Either Query.QueryExecutionError MetricResult) -> Handler (KansokuResult MetricResult)
 effToHandler action = do
   result <- liftIO (trySynchronous (runEff action))
   case result of
-    Left err -> do
-      liftIO . runEff . runLogStderr $
-        logError ("clickhouse query failed: " <> Text.pack (show err))
-      pure (KansokuUnavailable (unavailable "clickhouse_unavailable" "analytics storage is unavailable"))
-    Right value ->
-      pure (KansokuOk value)
-
-metricEffToHandler :: Eff '[IOE] (Either Query.QueryCompileError MetricResult) -> Handler (KansokuResult MetricResult)
-metricEffToHandler action = do
-  result <- liftIO (trySynchronous (runEff action))
-  case result of
-    Left err -> do
-      liftIO . runEff . runLogStderr $
-        logError ("clickhouse query failed: " <> Text.pack (show err))
-      pure (KansokuUnavailable (unavailable "clickhouse_unavailable" "analytics storage is unavailable"))
-    Right (Left compileError) ->
-      pure
-        ( KansokuBadRequest
-            ( badRequest
-                (Query.queryCompileErrorCode compileError)
-                (Query.queryCompileErrorMessage compileError)
-            )
-        )
+    Left err -> storageFailure (Text.pack (show err))
     Right (Right value) -> pure (KansokuOk value)
+    Right (Left failure) -> case failure of
+      Query.QueryCompileFailure compileError ->
+        pure $
+          KansokuBadRequest (badRequest (Query.queryCompileErrorCode compileError) (Query.queryCompileErrorMessage compileError))
+      Query.QueryLimitFailure (QueryLimitError code message) -> pure (KansokuBadRequest (badRequest code message))
+      Query.MetricResultTooLarge -> pure (KansokuBadRequest (badRequest "metric_result_too_large" "narrow the query range or grouping to at most 10000 metric points"))
+      Query.QueryStorageFailure message -> storageFailure message
+  where
+    storageFailure message = do
+      liftIO . runEff . runLogStderr $ logError ("clickhouse query failed: " <> message)
+      pure (KansokuUnavailable (unavailable "clickhouse_unavailable" "analytics storage is unavailable"))
+
+metricEffToHandler :: Eff '[IOE] (Either Query.QueryExecutionError MetricResult) -> Handler (KansokuResult MetricResult)
+metricEffToHandler = effToHandler
+
+withDateRange :: Day -> Day -> Handler (KansokuResult MetricResult) -> Handler (KansokuResult MetricResult)
+withDateRange fromDay toDay action = case validateDateRange fromDay toDay of
+  Left (QueryLimitError code message) -> pure (KansokuBadRequest (badRequest code message))
+  Right () -> action

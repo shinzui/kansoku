@@ -187,18 +187,20 @@ spec = describe "Kansoku.Query integration" $ do
       queryPool <- (`newQueryPool` 2) . clickHouseConfigFromConfig =<< requireConfig
       steps <- traverse validSqlName ["signup_started", "signup_completed"]
       result <-
-        runEff $
-          Query.runFunnel
-            queryPool
-            Query.QueryRequest
-              { accountId = AccountId "acct_funnel",
-                from = fromGregorian 2026 6 1,
-                to = fromGregorian 2026 6 8,
-                groupBy = Nothing,
-                timeGrain = Nothing
-              }
-            604800
-            steps
+        expectCompiled
+          =<< runEff
+            ( Query.runFunnel
+                queryPool
+                Query.QueryRequest
+                  { accountId = AccountId "acct_funnel",
+                    from = fromGregorian 2026 6 1,
+                    to = fromGregorian 2026 6 8,
+                    groupBy = Nothing,
+                    timeGrain = Nothing
+                  }
+                604800
+                steps
+            )
       [ (Map.lookup "index" (point ^. #group), point ^. #value)
         | point <- result ^. #points
         ]
@@ -233,13 +235,13 @@ spec = describe "Kansoku.Query integration" $ do
                 groupBy = Nothing,
                 timeGrain = Nothing
               }
-      exposures <- runEff (Query.runExperimentExposures queryPool request (Just experiment))
+      exposures <- expectCompiled =<< runEff (Query.runExperimentExposures queryPool request (Just experiment))
       Map.fromList
         [ (Map.lookup "variant" (point ^. #group), point ^. #value)
         | point <- exposures ^. #points
         ]
         `shouldBe` Map.fromList [(Just "control", 2), (Just "treatment", 2)]
-      conversion <- runEff (Query.runExperimentConversion queryPool request experiment conversionEvent)
+      conversion <- expectCompiled =<< runEff (Query.runExperimentConversion queryPool request experiment conversionEvent)
       Map.fromList
         [ ( (Map.lookup "measure" (point ^. #group), Map.lookup "variant" (point ^. #group)),
             point ^. #value
@@ -255,7 +257,7 @@ spec = describe "Kansoku.Query integration" $ do
             ((Just "exposed", Just "treatment"), 2)
           ]
       steps <- traverse validSqlName ["checkout_started", "purchase_completed"]
-      funnel <- runEff (Query.runExperimentFunnel queryPool request experiment 604800 steps)
+      funnel <- expectCompiled =<< runEff (Query.runExperimentFunnel queryPool request experiment 604800 steps)
       Map.fromList
         [ ( (Map.lookup "index" (point ^. #group), Map.lookup "variant" (point ^. #group)),
             point ^. #value
@@ -344,7 +346,7 @@ validSqlName value =
     Right name -> pure name
     Left invalid -> expectationFailure ("invalid SQL name fixture: " <> Text.unpack invalid) >> fail "invalid SQL name fixture"
 
-expectCompiled :: Either Query.QueryCompileError a -> IO a
+expectCompiled :: Either Query.QueryExecutionError a -> IO a
 expectCompiled = \case
   Right value -> pure value
   Left err -> expectationFailure ("unexpected query compile error: " <> show err) >> fail "query compile failed"

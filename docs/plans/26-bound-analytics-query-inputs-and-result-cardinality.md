@@ -23,6 +23,11 @@ provenance:
       at: 2026-10-15T03:37:31Z
       mode: "update"
       note: "Require EP-24 M2 recovery boundary and preserve explicit numeric/family-specific outer ordering."
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-10-15T04:34:06Z
+      mode: "implement"
+      note: "Enforce public input limits and typed complete-or-error bounded query execution."
 ---
 
 # Bound analytics query inputs and result cardinality
@@ -40,14 +45,30 @@ answers. Existing successful metric shapes and aggregation semantics remain inta
 
 ## Progress
 
-- [ ] M1: Every implemented metrics route rejects out-of-contract inputs before storage access with stable problem codes.
-- [ ] M2: Every query result is capped before unbounded collection, with exact-bound success and over-bound explicit failure.
-- [ ] M3: Database-backed correctness, SDK/OpenAPI behavior and the documented aggregate-response exception are verified.
+- [x] (2026-10-15) M1: Every implemented metrics route rejects out-of-contract inputs before storage access with stable problem codes.
+- [x] (2026-10-15) M2: Every query result is capped before unbounded collection, with exact-bound success and over-bound explicit failure.
+- [x] (2026-10-15) M3: Database-backed correctness, SDK/OpenAPI behavior and the documented aggregate-response exception are verified.
 
 
 ## Surprises & Discoveries
 
-None during implementation yet.
+The native small-block proof exposed a second ordering defect beyond per-block
+field decoding: ClickHaskell prepends callback results and returns its block list in
+reverse arrival order. A 10,000-group result was ordered inside each block but its
+32-row chunks were reversed. `runSQLWith` now reverses only the block-result list
+before concatenation; per-block field repairs stay unchanged, and no Haskell row sort
+replaces SQL ordering. Numeric-family and repeated-result checks are accepted
+against both large and deliberately small native blocks.
+
+The driver's `command` helper does not consume progress packets from bulk
+INSERT...SELECT fixture setup. Isolated test data therefore uses clickhouse-client;
+all metric reads still use the real production native driver. Fixture mutation is
+guarded by KANSOKU_QUERY_LIMIT_FIXTURES=1, supplied only by the private launcher.
+
+The reusable ClickHouse process fixture now lives in `scripts/isolated_clickhouse.py`;
+EP-24's original command still consumes it. `scripts/query-limits.py` applies every
+migration, requires nonzero examples with no pending cases, and uses a process watchdog.
+No ambient analytics database is used for acceptance.
 
 
 ## Decision Log
@@ -69,7 +90,27 @@ retention offsets and funnel indices must not become lexicographic composite-key
 
 ## Outcomes & Retrospective
 
-Not implemented.
+All milestones are accepted. Fixed public bounds reject invalid direct and HTTP
+inputs before storage; the final ordered aggregate transfers at most 10,001 rows and
+returns a typed permanent overflow rather than a partial result. Native block arrival
+order is repaired independently of the existing field repair. ADR-9 accepts the
+complete-or-error pagination exception; OpenAPI publishes maxItems 10000 and route
+limits, and the generated client decodes the permanent 400 without retry.
+
+`nix develop -c python3 scripts/query-limits.py` passes 9 examples with 65,536-row
+blocks, 9 with 2,048-row blocks, a targeted tiny-block (3-row) numeric ordering example,
+and all 9 existing query integration examples, with no pending cases. It covers two
+retention cohorts, offsets 1/2/10, ten-step plain/per-variant funnels, exact/over-bound
+property and experiment series, and execution-path failure/cancellation recovery.
+`nix develop -c python3 scripts/native-query-pool.py` separately passes all four
+owner-native cases after the shared fixture extraction. Each command owns fresh
+private migrated storage (the pool fixture needs only its isolated empty table).
+
+`cabal test all` passes core 169 examples (25 optional storage cases pending without
+prerequisites), client 15 examples (one optional live-client case pending), and all
+four probe-kit cases. Required private native runs have no pending cases. Both Nix
+server/client builds and strict ADR validation pass. Full packaged HTTP acceptance
+with actual auth and the live client remains owned by EP-28.
 
 
 ## Context and Orientation

@@ -34,6 +34,7 @@ import Kansoku.Event
   )
 import Kansoku.Ingest.Api (BatchAck, IngestAck, RejectedEvent)
 import Kansoku.Metrics.Api (MetricPoint, MetricResult, TimeGrain)
+import Kansoku.Metrics.Limits (maxMetricPoints)
 import Kansoku.Prelude
 import Servant.API (type (:>))
 import Servant.API.Experimental.Auth (AuthProtect)
@@ -101,7 +102,20 @@ instance O.ToSchema RejectedEvent
 
 instance O.ToSchema MetricPoint
 
-instance O.ToSchema MetricResult
+instance O.ToSchema MetricResult where
+  declareNamedSchema proxy = do
+    named <- O.genericDeclareNamedSchema O.defaultSchemaOptions proxy
+    pure $
+      named
+        & O.schema
+        . O.description
+        ?~ "A complete aggregate answer with at most 10000 points. Larger answers return the permanent metric_result_too_large problem; no partial result or cursor pages are returned."
+        & O.schema
+        . O.properties
+        . ix "points"
+        %~ \case
+          O.Inline schema -> O.Inline (schema & O.maxItems ?~ toInteger maxMetricPoints)
+          reference -> reference
 
 instance O.ToSchema OrganizationId where
   declareNamedSchema =

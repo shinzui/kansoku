@@ -4,6 +4,7 @@
 module Kansoku.Metrics.Query
   ( GroupDimension (..),
     QueryCompileError (..),
+    QueryExecutionError (..),
     QueryRequest (..),
     buildExperimentConversionSQL,
     buildExperimentExposuresSQL,
@@ -55,8 +56,10 @@ import Kansoku.Event
     EventName (..),
     EventRegistry,
   )
+import Kansoku.Exception (trySynchronous)
 import Kansoku.Metrics.Api (MetricPoint (..), MetricResult (..), TimeGrain (..))
 import Kansoku.Metrics.Definition (Aggregation (..), MetricDefinition (..), RatioMetric (..))
+import Kansoku.Metrics.Limits (maxMetricPoints)
 import Kansoku.Metrics.Query.Property
   ( PropertyError (..),
     PropertyName,
@@ -67,7 +70,7 @@ import Kansoku.Metrics.Query.Property
     resolveNumericProperty,
     resolveProperty,
   )
-import Kansoku.Metrics.Query.Validate (SqlName, mkSqlName, renderSqlName)
+import Kansoku.Metrics.Query.Validate (QueryLimitError (..), SqlName, mkSqlName, renderSqlName, validateDateRange, validateOffsets, validateSteps)
 import Kansoku.Metrics.Registry (BuiltinMetric (..))
 import Kansoku.Prelude
 
@@ -97,7 +100,8 @@ data QueryCompileError
 
 data CompiledMetric = CompiledMetric
   { sql :: !Text,
-    groupLabel :: !(Maybe Text)
+    groupLabel :: !(Maybe Text),
+    ordering :: !ResultOrder
   }
   deriving stock (Generic)
 
@@ -115,79 +119,139 @@ data AggRow = AggRow
   deriving stock (Generic, Eq, Show)
   deriving anyclass (ClickHaskell AggColumns)
 
-buildSQL :: EventRegistry -> BuiltinMetric -> QueryRequest -> Either QueryCompileError Text
-buildSQL registry metric req = (^. #sql) <$> compileMetric registry metric req
+-- | The execution boundary distinguishes permanent faults from dependency outages.
+data QueryExecutionError
+  = QueryCompileFailure !QueryCompileError
+  | QueryLimitFailure !QueryLimitError
+  | MetricResultTooLarge
+  | QueryStorageFailure !Text
+  deriving stock (Generic, Eq, Show)
 
-run :: (IOE :> es) => EventRegistry -> QueryPool -> BuiltinMetric -> QueryRequest -> Eff es (Either QueryCompileError MetricResult)
+-- No caller-supplied SQL may select a result ordering.
+data ResultOrder = BucketGroup | GroupKey | RetentionOrder | FunnelOrder | ExperimentFunnelOrder
+  deriving stock (Generic)
+
+buildSQL :: EventRegistry -> BuiltinMetric -> QueryRequest -> Either QueryCompileError Text
+buildSQL registry metric req = do
+  compiled <- compileMetric registry metric req
+  pure (boundedSQL (compiled ^. #ordering) (compiled ^. #sql))
+
+run :: (IOE :> es) => EventRegistry -> QueryPool -> BuiltinMetric -> QueryRequest -> Eff es (Either QueryExecutionError MetricResult)
 run registry pool metric req =
-  case compileMetric registry metric req of
+  case first QueryLimitFailure (validateDateRange (req ^. #from) (req ^. #to))
+    >> first QueryCompileFailure (compileMetric registry metric req) of
     Left err -> pure (Left err)
     Right compiled ->
-      Right
-        <$> liftIO
-          ( runSQL
-              pool
-              (metricName metric)
-              (compiled ^. #groupLabel)
-              (accountParameter req <> metricParameters metric req)
-              (compiled ^. #sql)
-          )
+      liftIO $
+        runSQL
+          pool
+          (metricName metric)
+          (compiled ^. #groupLabel)
+          (accountParameter req <> metricParameters metric req)
+          (boundedSQL (compiled ^. #ordering) (compiled ^. #sql))
 
-runSessions :: (IOE :> es) => QueryPool -> QueryRequest -> Eff es MetricResult
+runSessions :: (IOE :> es) => QueryPool -> QueryRequest -> Eff es (Either QueryExecutionError MetricResult)
 runSessions pool req =
-  liftIO (runSQL pool "sessions" Nothing (accountParameter req) (buildSessionsSQL req))
+  checked req (Right ()) $
+    runSQL pool "sessions" Nothing (accountParameter req) (buildSessionsSQL req)
 
-runRetention :: (IOE :> es) => QueryPool -> QueryRequest -> [Int] -> Eff es MetricResult
+runRetention :: (IOE :> es) => QueryPool -> QueryRequest -> [Int] -> Eff es (Either QueryExecutionError MetricResult)
 runRetention pool req offsets =
-  liftIO (runSQLWith pool "retention" retentionPoint (accountParameter req) (buildRetentionSQL req offsets))
+  case validateOffsets offsets of
+    Left err -> pure (Left (QueryLimitFailure err))
+    Right normalized ->
+      checked req (Right ()) $
+        runSQLWith pool "retention" retentionPoint (accountParameter req) (buildRetentionSQL req normalized)
 
-runFunnel :: (IOE :> es) => QueryPool -> QueryRequest -> Int -> [SqlName] -> Eff es MetricResult
+runFunnel :: (IOE :> es) => QueryPool -> QueryRequest -> Int -> [SqlName] -> Eff es (Either QueryExecutionError MetricResult)
 runFunnel pool req window steps =
-  liftIO (runSQLWith pool "funnel" funnelPoint (accountParameter req <> namedParameters "funnel_step" steps) (buildFunnelSQL req window steps))
+  checked req (funnelLimits window steps) $
+    runSQLWith
+      pool
+      "funnel"
+      funnelPoint
+      (accountParameter req <> namedParameters "funnel_step" steps)
+      (buildFunnelSQL req window steps)
 
-runExperimentExposures :: (IOE :> es) => QueryPool -> QueryRequest -> Maybe SqlName -> Eff es MetricResult
+runExperimentExposures :: (IOE :> es) => QueryPool -> QueryRequest -> Maybe SqlName -> Eff es (Either QueryExecutionError MetricResult)
 runExperimentExposures pool req experiment =
-  liftIO
-    ( runSQLWith
-        pool
-        "experiment_exposures"
-        experimentExposuresAggPoint
-        (accountParameter req <> maybe [] (pure . experimentParameter) experiment)
-        (buildExperimentExposuresSQL req experiment)
-    )
+  checked req (Right ()) $
+    runSQLWith
+      pool
+      "experiment_exposures"
+      experimentExposuresAggPoint
+      (accountParameter req <> maybe [] (pure . experimentParameter) experiment)
+      (buildExperimentExposuresSQL req experiment)
 
-runExperimentConversion :: (IOE :> es) => QueryPool -> QueryRequest -> SqlName -> SqlName -> Eff es MetricResult
+runExperimentConversion :: (IOE :> es) => QueryPool -> QueryRequest -> SqlName -> SqlName -> Eff es (Either QueryExecutionError MetricResult)
 runExperimentConversion pool req experiment conversionEvent =
-  liftIO
-    ( runSQLWith
-        pool
-        "experiment_conversion"
-        (experimentConversionAggPoint experiment)
-        (accountParameter req <> [experimentParameter experiment, conversionEventParameter conversionEvent])
-        (buildExperimentConversionSQL req experiment conversionEvent)
-    )
+  checked req (Right ()) $
+    runSQLWith
+      pool
+      "experiment_conversion"
+      (experimentConversionAggPoint experiment)
+      (accountParameter req <> [experimentParameter experiment, conversionEventParameter conversionEvent])
+      (buildExperimentConversionSQL req experiment conversionEvent)
 
-runExperimentFunnel :: (IOE :> es) => QueryPool -> QueryRequest -> SqlName -> Int -> [SqlName] -> Eff es MetricResult
+runExperimentFunnel :: (IOE :> es) => QueryPool -> QueryRequest -> SqlName -> Int -> [SqlName] -> Eff es (Either QueryExecutionError MetricResult)
 runExperimentFunnel pool req experiment window steps =
-  liftIO
-    ( runSQLWith
-        pool
-        "experiment_funnel"
-        (experimentFunnelAggPoint experiment)
-        (accountParameter req <> [experimentParameter experiment] <> namedParameters "experiment_funnel_step" steps)
-        (buildExperimentFunnelSQL req experiment window steps)
-    )
+  checked req (funnelLimits window steps) $
+    runSQLWith
+      pool
+      "experiment_funnel"
+      (experimentFunnelAggPoint experiment)
+      (accountParameter req <> [experimentParameter experiment] <> namedParameters "experiment_funnel_step" steps)
+      (buildExperimentFunnelSQL req experiment window steps)
+
+checked :: (IOE :> es) => QueryRequest -> Either QueryLimitError () -> IO (Either QueryExecutionError MetricResult) -> Eff es (Either QueryExecutionError MetricResult)
+checked req additional action =
+  case validateDateRange (req ^. #from) (req ^. #to) >> additional of
+    Left err -> pure (Left (QueryLimitFailure err))
+    Right () -> liftIO action
+
+funnelLimits :: Int -> [SqlName] -> Either QueryLimitError ()
+funnelLimits window steps = do
+  validateSteps steps
+  if window >= 1 && window <= 7776000
+    then Right ()
+    else Left (QueryLimitError "invalid_funnel_window" "expected 1..7776000 seconds")
+
+-- The extra row witnesses overflow; it never becomes a partial success.
+-- Sort columns belong to the aggregate subquery and stay out of the wire projection.
+boundedSQL :: ResultOrder -> Text -> Text
+boundedSQL order sql =
+  Text.unlines
+    [ "SELECT CAST(bucket, 'String') AS bucket, CAST(group_key, 'String') AS group_key, CAST(value, 'Float64') AS value",
+      "FROM (",
+      sql,
+      ")",
+      "ORDER BY " <> case order of
+        BucketGroup -> "bucket, group_key"
+        GroupKey -> "group_key"
+        RetentionOrder -> "sort_cohort, sort_offset"
+        FunnelOrder -> "sort_step"
+        ExperimentFunnelOrder -> "sort_variant, sort_step",
+      "LIMIT " <> Text.pack (show (maxMetricPoints + 1))
+    ]
 
 type QueryParameter = (String, Text)
 
-runSQL :: QueryPool -> Text -> Maybe Text -> [QueryParameter] -> Text -> IO MetricResult
+runSQL :: QueryPool -> Text -> Maybe Text -> [QueryParameter] -> Text -> IO (Either QueryExecutionError MetricResult)
 runSQL pool name groupName =
   runSQLWith pool name (defaultPoint groupName)
 
-runSQLWith :: QueryPool -> Text -> (AggRow -> MetricPoint) -> [QueryParameter] -> Text -> IO MetricResult
+runSQLWith :: QueryPool -> Text -> (AggRow -> MetricPoint) -> [QueryParameter] -> Text -> IO (Either QueryExecutionError MetricResult)
 runSQLWith pool metric toPoint parameters sql = do
-  rows <- withQueryConnection pool $ \conn -> concat <$> select (aggSelect parameters sql) conn (pure . repairAggRows)
-  pure MetricResult {metric, points = toPoint <$> rows}
+  outcome <- trySynchronous $
+    withQueryConnection pool $
+      -- ClickHaskell prepends each completed block; restore arrival order
+      -- without sorting or reversing any rows within a repaired block.
+      \conn -> concat . reverse <$> select (aggSelect parameters sql) conn (pure . repairAggRows)
+  pure $ case outcome of
+    Left err -> Left (QueryStorageFailure (Text.pack (show err)))
+    Right rows
+      | length rows > maxMetricPoints -> Left MetricResultTooLarge
+      | otherwise -> Right MetricResult {metric, points = toPoint <$> rows}
 
 -- ClickHaskell 1.1.0 reverses the first field of a three-field generic record
 -- relative to the other fields. Repair each result block before it escapes the
@@ -204,13 +268,7 @@ aggSelect parameters sql =
     unsafeMkSelect $
       const $
         Text.encodeUtf8Builder $
-          Text.unlines
-            [ "SELECT CAST(bucket, 'String') AS bucket, CAST(group_key, 'String') AS group_key, CAST(value, 'Float64') AS value",
-              "FROM (",
-              sql,
-              ")",
-              "SETTINGS compile_expressions = 0, compile_aggregate_expressions = 0, compile_sort_description = 0"
-            ]
+          sql <> "\nSETTINGS compile_expressions = 0, compile_aggregate_expressions = 0, compile_sort_description = 0"
   where
     addOne (name, value) rest =
       addParameter name (toChType (Text.unpack value) :: ChString) . rest
@@ -323,7 +381,7 @@ compileMetric registry metric req =
     Simple def -> compileSimpleMetric registry def req
     Ratioed ratio -> do
       validateRatioGrouping ratio req
-      pure CompiledMetric {sql = buildRatioSQL ratio req, groupLabel = Nothing}
+      pure CompiledMetric {sql = buildRatioSQL ratio req, groupLabel = Nothing, ordering = BucketGroup}
 
 compileSimpleMetric :: EventRegistry -> MetricDefinition -> QueryRequest -> Either QueryCompileError CompiledMetric
 compileSimpleMetric registry def req = do
@@ -333,7 +391,8 @@ compileSimpleMetric registry def req = do
   pure
     CompiledMetric
       { sql = compiledSQL,
-        groupLabel = dimensionLabel <$> grouping
+        groupLabel = dimensionLabel <$> grouping,
+        ordering = BucketGroup
       }
 
 buildSimpleSQL :: EventRegistry -> Maybe GroupDimension -> [Text] -> MetricDefinition -> QueryRequest -> Either QueryCompileError Text
@@ -506,7 +565,10 @@ pageViewsDaySQL grouping req =
         ]
 
 buildSessionsSQL :: QueryRequest -> Text
-buildSessionsSQL req =
+buildSessionsSQL req = boundedSQL BucketGroup (buildSessionsSQLAggregate req)
+
+buildSessionsSQLAggregate :: QueryRequest -> Text
+buildSessionsSQLAggregate req =
   "SELECT "
     <> bucketExpr (req ^. #timeGrain <|> Just Day)
     <> """ AS bucket, '' AS group_key,
@@ -526,7 +588,10 @@ buildSessionsSQL req =
 -- min(day) inside the requested window; lifetime cohorts require a first-seen
 -- rollup and are outside the MVP contract.
 buildRetentionSQL :: QueryRequest -> [Int] -> Text
-buildRetentionSQL req offsets =
+buildRetentionSQL req offsets = boundedSQL RetentionOrder (buildRetentionSQLAggregate req offsets)
+
+buildRetentionSQLAggregate :: QueryRequest -> [Int] -> Text
+buildRetentionSQLAggregate req offsets =
   Text.unlines
     [ "WITH",
       "  first_seen AS",
@@ -547,6 +612,7 @@ buildRetentionSQL req offsets =
       "      AND " <> timestampPredicate req,
       "  )",
       "SELECT",
+      "    f.cohort_day AS sort_cohort, dateDiff('day', f.cohort_day, a.active_day) AS sort_offset,",
       "    toString(f.cohort_day) AS bucket,",
       "    toString(dateDiff('day', f.cohort_day, a.active_day)) AS group_key,",
       "    toFloat64(uniqExact(f.canonical_user)) AS value",
@@ -563,10 +629,14 @@ buildRetentionSQL req offsets =
 -- Equal timestamps may satisfy consecutive steps; repeated step names mean
 -- the user performed that event repeatedly in order.
 buildFunnelSQL :: QueryRequest -> Int -> [SqlName] -> Text
-buildFunnelSQL req window steps =
+buildFunnelSQL req window steps = boundedSQL FunnelOrder (buildFunnelSQLAggregate req window steps)
+
+buildFunnelSQLAggregate :: QueryRequest -> Int -> [SqlName] -> Text
+buildFunnelSQLAggregate req window steps =
   """
   SELECT
       '' AS bucket,
+      step.1 AS sort_step,
       concat(toString(step.1), '|', step.2) AS group_key,
       toFloat64(countIf(level >= step.1)) AS value
   FROM
@@ -623,7 +693,10 @@ buildFunnelSQL req window steps =
 -- union. With no grain, a user exposed on several days therefore still counts
 -- once for the whole requested range.
 buildExperimentExposuresSQL :: QueryRequest -> Maybe SqlName -> Text
-buildExperimentExposuresSQL req experiment =
+buildExperimentExposuresSQL req experiment = boundedSQL BucketGroup (buildExperimentExposuresSQLAggregate req experiment)
+
+buildExperimentExposuresSQLAggregate :: QueryRequest -> Maybe SqlName -> Text
+buildExperimentExposuresSQLAggregate req experiment =
   Text.unlines
     [ "SELECT",
       "    " <> experimentBucketExpr (req ^. #timeGrain) <> " AS bucket,",
@@ -643,7 +716,10 @@ buildExperimentExposuresSQL req experiment =
 -- that variant. With ClickHouse's default join_use_nulls = 0, a LEFT JOIN miss
 -- supplies the zero DateTime64, which correctly fails that comparison.
 buildExperimentConversionSQL :: QueryRequest -> SqlName -> SqlName -> Text
-buildExperimentConversionSQL req _experiment _conversionEvent =
+buildExperimentConversionSQL req experiment conversionEvent = boundedSQL GroupKey (buildExperimentConversionSQLAggregate req experiment conversionEvent)
+
+buildExperimentConversionSQLAggregate :: QueryRequest -> SqlName -> SqlName -> Text
+buildExperimentConversionSQLAggregate req _experiment _conversionEvent =
   Text.unlines
     [ "WITH exposures AS",
       "(",
@@ -720,7 +796,10 @@ experimentFilterClause = \case
 -- timeline. DateTime64 is converted to DateTime so windowFunnel's public
 -- window unit remains seconds, matching the plain funnel endpoint.
 buildExperimentFunnelSQL :: QueryRequest -> SqlName -> Int -> [SqlName] -> Text
-buildExperimentFunnelSQL req _experiment window steps =
+buildExperimentFunnelSQL req experiment window steps = boundedSQL ExperimentFunnelOrder (buildExperimentFunnelSQLAggregate req experiment window steps)
+
+buildExperimentFunnelSQLAggregate :: QueryRequest -> SqlName -> Int -> [SqlName] -> Text
+buildExperimentFunnelSQLAggregate req _experiment window steps =
   Text.unlines
     [ "WITH exposures AS",
       "(",
@@ -740,6 +819,7 @@ buildExperimentFunnelSQL req _experiment window steps =
       ")",
       "SELECT",
       "    '' AS bucket,",
+      "    variant AS sort_variant, step.1 AS sort_step,",
       "    concat(toString(step.1), '|', step.2, '|', variant) AS group_key,",
       "    toFloat64(countIf(level >= step.1)) AS value",
       "FROM",
@@ -999,7 +1079,7 @@ renderDay = Text.pack . formatTime defaultTimeLocale "%F"
 -- negative offsets, and avoid duplicate result groups.
 normalizeOffsets :: [Int] -> [Int]
 normalizeOffsets offsets =
-  List.nub (0 : filter (>= 0) offsets)
+  0 : List.sort (List.nub offsets)
 
 metricName :: BuiltinMetric -> Text
 metricName = \case

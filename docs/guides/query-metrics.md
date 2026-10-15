@@ -6,9 +6,50 @@ HTTP 403 on metrics routes.
 
 ## Common query contract
 
-Most metric routes require `from` and `to` dates in `YYYY-MM-DD` format. Ranges are half-open in
+Every implemented metric route requires `from` and `to` dates in `YYYY-MM-DD` format. Ranges are half-open in
 UTC: `from` is inclusive and `to` is exclusive. For example, use `from=2026-07-01&to=2026-08-01`
 for July.
+
+The public limits are fixed:
+
+| Input or answer | Limit |
+| --- | --- |
+| Date range | Positive, at most 366 days |
+| Ordered funnel | 1..20 non-empty steps; repeated names retain their meaning |
+| Retention offsets | At most 32 distinct values in 1..365, normalized to ascending unique order |
+| Complete metric answer | At most 10,000 points |
+
+Retention always includes the implicit offset-zero cohort point; do not send zero as
+an offset. Default offsets remain 1, 7, 14 and 30. A funnel's existing maximum window
+is still 90 days within the bounded query interval.
+
+All bounds fail with HTTP 400, `application/problem+json`, and `retryable: false`.
+Stable codes are `invalid_date_range`, `query_range_too_large`,
+`too_many_funnel_steps`, `invalid_retention_days`, `too_many_retention_days`, and
+`metric_result_too_large`. A result overflow returns no partial metric payload:
+
+```json
+{
+  "type": "about:blank",
+  "title": "Bad Request",
+  "status": 400,
+  "detail": "narrow the query range or grouping to at most 10000 metric points",
+  "code": "metric_result_too_large",
+  "retryable": false
+}
+```
+
+Narrow the interval or grouping after a permanent limit error. The service caps the
+final aggregate projection, after grouping, ratios, identity resolution and funnel
+computation. It never limits the raw event input to fabricate an in-bound answer.
+These limits bound transferred result rows and Haskell collection; they do not bound
+ClickHouse scan cost or query duration. Storage failures remain retryable 503.
+
+Metric aggregates return complete-or-error answers rather than cursor pages: pages
+recomputed over an evolving event set can disagree. This is a deliberate service
+exception to the collection pagination standard, documented in
+[ADR-9](../adr/0009-bounded-complete-aggregate-responses.md). Future resource-list APIs
+still follow `mori://shinzui/haskell-jitsurei/docs/api-relay-pagination`.
 
 Standard metric routes also accept:
 

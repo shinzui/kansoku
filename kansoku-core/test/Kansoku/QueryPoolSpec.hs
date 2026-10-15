@@ -1,4 +1,4 @@
-module Kansoku.QueryPoolSpec (spec) where
+module Kansoku.QueryPoolSpec (spec, Fault (..), Proxy (..), withProxy, through, drained) where
 
 import ClickHaskell (closeConnection, ping)
 import Control.Concurrent (threadDelay)

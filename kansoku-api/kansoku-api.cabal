@@ -41,6 +41,7 @@ library
     Kansoku.Event.Validation
     Kansoku.Ingest.Api
     Kansoku.Metrics.Api
+    Kansoku.Metrics.Limits
     Kansoku.Prelude
 
   build-depends:

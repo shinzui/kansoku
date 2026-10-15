@@ -14,6 +14,7 @@ import Kansoku.Ingest.HandlerSpec qualified
 import Kansoku.Ingest.QueueSpec qualified
 import Kansoku.LimitsSpec qualified
 import Kansoku.Metrics.HandlerSpec qualified
+import Kansoku.Metrics.LimitsSpec qualified
 import Kansoku.Metrics.RoutingSpec qualified
 import Kansoku.MigrationsSpec qualified
 import Kansoku.Observability (registerPipelineMetrics)
@@ -53,6 +54,7 @@ normalTests = hspec $ do
   Kansoku.LimitsSpec.spec
   Kansoku.MigrationsSpec.spec
   Kansoku.Metrics.HandlerSpec.spec
+  Kansoku.Metrics.LimitsSpec.spec
   Kansoku.Metrics.RoutingSpec.spec
   Kansoku.OpenApiSpec.spec
   Kansoku.ProblemSpec.spec

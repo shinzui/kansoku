@@ -1,6 +1,8 @@
 # Bundle Update Log
 
 ## 2026-10-15
+* **Update**: ADR-9: accept bounded complete aggregate responses with native boundary, numeric ordering, block-order repair and recovery evidence.
+* **Update**: ADR-9: propose bounded complete aggregate answers and the explicit pagination-standard exception.
 * **Update**: ADR-2: accept sanitized HTTP instrumentation, correlated access records and provider flush/shutdown ownership.
 * **Update**: Adopt shared operational probes and physically disposed query connections, backed by isolated native failure and recovery tests.
 * **Update**: ADR-8: link the verified released dependency cohort with canonical Mori package references.

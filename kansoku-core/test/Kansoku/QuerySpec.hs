@@ -28,7 +28,7 @@ spec :: Spec
 spec = describe "Kansoku.Query.buildSQL" $ do
   it "reads active users at day grain from analytics.dau with uniqCombinedMerge" $
     buildSQL (Simple activeUsers) dayRequest
-      `shouldBe` Text.unlines
+      `shouldContainText` Text.unlines
         [ "SELECT toString(day) AS bucket, '' AS group_key,",
           "       toFloat64(uniqCombinedMerge(users)) AS value",
           "FROM analytics.dau",
@@ -40,7 +40,7 @@ spec = describe "Kansoku.Query.buildSQL" $ do
 
   it "reads page views at day grain from the count-state rollup" $
     buildSQL (Simple pageViews) dayRequest
-      `shouldBe` Text.unlines
+      `shouldContainText` Text.unlines
         [ "SELECT toString(day) AS bucket, '' AS group_key,",
           "       toFloat64(countMerge(views)) AS value",
           "FROM analytics.page_views_by_route",
@@ -52,7 +52,7 @@ spec = describe "Kansoku.Query.buildSQL" $ do
 
   it "counts events at day grain with distinct event ids" $
     buildSQL (Simple events) dayRequest
-      `shouldBe` Text.unlines
+      `shouldContainText` Text.unlines
         [ "SELECT toString(toDate(occurred_at)) AS bucket, '' AS group_key,",
           "       toFloat64(count(DISTINCT event_id)) AS value",
           "FROM analytics.events_raw",
@@ -75,15 +75,15 @@ spec = describe "Kansoku.Query.buildSQL" $ do
 
   it "counts sessions by distinct non-empty session ids" $
     buildSessionsSQL dayRequest
-      `shouldBe` """
-                 SELECT toString(toDate(occurred_at)) AS bucket, '' AS group_key,
-                        toFloat64(uniqExact(session_id)) AS value
-                 FROM analytics.events_raw
-                 WHERE account_id = {account_id:String}
-                   AND occurred_at >= '2026-06-01 00:00:00' AND occurred_at < '2026-06-08 00:00:00'
-                   AND session_id != ''
-                 GROUP BY bucket, group_key
-                 ORDER BY bucket, group_key"""
+      `shouldContainText` """
+                          SELECT toString(toDate(occurred_at)) AS bucket, '' AS group_key,
+                                 toFloat64(uniqExact(session_id)) AS value
+                          FROM analytics.events_raw
+                          WHERE account_id = {account_id:String}
+                            AND occurred_at >= '2026-06-01 00:00:00' AND occurred_at < '2026-06-08 00:00:00'
+                            AND session_id != ''
+                          GROUP BY bucket, group_key
+                          ORDER BY bucket, group_key"""
 
   it "builds retention SQL with default offsets plus cohort size" $
     buildRetentionSQL dayRequest [1, 7, 14, 30]
@@ -204,7 +204,11 @@ spec = describe "Kansoku.Query.buildSQL" $ do
 
   it "keeps ClickHouse ORDER BY as the sole ordering authority for every builder" $
     traverse_
-      (`shouldContainText` "ORDER BY")
+      ( \sql -> do
+          sql `shouldContainText` "ORDER BY"
+          Text.count "LIMIT 10001" sql `shouldBe` 1
+          Text.stripEnd sql `shouldSatisfy` Text.isSuffixOf "LIMIT 10001"
+      )
       [ buildSQL (Simple activeUsers) dayRequest,
         buildSQL (Simple pageViews) dayRequest,
         buildSQL (Simple events) dayRequest,
@@ -223,19 +227,17 @@ spec = describe "Kansoku.Query.buildSQL" $ do
     traverse_ assertAggregationProperty (Map.elems builtinMetrics)
 
   it "groups revenue by a declared property through native JSON storage" $
-    Query.buildSQL defaultRegistry (Simple revenueDefinition) planRequest
-      `shouldBe` Right
-        ( Text.unlines
-            [ "SELECT toString(toDate(occurred_at)) AS bucket, toString(getSubcolumn(properties_json, 'plan')) AS group_key,",
-              "       toFloat64(sum(CAST(getSubcolumn(properties_json, 'amount'), 'Float64'))) AS value",
-              "FROM analytics.events_raw",
-              "WHERE account_id = {account_id:String}",
-              "  AND occurred_at >= '2026-06-01 00:00:00' AND occurred_at < '2026-06-08 00:00:00'",
-              "  AND event_name IN ({event_name_1:String})",
-              "GROUP BY bucket, group_key",
-              "ORDER BY bucket, group_key"
-            ]
-        )
+    buildSQL (Simple revenueDefinition) planRequest
+      `shouldContainText` Text.unlines
+        [ "SELECT toString(toDate(occurred_at)) AS bucket, toString(getSubcolumn(properties_json, 'plan')) AS group_key,",
+          "       toFloat64(sum(CAST(getSubcolumn(properties_json, 'amount'), 'Float64'))) AS value",
+          "FROM analytics.events_raw",
+          "WHERE account_id = {account_id:String}",
+          "  AND occurred_at >= '2026-06-01 00:00:00' AND occurred_at < '2026-06-08 00:00:00'",
+          "  AND event_name IN ({event_name_1:String})",
+          "GROUP BY bucket, group_key",
+          "ORDER BY bucket, group_key"
+        ]
 
   it "honors feature_adoption's declared property grouping by default" $
     buildSQL (requiredMetric "feature_adoption") dayRequest
