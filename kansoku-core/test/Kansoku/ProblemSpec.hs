@@ -136,6 +136,27 @@ spec = describe "RFC 9457 problems" $ do
     check lookupPrincipal status403 "forbidden"
     check (const (pure (Left (AuthStoreUsageError Pool.AcquisitionTimeoutUsageError)))) status503 "auth_store_unavailable"
 
+  it "validates metric parameters on the full routed path after authenticating" $
+    Warp.testWithApplication (pure (appWith lookupPrincipal)) $ \port -> do
+      manager <- HTTP.newManager HTTP.defaultManagerSettings
+      let cases =
+            [ ("/metrics/events", "filter=not-json", [], status401, "unauthorized"),
+              ("/metrics/events", "filter=not-json", [("X-Api-Key", "ksk_w_fixture")], status403, "forbidden"),
+              ("/metrics/events", "filter=null", [("X-Api-Key", "ksk_s_fixture")], status400, "invalid_filter"),
+              ("/metr%69cs/events", "filter=not-json", [("X-Api-Key", "ksk_s_fixture")], status400, "invalid_filter"),
+              ("/metrics/events", "typo=1", [("X-Api-Key", "ksk_s_fixture")], status400, "unsupported_query_parameter"),
+              ("/metrics/events", "groupBy=source&groupBy=route", [("X-Api-Key", "ksk_s_fixture")], status400, "invalid_query_parameter"),
+              ("/metrics/events", "filter", [("X-Api-Key", "ksk_s_fixture")], status400, "invalid_filter"),
+              ("/metrics/sessions", "groupBy=source", [("X-Api-Key", "ksk_s_fixture")], status400, "unsupported_query_parameter")
+            ]
+      mapM_
+        ( \(path, query, headers, expected, code) -> do
+            request <- requestAt port (path <> "?from=2026-06-01&to=2026-06-02&" <> query)
+            response <- HTTP.httpLbs request {HTTP.requestHeaders = headers} manager
+            assertProblem expected code response
+        )
+        cases
+
   it "decodes pre-handler 401 and 403 problem bodies from generated-client failures" $
     Warp.testWithApplication (pure (appWith lookupPrincipal)) $ \port -> do
       manager <- HTTP.newManager HTTP.defaultManagerSettings

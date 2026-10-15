@@ -218,12 +218,13 @@ spec = describe "Kansoku.Client" $ do
                 "{\"metric\":\"events\",\"points\":[{\"bucket\":null,\"group\":{\"source\":\"web\",\"prop:plan\":null},\"value\":1}]}"
             )
     input <- either (fail . Text.unpack) pure (Filter.mkMetricFilter "source_service" Filter.FilterEq (Just (Aeson.String "é:|,\"\\")))
+    secondInput <- either (fail . Text.unpack) pure (Filter.mkMetricFilter "source" Filter.FilterEq (Just (Aeson.String "web")))
     Warp.testWithApplication (pure app) $ \port -> do
       manager <- HTTP.newManager HTTP.defaultManagerSettings
       base <- parseBaseUrl ("http://127.0.0.1:" <> show port)
       result <-
         runClientM
-          (Metrics.events metricsClient (kansokuMetricsCredential "test-service-token") (read "2026-07-01") (read "2026-07-02") (Just "source,prop:plan") Nothing [input])
+          (Metrics.events metricsClient (kansokuMetricsCredential "test-service-token") (read "2026-07-01") (read "2026-07-02") (Just "source,prop:plan") Nothing [input, secondInput])
           (mkClientEnv manager base)
       case result of
         Right (KansokuOk payload) -> case points payload of
@@ -231,9 +232,8 @@ spec = describe "Kansoku.Client" $ do
           other -> expectationFailure (show other)
         other -> expectationFailure (show other)
       parameters <- readTVarIO captured
-      case lookup "filter" parameters of
-        Just (Just bytes) -> Aeson.eitherDecodeStrict' bytes `shouldBe` Right input
-        _ -> expectationFailure "typed client omitted the canonical filter parameter"
+      let encodedFilters = [bytes | ("filter", Just bytes) <- parameters]
+      traverse Aeson.eitherDecodeStrict' encodedFilters `shouldBe` Right [input, secondInput]
 
   it "decodes permanent metric limit problems through the generated client" $ do
     attempts <- newTVarIO (0 :: Int)

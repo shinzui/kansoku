@@ -15,7 +15,7 @@ import Kansoku.Metrics.Query.Filter qualified as Compile
 import Kansoku.Metrics.Registry (BuiltinMetric (..), events)
 import Kansoku.Metrics.RequestValidation (validateMetricRequest)
 import Kansoku.Prelude
-import Network.Wai (defaultRequest, pathInfo, queryString)
+import Network.Wai (defaultRequest, pathInfo, queryString, rawPathInfo)
 import Test.Hspec
 import Web.HttpApiData (toUrlPiece)
 
@@ -100,7 +100,7 @@ spec = describe "Kansoku.Metrics filters" $ do
 
   it "rejects parameters that a route cannot apply and permits repeated canonical filters" $ do
     input <- validFilter (jsonFilter "source" "eq" (Aeson.String "web"))
-    let req endpoint query = defaultRequest {pathInfo = ["metrics", endpoint], queryString = query}
+    let req endpoint query = defaultRequest {pathInfo = [], rawPathInfo = Text.encodeUtf8 ("/metrics/" <> endpoint), queryString = query}
         encoded = Just (Text.encodeUtf8 (toUrlPiece input))
     validateMetricRequest (req "events" [("filter", encoded), ("filter", encoded)]) `shouldBe` Right ()
     traverse_

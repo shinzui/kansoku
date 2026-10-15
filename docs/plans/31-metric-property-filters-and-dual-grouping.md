@@ -71,6 +71,14 @@ preparation and final aggregation, and healthy reuse after disposal. Evidence is
 `.dev/acceptance/identity-validation/ep31-native-core.log`. Packaged acceptance and the SDK
 contract refresh remain open.
 
+The first packaged Hurl run caught a boundary gap that direct auth-handler tests missed:
+Servant consumes WAI pathInfo during routing, so route-aware query validation must decode
+the preserved rawPathInfo. Auth checks already precede parameter decoding; retain the typed
+DTO and fix the route lookup rather than weakening parsing. Add a real Warp/Servant matrix
+covering encoded paths, malformed filters, unknown/repeated parameters and 401/403 priority.
+The first packaged run passed native recovery, limits, replay and identity, then failed the
+invalid_filter error-code assertion; it is not accepted packaged evidence.
+
 ## Decision Log
 
 
@@ -95,9 +103,22 @@ propagates. The private Join table footprints remain separate from each query's 
 M1 and M2 are accepted by the 224-example native run. The generated OpenAPI now declares
 nullable bucket/group values and repeatable JSON filters. `just check` also passes 188 deterministic core examples, 17 client examples, four probes,
 generated contracts, OpenAPI lint, strict ADR validation, all three HTTP semantic modes and
-four lifecycle cases. M3 remains open until packaged acceptance, the updated identity cost
-gate and the pinned SDK contract checks pass. The implementation candidate is committed
-before refreshing the SDK so its contract pin names a concrete source revision.
+four lifecycle cases. M3 remains open until the corrected packaged acceptance passes. Implementation candidate `97ed2e65cf5d542382a86d3da5600d0aa9550f6e` is pinned by
+`mori://shinzui/kansoku-ts` commit `a1b2d36` (contract files under `contracts/`;
+artifact-level URI pending). The regenerated consumer asserts nullable namespaced groups and
+repeatable filter parameter types. Its `just typecheck`, 60 unit examples, two native SSR
+examples and post-commit `just check` pass, including clean generated artifacts, package
+checks, size budgets and strict ADR enforcement. The seven SDK live examples remain the
+explicit final EP-38 joint gate, not evidence claimed by this contract-only refresh.
+
+The updated compiler and native work settings pass the full ten-million-event identity gate,
+with five-run medians for all twelve comparisons. Recent-only day raw/resolved medians (ms):
+funnel 14/19, retention 29/36, conversion 12/18; month 50/67, 123/176, 41/60. After seven
+million historical facts are added, day medians are 14/19, 29/36, 12/19; month 48/67,
+124/178, 41/58. Every ratio is below 2 (range 1.24–1.58). The workload, hardware and
+cold preparation evidence are preserved in private
+`.dev/acceptance/identity-bench-eukoy674/report.json`; this is the same EP-32 workload with
+the actual current production compiler, including execution/memory SET commands in timing.
 
 ## Context and Orientation
 

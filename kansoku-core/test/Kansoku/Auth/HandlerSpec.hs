@@ -16,7 +16,7 @@ import Kansoku.Auth.Token (Token (..), hashToken)
 import Kansoku.Auth.Types
 import Kansoku.Event (AccountId (..))
 import Network.HTTP.Types.Header (RequestHeaders, hAuthorization, hWWWAuthenticate)
-import Network.Wai (Request (pathInfo, queryString, requestHeaders), defaultRequest)
+import Network.Wai (Request (pathInfo, queryString, rawPathInfo, requestHeaders), defaultRequest)
 import Servant (ServerError (..), runHandler)
 import Servant.Server.Experimental.Auth (AuthHandler, unAuthHandler)
 import Test.Hspec
@@ -66,7 +66,7 @@ spec = describe "Kansoku.Auth.Handler" $ do
 
   it "validates metric parameters after authentication and returns invalid_filter before routing" $ do
     let handler = metricsAuthHandlerWith fixtureLookup
-        request headers query = defaultRequest {requestHeaders = headers, pathInfo = ["metrics", "events"], queryString = query}
+        request headers query = defaultRequest {requestHeaders = headers, pathInfo = [], rawPathInfo = "/metrics/events", queryString = query}
         run headers query = runHandler (unAuthHandler handler (request headers query))
         malformed = [("filter", Just "not-json")]
     absent <- run [] malformed

@@ -8,10 +8,12 @@ import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import Kansoku.Metrics.Filter (maxFilterBytes, maxFilters, parseMetricFilter, validateMetricFilters)
 import Kansoku.Prelude
-import Network.Wai (Request, pathInfo, queryString)
+import Network.HTTP.Types.URI (decodePathSegments)
+import Network.Wai (Request, queryString, rawPathInfo)
 
 validateMetricRequest :: Request -> Either (Text, Text) ()
-validateMetricRequest request = case allowedParameters (pathInfo request) of
+-- Servant consumes pathInfo while routing; rawPathInfo retains the full path.
+validateMetricRequest request = case allowedParameters (decodePathSegments (rawPathInfo request)) of
   Nothing -> Right ()
   Just allowed -> do
     names <- traverse (first (const ("invalid_query_parameter", "query parameter names must be UTF-8")) . Text.decodeUtf8' . fst) query
