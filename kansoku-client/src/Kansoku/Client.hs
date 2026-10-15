@@ -292,6 +292,12 @@ deliverWithRetry cfg env events =
               threadDelay (backoff attempt)
               go (attempt + 1)
           | otherwise -> pure (Left (DeliveryRejected envelope))
+        Right (KansokuRateLimited envelope retryAfter)
+          | envelope ^. #retryable && attempt < cfg ^. #maxRetries -> do
+              let retryMicros = fromInteger (min (toInteger (maxBound :: Int)) (max 0 (toInteger retryAfter) * 1000000))
+              threadDelay (max retryMicros (backoff attempt))
+              go (attempt + 1)
+          | otherwise -> pure (Left (DeliveryRejected envelope))
         Right (KansokuBadRequest envelope) -> pure (Left (DeliveryRejected envelope))
         Right (KansokuNotFound envelope) -> pure (Left (DeliveryRejected envelope))
         Right (KansokuTooLarge envelope) -> pure (Left (DeliveryRejected envelope))

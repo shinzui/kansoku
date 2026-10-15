@@ -16,7 +16,7 @@ import Test.Hspec
 
 spec :: PipelineMetrics -> Spec
 spec _metrics = describe "Kansoku.Observability" $ do
-  it "registers and exports all seven pipeline metric families" $ do
+  it "registers and exports pipeline metric families" $ do
     scrape <- Prometheus.exportMetricsAsText
     traverse_
       (\metricName -> LBS.toStrict scrape `shouldSatisfy` BS8.isInfixOf metricName)
@@ -26,7 +26,10 @@ spec _metrics = describe "Kansoku.Observability" $ do
         "kansoku_writer_events_written_total",
         "kansoku_writer_batch_flush_seconds",
         "kansoku_writer_insert_failures_total",
-        "kansoku_writer_dead_letters_total"
+        "kansoku_writer_dead_letters_total",
+        "kansoku_writer_breaker_state",
+        "kansoku_writer_recovery_failures_total",
+        "kansoku_queue_archive_length"
       ]
 
   it "records the writer's latest successful flush" $ do

@@ -13,6 +13,7 @@ import Data.Generics.Labels ()
 import Data.Map.Strict qualified as Map
 import Data.Text qualified as Text
 import Data.Time.Format (defaultTimeLocale, formatTime)
+import GHC.Clock (getMonotonicTime)
 import Kansoku.Api.Response (KansokuResult (..), problem)
 import Kansoku.Api.Response qualified as Response
 import Kansoku.Client
@@ -21,7 +22,7 @@ import Kansoku.Event
 import Kansoku.Metrics.Api (MetricResult (..), TimeGrain (Day))
 import Kansoku.Prelude
 import Network.HTTP.Client qualified as HTTP
-import Network.HTTP.Types (Status, status200, status202, status400, status401, status404, status413, status503, statusCode)
+import Network.HTTP.Types (Status, status200, status202, status400, status401, status404, status413, status429, status503, statusCode)
 import Network.HTTP.Types.Header (hAuthorization)
 import Network.Wai (Application, Request, pathInfo, queryString, requestHeaders, requestMethod, responseLBS, strictRequestBody)
 import Network.Wai.Handler.Warp qualified as Warp
@@ -113,6 +114,20 @@ spec = describe "Kansoku.Client" $ do
       readTVarIO attempts `shouldReturn` 3
       batches <- readBatches received
       fmap length batches `shouldBe` [1, 1, 1]
+      length (uniqueEventIds (concat batches)) `shouldBe` 1
+
+  it "honors a real 429 Retry-After header and retries the same event ID" $
+    withRecorder (\attempts -> do n <- readTVarIO attempts; pure (if n == 1 then status429 else status202)) $ \port received attempts -> do
+      started <- getMonotonicTime
+      withClient ((testConfig port) & #maxRetries .~ 2 & #retryBaseDelayMicros .~ 1_000) $ \client -> do
+        trackEvent client emptyIds "rate_limited_event" []
+        flush client
+        droppedCount client `shouldReturn` 0
+      elapsed <- subtract started <$> getMonotonicTime
+      elapsed `shouldSatisfy` (>= 1)
+      readTVarIO attempts `shouldReturn` 2
+      batches <- readBatches received
+      fmap length batches `shouldBe` [1, 1]
       length (uniqueEventIds (concat batches)) `shouldBe` 1
 
   it "does not retry a non-retryable API rejection" $
@@ -261,13 +276,14 @@ recorderApp received attempts nextStatus request respond = do
       status <- nextStatus attempts
       when (requestMethod request == "POST" && pathInfo request == ["v1", "batch"]) $
         atomically (modifyTVar' received (<> [body]))
-      respond (responseLBS status [("content-type", if statusCode status >= 400 then "application/problem+json" else "application/json")] (responseBodyFor status request body))
+      respond (responseLBS status ([("content-type", if statusCode status >= 400 then "application/problem+json" else "application/json")] <> [("Retry-After", "1") | status == status429]) (responseBodyFor status request body))
 
 responseBodyFor :: Status -> Request -> LBS.ByteString -> LBS.ByteString
 responseBodyFor status _request _body
   | status == status401 = Aeson.encode (problem 401 "unauthorized" "missing or unknown credential")
   | status == status400 =
       Aeson.encode (problem 400 "validation_failed" "validation failed")
+  | status == status429 = Aeson.encode (problem 429 "rate_limited" "ingest rate exceeded")
   | status == status503 =
       Aeson.encode (problem 503 "queue_unavailable" "analytics queue is unavailable")
   | status == status413 =

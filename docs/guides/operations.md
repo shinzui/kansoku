@@ -10,7 +10,7 @@ planning.
 Kansoku has two independent, forward-only migration systems:
 
 1. `just migrate` (or `cabal run kansoku-migrate -- up`) installs the vendored PGMQ schema and
-   then `kansoku.api_keys` and `kansoku.ingest_rejections` in PostgreSQL.
+   then the application credential, rejection and acceptance-ledger tables in PostgreSQL.
 2. `just ch-migrate` applies `db/clickhouse/migrations/*.sql` in filename order and records them
    in `analytics.schema_migrations`.
 
@@ -114,13 +114,18 @@ The built-in scrape exports these Kansoku pipeline instruments in addition to ru
 metrics:
 
 - `kansoku_queue_length`
+- `kansoku_queue_archive_length`
 - `kansoku_queue_oldest_message_age_seconds`
 - `kansoku_writer_batches_total`
 - `kansoku_writer_events_written_total`
 - `kansoku_writer_batch_flush_seconds`
 - `kansoku_writer_insert_failures_total`
+- `kansoku_writer_breaker_state`
+- `kansoku_writer_recovery_failures_total`
 - `kansoku_writer_dead_letters_total`
 - `kansoku_ingest_events_total{outcome,transport}`
+- `kansoku_ingest_newly_queued_total{transport}`
+- `kansoku_ingest_rate_limited_requests_total{transport}`
 - `kansoku_ingest_rejections_total{reason,transport}`
 - `kansoku_ingest_timestamp_adjustments_total{adjustment,transport}`
 - `kansoku_ingest_quarantine_failures_total`
@@ -131,7 +136,9 @@ dead-letter increases, and a mismatch between accepted traffic and written-event
 queue resets the backlog-sensitive stale-flush readiness condition, so monotonic counters are
 important for historical alerting.
 
-Accepted counts increase after queue commit; rejected counts increase once per event, and
+Accepted counts include acknowledged equal retries after commit; newly queued counts include only
+new identities. Rate-limited requests have their own request counter and no event outcome.
+Rejected counts increase once per event, and
 reason counts once per distinct reason per event. Labels never contain account, credential or
 payload values. Transports are `single` and `batch` (the later beacon route uses the same
 instruments). Compare rates while watching queue depth/oldest age for backlog; writer retries
@@ -184,15 +191,34 @@ Accepted events already in the queue remain durable.
 
 Canonical readiness fails `clickhouse_query_reachable`. Interrupted and failed query
 connections close before errors propagate; the next pool checkout opens a fresh connection.
-Pool shutdown closes idle physical connections. Metric queries return retryable HTTP 503. Writer inserts fail, increment
-`kansoku_writer_insert_failures_total`, and are retried within the adapter policy. The writer
-discards a failed physical connection and opens a new one on the next delivery so a repaired
-ClickHouse can recover without restarting Kansoku.
+Pool shutdown closes idle physical connections. Metric queries return retryable HTTP 503.
+The writer retains one unchanged batch and closes the source gate before further adapter pulls.
+Prefetch is disabled, the inbox and ready-batch buffer are each one element, and a read already
+in progress may finish. For the single constant batch key, a conservative retained-delivery
+bound is `2 * writerBatch + adapterBatch + 3` (11003 at defaults); recovery itself retains
+one unchanged active batch. Framework buffers and chunks account for the rest.
+A separate physical connection probes storage every five seconds (750 ms deadline); ping permits
+another insert attempt, and only a successful insert reopens consumption. Inserts have a 30-second
+deadline. Failed connections are discarded. Native batch lease renewal uses at least 60 seconds.
 
-The pinned adapter auto-archives a message after its retry budget is exhausted. A long outage can
-therefore require deliberate archive inspection and replay after storage recovers; do not assume
-an arbitrarily long outage drains automatically. Verify event IDs before replay so ClickHouse's
-idempotency boundary remains effective.
+`kansoku_writer_breaker_state` is 0 while closed, 1 while unavailable, and 2 for a rejected
+SQL/schema insert. State 2 parks the batch and retries at the same cadence; repair the schema
+rather than replaying valid data. Recovery failures increment their own counter. Batch-flush
+histograms include time retained for recovery. Alert on an open breaker and archive growth.
+
+The adapter delivery maximum is 9223372036854775807, with a proven source pause. Its underlying
+read count is still a finite Int32; overflow fails rather than archiving a valid event. This is
+a practically non-exhausting delivery policy, conditional on finite PostgreSQL disk/WAL capacity
+and eventual storage recovery. Ordinary storage retry renews the held batch without consuming
+more deliveries. A restart redelivers leased messages after visibility expiry; immutable acceptance
+and canonical reads make uncertain committed inserts safe. Allow at least the 35-second total
+writer shutdown deadline before forcibly terminating the process.
+
+Run `just outage-acceptance` for the owned packaged-server ten-minute, 200-events/s outage and
+restart proof, or `just outage-smoke` for a short recovery regression. Both require native tools
+from `nix develop`, own their stores/processes, fail on missing required cases, and record private
+measurement reports under `.dev/acceptance/outage-*/report.json`. See the
+[capacity procedure](capacity.md) for finite disk and drain budgets.
 
 ### Malformed queued payload
 

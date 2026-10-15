@@ -54,9 +54,9 @@ without staged rollout, legacy compatibility or downstream release coordination.
 
 - [x] M0: Released Shibuya/adapter/PGMQ baseline builds and passes fresh-install and writer lifecycle checks.
 - [x] M1: Durable event identity and replay-safe analytical reads pass failure/rebatching tests.
-- [ ] M2: Writer pauses consumption during outages and resumes with bounded recovery evidence.
-- [ ] M3: Archive/backlog instruments and shared credential rate limits pass HTTP tests.
-- [ ] M4: Named-hardware ingest and drain benchmarks establish the deployment envelope.
+- [x] M2: Writer pauses consumption during outages and resumes with bounded recovery evidence.
+- [x] M3: Archive/backlog instruments and shared credential rate limits pass HTTP tests.
+- [x] M4: Named-hardware ingest and drain benchmarks establish the deployment envelope.
 
 ## Surprises & Discoveries
 
@@ -91,12 +91,39 @@ and merges. Trait analytics is introduced by the later trait child and must cons
 canonical boundary rather than introduce an insert-time additive projection.
 
 The acceptance ledger hashes original JSON with Aeson's lossless RFC8785 encoder (available
-since 2.2.1.0; the existing resolved 2.2.4.1 is retained; current upstream/Hackage preferred is
+since 2.2.1.0; Nix resolves 2.2.4.1 and Cabal 2.2.5.1; current upstream/Hackage preferred is
 2.3.2.0). It excludes receive/send clocks and ignored producer account, while preserving unknown
 producer content in the hash. Validation/normalization is lazy and skipped for known equal
 payloads. Claims and sends share one Hasql transaction; stable key order avoids opposing batch
 lock order. Native tests cover concurrent equal/conflicting IDs, rollback, tombstones and a
 real discarded acceptance-COMMIT response. Only hash/identity/time/tombstone metadata persists.
+
+M2's released source wrapper must cancel an in-progress pull when the breaker opens:
+`Stream.uncons` can otherwise continue the adapter's internal empty polling even when no new
+outer pulls occur. Its wake/cancel race is covered by an explicit empty-poll regression.
+Prefetch is disabled; serial processing retains one unchanged batch, native batch lease renewal
+avoids per-message roundtrips, and the inbox is one element. A single already-issued read can
+finish at the transition; the released batcher also has a one-batch ready-output buffer. A conservative per-process
+retained-delivery bound for the single constant key is `2 * writerBatch + adapterBatch + 3`
+(active handler, ready batch or accumulator, adapter chunk, inbox/producer handoff). At tested
+settings this is 11003, with 22006 across one restart. The native run's observed 7200 reads
+also passes its original stricter 12002 fixture assertion; the general bound must include that
+batcher output buffer rather than treating the inbox as the only background buffer.
+Storage probes use a separate owned connection every five seconds, and only a successful
+insert reopens pulls. Server errors park/alert at state 2 and retry on that cadence. The
+adapter maximum is Int64 maxBound (9223372036854775807); native PGMQ read_ct is a finite Int32,
+so this is a practically non-exhausting delivery policy, not an infinite-storage/delivery claim.
+Read-count overflow would fail rather than auto-archive a valid event. Ordinary outage retry
+holds/renews the batch instead of consuming additional deliveries.
+
+The native smoke proof (`.dev/acceptance/outage-5rlhhwgm/report.json`, private ignored evidence)
+passes schema parking/repair, malformed-payload archive, source quiescence, real process restart,
+8000 accepted events and zero valid archives. Its outage lasted 51.8 seconds including restart;
+first recovered write was 3.90 seconds and drain 54.31 seconds. Old-process leases explain the
+longer final drain. This does not discharge the required 600-second/200-events-per-second proof;
+`just outage-acceptance` owns that separate, non-skipping duration gate. Both it and
+`just outage-smoke` run the packaged server against Haskell-owned ephemeral PostgreSQL and
+private ClickHouse/proxy processes, with measured calibration-based drain bounds and disk data.
 
 The actual raw sort key is `(account_id,event_name,occurred_at,event_id)`, not event ID alone.
 `ReplacingMergeTree` does not deduplicate additive materialized-view counts. The adapter pinned
@@ -125,7 +152,13 @@ Use the released APIs directly; no external consumer or SDK release blocks this 
 ## Outcomes & Retrospective
 
 
-Planning reviewed; no throughput or recovery guarantee has yet been measured.
+All milestones are accepted. The released queue lifecycle, permanent acceptance identity,
+canonical replay-safe analytics, pre-pull storage gate, bounded credential admission and named
+hardware measurement are implemented. The ten-minute outage preserves all 120000 logical events
+through restart, first write in 2.48 seconds and drain in 21.21 seconds, with zero valid archives.
+The deployment envelope remains finite and hardware/workload-specific. Later children consume
+`IngestService`, `events_canonical`, shared typed 429 and the queue dependency baseline. Beacon
+endpoint conformance is explicitly owned by EP-39. No deployed-data compatibility is introduced.
 
 ## Context and Orientation
 
@@ -255,6 +288,11 @@ Use monotonic time, bounded idle eviction and atomic updates. State limits are p
 proxies supply outer request/byte limits. Return retryable 429 `rate_limited`, whole-second
 `Retry-After`, and shared OpenAPI/client alternatives. Verify actual SDK 429/backoff behavior.
 
+The shared Beacon service adapter is tested here against the same credential bucket; public
+beacon HTTP credential/origin and normalization/persistence scenarios belong to its owning
+`docs/plans/39-beacon-ingest-route-for-page-exit-delivery.md`, after this whole-child prerequisite.
+This preserves the declared dependency graph without pretending the route already exists.
+
 ### M4: Capacity
 
 
@@ -304,6 +342,30 @@ unchanged by replay. Compare final values before and after merges. Ten-minute ou
 on all three transports, two keys, bucket eviction and concurrent requests. Tests that only
 count distinct IDs cannot establish aggregate correctness.
 
+M3 implementation checks (2026-10-15): `just check` passes 178 deterministic core examples,
+16 client examples, four probes, generated OpenAPI/catalog, strict ADRs and all telemetry modes.
+Owned PostgreSQL HTTP admission includes four concurrent requests, independent credentials on
+one account, charge for invalid events, retry headers/CORS and unchanged normalization,
+quarantine/ledger/queue state on denial. The browser consumer fixture (`just sdk-rate-limit`)
+passes at `mori://shinzui/kansoku-ts/packages/kansoku-js`, revision
+`f57bc4ef378d60adbd08c81ccf69a2268d368167`: two 429 retries preserve IDs and exponential
+scheduling. That SDK currently ignores Retry-After; the Haskell client's real HTTP test honors
+its one-second lower bound. Packaged acceptance also passes in `.dev/acceptance/run-hjkdqtkv/sanitized`: 207 core,
+17 client, four probe examples and 45 Hurl requests, native recovery/limit/replay and all telemetry
+modes, with no required pending cases. The native committed-insert/lost-confirmation example
+also exercises the retained recovery callback before successful acknowledgement. M2/M4 are accepted by `just outage-acceptance`, one required example with no failures/pending:
+`.dev/acceptance/outage-mk1fy7bw/report.json` records 120000 events over 600.005 seconds at
+200/s, real restart, frozen reads 200/7200, zero valid archives, first recovered write 2.477
+seconds and drain 21.211 seconds versus 336.280-second bound. Apple M1 Max/64 GiB/macOS 26.7
+calibration including probe startup is 870.94 events/s; actual logical drain is 5657.44/s.
+Database growth is 146194432 bytes; generated WAL 416709088 bytes; oldest backlog 600.17 seconds.
+The successful writer counter is 121049 because leases can redeliver buffered payloads; canonical
+logical count and acceptance ledger are both exactly 120000. The named-workload report,
+finite 10-GiB/50%-headroom example and alert thresholds are in `docs/guides/capacity.md`.
+Other reference hardware is explicitly unmeasured. The run passed the original stricter 12002
+cross-restart read bound; the reusable harness now derives its conservative 22006 bound from
+the released ready-batch buffer as well, with production code unchanged after acceptance.
+
 ## Concrete Steps
 
 
@@ -317,6 +379,7 @@ just openapi
 just contracts
 just check
 just acceptance
+just outage-acceptance
 ```
 
 Use focused Hspec examples while developing. Before marking Complete, require nonzero example

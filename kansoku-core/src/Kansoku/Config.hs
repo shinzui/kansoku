@@ -49,6 +49,8 @@ data Config = Config
     corsAllowedOrigins :: !(Maybe [Text]),
     ingestMaxBodyBytes :: !Int,
     ingestMaxBatchLength :: !Int,
+    ingestRatePerSec :: !Int,
+    ingestRateBurst :: !Int,
     ingestFutureToleranceSec :: !Int,
     ingestQuarantine :: !Bool,
     quarantineRetentionDays :: !Int,
@@ -86,6 +88,8 @@ loadConfig = do
   corsOrigins <- lookupEnv "KANSOKU_CORS_ORIGINS"
   ingestBodyBytes <- lookupEnv "KANSOKU_INGEST_MAX_BODY_BYTES"
   ingestBatchLength <- lookupEnv "KANSOKU_INGEST_MAX_BATCH_LENGTH"
+  ingestRate <- lookupEnv "KANSOKU_INGEST_RATE_PER_SEC"
+  ingestBurst <- lookupEnv "KANSOKU_INGEST_RATE_BURST"
   quarantineEnabled <- lookupEnv "KANSOKU_INGEST_QUARANTINE"
   quarantineRetention <- lookupEnv "KANSOKU_INGEST_QUARANTINE_RETENTION_DAYS"
   quarantineRows <- lookupEnv "KANSOKU_INGEST_QUARANTINE_MAX_ROWS"
@@ -99,13 +103,16 @@ loadConfig = do
   pure $ do
     tcp <- parsePort "CLICKHOUSE_TCP_PORT" 9000 chTcp
     http <- parsePort "CLICKHOUSE_HTTP_PORT" 8123 chHttp
-    maxBatch <- parseInt "KANSOKU_WRITER_MAX_BATCH" 5000 writerBatch
-    maxLatency <- parseInt "KANSOKU_WRITER_MAX_LATENCY_MS" 5000 writerLatency
-    visibility <- parseInt32 "KANSOKU_WRITER_VT_SEC" 60 writerVt
-    adapterBatch <- parseInt32 "KANSOKU_WRITER_ADAPTER_BATCH" 1000 writerAdapterBatch
+    maxBatch <- parsePositiveInt "KANSOKU_WRITER_MAX_BATCH" 5000 writerBatch
+    maxLatency <- parsePositiveInt "KANSOKU_WRITER_MAX_LATENCY_MS" 5000 writerLatency
+    visibility <- parsePositiveInt32 "KANSOKU_WRITER_VT_SEC" 60 writerVt
+    adapterBatch <- parsePositiveInt32 "KANSOKU_WRITER_ADAPTER_BATCH" 1000 writerAdapterBatch
     queryPoolSize <- parsePositiveInt "KANSOKU_CH_QUERY_POOL_SIZE" 4 chQueryPoolSize
     maxBodyBytes <- parsePositiveInt "KANSOKU_INGEST_MAX_BODY_BYTES" defaultIngestMaxBodyBytes ingestBodyBytes
     maxBatchLength <- parsePositiveInt "KANSOKU_INGEST_MAX_BATCH_LENGTH" defaultIngestMaxBatchLength ingestBatchLength
+    rate <- parseNonNegativeInt "KANSOKU_INGEST_RATE_PER_SEC" 2000 ingestRate
+    burst <- parseNonNegativeInt "KANSOKU_INGEST_RATE_BURST" 10000 ingestBurst
+    unless (rate == 0 || burst >= maxBatchLength) (Left (ConfigError "KANSOKU_INGEST_RATE_BURST: enabled burst must cover KANSOKU_INGEST_MAX_BATCH_LENGTH"))
     enableQuarantine <- parseBool "KANSOKU_INGEST_QUARANTINE" False quarantineEnabled
     retentionDays <- parsePositiveInt "KANSOKU_INGEST_QUARANTINE_RETENTION_DAYS" 14 quarantineRetention
     maxRows <- parsePositiveInt "KANSOKU_INGEST_QUARANTINE_MAX_ROWS" 10000 quarantineRows
@@ -135,6 +142,8 @@ loadConfig = do
           corsAllowedOrigins = parseCorsOrigins corsOrigins,
           ingestMaxBodyBytes = maxBodyBytes,
           ingestMaxBatchLength = maxBatchLength,
+          ingestRatePerSec = rate,
+          ingestRateBurst = burst,
           ingestQuarantine = enableQuarantine,
           quarantineRetentionDays = retentionDays,
           quarantineMaxRows = maxRows,
@@ -192,6 +201,11 @@ parseInt32 name _ (Just raw) =
     Just n -> Right n
     Nothing ->
       Left (ConfigError (name <> ": not a valid integer: " <> Text.pack raw))
+
+parsePositiveInt32 :: Text -> Int32 -> Maybe String -> Either ConfigError Int32
+parsePositiveInt32 name def raw = do
+  value <- parseInt32 name def raw
+  if value >= 1 then Right value else Left (ConfigError (name <> ": must be at least 1"))
 
 parseInt64 :: Text -> Int64 -> Maybe String -> Either ConfigError Int64
 parseInt64 _ def Nothing = Right def

@@ -5,7 +5,7 @@ description: Use one RFC 9457 error shape and explicit per-response media types 
 docId: ADR-8
 status: Accepted
 date: 2026-10-15
-timestamp: 2026-10-15T03:59:59Z
+timestamp: 2026-10-15T18:26:32Z
 generated:
   by: codex-cli/gpt-6.1-sol
   at: 2026-10-15T03:43:15Z
@@ -54,8 +54,8 @@ probes and Prometheus remain outside the public analytics error contract.
 The generated Haskell clients decode declared handler failures into `KansokuResult`.
 Authentication can reject before the typed handler and arrive as a Servant client failure;
 callers can decode its problem body explicitly. The buffering SDK drops permanent typed
-problems and pre-handler 4xx failures, retries retryable 503s and connection failures with
-bounded backoff, and preserves event IDs across retries. Parsed 202 batch rejections
+problems and pre-handler 4xx failures, retries retryable 429/503 problems and connection failures with
+bounded backoff, honors the typed 429 Retry-After lower bound, and preserves event IDs across retries. Parsed 202 batch rejections
 remain acknowledgement data and are never retried.
 
 ## Consequences
@@ -70,3 +70,10 @@ regenerate OpenAPI, and exercise real HTTP and generated-client decoding. Schema
 cover every documented error, including authentication. Query-limit additions can add
 codes without changing the wire shape; probe adoption must preserve the operational
 exemption. Server/client builds must use the same verified OpenAPI cohort.
+
+The shared 429 alternative returns `rate_limited` with `retryable: true` and required integer
+`Retry-After` seconds. Servant's supported plain Header type encodes the body/header pair; the
+OpenAPI overlay marks the header required. HTTP and generated-client tests verify the media
+type, header and stable event identity across actual retry. The browser SDK consumer currently
+uses its exponential jittered 429 backoff; its executable source fixture proves eventual
+acceptance and stable IDs without claiming it consumes Retry-After.

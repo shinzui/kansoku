@@ -2,7 +2,7 @@
 type: Architecture Decision Record
 title: SDK-grade ingest contract boundaries
 description: Accept syntactically valid ingest batches partially, cap request size and count, and scope CORS to /v1/* so SDKs get stable retry semantics.
-timestamp: 2026-10-15T17:23:33Z
+timestamp: 2026-10-15T18:26:32Z
 generated:
   by: human:kansoku-maintainers
   at: 2026-07-19T00:00:00Z
@@ -29,7 +29,7 @@ tokens to ingest and protected read credentials to metrics.
 
 ## Decision
 
-`POST /v1/batch` partially accepts any syntactically valid batch. It enqueues valid events and
+`POST /v1/batch` partially accepts an admitted, in-bound syntactically valid batch. It enqueues valid events and
 returns HTTP 202 with an accepted count plus zero-based rejection records for invalid events.
 Even an all-invalid parsed batch returns 202. HTTP 400 is reserved for a body that cannot be
 decoded as the batch type. Rejection text is human-facing; clients identify rejected submissions
@@ -118,3 +118,20 @@ overrides and receive/send clocks. Nested order and equivalent numbers canonical
 Aeson's lossless RFC8785 encoder. Claims roll back with failed queue sends; concurrent batches
 acquire identity claims in stable key order. The minimal ledger persists indefinitely, including
 erasure tombstones. It stores no full event payload.
+
+## Shared admission
+
+One process-owned ingest service performs credential admission after bounded decoding and before
+normalization, hash/ledger work, quarantine or queue writes. Single and batch share a monotonic,
+atomic token bucket per credential; the beacon adapter must use the same service. Submitted
+event count includes invalid events and equal retries. Defaults are 2000 events/s and burst
+10000; rate zero disables limits, otherwise burst must cover the maximum batch. State is capped
+at 10000 credentials and idle eviction waits at least the full-refill interval and 60 seconds.
+New credentials at capacity receive a bounded retry delay. Process-local limits require proxy
+request/byte limits for a deployment-wide envelope.
+
+Denial returns retryable 429 `rate_limited` with positive whole-second `Retry-After`, exposed by
+CORS. No event outcomes, normalization or persistence occur for a denied request. The shared
+response algebra, generated OpenAPI and Haskell client include this header-bearing alternative.
+Native HTTP tests prove concurrent atomic admission, independent keys on one account and absence
+of persistence/normalization side effects. Public beacon endpoint acceptance belongs to EP-39.

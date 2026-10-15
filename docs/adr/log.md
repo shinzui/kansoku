@@ -1,6 +1,8 @@
 # Bundle Update Log
 
 ## 2026-10-15
+* **Update**: Include the released batcher ready-output buffer in the conservative retained-delivery bound.
+* **Update**: Record shared credential admission, typed rate-limit retry and retained source-pausing writer recovery.
 * **Update**: ADR-1/ADR-4: record immutable transactional acceptance, indefinite identity tombstones, canonical reads and replay-safe exact count states.
 * **Update**: Record released queue lifecycle cohort, finite total shutdown, asynchronous cancellation and native lost-commit proof.
 * **Update**: Localize bounded quarantine I/O to a dedicated nonblocking libpq adapter; retain ordinary credential and queue dependency sources.

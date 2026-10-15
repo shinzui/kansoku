@@ -43,6 +43,7 @@ import Kansoku.Event.Registry (defaultRegistry)
 import Kansoku.Exception (catchSynchronous, trySynchronous)
 import Kansoku.Health (probeApplication)
 import Kansoku.Ingest.Handler (ingestServer)
+import Kansoku.Ingest.Service (IngestService, newIngestService)
 import Kansoku.Logging (Log, logError, logInfo, runLogStderr)
 import Kansoku.Metrics.Handler (metricsServer)
 import Kansoku.Observability (PipelineMetrics)
@@ -90,23 +91,24 @@ healthApp req respond =
     _ ->
       respond (responseLBS status404 [(hContentType, "text/plain")] "Not Found")
 
-kansokuServer :: Config -> PipelineMetrics -> Pool.Pool -> QueueName -> QueryPool -> KansokuAPI (AsServerT Handler)
-kansokuServer config pipelineMetrics pool queueName queryPool =
+kansokuServer :: IngestService -> QueryPool -> KansokuAPI (AsServerT Handler)
+kansokuServer service queryPool =
   KansokuAPI
-    { ingest = ingestServer config pipelineMetrics pool queueName,
+    { ingest = ingestServer service,
       metrics = metricsServer queryPool,
       schemas = pure (schemaCatalog defaultRegistry)
     }
 
 kansokuApp :: PipelineMetrics -> Config -> ReadyProbe -> Pool.Pool -> QueueName -> QueryPool -> IO Application
 kansokuApp pipelineMetrics config probe pool queueName queryPool = do
+  service <- newIngestService config pipelineMetrics pool queueName
   (liveCheck, readyCheck) <- newProbeChecks probe
-  pure (kansokuAppWithChecks liveCheck readyCheck pipelineMetrics config probe pool queueName queryPool)
+  pure (kansokuAppWithChecks liveCheck readyCheck pipelineMetrics config probe pool service queryPool)
 
 -- | Production assembly with independently injectable checks. The conformance kit
 -- uses this same builder; analytics dependencies stay unevaluated for probes.
-kansokuAppWithChecks :: ProbeCheck -> ProbeCheck -> PipelineMetrics -> Config -> ReadyProbe -> Pool.Pool -> QueueName -> QueryPool -> Application
-kansokuAppWithChecks liveCheck readyCheck pipelineMetrics config probe pool queueName queryPool =
+kansokuAppWithChecks :: ProbeCheck -> ProbeCheck -> PipelineMetrics -> Config -> ReadyProbe -> Pool.Pool -> IngestService -> QueryPool -> Application
+kansokuAppWithChecks liveCheck readyCheck _pipelineMetrics config probe pool service queryPool =
   operational liveCheck readyCheck $
     waiWrapper
       probe
@@ -124,7 +126,7 @@ kansokuAppWithChecks liveCheck readyCheck pipelineMetrics config probe pool queu
                             :. metricsAuthHandler pool
                             :. EmptyContext
                         )
-                        (kansokuServer config pipelineMetrics pool queueName queryPool)
+                        (kansokuServer service queryPool)
                     )
               )
           )
@@ -197,6 +199,7 @@ ingestCors allowedOrigins inner req respond =
             (\origins -> (Text.Encoding.encodeUtf8 <$> origins, False)) <$> allowedOrigins,
           Cors.corsMethods = ["GET", "POST"],
           Cors.corsRequestHeaders = ["Content-Type", "X-Api-Key", "Authorization"],
+          Cors.corsExposedHeaders = Just ["Retry-After"],
           Cors.corsMaxAge = Just 3600
         }
 

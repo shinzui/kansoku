@@ -59,7 +59,7 @@ spec = describe "RFC 9457 problems" $ do
           let problem = P.problem status code "safe detail"
           P.code problem `shouldBe` code
           P.status problem `shouldBe` status
-          P.retryable problem `shouldBe` (status == 503)
+          P.retryable problem `shouldBe` (status == 503 || status == 429)
           validateToJSON problem `shouldBe` []
       )
       P.problemCatalog

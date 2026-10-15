@@ -121,3 +121,15 @@ hurl:
 # Own private databases and exercise the Nix-packaged executable.
 acceptance:
     bash scripts/acceptance.sh
+
+# Required EP-30 duration proof: owned stores, packaged server, 600s at 200 events/s.
+outage-acceptance:
+    python3 scripts/outage-acceptance.py
+
+# Shorter native outage/restart proof for recovery-code changes.
+outage-smoke:
+    python3 scripts/outage-acceptance.py --smoke
+
+# Exercise the Mori-registered browser SDK against the 429 transport contract.
+sdk-rate-limit:
+    python3 scripts/sdk-rate-limit.py

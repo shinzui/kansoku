@@ -6,6 +6,7 @@ import Control.Exception (SomeException, fromException, throwIO, try)
 import Data.Aeson (Value)
 import Data.Aeson qualified as Aeson
 import Data.HashMap.Strict qualified as HashMap
+import Data.IORef (atomicModifyIORef', newIORef, readIORef)
 import Effectful (IOE, runEff)
 import Kansoku.ClickHouse
   ( clickHouseConfigFromConfig,
@@ -28,6 +29,7 @@ import Kansoku.Observability
   )
 import Kansoku.Prelude
 import Kansoku.Writer.Batch (writerBatchHandler)
+import Kansoku.Writer.Recovery
 import Prometheus qualified
 import Shibuya.Batch
   ( BatchInfo (..),
@@ -112,6 +114,22 @@ spec metrics = describe "Kansoku.Writer.Batch" $ do
     Prometheus.getCounter (metrics ^. #writerEventsWrittenTotal)
       `shouldReturn` eventsBefore
     lastWriterBeat heartbeat `shouldReturn` Nothing
+
+  it "retains a committed batch after lost confirmation and only acknowledges its successful retry" $
+    withClickHouse $ \conn -> do
+      command conn "TRUNCATE TABLE analytics.events_raw"
+      heartbeat <- newWriterHeartbeat
+      attempts <- newIORef (0 :: Int)
+      recovery <- newWriterRecovery (defaultRecoveryPolicy {probeIntervalMicros = 1000}) metrics (ping conn)
+      let insert events = do
+            number <- atomicModifyIORef' attempts (\n -> (n + 1, n))
+            insertEvents conn events
+            when (number == 0) $ ioError (userError "injected lost committed insert confirmation")
+      ack <- runEff (writerBatchHandler metrics heartbeat (recoverInsert recovery (pure ()) insert) batchInfo (handlerMessage :| []))
+      ack ^. #fallback `shouldBe` AckOk
+      readIORef attempts `shouldReturn` 2
+      readBreakerState recovery `shouldReturn` Closed
+      countEvents conn `shouldReturn` 1
 
 withClickHouse :: (Connection -> Expectation) -> Expectation
 withClickHouse action = do

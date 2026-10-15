@@ -20,6 +20,7 @@ import Kansoku.Ingest.Acceptance
 import Kansoku.Ingest.Api
 import Kansoku.Ingest.Handler (ingestServer)
 import Kansoku.Ingest.Queue (eventsQueueName)
+import Kansoku.Ingest.Service (newIngestService)
 import Kansoku.Observability (PipelineMetrics)
 import Kansoku.Postgres (createPool)
 import Kansoku.PostgresTestSupport (withCommitFault, withMigratedPool, withMigratedStore)
@@ -99,7 +100,8 @@ spec metrics = describe "Kansoku.Ingest.Acceptance" $ do
   it "returns a single 400 conflict and batch per-event conflict with original indices" $ withMigratedPool $ \pool -> do
     provision pool
     cfg <- loadConfig >>= either (fail . show) pure
-    let routes = ingestServer cfg metrics pool queue
+    service <- newIngestService cfg metrics pool queue
+    let routes = ingestServer service
         principal = IngestPrincipal (AuthenticatedPrincipal (ApiKeyId UUID.nil) WriteKey account)
         original = raw sample
         changed = raw (sample & #eventName .~ EventName "changed")

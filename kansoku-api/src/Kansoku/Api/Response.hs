@@ -14,6 +14,7 @@ module Kansoku.Api.Response
     badRequest,
     notFound,
     tooLarge,
+    rateLimited,
     unauthorized,
     unavailable,
     forbidden,
@@ -26,9 +27,9 @@ import Data.Text.Encoding qualified as Text.Encoding
 import GHC.TypeLits (Symbol)
 import Kansoku.Prelude
 import Network.HTTP.Media ((//))
-import Network.HTTP.Types.Status (status400, status401, status403, status404, status405, status406, status413, status415, status500, status503, statusMessage)
-import Servant.API (Accept (..), JSON, MimeRender (..), MimeUnrender (..))
-import Servant.API.MultiVerb (AsUnion (..), RespondAs)
+import Network.HTTP.Types.Status (status400, status401, status403, status404, status405, status406, status413, status415, status429, status500, status503, statusMessage)
+import Servant.API (Accept (..), Header, JSON, MimeRender (..), MimeUnrender (..))
+import Servant.API.MultiVerb (AsUnion (..), RespondAs, WithHeaders)
 
 -- | RFC 9457 problem document. `about:blank` uses the HTTP status phrase.
 data ProblemDetails = ProblemDetails
@@ -71,14 +72,22 @@ data KansokuResult a
   | KansokuNotFound !ProblemDetails
   | KansokuTooLarge !ProblemDetails
   | KansokuUnavailable !ProblemDetails
+  | KansokuRateLimited !ProblemDetails !Int
   deriving stock (Generic, Eq, Show, Functor)
+
+type RateLimitedResponse =
+  WithHeaders
+    '[Header "Retry-After" Int]
+    (ProblemDetails, Int)
+    (RespondAs ProblemJSON 429 "Rate limited" ProblemDetails)
 
 type OkResponses (desc :: Symbol) a =
   '[ RespondAs JSON 200 desc a,
      RespondAs ProblemJSON 400 "Malformed request" ProblemDetails,
      RespondAs ProblemJSON 404 "Not found" ProblemDetails,
      RespondAs ProblemJSON 413 "Payload too large" ProblemDetails,
-     RespondAs ProblemJSON 503 "Storage unavailable" ProblemDetails
+     RespondAs ProblemJSON 503 "Storage unavailable" ProblemDetails,
+     RateLimitedResponse
    ]
 
 type AcceptedResponses (desc :: Symbol) a =
@@ -86,7 +95,8 @@ type AcceptedResponses (desc :: Symbol) a =
      RespondAs ProblemJSON 400 "Malformed request" ProblemDetails,
      RespondAs ProblemJSON 404 "Not found" ProblemDetails,
      RespondAs ProblemJSON 413 "Payload too large" ProblemDetails,
-     RespondAs ProblemJSON 503 "Storage unavailable" ProblemDetails
+     RespondAs ProblemJSON 503 "Storage unavailable" ProblemDetails,
+     RateLimitedResponse
    ]
 
 -- These instances deliberately spell out the positional mapping. The final
@@ -98,7 +108,8 @@ instance
        RespondAs ProblemJSON 400 "Malformed request" ProblemDetails,
        RespondAs ProblemJSON 404 "Not found" ProblemDetails,
        RespondAs ProblemJSON 413 "Payload too large" ProblemDetails,
-       RespondAs ProblemJSON 503 "Storage unavailable" ProblemDetails
+       RespondAs ProblemJSON 503 "Storage unavailable" ProblemDetails,
+       RateLimitedResponse
      ]
     (KansokuResult a)
   where
@@ -108,13 +119,15 @@ instance
     KansokuNotFound err -> S (S (Z (I err)))
     KansokuTooLarge err -> S (S (S (Z (I err))))
     KansokuUnavailable err -> S (S (S (S (Z (I err)))))
+    KansokuRateLimited err delay -> S (S (S (S (S (Z (I (err, delay)))))))
   fromUnion = \case
     Z (I value) -> KansokuOk value
     S (Z (I err)) -> KansokuBadRequest err
     S (S (Z (I err))) -> KansokuNotFound err
     S (S (S (Z (I err)))) -> KansokuTooLarge err
     S (S (S (S (Z (I err))))) -> KansokuUnavailable err
-    S (S (S (S (S impossible)))) -> case impossible of {}
+    S (S (S (S (S (Z (I (err, delay))))))) -> KansokuRateLimited err delay
+    S (S (S (S (S (S impossible))))) -> case impossible of {}
 
 instance
   AsUnion
@@ -122,7 +135,8 @@ instance
        RespondAs ProblemJSON 400 "Malformed request" ProblemDetails,
        RespondAs ProblemJSON 404 "Not found" ProblemDetails,
        RespondAs ProblemJSON 413 "Payload too large" ProblemDetails,
-       RespondAs ProblemJSON 503 "Storage unavailable" ProblemDetails
+       RespondAs ProblemJSON 503 "Storage unavailable" ProblemDetails,
+       RateLimitedResponse
      ]
     (KansokuResult a)
   where
@@ -132,13 +146,15 @@ instance
     KansokuNotFound err -> S (S (Z (I err)))
     KansokuTooLarge err -> S (S (S (Z (I err))))
     KansokuUnavailable err -> S (S (S (S (Z (I err)))))
+    KansokuRateLimited err delay -> S (S (S (S (S (Z (I (err, delay)))))))
   fromUnion = \case
     Z (I value) -> KansokuOk value
     S (Z (I err)) -> KansokuBadRequest err
     S (S (Z (I err))) -> KansokuNotFound err
     S (S (S (Z (I err)))) -> KansokuTooLarge err
     S (S (S (S (Z (I err))))) -> KansokuUnavailable err
-    S (S (S (S (S impossible)))) -> case impossible of {}
+    S (S (S (S (S (Z (I (err, delay))))))) -> KansokuRateLimited err delay
+    S (S (S (S (S (S impossible))))) -> case impossible of {}
 
 -- | Central status/title/retry policy. Callers supply a stable code and safe detail.
 problem :: Int -> Text -> Text -> ProblemDetails
@@ -157,6 +173,7 @@ problem status code detail =
                   406 -> status406
                   413 -> status413
                   415 -> status415
+                  429 -> status429
                   503 -> status503
                   _ -> status500
               )
@@ -164,13 +181,14 @@ problem status code detail =
       status,
       detail,
       code,
-      retryable = status == 503
+      retryable = status == 503 || status == 429
     }
 
-badRequest, notFound, tooLarge, unauthorized, forbidden, unavailable :: Text -> Text -> ProblemDetails
+badRequest, notFound, tooLarge, rateLimited, unauthorized, forbidden, unavailable :: Text -> Text -> ProblemDetails
 badRequest = catalogProblem 400
 notFound = catalogProblem 404
 tooLarge = catalogProblem 413
+rateLimited = catalogProblem 429
 unauthorized = catalogProblem 401
 forbidden = catalogProblem 403
 unavailable = catalogProblem 503
@@ -209,6 +227,7 @@ problemCatalog =
     ("not_acceptable", 406),
     ("payload_too_large", 413),
     ("batch_too_large", 413),
+    ("rate_limited", 429),
     ("unsupported_media_type", 415),
     ("internal_error", 500),
     ("auth_store_unavailable", 503),

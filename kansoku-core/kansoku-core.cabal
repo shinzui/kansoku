@@ -50,6 +50,8 @@ library
     Kansoku.Ingest.Producer
     Kansoku.Ingest.Quarantine
     Kansoku.Ingest.Queue
+    Kansoku.Ingest.RateLimit
+    Kansoku.Ingest.Service
     Kansoku.Ingest.Timestamp
     Kansoku.Logging
     Kansoku.Metrics.Definition
@@ -67,6 +69,7 @@ library
     Kansoku.Server
     Kansoku.Telemetry
     Kansoku.Writer.Batch
+    Kansoku.Writer.Recovery
     Kansoku.Writer.Run
 
   build-depends:
@@ -104,6 +107,8 @@ library
     servant-server,
     shibuya-core,
     shibuya-pgmq-adapter,
+    stm,
+    streamly-core,
     text,
     time,
     unordered-containers,
@@ -132,8 +137,10 @@ test-suite kansoku-core-test
     Kansoku.HttpIntegrationSpec
     Kansoku.HttpTelemetrySpec
     Kansoku.Ingest.AcceptanceSpec
+    Kansoku.Ingest.AdmissionSpec
     Kansoku.Ingest.HandlerSpec
     Kansoku.Ingest.QueueSpec
+    Kansoku.Ingest.RateLimitSpec
     Kansoku.Ingest.ServiceSpec
     Kansoku.Ingest.TimestampSpec
     Kansoku.LimitsSpec
@@ -153,6 +160,8 @@ test-suite kansoku-core-test
     Kansoku.RequestLogSpec
     Kansoku.Writer.BatchSpec
     Kansoku.Writer.LifecycleSpec
+    Kansoku.Writer.OutageSpec
+    Kansoku.Writer.RecoverySpec
 
   build-depends:
     ClickHaskell,

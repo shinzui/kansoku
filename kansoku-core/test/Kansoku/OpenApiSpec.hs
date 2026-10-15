@@ -283,12 +283,16 @@ assertStatuses (path, method, operation) = do
         | otherwise = ["401"]
       expected
         | path == "/v1/schemas" = ["200", "405", "406", "413", "500"]
-        | otherwise = [success, "400", "404", "405", "406", "413", "500", "503"] <> authStatuses <> ["415" | method == "post"]
+        | otherwise = [success, "400", "404", "405", "406", "413", "429", "500", "503"] <> authStatuses <> ["415" | method == "post"]
   actual `shouldBe` List.sort expected
   when (path /= "/v1/schemas") $ do
     lookupText ["responses", "401", "headers", "WWW-Authenticate", "schema", "type"] operation
       `shouldBe` Just "string"
     valueAt ["responses", "401", "headers", "WWW-Authenticate", "required"] operation
+      `shouldBe` Just (Aeson.Bool True)
+    lookupText ["responses", "429", "headers", "Retry-After", "schema", "type"] operation
+      `shouldBe` Just "integer"
+    valueAt ["responses", "429", "headers", "Retry-After", "required"] operation
       `shouldBe` Just (Aeson.Bool True)
   path `shouldSatisfy` (`elem` expectedServedPaths)
 

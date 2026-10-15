@@ -11,8 +11,10 @@ import Kansoku.HealthSpec qualified
 import Kansoku.HttpIntegrationSpec qualified
 import Kansoku.HttpTelemetrySpec qualified
 import Kansoku.Ingest.AcceptanceSpec qualified
+import Kansoku.Ingest.AdmissionSpec qualified
 import Kansoku.Ingest.HandlerSpec qualified
 import Kansoku.Ingest.QueueSpec qualified
+import Kansoku.Ingest.RateLimitSpec qualified
 import Kansoku.Ingest.ServiceSpec qualified
 import Kansoku.Ingest.TimestampSpec qualified
 import Kansoku.LimitsSpec qualified
@@ -31,15 +33,19 @@ import Kansoku.ReadinessSpec qualified
 import Kansoku.RequestLogSpec qualified
 import Kansoku.Writer.BatchSpec qualified
 import Kansoku.Writer.LifecycleSpec qualified
+import Kansoku.Writer.OutageSpec qualified
+import Kansoku.Writer.RecoverySpec qualified
 import System.Environment (lookupEnv)
 import Test.Hspec (hspec, runIO)
 
 main :: IO ()
 main = do
+  outageMode <- lookupEnv "KANSOKU_PIPELINE_OUTAGE_CHILD"
   childMode <- lookupEnv "KANSOKU_TELEMETRY_LIFECYCLE_CHILD"
-  case childMode of
-    Just _ -> Kansoku.HttpTelemetrySpec.lifecycleChild
-    Nothing -> normalTests
+  case (outageMode, childMode) of
+    (Just _, _) -> hspec Kansoku.Writer.OutageSpec.spec
+    (_, Just _) -> Kansoku.HttpTelemetrySpec.lifecycleChild
+    _ -> normalTests
 
 normalTests :: IO ()
 normalTests = hspec $ do
@@ -57,6 +63,8 @@ normalTests = hspec $ do
   Kansoku.Ingest.QueueSpec.spec
   Kansoku.Ingest.TimestampSpec.spec
   Kansoku.Ingest.ServiceSpec.spec metrics
+  Kansoku.Ingest.RateLimitSpec.spec
+  Kansoku.Ingest.AdmissionSpec.spec metrics
   Kansoku.HttpIntegrationSpec.spec
   Kansoku.LimitsSpec.spec
   Kansoku.MigrationsSpec.spec
@@ -74,3 +82,4 @@ normalTests = hspec $ do
   Kansoku.HttpTelemetrySpec.spec
   Kansoku.Writer.BatchSpec.spec metrics
   Kansoku.Writer.LifecycleSpec.spec metrics
+  Kansoku.Writer.RecoverySpec.spec metrics

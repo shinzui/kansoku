@@ -17,36 +17,38 @@ module Kansoku.Observability
 where
 
 import Control.Concurrent (threadDelay)
-import Control.Exception
-  ( AsyncException,
-    SomeException,
-    fromException,
-    throwIO,
-    try,
-  )
 import Control.Monad (forever)
 import Data.Generics.Labels ()
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Int (Int32, Int64)
 import Data.Text qualified as Text
 import Effectful (runEff)
-import Effectful.Error.Static qualified as Error
+import Hasql.Decoders qualified as D
+import Hasql.Encoders qualified as E
 import Hasql.Pool qualified as Pool
+import Hasql.Session qualified as Session
+import Hasql.Statement qualified as Statement
+import Kansoku.Exception (trySynchronous)
 import Kansoku.Logging (logWarn, runLogStderr)
 import Kansoku.Prelude
-import Pgmq.Effectful (QueueName, queueMetrics, runPgmq)
-import Pgmq.Effectful.Interpreter (PgmqRuntimeError)
+import Pgmq qualified
+import Pgmq.Types (QueueName, queueNameToText)
 import Prometheus qualified
 
 data PipelineMetrics = PipelineMetrics
   { queueLength :: !Prometheus.Gauge,
+    queueArchiveLength :: !Prometheus.Gauge,
     queueOldestMessageAgeSeconds :: !Prometheus.Gauge,
     writerBatchesTotal :: !Prometheus.Counter,
     writerEventsWrittenTotal :: !Prometheus.Counter,
     writerBatchFlushSeconds :: !Prometheus.Histogram,
     writerInsertFailuresTotal :: !Prometheus.Counter,
     writerDeadLettersTotal :: !Prometheus.Counter,
+    writerBreakerState :: !Prometheus.Gauge,
+    writerRecoveryFailuresTotal :: !Prometheus.Counter,
     ingestEventsTotal :: !(Prometheus.Vector (Text, Text) Prometheus.Counter),
+    ingestNewlyQueuedTotal :: !(Prometheus.Vector Text Prometheus.Counter),
+    ingestRateLimitedRequestsTotal :: !(Prometheus.Vector Text Prometheus.Counter),
     ingestRejectionsTotal :: !(Prometheus.Vector (Text, Text) Prometheus.Counter),
     ingestTimestampAdjustmentsTotal :: !(Prometheus.Vector (Text, Text) Prometheus.Counter),
     quarantineFailuresTotal :: !Prometheus.Counter,
@@ -61,6 +63,7 @@ registerPipelineMetrics = do
   queueLength <-
     Prometheus.register . Prometheus.gauge $
       Prometheus.Info "kansoku_queue_length" "Messages currently in the pgmq events queue."
+  queueArchiveLength <- Prometheus.register $ Prometheus.gauge $ Prometheus.Info "kansoku_queue_archive_length" "Messages in the queue archive; sampled with queue depth."
   queueOldestMessageAgeSeconds <-
     Prometheus.register . Prometheus.gauge $
       Prometheus.Info
@@ -77,7 +80,7 @@ registerPipelineMetrics = do
   writerBatchFlushSeconds <-
     Prometheus.register $
       Prometheus.histogram
-        (Prometheus.Info "kansoku_writer_batch_flush_seconds" "ClickHouse insert duration per batch.")
+        (Prometheus.Info "kansoku_writer_batch_flush_seconds" "Batch insert residence, including retained storage recovery.")
         Prometheus.defaultBuckets
   writerInsertFailuresTotal <-
     Prometheus.register . Prometheus.counter $
@@ -89,10 +92,14 @@ registerPipelineMetrics = do
       Prometheus.Info
         "kansoku_writer_dead_letters_total"
         "Messages dead-lettered because their payload could not be decoded."
+  writerBreakerState <- Prometheus.register $ Prometheus.gauge $ Prometheus.Info "kansoku_writer_breaker_state" "Writer source gate: 0 closed, 1 storage unavailable, 2 insert rejected/parked."
+  writerRecoveryFailuresTotal <- Prometheus.register $ Prometheus.counter $ Prometheus.Info "kansoku_writer_recovery_failures_total" "Failed recovery probes and reinserts."
   ingestEventsTotal <-
     Prometheus.register $
       Prometheus.vector ("outcome", "transport") $
         Prometheus.counter (Prometheus.Info "kansoku_ingest_events_total" "Validated ingest outcomes; acceptance follows queue commit.")
+  ingestNewlyQueuedTotal <- Prometheus.register $ Prometheus.vector "transport" $ Prometheus.counter $ Prometheus.Info "kansoku_ingest_newly_queued_total" "New immutable event identities committed to the queue; equal retries excluded."
+  ingestRateLimitedRequestsTotal <- Prometheus.register $ Prometheus.vector "transport" $ Prometheus.counter $ Prometheus.Info "kansoku_ingest_rate_limited_requests_total" "Ingest requests denied before normalization or persistence."
   ingestRejectionsTotal <-
     Prometheus.register $
       Prometheus.vector ("reason", "transport") $
@@ -112,13 +119,18 @@ registerPipelineMetrics = do
   pure
     PipelineMetrics
       { queueLength,
+        queueArchiveLength,
         queueOldestMessageAgeSeconds,
         writerBatchesTotal,
         writerEventsWrittenTotal,
         writerBatchFlushSeconds,
         writerInsertFailuresTotal,
         writerDeadLettersTotal,
+        writerBreakerState,
+        writerRecoveryFailuresTotal,
         ingestEventsTotal,
+        ingestNewlyQueuedTotal,
+        ingestRateLimitedRequestsTotal,
         ingestRejectionsTotal,
         ingestTimestampAdjustmentsTotal,
         quarantineFailuresTotal,
@@ -158,13 +170,12 @@ runQueueDepthPoller ::
   Pool.Pool -> QueueName -> PipelineMetrics -> QueueDepthCell -> Int -> IO ()
 runQueueDepthPoller pool queueName metrics (QueueDepthCell cell) intervalSec = forever $ do
   result <-
-    try @SomeException $
-      runEff $
-        Error.runErrorNoCallStack @PgmqRuntimeError $
-          runPgmq pool $
-            queueMetrics queueName
+    trySynchronous $
+      Pool.use pool $
+        (,) <$> Pgmq.queueMetrics queueName <*> Session.statement () archiveCount
   case result of
-    Right (Right queueSample) -> do
+    Right (Right (queueSample, archived)) -> do
+      Prometheus.setGauge (metrics ^. #queueArchiveLength) (fromIntegral archived)
       now <- getCurrentTime
       Prometheus.setGauge
         (metrics ^. #queueLength)
@@ -179,12 +190,16 @@ runQueueDepthPoller pool queueName metrics (QueueDepthCell cell) intervalSec = f
             sampledAt = now
           }
     Right (Left pgmqError) -> logPollError (show pgmqError)
-    Left exception ->
-      case fromException exception of
-        Just asyncException -> throwIO (asyncException :: AsyncException)
-        Nothing -> logPollError (show exception)
+    Left exception -> logPollError (show exception)
   threadDelay (intervalSec * 1_000_000)
   where
+    -- QueueName construction permits only bounded lowercase ASCII/digit/_;
+    -- this administrative identifier cannot contain SQL syntax.
+    archiveCount =
+      Statement.preparable
+        ("SELECT count(*) FROM pgmq.a_" <> queueNameToText queueName)
+        E.noParams
+        (D.singleRow (D.column (D.nonNullable D.int8)))
     logPollError detail =
       runEff $
         runLogStderr $

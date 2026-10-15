@@ -191,6 +191,7 @@ kansokuOpenApi =
       ]
     & addProblemResponses [(405, "Method not allowed"), (406, "Not acceptable"), (413, "Payload too large"), (500, "Internal server error")]
     & withUnsupportedBodyMedia
+    & withRetryAfterHeader
     & withOperationIds
 
 authSecuritySchemes :: O.SecurityDefinitions
@@ -252,6 +253,24 @@ withUnsupportedBodyMedia document =
       else operation
   where
     (_, problemSchema) = runDeclare (O.declareSchemaRef (Proxy @ProblemDetails)) mempty
+
+-- MultiVerb emits this header on every typed 429. Mark it required explicitly
+-- while preserving the generated response/body and leaving public schemas alone.
+withRetryAfterHeader :: O.OpenApi -> O.OpenApi
+withRetryAfterHeader document =
+  document & O.allOperations %~ \operation ->
+    case operation ^. at 429 of
+      Just (O.Inline response) ->
+        operation
+          & at 429
+          ?~ O.Inline
+            ( response
+                & O.headers
+                . at "Retry-After"
+                ?~ O.Inline
+                  (mempty & O.description ?~ "Positive whole seconds before retrying" & O.required ?~ True & O.schema ?~ O.Inline (O.toSchema (Proxy @Int)))
+            )
+      _ -> operation
 
 -- | Assign deterministic operation identifiers from method and path. They are
 -- derived rather than authored, so a path rename intentionally changes the id.

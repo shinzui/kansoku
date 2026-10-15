@@ -12,6 +12,7 @@ skips = [
     'Kansoku.Metrics.Limits/native',
     'Kansoku.Writer.Batch/decodes a pgmq payload',
     'Kansoku.Writer.Batch/keeps a committed insert',
+    'Kansoku.Writer.Batch/retains a committed batch',
 ]
 # Binding without listening reserves a non-service endpoint for the entire run.
 # An incorrectly selected native example cannot contact an ambient database.

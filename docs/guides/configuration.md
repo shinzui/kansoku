@@ -45,6 +45,8 @@ exit brings down the server rather than leaving a write-only or read-only partia
 | `KANSOKU_CORS_ORIGINS` | unset / `*` | Allow all browser origins. Otherwise, a comma-separated exact origin allowlist. |
 | `KANSOKU_INGEST_MAX_BODY_BYTES` | `5242880` | Positive maximum request body size; default is 5 MiB. |
 | `KANSOKU_INGEST_MAX_BATCH_LENGTH` | `500` | Positive maximum events in one parsed batch. |
+| `KANSOKU_INGEST_RATE_PER_SEC` | `2000` | Nonnegative submitted events per second per credential per process; zero disables admission limits. |
+| `KANSOKU_INGEST_RATE_BURST` | `10000` | Token-bucket burst; when enabled must cover the maximum batch length. |
 | `KANSOKU_INGEST_FUTURE_TOLERANCE_SEC` | `86400` | Nonnegative future offset clamped when no usable `sentAt` exists; zero disables clamping. |
 | `KANSOKU_INGEST_QUARANTINE` | `false` | Enable best-effort capture of declared-schema rejections. |
 | `KANSOKU_INGEST_QUARANTINE_RETENTION_DAYS` | `14` | Positive diagnostic retention in days. |
@@ -57,7 +59,13 @@ For production browser ingestion, set exact scheme/host/port origins, for exampl
 export KANSOKU_CORS_ORIGINS='https://app.example.com,https://www.example.com'
 ```
 
-CORS covers `/v1/*` only and permits `GET`, `POST`, `Content-Type`, `X-Api-Key`, and
+Admission charges all submitted events, including schema-invalid events and equal retries, after
+authentication and bounded decoding. Single and batch share each credential bucket. Bucket state
+is atomic, capped at 10000 credentials, and evicted only after idle full-refill time (at least
+60 seconds). A new credential at capacity receives 429 until state can expire. Multiple server
+processes have independent limits; enforce outer request/byte limits at the proxy.
+
+CORS exposes `Retry-After`. It covers `/v1/*` only and permits `GET`, `POST`, `Content-Type`, `X-Api-Key`, and
 `Authorization`. Analytics metrics and operational endpoints are not CORS-enabled. CORS is not
 an access-control substitute; ingestion authentication remains mandatory.
 

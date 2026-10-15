@@ -111,7 +111,7 @@ is `mori://shinzui/kansoku-ts/okf/adrs/concepts/ADR-2`.
 | # | Title | Path | Hard Deps | Soft Deps | Status |
 |---|-------|------|-----------|-----------|--------|
 | 29 | Correct client timestamp skew and count ingest rejections | docs/plans/29-correct-client-timestamp-skew-and-count-ingest-rejections.md | None | None | Complete |
-| 30 | Pipeline backpressure and storage-outage resilience | docs/plans/30-pipeline-backpressure-and-storage-outage-resilience.md | EP-29 | None | In Progress |
+| 30 | Pipeline backpressure and storage-outage resilience | docs/plans/30-pipeline-backpressure-and-storage-outage-resilience.md | EP-29 | None | Complete |
 | 31 | Metric property filters and dual grouping | docs/plans/31-metric-property-filters-and-dual-grouping.md | EP-26; EP-30; EP-32 | None | Not Started |
 | 32 | Time-aware identity bindings and bounded resolution cost | docs/plans/32-time-aware-identity-bindings-and-bounded-resolution-cost.md | EP-29; EP-30 | None | Not Started |
 | 33 | Acquisition and device enrichment with bot flagging | docs/plans/33-acquisition-and-device-enrichment-with-bot-flagging.md | EP-26; EP-31 | None | Not Started |
@@ -212,12 +212,15 @@ the migration ledger; unsafe append-backfills are replaced with verified rebuild
 ## Progress
 
 
-EP-29 is Complete, EP-30 is In Progress, and ten children remain Not Started. Its packaged acceptance passed 180 core
+EP-29 and EP-30 are Complete, and ten children remain Not Started. Its packaged acceptance passed 180 core
 examples, 16 client examples, four probes, extra native recovery/limit checks and 45 Hurl
 requests with no required skips or pending cases. EP-30 now owns
 the released queue baseline, event uniqueness, outage recovery, admission and capacity proofs.
-Its M0 and M1 are accepted; M1 introduces `analytics.events_canonical` as the internal replay-safe source
-for subsequent identity, grouping and enrichment work, preserving the public resolved projection.
+All EP-30 milestones are accepted; M1 introduces `analytics.events_canonical` as the internal replay-safe source
+for subsequent identity, grouping and enrichment work, preserving the public resolved projection. Its ten-minute 200/s native outage/restart proof
+retains 120000 logical events with zero valid archives, first write 2.48 seconds and drain
+21.21 seconds. The tested Apple M1 Max/64-GiB workload and finite capacity budget are documented
+in `docs/guides/capacity.md`; they are not generic deployment throughput promises.
 
 Final integration gate (owned by EP-38): packaged server acceptance, generated API/catalog,
 SDK contracts and required live/browser cases all agree with zero feature skips. Performance,
@@ -228,7 +231,7 @@ proofs, not results established by this document review.
 
 EP-29 implementation on 2026-10-15 established the supported UTC range
 `[1970-01-01, 2100-01-01)` and catalog v2 constraint fields (`minimum`, `minLength`). Later
-children consume these contracts. Beacon-specific executions of the shared ingest/quarantine
+children consume these contracts. Beacon-specific executions of shared ingest/quarantine and credential-rate admission
 acceptance belong to EP-39, when its route exists; this resolves the impossible requirement
 to test that route before its hard prerequisite EP-29 completes.
 
@@ -309,4 +312,4 @@ implementation, not this planning update.
 The original plan set was not ready to implement unchanged. This update records and corrects
 the material findings and creates a coherent implementation sequence. Implementation must still
 prove writer source pausing, event idempotency under failures, identity performance, native geo
-compatibility and external consumer behavior. No child is Complete and no deployment is performed.
+compatibility and external consumer behavior. EP-29 and EP-30 are Complete; the remaining acceptance obligations stay open. No deployment is performed.

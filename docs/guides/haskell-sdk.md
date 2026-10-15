@@ -133,7 +133,9 @@ Errors now use `Kansoku.Api.Response.ProblemDetails` and `application/problem+js
 The fields are `type`, `title`, `status`, `detail`, `code`, and `retryable`; the old
 `ErrorEnvelopeWire` and its `message` field are removed. Generated clients advertise JSON and
 problem JSON, decode handler errors into `KansokuResult`, and retain the existing retry policy:
-permanent problems are dropped and retryable 503s use bounded backoff. Partial 202 batches
+permanent problems are dropped and retryable 429/503 problems use bounded backoff. Typed 429
+responses include `Retry-After`; the buffering client waits at least that many seconds before
+retrying the same event IDs, within its configured retry count. Partial 202 batches
 remain acknowledgements, including per-event rejections.
 
 Authentication runs before the typed handler. Its 401/403/503 responses may arrive as a

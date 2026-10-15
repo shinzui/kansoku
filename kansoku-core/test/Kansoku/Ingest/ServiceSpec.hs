@@ -26,6 +26,7 @@ import Kansoku.Ingest.Api
 import Kansoku.Ingest.Handler (ingestServer)
 import Kansoku.Ingest.Quarantine
 import Kansoku.Ingest.Queue (eventsQueueName)
+import Kansoku.Ingest.Service (newIngestService)
 import Kansoku.Observability
 import Kansoku.PostgresTestSupport
 import Kansoku.Prelude
@@ -43,7 +44,8 @@ spec metrics = describe "Kansoku.Ingest.Service" $ do
     cfg <- loadConfig >>= either (fail . show) pure
     let enabled = cfg & #pgConnectionString .~ settings & #ingestQuarantine .~ True & #quarantineMaxRows .~ 2 & #quarantineMaxPayloadBytes .~ 2048
         queue = eventsQueueName "ingest_service_spec"
-        routes = ingestServer enabled metrics pool queue
+    service <- newIngestService enabled metrics pool queue
+    let routes = ingestServer service
         single = postEvent routes principal . ingestEvent
         batch = postBatch routes principal . fmap ingestEvent
     Pool.use pool (Pgmq.createQueue queue) `shouldReturn` Right ()
@@ -92,7 +94,8 @@ spec metrics = describe "Kansoku.Ingest.Service" $ do
     -- Disabled capture does not touch a deliberately unavailable store.
     Pool.use pool (Session.script "ALTER TABLE kansoku.ingest_rejections RENAME TO held_rejections") `shouldReturn` Right ()
     failures <- P.getCounter (metrics ^. #quarantineFailuresTotal)
-    _ <- runHandler (postEvent (ingestServer (enabled & #ingestQuarantine .~ False) metrics pool queue) principal (ingestEvent bad))
+    disabledService <- newIngestService (enabled & #ingestQuarantine .~ False) metrics pool queue
+    _ <- runHandler (postEvent (ingestServer disabledService) principal (ingestEvent bad))
     P.getCounter (metrics ^. #quarantineFailuresTotal) `shouldReturn` failures
     mixed <- runHandler (batch [bad, event "valid-during-quarantine-failure" "custom" now])
     case mixed of Right (KansokuOk ack) -> ack ^. #accepted `shouldBe` 1; other -> expectationFailure (show other)
@@ -100,7 +103,8 @@ spec metrics = describe "Kansoku.Ingest.Service" $ do
     Pool.use pool (Session.script "ALTER TABLE kansoku.held_rejections RENAME TO ingest_rejections") `shouldReturn` Right ()
     -- Queue failure cannot increment acceptance.
     beforeFailure <- counter (metrics ^. #ingestEventsTotal) ("accepted", "single")
-    failed <- runHandler (postEvent (ingestServer enabled metrics pool (eventsQueueName "missing_queue")) principal (ingestEvent (event "queue-fail" "custom" now)))
+    failingService <- newIngestService enabled metrics pool (eventsQueueName "missing_queue")
+    failed <- runHandler (postEvent (ingestServer failingService) principal (ingestEvent (event "queue-fail" "custom" now)))
     case failed of Right (KansokuUnavailable _) -> pure (); other -> expectationFailure (show other)
     counter (metrics ^. #ingestEventsTotal) ("accepted", "single") `shouldReturn` beforeFailure
     -- Startup catches up expiry and the account cap automatically.

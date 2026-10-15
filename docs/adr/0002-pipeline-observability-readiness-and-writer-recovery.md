@@ -2,7 +2,7 @@
 type: Architecture Decision Record
 title: Pipeline observability, readiness, and writer recovery
 description: Add OpenTelemetry tracing, Prometheus pipeline metrics, ordered readiness checks, and logical writer-connection recovery for the PGMQ-to-ClickHouse pipeline.
-timestamp: 2026-10-15T17:09:59Z
+timestamp: 2026-10-15T18:38:08Z
 generated:
   by: human:kansoku-maintainers
   at: 2026-07-19T00:00:00Z
@@ -41,7 +41,7 @@ supports collector-free validation, while configured OTLP remains the production
 Its JSON snapshot includes name, trace/span IDs, attributes, events and status so executable
 privacy checks inspect the complete captured span rather than only its name.
 
-Prometheus owns seven writer/backlog instruments plus the ingest instruments below: queue length, oldest queued-message
+Prometheus owns writer/backlog instruments plus the ingest instruments below: queue length, oldest queued-message
 age, writer batches, successfully written events, batch insert duration, insert failures, and
 decode dead letters. `GET /internal/metrics` is an exact WAI-level operational route on the main
 port. It stays outside Servant/OpenAPI, ingest CORS, and body-size handling, and can be disabled
@@ -155,11 +155,22 @@ two pipeline threshold checks; PostgreSQL reachability still fails independently
 recovers after backlog drains and does not retain historical failure state, so alerting should
 also watch the monotonic insert-failure and dead-letter counters.
 
-The pinned Shibuya PGMQ adapter still owns retry policy: its default `maxRetries = 3`
-auto-archives before handler invocation on delivery four. Replace-on-failure connection recovery
-therefore guarantees automatic drain only inside that retry budget. Longer dependency outages
-require archive replay or a separately approved retry-policy change; EP-16 does not silently
-change that established delivery policy.
+The source gate pauses before adapter pulls while one unchanged batch is retained. Prefetch is
+disabled, the inbox and ready-batch output each have capacity one, and the gate cancels an
+internal empty-poll pull on opening. For the single constant key, the conservative retained
+bound is `2 * writerBatch + adapterBatch + 3`, including the active/ready batches, adapter
+chunk and handoff slots (11003 at defaults).
+One already-issued read can finish. Failed inserts invalidate their connection; a separate
+750 ms native probe runs every five seconds, and only a successful bounded insert reopens
+consumption. Native batch lease renewal uses at least 60 seconds. SQL/schema errors park and
+alert rather than exhaust deliveries. Cancellation propagates through probes and recovery.
+
+The adapter maximum is Int64 maxBound (9223372036854775807), with native read_ct still Int32.
+This is practically non-exhausting, not an unbounded outage guarantee; overflow fails rather
+than archives valid data. Durable capacity and eventual storage recovery remain prerequisites.
+Malformed payloads archive explicitly. The queue/archive gauges, breaker state (0 closed,
+1 unavailable, 2 parked), recovery failures, newly queued events and rate-limited requests
+separate admission, replay and outage behavior. Batch residence includes retained recovery.
 
 Changes to operational route placement, readiness semantics, writer connection ownership, or
 trace/metric export boundaries must update the server, conformance and readiness tests, EP-16,

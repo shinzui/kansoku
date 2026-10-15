@@ -121,7 +121,7 @@ existing JSON shape. Authentication problems use the same schema, and 401 retain
 
 ## Partial batch acceptance
 
-`POST /v1/batch` accepts a JSON array. A syntactically valid batch always returns HTTP 202,
+`POST /v1/batch` accepts a JSON array. An admitted, in-bound syntactically valid batch returns HTTP 202,
 including when every event is invalid. Valid events are enqueued; invalid events are reported by
 their zero-based input index:
 
@@ -184,8 +184,12 @@ states prevent it changing counts, revenue or averages before background merges.
 acceptance ledger has no automatic expiry; erasure tombstones also prevent restoration by retry.
 
 
-Retry transient network failures, HTTP 503 responses whose problem document has `retryable: true`, and
-an interrupted request for which no response was received. Use bounded exponential backoff.
+Retry transient network failures, HTTP 429 or 503 responses whose problem document has `retryable: true`, and
+an interrupted request for which no response was received. Use bounded exponential backoff. A 429 `rate_limited` response carries a positive whole-second
+`Retry-After` header, exposed through CORS; wait at least that long. Default admission is 2000
+submitted events/s with a burst of 10000 per credential per server process. Invalid events and
+equal retries consume tokens. A denied request changes no acceptance, normalization, quarantine
+or queue state. These limits protect admission; use a proxy for outer request/byte limits.
 Do not automatically retry HTTP 400, 401, 403, 404, or 413, or per-event batch rejections.
 
 Browser CORS applies to `/v1/*`. The default allows every origin; production deployments should

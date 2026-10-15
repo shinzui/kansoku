@@ -1,6 +1,8 @@
 module Kansoku.ConfigSpec (spec) where
 
 import Control.Exception (bracket)
+import Control.Monad (forM_)
+import Data.Either (isRight)
 import Data.Generics.Labels ()
 import Kansoku.Config (ConfigError (..), loadConfig)
 import Kansoku.Prelude
@@ -29,6 +31,8 @@ configVariables =
     "KANSOKU_CORS_ORIGINS",
     "KANSOKU_INGEST_MAX_BODY_BYTES",
     "KANSOKU_INGEST_MAX_BATCH_LENGTH",
+    "KANSOKU_INGEST_RATE_PER_SEC",
+    "KANSOKU_INGEST_RATE_BURST",
     "KANSOKU_INGEST_FUTURE_TOLERANCE_SEC",
     "KANSOKU_INGEST_QUARANTINE",
     "KANSOKU_INGEST_QUARANTINE_RETENTION_DAYS",
@@ -64,6 +68,8 @@ spec = around_ preserveConfigEnvironment $ describe "Kansoku.Config.loadConfig" 
         (cfg ^. #corsAllowedOrigins) `shouldBe` Nothing
         (cfg ^. #ingestMaxBodyBytes) `shouldBe` 5242880
         (cfg ^. #ingestMaxBatchLength) `shouldBe` 500
+        (cfg ^. #ingestRatePerSec) `shouldBe` 2000
+        (cfg ^. #ingestRateBurst) `shouldBe` 10000
         (cfg ^. #queuePollIntervalSec) `shouldBe` 15
         (cfg ^. #internalMetricsEnabled) `shouldBe` True
         (cfg ^. #readyMaxQueueDepth) `shouldBe` 100000
@@ -155,6 +161,23 @@ spec = around_ preserveConfigEnvironment $ describe "Kansoku.Config.loadConfig" 
     setEnv "KANSOKU_INGEST_FUTURE_TOLERANCE_SEC" "-1"
     negative <- loadConfig
     negative `shouldBe` Left (ConfigError "KANSOKU_INGEST_FUTURE_TOLERANCE_SEC: must be at least 0")
+
+  it "validates shared ingest rate/burst and allows explicit disabling" $ do
+    setEnv "KANSOKU_INGEST_RATE_PER_SEC" "1"
+    setEnv "KANSOKU_INGEST_RATE_BURST" "499"
+    loadConfig >>= (`shouldSatisfy` isLeft)
+    setEnv "KANSOKU_INGEST_RATE_PER_SEC" "0"
+    setEnv "KANSOKU_INGEST_RATE_BURST" "0"
+    disabled <- loadConfig
+    disabled `shouldSatisfy` isRight
+    setEnv "KANSOKU_INGEST_RATE_PER_SEC" "-1"
+    loadConfig >>= (`shouldSatisfy` isLeft)
+
+  it "rejects non-positive writer bounds before starting recovery" $ do
+    forM_ ["KANSOKU_WRITER_MAX_BATCH", "KANSOKU_WRITER_MAX_LATENCY_MS", "KANSOKU_WRITER_VT_SEC", "KANSOKU_WRITER_ADAPTER_BATCH"] $ \name -> do
+      setEnv name "0"
+      loadConfig >>= (`shouldSatisfy` isLeft)
+      unsetEnv name
 
   it "rejects a non-positive queue poll interval" $ do
     clearEnv
