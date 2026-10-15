@@ -21,6 +21,11 @@ provenance:
       at: 2026-10-15T15:43:15Z
       mode: "update"
       note: "Reconcile first-release APIs, domain semantics, dependencies and acceptance with the source-validated MP-5 review."
+    - model: "gpt-6-astra"
+      harness: "codex-cli"
+      at: 2026-10-15T16:02:57Z
+      mode: "update"
+      note: "Select released Shibuya and PGMQ upgrades for fresh deployment without rollout coordination."
   reviews:
     - model: "gpt-6-astra"
       harness: "codex-cli"
@@ -37,7 +42,9 @@ provenance:
 
 Prepare Kansoku for its first deployment with stable event, identity, query and administrative
 contracts. There are no deployed consumers to migrate: make necessary API/domain corrections
-before initial release, without temporary compatibility flags. The originating feature review is
+before initial release, without temporary compatibility flags, staged rollouts or downstream
+release coordination. Dependency upgrades target fresh installations; internal package bounds
+must agree and server/SDK contracts must still pass conformance tests. The originating feature review is
 `docs/reviews/2026-10-15-architecture-and-feature-set-against-comparable-products.md`.
 
 The initiative covers timestamp normalization, rejection visibility/quarantine, durable event
@@ -68,7 +75,8 @@ these newly authored plan URIs; the registered project and files were verified d
 
 Keep twelve functional children, but correct their actual prerequisites rather than let a child
 omit promised filters, bot handling or erasure because a "soft" dependency is absent. EP-29
-owns shared normalization/validation; EP-30 establishes durable acceptance and logical uniqueness;
+owns shared normalization/validation; EP-30 first upgrades the released queue-processing stack,
+then establishes durable acceptance and logical uniqueness;
 EP-32 defines identity and the internal rich resolved source; EP-31 defines metric grammar and
 result grouping. Later analytic features consume those foundations. EP-37 finalizes operational
 lifecycle after the stores exist, and EP-38 finalizes documentation and release proof last.
@@ -131,6 +139,15 @@ against obsolete metric semantics. Whole-child hard dependencies cannot be weake
 
 ## Integration Points
 
+
+**Queue-processing dependencies — EP-30 M0 owner.** Adopt shibuya-core 0.10.0.1,
+shibuya-pgmq-adapter 0.16.1.0 and pgmq-core/hasql/effectful/migration 0.6.1.1 together in
+`cabal.project` and `flake.module.nix`. EP-30 owns source adaptations, fresh native schema
+installation and acknowledgement/lifecycle acceptance. Later children use this baseline.
+This is local dependency consistency, with no upstream release work, SDK release sequencing,
+old-version support or deployed-data migration required. The selected releases do not expose
+the pause/resume API seen in unreleased Shibuya source; EP-30 M2 still owns source-level outage
+control and verifies it against the selected released adapter.
 
 **Shared ingest service — EP-29 owner, EP-30/33/39 extensions.** Wire AnalyticsEvent and catalog
 live in kansoku-api; core owns request context and the private queued envelope. EP-29 defines
@@ -223,8 +240,13 @@ metadata as gpt-6-astra. Review provenance records the original changes-requeste
 revision provenance records this corrective update. This is not runtime deployment approval.
 
 Dependency validation: Mori located the adapter and PGMQ sources; inspected adapter tag
-v0.12.0.0 matching cabal.project, not just current checkout. Hackage and upstream tags confirm
-0.16.1.0 exists, but this change does not choose a dependency upgrade. Vendored ClickHaskell
+v0.12.0.0 matching cabal.project, not just current checkout. The follow-up on 2026-10-15 verified
+Hackage releases and upstream tags for shibuya-core 0.10.0.1, shibuya-pgmq-adapter 0.16.1.0
+and the PGMQ family 0.6.1.1, now selected by EP-30 M0. They fix acknowledgement failure
+propagation, ambiguous-commit dead-letter duplication and processor lifecycle failures;
+they do not implement Kansoku's event idempotency or a complete storage-outage policy.
+Canonical dependency references and source/API adaptations are recorded in EP-30.
+Vendored ClickHaskell
 exposes passSettings/addSetting for insert tokens and dependent-view dedup settings. These
 APIs do not remove finite-window limitations documented by
 [ClickHouse](https://clickhouse.com/docs/guides/developer/deduplicating-inserts-on-retries).
@@ -254,6 +276,12 @@ inside the owning child, with failure treated as an implementation blocker.
 Revision note (2026-10-15): all twelve children and the matching SDK plans were reconciled
 against current sources. Corrected graph/status, stable initial contracts, first-release
 exclusions, lifecycle guarantees and acceptance ownership; no production code changed.
+
+Revision note (2026-10-15, dependency follow-up): select the released Shibuya core/adapter and
+required PGMQ upgrades as EP-30 M0. Kansoku is unused, so implement directly against the new
+baseline and validate fresh installation without rollout coordination or legacy compatibility
+work. Keep the existing child graph and final contract tests; dependency pins change during
+implementation, not this planning update.
 
 ## Outcomes & Retrospective
 

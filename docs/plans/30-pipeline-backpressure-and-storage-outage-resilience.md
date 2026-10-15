@@ -23,6 +23,11 @@ provenance:
       at: 2026-10-15T15:43:15Z
       mode: "update"
       note: "Reconcile first-release APIs, domain semantics, dependencies and acceptance with the source-validated MP-5 review."
+    - model: "gpt-6-astra"
+      harness: "codex-cli"
+      at: 2026-10-15T16:02:57Z
+      mode: "update"
+      note: "Add released Shibuya/adapter/PGMQ upgrade milestone and fresh-install failure acceptance."
 ---
 
 # Pipeline backpressure and storage-outage resilience
@@ -35,10 +40,14 @@ Keep accepted events durable through storage outages and retries, without counti
 events twice. Rate limits protect the queue, and measured recovery capacity defines an honest
 operating envelope. Automatic recovery is conditional on PostgreSQL capacity and eventual
 storage recovery; no finite system promises arbitrary outage duration.
+Start by upgrading the released Shibuya and PGMQ stack so the writer benefits from corrected
+acknowledgement and lifecycle behavior. Kansoku is not used anywhere: target a fresh deployment,
+without staged rollout, legacy compatibility or downstream release coordination.
 
 ## Progress
 
 
+- [ ] M0: Released Shibuya/adapter/PGMQ baseline builds and passes fresh-install and writer lifecycle checks.
 - [ ] M1: Durable event identity and replay-safe analytical reads pass failure/rebatching tests.
 - [ ] M2: Writer pauses consumption during outages and resumes with bounded recovery evidence.
 - [ ] M3: Archive/backlog instruments and shared credential rate limits pass HTTP tests.
@@ -53,6 +62,10 @@ in `cabal.project` is 0.12.0.0: `maxRetries` counts deliveries before handler ex
 archives immediately, and `AckHalt` parks an already-read message. Neither a handler-only
 breaker nor AckHalt makes outage retries unlimited. Checked the pinned tag through Mori;
 Hackage and upstream tags expose 0.16.1.0 on review day, so do not mistake local HEAD for the pin.
+The selected adapter release still has finite delivery-count-based maxRetries. Shibuya's local
+checkout has pauseProcessor/resumeProcessor, but they are absent from released core 0.10.0.1.
+PGMQ's local checkout also contains unreleased inspection/error-classification APIs; use the
+selected release source when implementing this plan.
 
 ## Decision Log
 
@@ -60,6 +73,12 @@ Hackage and upstream tags expose 0.16.1.0 on review day, so do not mistake local
 On 2026-10-15 make `(account,eventId)` an immutable event identity at acceptance, and separate
 HTTP retry deduplication from queue redelivery. Finite ClickHouse block tokens are an optional
 optimization, never the correctness boundary. Exact metrics deduplicate before aggregation.
+
+On 2026-10-15 select shibuya-core 0.10.0.1, shibuya-pgmq-adapter 0.16.1.0 and
+pgmq-core/hasql/effectful/migration 0.6.1.1 as M0, before M1–M4. These published releases
+fix failure paths relevant to this plan. The adapter requires core ^>=0.10.0.0 and PGMQ ^>=0.6,
+so updating all six local pins is required dependency resolution, not a coordinated rollout.
+Use the released APIs directly; no external consumer or SDK release blocks this upgrade.
 
 ## Outcomes & Retrospective
 
@@ -76,9 +95,55 @@ count-state rollups. Read [ADR-2](../adr/0002-pipeline-observability-readiness-a
 Dependency source is `mori://shinzui/shibuya-pgmq-adapter/packages/shibuya-pgmq-adapter`
 (`Shibuya.Adapter.Pgmq.Config` and `Internal`) and
 `mori://shinzui/pgmq-hs/packages/pgmq-hasql` (`Pgmq.Hasql.Sessions` and statements).
+Core is `mori://shinzui/shibuya/packages/shibuya-core`; the other required PGMQ packages are
+`mori://shinzui/pgmq-hs/packages/pgmq-core`,
+`mori://shinzui/pgmq-hs/packages/pgmq-effectful` and
+`mori://shinzui/pgmq-hs/packages/pgmq-migration`.
+`cabal.project` and the Hackage overrides in `flake.module.nix` currently pin core 0.8.0.1,
+adapter 0.12.0.0 and all four PGMQ packages 0.4.0.1. Both build paths must move to the same
+selected versions. `kansoku-core/src/Kansoku/Migrations.hs` composes the native PGMQ and
+application migration components; `kansoku-core/test/Kansoku/MigrationsSpec.hs` already
+tests fresh installation, verification and repeat application.
 
 ## Plan of Work
 
+
+### M0: Adopt the released queue-processing baseline
+
+
+Set shibuya-core to 0.10.0.1, shibuya-pgmq-adapter to 0.16.1.0 and pgmq-core,
+pgmq-hasql, pgmq-effectful and pgmq-migration to 0.6.1.1 in `cabal.project` and
+`flake.module.nix`, obtaining the corresponding Hackage source hashes. Verify the selected
+package metadata against the upstream release tags using Mori-located sources; do not consume
+unreleased checkout APIs or bypass incompatible bounds with allow-newer. These releases were
+verified on 2026-10-15; if implementation selects a newer release, record its API review and
+update both build paths explicitly. No additional Shibuya metrics package is needed.
+
+Adapt the writer and affected tests to the released APIs. In
+`kansoku-core/src/Kansoku/Writer/Run.hs`, the existing direct ShutdownConfig construction only
+sets drainTimeout; the new core also requires a finite totalShutdownTimeout. Use the public
+default with explicit timeout overrides and test bounded shutdown. Review exhaustive matches
+and direct record construction affected by ApplicationFailure, ProcessorState.Processing,
+ProcessorFailure and QueueMetrics.defaultPartitionLength. PGMQ visibility-timeout updates
+now return Maybe Message: absence after deletion is a normal race, not a database failure.
+Queue names must be lowercase ASCII letters, digits or underscore, length 1–47;
+`kansoku_events` already complies. Change only actual call sites and fixtures that need it.
+
+Use pgmq-migration's native migration component to install its PGMQ 1.13 SQL baseline on an
+empty owned PostgreSQL database. Verify and reapply the migration ledger without new work,
+then create a queue and exercise send/read/acknowledgement through the real adapter. Keep
+explicit administrative migration ownership; do not add normal-startup DDL or a requirement
+to install the PostgreSQL extension separately. There is no deployed schema to preserve or
+mixed-version fleet to support. Do not add legacy migration/remediation exercises. Existing
+local development data may be recreated through an explicitly chosen disposable test setup.
+
+Prove the fixes at Kansoku's writer boundary: exhausted acknowledgement failure is visible
+as processor failure rather than clean completion; cancellation and repeated stop terminate
+within the configured deadline; and normal acknowledgement removes the source message.
+Exercise ambiguous-commit dead-letter retry without duplicating the dead-letter message,
+using an owned PostgreSQL fault fixture. Reuse existing
+native harnesses and record non-skipped evidence. This milestone does not assert exactly-once
+ClickHouse effects or outage safety; M1/M2 must prove those separately.
 
 ### M1: Durable acceptance and logical event uniqueness
 
@@ -88,7 +153,7 @@ hash and first acceptance time. Hash stable original producer fields, excluding 
 received time, transport send time and derived enrichment. Canonicalize object ordering.
 Validate the original event, then perform deduplication and queue send in one PostgreSQL
 transaction on one connection; standalone effect calls do not provide this transaction.
-Use the pinned Hasql/PGMQ statement layer (verify the version's exports) or an explicit prepared
+Use the M0-upgraded Hasql/PGMQ statement layer (verify the version's exports) or an explicit prepared
 statement calling the installed PGMQ SQL API. Identical retries count as accepted in the wire
 acknowledgement but do not enqueue or normalize again. Changed payload under the same ID is a
 per-event `event_id_conflict` rejection (single 400, batch 202 rejection), not silent overwrite.
@@ -116,13 +181,17 @@ and ambiguous insert acknowledgements on the packaged version. See
 
 Place the breaker before the adapter reads new messages, not only inside the batch callback.
 Wrap the source pull boundary or supervise a clean stop/restart of the processor with a bounded
-in-flight batch; inspect the pinned source API before choosing. On transient connection/timeout
+in-flight batch; inspect the M0-selected released source API before choosing. Do not call the
+unreleased pauseProcessor/resumeProcessor API or wait for its publication. Disable adapter
+prefetch unless the implementation proves its background reads obey the same pause boundary;
+stopping downstream stream pulls alone does not establish that. On transient connection/timeout
 failure, retain the batch, release/renew leases safely and pause further pulls. Probe with a
 separate owned connection every five seconds; a successful ping permits an insert attempt,
 whose failure reopens the breaker. No valid event may archive solely because storage is down.
 Use a non-exhausting delivery policy for infrastructure failures (the current adapter's finite
-maxRetries cannot express it); an adapter change must be an explicit prerequisite, or configure
-a practically non-exhausting maximum with a proven source pause and document the numeric bound.
+maxRetries cannot express it). With the selected released adapter, configure a practically
+non-exhausting maximum with a proven source pause and document the numeric bound; do not make
+an upstream release a prerequisite. Retain the explicit finite-capacity qualification.
 Malformed queue payloads dead-letter; server SQL/schema errors park and alert instead of
 rapidly exhausting valid events. Preserve cancellation and connection invalidation.
 
@@ -154,6 +223,12 @@ hardware measurement remains pending if that machine is unavailable; do not inve
 
 ## Validation and Acceptance
 
+
+M0 requires agreement between Cabal's resolved build plan and Nix's packaged dependency
+versions, successful fresh native migrations and repeat verification, a real queue roundtrip,
+and the acknowledgement/lifecycle failure cases above. Run both developer checks and packaged
+acceptance. No rolling deployment, older-client matrix or existing-production-data conversion
+is required. All milestones remain incomplete until their executable checks pass.
 
 Test identical HTTP retries with restamped sentAt, simultaneous duplicates, conflicting IDs,
 queue commit rollback, ClickHouse committed-write/lost-ack, restart, different batch boundaries
@@ -193,9 +268,14 @@ Backfills of count states are not repeatable by appending. Build replacement tab
 
 Required complete child artifacts: `docs/plans/29-correct-client-timestamp-skew-and-count-ingest-rejections.md`.
 
-Hard dependency: EP-29 (`docs/plans/29-correct-client-timestamp-skew-and-count-ingest-rejections.md`) Complete. Owns canonical event source, acceptance ledger, writer recovery and admission. EP-32/31 consume canonical reads; EP-37 consumes replay safety. No dependency upgrade is selected by this review; recheck registry and release tags before selecting bounds.
+Hard dependency: EP-29 (`docs/plans/29-correct-client-timestamp-skew-and-count-ingest-rejections.md`) Complete. Owns canonical event source, acceptance ledger, writer recovery and admission. EP-32/31 consume canonical reads; EP-37 consumes replay safety. M0 owns the selected released dependency upgrades and precedes M1–M4; there is no SDK or upstream-release prerequisite.
 
 Revision note (2026-10-15): reviewed against the current source and revised for first deployment.
 [ADR-11](../adr/0011-initial-release-analytics-contracts.md) records the proposed cross-plan
 contracts; implementation must supply the acceptance evidence before those contracts become
 accepted runtime guarantees.
+
+Revision note (2026-10-15, dependency follow-up): add M0 with explicit released versions,
+Cabal/Nix consistency, source adaptations and fresh-install failure checks. The owner's
+pre-deployment scope removes rollout/legacy compatibility work; source pausing remains M2's
+responsibility because the selected release does not expose the unreleased control API.
