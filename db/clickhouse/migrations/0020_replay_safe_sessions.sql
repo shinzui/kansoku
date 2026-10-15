@@ -1,0 +1,53 @@
+-- EP-34: merge whole retained sessions, never per-block start-day groups.
+-- The operator keeps writers stopped during migrations/rebuilds. Every state
+-- is idempotent for immutable event IDs: sets, min/max and deterministic argmin/max.
+DROP TABLE IF EXISTS analytics.mv_sessions;
+DROP TABLE IF EXISTS analytics.sessions_rebuild;
+CREATE TABLE analytics.sessions_rebuild
+ENGINE = AggregatingMergeTree
+ORDER BY (account_id,source_service,session_id)
+AS
+SELECT account_id,source_service,session_id,
+       minState(occurred_at) AS started,
+       maxState(occurred_at) AS ended,
+       uniqExactIfState(event_id,event_name='page_view') AS page_ids,
+       uniqExactIfState(event_id,event_name NOT IN ('page_view','session_start','page_leave','identify','identify_once','alias','group','experiment_viewed')) AS engagement_ids,
+       argMinState(tuple(toString(event_name),toString(source),toString(url),toString(referrer),toString(utm_source),toString(utm_medium),toString(utm_campaign),toString(utm_content),toString(utm_term),toString(browser_family),toString(os_family),toString(device_class),toString(channel),toString(country_code),toString(properties)),tuple(occurred_at,event_id)) AS first_event,
+       argMinIfState(tuple(toString(event_name),toString(source),toString(url),toString(referrer),toString(utm_source),toString(utm_medium),toString(utm_campaign),toString(utm_content),toString(utm_term),toString(browser_family),toString(os_family),toString(device_class),toString(channel),toString(country_code),toString(properties)),tuple(occurred_at,event_id),event_name='page_view') AS first_page,
+       argMaxIfState(tuple(url),tuple(occurred_at,event_id),event_name='page_view') AS last_page,
+       maxState(is_bot) AS bot
+FROM analytics.events_canonical
+WHERE source='web' AND session_id!='' AND 0
+GROUP BY account_id,source_service,session_id;
+
+INSERT INTO analytics.sessions_rebuild
+SELECT account_id,source_service,session_id,
+       minState(occurred_at) AS started,
+       maxState(occurred_at) AS ended,
+       uniqExactIfState(event_id,event_name='page_view') AS page_ids,
+       uniqExactIfState(event_id,event_name NOT IN ('page_view','session_start','page_leave','identify','identify_once','alias','group','experiment_viewed')) AS engagement_ids,
+       argMinState(tuple(toString(event_name),toString(source),toString(url),toString(referrer),toString(utm_source),toString(utm_medium),toString(utm_campaign),toString(utm_content),toString(utm_term),toString(browser_family),toString(os_family),toString(device_class),toString(channel),toString(country_code),toString(properties)),tuple(occurred_at,event_id)) AS first_event,
+       argMinIfState(tuple(toString(event_name),toString(source),toString(url),toString(referrer),toString(utm_source),toString(utm_medium),toString(utm_campaign),toString(utm_content),toString(utm_term),toString(browser_family),toString(os_family),toString(device_class),toString(channel),toString(country_code),toString(properties)),tuple(occurred_at,event_id),event_name='page_view') AS first_page,
+       argMaxIfState(tuple(url),tuple(occurred_at,event_id),event_name='page_view') AS last_page,
+       maxState(is_bot) AS bot
+FROM analytics.events_canonical
+WHERE source='web' AND session_id!=''
+GROUP BY account_id,source_service,session_id;
+
+CREATE TABLE IF NOT EXISTS analytics.sessions AS analytics.sessions_rebuild;
+EXCHANGE TABLES analytics.sessions AND analytics.sessions_rebuild;
+DROP TABLE analytics.sessions_rebuild;
+
+CREATE MATERIALIZED VIEW analytics.mv_sessions TO analytics.sessions AS
+SELECT account_id,source_service,session_id,
+       minState(occurred_at) AS started,
+       maxState(occurred_at) AS ended,
+       uniqExactIfState(event_id,event_name='page_view') AS page_ids,
+       uniqExactIfState(event_id,event_name NOT IN ('page_view','session_start','page_leave','identify','identify_once','alias','group','experiment_viewed')) AS engagement_ids,
+       argMinState(tuple(toString(event_name),toString(source),toString(url),toString(referrer),toString(utm_source),toString(utm_medium),toString(utm_campaign),toString(utm_content),toString(utm_term),toString(browser_family),toString(os_family),toString(device_class),toString(channel),toString(country_code),toString(properties)),tuple(occurred_at,event_id)) AS first_event,
+       argMinIfState(tuple(toString(event_name),toString(source),toString(url),toString(referrer),toString(utm_source),toString(utm_medium),toString(utm_campaign),toString(utm_content),toString(utm_term),toString(browser_family),toString(os_family),toString(device_class),toString(channel),toString(country_code),toString(properties)),tuple(occurred_at,event_id),event_name='page_view') AS first_page,
+       argMaxIfState(tuple(url),tuple(occurred_at,event_id),event_name='page_view') AS last_page,
+       maxState(is_bot) AS bot
+FROM analytics.events_raw
+WHERE source='web' AND session_id!=''
+GROUP BY account_id,source_service,session_id;

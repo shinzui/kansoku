@@ -61,17 +61,13 @@ spec = describe "Kansoku.Query.buildSQL" $ do
     sql `shouldNotContainText` "'signup_completed'"
     sql `shouldNotContainText` "'signup_started'"
 
-  it "counts sessions by distinct non-empty session ids" $
-    buildSessionsSQL dayRequest
-      `shouldContainText` """
-                          SELECT toString(toDate(occurred_at)) AS bucket, '[]' AS group_key,
-                                 toFloat64(uniqExact(session_id)) AS value
-                          FROM analytics.events_canonical
-                          WHERE account_id = {account_id:String}
-                            AND occurred_at >= '2026-06-01 00:00:00' AND occurred_at < '2026-06-08 00:00:00'
-                            AND session_id != ''
-                          GROUP BY bucket, group_key
-                          ORDER BY bucket, group_key"""
+  it "merges complete retained session states before filtering their start date" $ do
+    let sql = sessionSQL dayRequest
+    sql `shouldContainText` "FROM analytics.sessions"
+    sql `shouldContainText` "GROUP BY account_id,source_service,session_id"
+    sql `shouldContainText` "minMerge(started) AS session_start_at"
+    sql `shouldContainText` "NOT is_bot"
+    sql `shouldNotContainText` "uniqExact(session_id)"
 
   it "builds retention SQL with default offsets plus cohort size" $
     buildRetentionSQL dayRequest [1, 7, 14, 30]
@@ -183,7 +179,7 @@ spec = describe "Kansoku.Query.buildSQL" $ do
             buildSQL (requiredMetric "new_users") dayRequest,
             buildSQL (requiredMetric "revenue") dayRequest,
             buildSQL (Ratioed conversionRate) dayRequest,
-            buildSessionsSQL dayRequest,
+            sessionSQL dayRequest,
             buildRetentionSQL dayRequest [1, 7],
             buildFunnelSQL dayRequest 604800 (sqlName <$> ["signup_started", "signup_completed"]),
             buildExperimentExposuresSQL dayRequest (Just (sqlName "checkout_v2")),
@@ -206,7 +202,7 @@ spec = describe "Kansoku.Query.buildSQL" $ do
         buildSQL (requiredMetric "new_users") dayRequest,
         buildSQL (requiredMetric "revenue") dayRequest,
         buildSQL (Ratioed conversionRate) dayRequest,
-        buildSessionsSQL dayRequest,
+        sessionSQL dayRequest,
         buildRetentionSQL dayRequest [1, 7],
         buildFunnelSQL dayRequest 604800 (sqlName <$> ["signup_started", "signup_completed"]),
         buildExperimentExposuresSQL dayRequest (Just (sqlName "checkout_v2")),
@@ -333,3 +329,6 @@ assertNumericDeclaration property event =
         [PTNumber] -> pure ()
         [PTAny] -> pure ()
         _ -> expectationFailure ("aggregation property is not numeric: " <> Text.unpack event <> "." <> Text.unpack property)
+
+sessionSQL :: QueryRequest -> Text
+sessionSQL = either (error . show) id . buildSessionsSQL

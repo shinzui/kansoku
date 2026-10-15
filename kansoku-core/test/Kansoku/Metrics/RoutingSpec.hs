@@ -263,7 +263,7 @@ sentinelMetricsServer =
   Metrics.MetricsRoutes
     { Metrics.events = standardSentinel "events",
       Metrics.pageViews = webSentinel "page-views",
-      Metrics.sessions = \_principal _from _to _grain -> pure (Response.KansokuOk (sentinelResult "sessions")),
+      Metrics.sessions = \principal fromDay toDay groupBy grain filters _measure _bots -> standardSentinel "sessions" principal fromDay toDay groupBy grain filters,
       Metrics.funnel = funnelSentinel,
       Metrics.retention = retentionSentinel,
       Metrics.acquisition = \principal fromDay toDay groupBy grain filters _measure _bots -> standardSentinel "acquisition" principal fromDay toDay groupBy grain filters,

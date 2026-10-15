@@ -15,6 +15,7 @@ module Kansoku.Metrics.Query
     buildAcquisitionSQL,
     activityPredicate,
     buildSessionsSQL,
+    buildSessionMetricSQL,
     experimentConversionPoint,
     experimentExposuresPoint,
     experimentFunnelPoint,
@@ -28,6 +29,7 @@ module Kansoku.Metrics.Query
     runFunnel,
     runRetention,
     runSessions,
+    runSessionMetric,
     runAcquisition,
   )
 where
@@ -55,7 +57,7 @@ import Data.List qualified as List
 import Data.Map.Strict qualified as Map
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
-import Data.Time (Day, fromGregorian)
+import Data.Time (Day, addDays, dayOfWeek, diffDays, fromGregorian, toGregorian)
 import Data.Time.Format (defaultTimeLocale, formatTime)
 import Effectful (Eff, IOE, type (:>))
 import Kansoku.ClickHouse (QueryPool, queryDeadlineMicros, withIdentityQueryConnection, withMetricsQueryConnection)
@@ -63,13 +65,14 @@ import Kansoku.Event
   ( AccountId (..),
     EventName (..),
     EventRegistry,
+    defaultRegistry,
   )
 import Kansoku.Exception (trySynchronous)
-import Kansoku.Metrics.Api (AcquisitionMeasure (..), MetricPoint (..), MetricResult (..), TimeGrain (..))
+import Kansoku.Metrics.Api (AcquisitionMeasure (..), MetricPoint (..), MetricResult (..), SessionMeasure (..), TimeGrain (..))
 import Kansoku.Metrics.Definition (Aggregation (..), MetricDefinition (..), RatioMetric (..))
 import Kansoku.Metrics.Filter (MetricFilter)
 import Kansoku.Metrics.Filter qualified as WireFilter
-import Kansoku.Metrics.Limits (maxMetricPoints)
+import Kansoku.Metrics.Limits (maxMetricPoints, maxQueryDays)
 import Kansoku.Metrics.Query.Dimension
 import Kansoku.Metrics.Query.Filter qualified as Filters
 import Kansoku.Metrics.Query.Property
@@ -78,7 +81,7 @@ import Kansoku.Metrics.Query.Property
     propertyFloatExpr,
     resolveNumericProperty,
   )
-import Kansoku.Metrics.Query.Session (sessionProjection)
+import Kansoku.Metrics.Query.Session (materializedSessionProjection, sessionProjection)
 import Kansoku.Metrics.Query.Validate (QueryLimitError (..), SqlName, mkSqlName, renderSqlName, validateDateRange, validateOffsets, validateSteps)
 import Kansoku.Metrics.Registry (BuiltinMetric (..))
 import Kansoku.Prelude
@@ -183,8 +186,8 @@ retainedScope req = req {from = fromGregorian 1970 1 1, to = fromGregorian 2100 
 compileAcquisition :: EventRegistry -> AcquisitionMeasure -> QueryRequest -> Either QueryCompileError CompiledMetric
 compileAcquisition registry measure req = do
   let scope = Filters.filteredEventScope [] (req ^. #filters)
-  grouping <- requestedGrouping registry scope (req ^. #groupBy) ["channel"]
-  filters <- first QueryCompileFilterError (Filters.compileMetricFilters registry scope (req ^. #filters))
+  grouping <- requestedGroupingWith (resolveSessionDimension registry scope) (req ^. #groupBy) ["channel"]
+  filters <- first QueryCompileFilterError (Filters.compileFiltersWith "metric_filter" (resolveSessionDimension registry scope) (req ^. #filters))
   let resolved = measure == AcquisitionUsers
       source = if resolved then resolvedSource (retainedScope req) else "analytics.events_canonical"
       aggregate = if resolved then "uniqExactIf(primary_subject,primary_subject!='')" else "count()"
@@ -192,16 +195,28 @@ compileAcquisition registry measure req = do
       sql =
         Text.unlines
           [ "SELECT " <> bucketExpr (req ^. #timeGrain) <> " AS bucket," <> groupProjection grouping <> ",toFloat64(" <> aggregate <> ") AS value",
-            "FROM (" <> sessionProjection source resolved <> ")",
+            "FROM (" <> (if resolved || any isPropertyDimension grouping || any (Text.isPrefixOf "prop:" . WireFilter.dimension) (req ^. #filters) then sessionProjection source resolved else materializedSessionProjection) <> ")",
             "WHERE " <> accountPredicate <> " AND " <> Text.intercalate " AND " predicates,
             "GROUP BY bucket,sort_group_1,sort_group_2"
           ]
   pure CompiledMetric {sql, groupLabels = map dimensionLabel grouping, filterParameters = Filters.parameters filters, ordering = BucketDimensions}
 
 runSessions :: (IOE :> es) => QueryPool -> QueryRequest -> Eff es (Either QueryExecutionError MetricResult)
-runSessions pool req =
-  checked req (Right ()) $
-    runSQL pool "sessions" [] (accountParameter req) (buildSessionsSQL req)
+runSessions pool = runSessionMetric pool SessionCount
+
+runSessionMetric :: (IOE :> es) => QueryPool -> SessionMeasure -> QueryRequest -> Eff es (Either QueryExecutionError MetricResult)
+runSessionMetric pool measure req =
+  case first QueryLimitFailure (validateDateRange (req ^. #from) (req ^. #to))
+    >> first QueryCompileFailure (compileSessions measure req) of
+    Left failure -> pure (Left failure)
+    Right compiled ->
+      liftIO $
+        runSQL
+          pool
+          "sessions"
+          (compiled ^. #groupLabels)
+          (accountParameter req <> compiled ^. #filterParameters)
+          (boundedSQL BucketDimensions (compiled ^. #sql))
 
 runRetention :: (IOE :> es) => QueryPool -> QueryRequest -> [Int] -> Eff es (Either QueryExecutionError MetricResult)
 runRetention pool req offsets =
@@ -396,6 +411,7 @@ decodeUtf8 = first (Text.pack . show) . Text.decodeUtf8'
 
 compileMetric :: EventRegistry -> BuiltinMetric -> QueryRequest -> Either QueryCompileError CompiledMetric
 compileMetric registry metric req = case metric of
+  Simple def | def ^. #name == "sessions" -> compileSessions SessionCount req
   Simple def -> compileSimpleMetric registry def req
   Ratioed ratio -> do
     let scope = Filters.filteredEventScope (definitionEvents (ratio ^. #numerator) <> definitionEvents (ratio ^. #denominator)) (req ^. #filters)
@@ -506,25 +522,55 @@ simpleAggregateSQL aggregationSQL source grouping predicates def req =
 activityPredicate :: Text
 activityPredicate = "event_name NOT IN ('identify','identify_once','alias','group')"
 
-buildSessionsSQL :: QueryRequest -> Text
-buildSessionsSQL req = boundedSQL BucketGroup (buildSessionsSQLAggregate req)
+buildSessionsSQL :: QueryRequest -> Either QueryCompileError Text
+buildSessionsSQL = buildSessionMetricSQL SessionCount
 
-buildSessionsSQLAggregate :: QueryRequest -> Text
-buildSessionsSQLAggregate req =
-  "SELECT "
-    <> bucketExpr (req ^. #timeGrain <|> Just Day)
-    <> """ AS bucket, '[]' AS group_key,
-              toFloat64(uniqExact(session_id)) AS value
-       FROM analytics.events_canonical
-       WHERE """
-    <> accountPredicate
-    <> "\n  AND "
-    <> timestampPredicate req
-    <> """
+buildSessionMetricSQL :: SessionMeasure -> QueryRequest -> Either QueryCompileError Text
+buildSessionMetricSQL measure req = boundedSQL BucketDimensions . view #sql <$> compileSessions measure req
 
-         AND session_id != ''
-       GROUP BY bucket, group_key
-       ORDER BY bucket, group_key"""
+compileSessions :: SessionMeasure -> QueryRequest -> Either QueryCompileError CompiledMetric
+compileSessions measure req = do
+  let days = diffDays (req ^. #to) (req ^. #from)
+  unless (days > 0 && days <= maxQueryDays) (Left (QueryCompileFilterError "session calendar requires a positive range of at most 366 days"))
+  when
+    (any (Text.isPrefixOf "prop:" . WireFilter.dimension) (req ^. #filters))
+    (Left (QueryCompileFilterError "arbitrary property filters are unsupported on sessions; select session attributes"))
+  when
+    (any (Text.isPrefixOf "prop:") (fromMaybe [] (req ^. #groupBy)))
+    (Left (QueryCompileInvalidGroupBy "arbitrary property grouping is unsupported on sessions"))
+  grouping <- requestedGroupingWith (resolveSessionDimension defaultRegistry []) (req ^. #groupBy) []
+  predicates <- first QueryCompileFilterError (Filters.compileFiltersWith "session_filter" (resolveSessionDimension defaultRegistry []) (req ^. #filters))
+  let selected =
+        "SELECT * FROM ("
+          <> materializedSessionProjection
+          <> ") WHERE "
+          <> accountPredicate
+          <> " AND "
+          <> Text.intercalate " AND " ([timestampPredicate req] <> ["NOT is_bot" | not (req ^. #includeBots)] <> Filters.predicates predicates)
+      aggregate = case measure of
+        SessionCount -> "toFloat64(count())"
+        SessionBounceRate -> "toFloat64(countIf(page_view_count=1 AND engagement_count=0))/count()"
+        SessionAverageDuration -> "avg(dateDiff('millisecond',occurred_at,session_end_at)/1000.0)"
+      grouped = "SELECT " <> bucketExpr (req ^. #timeGrain) <> " AS bucket," <> groupProjection grouping <> "," <> aggregate <> " AS value FROM (" <> selected <> ") GROUP BY bucket,sort_group_1,sort_group_2"
+      -- Generate bounded UTC labels in Haskell: native DateTime calendars
+      -- silently clamp dates outside their narrower epoch range.
+      calendar = sessionCalendar req
+      sql =
+        if null grouping
+          then "SELECT calendar.bucket AS bucket,'[]' AS group_key,CAST(NULL,'Nullable(String)') AS sort_group_1,CAST(NULL,'Nullable(String)') AS sort_group_2,ifNull(answer.value,0) AS value FROM (" <> calendar <> ") AS calendar LEFT JOIN (" <> grouped <> ") AS answer USING(bucket)"
+          else grouped
+  pure CompiledMetric {sql, groupLabels = map dimensionLabel grouping, filterParameters = Filters.parameters predicates, ordering = BucketDimensions}
+
+sessionCalendar :: QueryRequest -> Text
+sessionCalendar req = "SELECT arrayJoin([" <> Text.intercalate "," (map (\label -> "'" <> label <> "'") labels) <> "]) AS bucket"
+  where
+    days = [addDays offset (req ^. #from) | offset <- [0 .. diffDays (req ^. #to) (req ^. #from) - 1]]
+    labels = case req ^. #timeGrain of
+      Just Hour -> [date day <> " " <> (if hour < 10 then "0" else "") <> Text.pack (show hour) <> ":00:00" | day <- days, hour <- [0 .. 23 :: Int]]
+      Just Week -> map date (List.nub [addDays (1 - fromIntegral (fromEnum (dayOfWeek day))) day | day <- days])
+      Just Month -> map date (List.nub [fromGregorian year month 1 | day <- days, let (year, month, _) = toGregorian day])
+      _ -> map date days
+    date = Text.pack . formatTime defaultTimeLocale "%Y-%m-%d"
 
 -- | Retention over new-in-window cohorts. first_seen deliberately computes
 -- min(day) inside the requested window; lifetime cohorts require a first-seen
@@ -815,10 +861,13 @@ bucketExpr = \case
   _ -> "toString(toDate(occurred_at))"
 
 requestedGrouping :: EventRegistry -> [EventName] -> Maybe [Text] -> [Text] -> Either QueryCompileError [GroupDimension]
-requestedGrouping registry scope requested defaults = do
+requestedGrouping registry scope = requestedGroupingWith (resolveDimension registry scope)
+
+requestedGroupingWith :: (Text -> Either DimensionError GroupDimension) -> Maybe [Text] -> [Text] -> Either QueryCompileError [GroupDimension]
+requestedGroupingWith resolve requested defaults = do
   let names = fromMaybe defaults requested
   when (length names > 2 || length (List.nub names) /= length names || any Text.null names || requested == Just []) (Left (QueryCompileMultipleGroupBy names))
-  traverse (first dimensionFailure . resolveDimension registry scope) names
+  traverse (first dimensionFailure . resolve) names
   where
     dimensionFailure (UnknownDimension name) = QueryCompileInvalidGroupBy name
     dimensionFailure (InvalidDimensionProperty failure) = QueryCompilePropertyError failure

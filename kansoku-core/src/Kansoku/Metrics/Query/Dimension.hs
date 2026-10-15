@@ -3,6 +3,7 @@ module Kansoku.Metrics.Query.Dimension
   ( GroupDimension (..),
     DimensionError (..),
     resolveDimension,
+    resolveSessionDimension,
     dimensionLabel,
     dimensionType,
     dimensionExpr,
@@ -35,6 +36,8 @@ data GroupDimension
   | GroupByUtmTerm
   | GroupByReferrerHost
   | GroupByBot
+  | GroupByEntryPage
+  | GroupByExitPage
   | GroupByProperty !PropertyName
   deriving stock (Generic, Eq, Show)
 
@@ -64,6 +67,12 @@ resolveDimension registry events name = case name of
     Nothing -> Left (UnknownDimension name)
     Just property -> GroupByProperty <$> first InvalidDimensionProperty (resolveProperty registry events property)
 
+-- Entry/exit names are scoped to whole-session sources, never ordinary rows.
+resolveSessionDimension :: EventRegistry -> [EventName] -> Text -> Either DimensionError GroupDimension
+resolveSessionDimension _ _ "entry_page" = Right GroupByEntryPage
+resolveSessionDimension _ _ "exit_page" = Right GroupByExitPage
+resolveSessionDimension registry events name = resolveDimension registry events name
+
 dimensionLabel :: GroupDimension -> Text
 dimensionLabel = \case
   GroupByEventName -> "event_name"
@@ -83,6 +92,8 @@ dimensionLabel = \case
   GroupByUtmTerm -> "utm_term"
   GroupByReferrerHost -> "referrer_host"
   GroupByBot -> "is_bot"
+  GroupByEntryPage -> "entry_page"
+  GroupByExitPage -> "exit_page"
   GroupByProperty property -> "prop:" <> propertyNameText property
 
 dimensionType :: GroupDimension -> ScalarType
@@ -109,6 +120,8 @@ dimensionExpr = \case
   GroupByUtmTerm -> "nullIf(toString(utm_term), '')"
   GroupByReferrerHost -> "if(" <> canonicalDomain "referrer" <> " = " <> canonicalDomain "url" <> ", CAST(NULL, 'Nullable(String)'), " <> canonicalDomain "referrer" <> ")"
   GroupByBot -> "is_bot"
+  GroupByEntryPage -> "nullIf(path(entry_url), '')"
+  GroupByExitPage -> "nullIf(path(exit_url), '')"
   GroupByProperty property -> propertyTypedExpr property
 
 canonicalDomain :: Text -> Text

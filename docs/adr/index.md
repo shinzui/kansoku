@@ -20,3 +20,5 @@ okf_version: "0.2"
 - [Owned executable acceptance environments](0010-owned-executable-acceptance-environments.md) - Gate service changes with deterministic checks and required integration against the Nix executable in fresh owned database processes.
 - [Initial release analytics contracts](0011-initial-release-analytics-contracts.md) - Establish coherent event identity, analytical populations and lifecycle boundaries before the first Kansoku deployment.
 - [Server enrichment and first-touch web acquisition](0012-server-enrichment-and-first-touch-web-acquisition.md) - Preserve categorical request enrichment in a private versioned queue envelope and assemble complete retained web sessions before acquisition selection.
+
+- [Whole retained replay-safe web sessions](0013-whole-retained-replay-safe-web-sessions.md) - Merge idempotent session state before date and attribute selection.

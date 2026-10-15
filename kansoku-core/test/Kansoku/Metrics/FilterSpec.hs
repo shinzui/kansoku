@@ -110,7 +110,7 @@ spec = describe "Kansoku.Metrics filters" $ do
         req "events" [("filter[]", encoded)],
         req "events" [("filter", Nothing)],
         req "events" [("groupBy", Nothing)],
-        req "sessions" [("filter", encoded)],
+        req "sessions" [("attribution", Just "event")],
         req "funnel" [("groupBy", Just "source")]
       ]
   where

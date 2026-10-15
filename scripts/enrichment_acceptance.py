@@ -30,15 +30,15 @@ def event(identifier, session, name='page_view', timestamp='2026-07-01T23:59:00Z
     return result
 
 
-def query(base, token, **parameters):
+def query(base, token, endpoint='acquisition', **parameters):
     params = dict(from_='2026-07-01', to='2026-07-03')
     params.update(parameters)
     params['from'] = params.pop('from_')
-    path = '/metrics/acquisition?' + urllib.parse.urlencode(params, doseq=True)
+    path = '/metrics/' + endpoint + '?' + urllib.parse.urlencode(params, doseq=True)
     request = urllib.request.Request(base + path, headers={'Authorization': 'Bearer ' + token})
     with urllib.request.urlopen(request, timeout=5) as response:
         result = json.load(response)
-        assert result['metric'] == 'acquisition'
+        assert result['metric'] == endpoint
         return result['points']
 
 
@@ -84,6 +84,27 @@ def verify_enrichment(base, write_key, service_token):
         {'bucket': '2026-07-01', 'group': {'country_code': 'GB'}, 'value': 1}]
     changed_country = json.dumps(dict(dimension='country_code', op='eq', value='JP'))
     assert report(filter=changed_country) == [], 'later country replaced first-touch country'
+    # Session count and attribution share one complete retained projection.
+    selected = report(endpoint='sessions', groupBy='entry_page,exit_page')
+    assert selected == [{'bucket': '2026-07-01', 'group': {'entry_page': '/entry', 'exit_page': '/later'}, 'value': 1}], selected
+    assert sum(point['value'] for point in report(endpoint='sessions', measure='average_duration_seconds')) == 240
+    assert sum(point['value'] for point in report(endpoint='sessions', measure='bounce_rate')) == 0
+    assert sum(point['value'] for point in report(endpoint='sessions', includeBots='true')) == 2
+    assert sum(point['value'] for point in report(endpoint='sessions', from_='2026-07-02')) == 0
+    bounce = [event(prefix + '_bounce_page', prefix + '_bounce', timestamp='2026-07-02T10:00:00Z'),
+              event(prefix + '_bounce_leave', prefix + '_bounce', name='page_leave', timestamp='2026-07-02T10:01:00Z')]
+    for value in bounce:
+        value['sourceService'] = prefix
+        value['url'] = 'https://shop.example/bounce'
+        value['properties'] = {'url': value['url']} if value['eventName'] == 'page_view' else {'durationMs': 60000}
+    send(base, write_key, bounce)
+    bounce_filter = json.dumps(dict(dimension='entry_page', op='eq', value='/bounce'))
+    eventually(lambda: sum(point['value'] for point in report(endpoint='sessions', filter=bounce_filter)) == 1)
+    assert sum(point['value'] for point in report(endpoint='sessions', filter=bounce_filter, measure='bounce_rate')) == 1
+    assert sum(point['value'] for point in report(endpoint='sessions', filter=bounce_filter, measure='average_duration_seconds')) == 60
+    send(base, write_key, bounce)
+    assert sum(point['value'] for point in report(endpoint='sessions', filter=bounce_filter, measure='bounce_rate')) == 1
+    print('EP-34 public workflow: cross-midnight counts, entry/exit, bots, positive-duration lifecycle bounce and replay passed.', flush=True)
     print('EP-33 public workflow: existing event JSON, retries, first-touch/device/country, bots and exact users passed.', flush=True)
 
 

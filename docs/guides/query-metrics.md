@@ -101,7 +101,7 @@ Invalid JSON/filter grammar or incompatible filter types return `invalid_filter`
 | events, feature-adoption, revenue, conversion | `groupBy`, `timeGrain`, repeatable `filter` |
 | page-views, users | `groupBy`, `timeGrain`, repeatable `filter`, `includeBots` (default false) |
 | acquisition | `groupBy` (default channel), `timeGrain`, repeatable session-attribute `filter`, `measure` (sessions/users), `includeBots` (default false) |
-| sessions | `timeGrain` |
+| sessions | `groupBy`, `timeGrain`, repeatable session-attribute `filter`, `measure` (count/bounce_rate/average_duration_seconds), `includeBots` (default false) |
 | funnel | required `steps`; optional `window` |
 | retention | `days` |
 | experiments | `experiment`, `timeGrain` (day/week/month) |
@@ -141,7 +141,7 @@ conversion returns a single zero when its denominator is zero.
 | `/metrics/events` | Distinct event IDs across all event names. |
 | `/metrics/page-views` | Distinct canonical `page_view` event IDs with the same filters and default row-level bot exclusion at every grain. |
 | `/metrics/acquisition` | Complete retained web sessions, first-touch attribution and exact primary-subject users; defaults to sessions grouped by channel, excluding any-bot sessions. |
-| `/metrics/sessions` | Distinct non-empty producer-supplied `sessionId` values. |
+| `/metrics/sessions` | Whole retained web sessions, assigned to their earliest event bucket; count, bounce rate and observed duration, excluding any-bot sessions by default. |
 | `/metrics/funnel` | Exact identity-resolved users completing ordered event steps. |
 | `/metrics/retention` | Exact identity-resolved activity by new-in-window cohort and day offset. |
 | `/metrics/feature-adoption` | Exact identity-resolved users emitting `feature_used`, grouped by its `feature` property by default. |
@@ -291,3 +291,40 @@ For the complete parameter and response schema, use the
 [generated OpenAPI document](../api/openapi.json) or `GET /openapi.json`.
 
 [Documentation index](../README.md)
+
+## Session measures
+
+`/metrics/sessions` defaults to `measure=count`, daily UTC buckets and no grouping. A session
+key combines account, source service and a nonempty producer session ID. It spans all retained
+web events, across insert batches, midnight and hosts. The server assembles the session before
+applying its start date or attributes. A session starting before `from` is excluded even if
+later events fall inside the requested range. Missing IDs and non-web events do not join.
+
+`measure=bounce_rate` returns a fraction from zero to one: exactly one distinct page_view and
+no engagement events, divided by every selected session. session_start, page_leave, identify,
+identify_once, alias, group and experiment_viewed are not engagement; other application events
+are. Zero-page sessions count but are not bounces. A page_view followed by page_leave can be
+a bounce with positive duration. `measure=average_duration_seconds` averages last minus first
+observed timestamp, including page_leave and one-event sessions with zero duration. It measures
+elapsed observed duration, not active reading time. Empty ungrouped buckets return zero for
+all measures; nonexistent groups are omitted.
+
+Use `groupBy=entry_page,exit_page` for the first/last page_view route; lifecycle events cannot
+supply these routes. Other common/enrichment dimensions use first-page attribution, otherwise
+the earliest web event, with `(occurred_at,event_id)` tie ordering. Repeated attribute filters
+select whole sessions; arbitrary `prop:` filters/grouping are rejected on this route. Any bot
+event excludes the session unless `includeBots=true`. Session counts and acquisition's sessions
+measure agree under equivalent filters/grouping. Example:
+
+```bash
+curl --get "$KANSOKU_URL/metrics/sessions" \
+  --header "Authorization: Bearer $KANSOKU_SERVICE_TOKEN" \
+  --data-urlencode 'from=2026-07-01' --data-urlencode 'to=2026-07-03' \
+  --data-urlencode 'measure=bounce_rate' --data-urlencode 'groupBy=entry_page,channel'
+```
+
+Replay does not double-count page views or engagement. Late arrivals can move a session to an
+earlier start bucket or extend duration. These are retained-history sessions: expiry, erasure
+or corrected historical facts can change their minimum and attribution after a fenced rebuild.
+The server does not invent IDs or apply a second inactivity timeout; browser SDK rotation
+controls browser sessions. Identical IDs in different source services remain separate.

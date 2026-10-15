@@ -176,6 +176,7 @@ test-suite kansoku-core-test
     Kansoku.Metrics.HandlerSpec
     Kansoku.Metrics.LimitsSpec
     Kansoku.Metrics.RoutingSpec
+    Kansoku.Metrics.SessionIntegrationSpec
     Kansoku.MigrationsSpec
     Kansoku.ObservabilitySpec
     Kansoku.OpenApiSpec

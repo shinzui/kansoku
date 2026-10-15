@@ -3,6 +3,7 @@ module Kansoku.Metrics.Api
   ( MetricPoint (..),
     MetricQuery,
     AcquisitionMeasure (..),
+    SessionMeasure (..),
     MetricResult (..),
     MetricsRoutes (..),
     TimeGrain (..),
@@ -92,9 +93,26 @@ instance ToHttpApiData AcquisitionMeasure where
   toUrlPiece AcquisitionSessions = "sessions"
   toUrlPiece AcquisitionUsers = "users"
 
+data SessionMeasure = SessionCount | SessionBounceRate | SessionAverageDuration
+  deriving stock (Generic, Eq, Show)
+
+instance FromHttpApiData SessionMeasure where
+  parseUrlPiece "count" = Right SessionCount
+  parseUrlPiece "bounce_rate" = Right SessionBounceRate
+  parseUrlPiece "average_duration_seconds" = Right SessionAverageDuration
+  parseUrlPiece _ = Left "measure must be count, bounce_rate or average_duration_seconds"
+
+instance ToHttpApiData SessionMeasure where
+  toUrlPiece SessionCount = "count"
+  toUrlPiece SessionBounceRate = "bounce_rate"
+  toUrlPiece SessionAverageDuration = "average_duration_seconds"
+
 type MetricParameters result =
   Description "Every metric requires a positive half-open from/to range of at most 366 days and returns at most 10000 complete points. groupBy accepts one or two distinct dimensions: event_name, source, source_service, host, route, enrichment/acquisition fields or prop:<declared scalar property>. Repeated filter parameters are AND-combined JSON objects with dimension/op/value (omit value for set/unset): at most 8 filters, 100 in values, 1024 UTF-8 bytes per string and 16384 decoded bytes combined. Missing/null values are unset; comparisons including neq do not match unset values. Group keys keep full dimension names and null differs from an empty string. Unsupported parameters are errors. See the documented route matrix."
-    :> QueryParam' '[Required] "from" Day
+    :> MetricArguments result
+
+type MetricArguments result =
+  QueryParam' '[Required] "from" Day
     :> QueryParam' '[Required] "to" Day
     :> QueryParam "groupBy" Text
     :> QueryParam "timeGrain" TimeGrain
@@ -107,6 +125,10 @@ type MetricQuery = MetricParameters MetricResponse
 
 type WebMetricQuery = MetricParameters (QueryParam "includeBots" Bool :> MetricResponse)
 
+type SessionQuery =
+  Description "Whole retained web sessions keyed by account/source_service/nonempty session_id; assemble before selecting the start date or UTC bucket. Defaults: measure=count, day grain, no grouping, includeBots=false. bounce_rate is exactly one page_view and no engagement divided by all selected sessions; lifecycle/identity/exposure events are not engagement. average_duration_seconds includes every selected session, including zero-duration visits, and measures last minus first observed event including page_leave. Attribute grouping/filters select first page_view, else earliest event; entry_page/exit_page come from page views. Arbitrary prop: filters/grouping are rejected. Any bot event excludes the whole session unless includeBots=true. Empty ungrouped buckets return zero; nonexistent groups are omitted. One/two dimensions, at most 8 AND filters (100 in values, 1024 UTF-8 bytes per string, 16384 decoded bytes), positive half-open range at most 366 days, at most 10000 complete points. Late arrivals and retained-history changes can change start/attribution/duration."
+    :> MetricArguments (QueryParam "measure" SessionMeasure :> QueryParam "includeBots" Bool :> MetricResponse)
+
 type AcquisitionQuery = MetricParameters (QueryParam "measure" AcquisitionMeasure :> QueryParam "includeBots" Bool :> MetricResponse)
 
 -- | Metric routes keyed by field name. Six fields deliberately share
@@ -115,16 +137,7 @@ type AcquisitionQuery = MetricParameters (QueryParam "measure" AcquisitionMeasur
 data MetricsRoutes mode = MetricsRoutes
   { events :: mode :- MetricsAuth :> "metrics" :> "events" :> MetricQuery,
     pageViews :: mode :- MetricsAuth :> "metrics" :> "page-views" :> WebMetricQuery,
-    sessions ::
-      mode
-        :- MetricsAuth
-          :> "metrics"
-          :> "sessions"
-          :> Description "Distinct nonempty session IDs over a positive half-open range of at most 366 days; at most 10000 complete points. Only from, to and optional timeGrain are supported here; other parameters return HTTP 400."
-          :> QueryParam' '[Required] "from" Day
-          :> QueryParam' '[Required] "to" Day
-          :> QueryParam "timeGrain" TimeGrain
-          :> MultiVerb 'Servant.GET '[JSON, ProblemJSON] (OkResponses "Metric result" MetricResult) (KansokuResult MetricResult),
+    sessions :: mode :- MetricsAuth :> "metrics" :> "sessions" :> SessionQuery,
     funnel ::
       mode
         :- MetricsAuth

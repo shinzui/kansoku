@@ -3,6 +3,7 @@ module Kansoku.Metrics.Query.Filter
   ( CompiledFilters (..),
     compileMetricFilters,
     compileMetricFiltersWithPrefix,
+    compileFiltersWith,
     filteredEventScope,
   )
 where
@@ -30,13 +31,16 @@ compileMetricFilters :: EventRegistry -> [EventName] -> [Wire.MetricFilter] -> E
 compileMetricFilters = compileMetricFiltersWithPrefix "metric_filter"
 
 compileMetricFiltersWithPrefix :: String -> EventRegistry -> [EventName] -> [Wire.MetricFilter] -> Either Text CompiledFilters
-compileMetricFiltersWithPrefix prefix registry scope inputs = do
+compileMetricFiltersWithPrefix prefix registry scope = compileFiltersWith prefix (resolveDimension registry scope)
+
+compileFiltersWith :: String -> (Text -> Either DimensionError GroupDimension) -> [Wire.MetricFilter] -> Either Text CompiledFilters
+compileFiltersWith prefix resolve inputs = do
   filters <- Wire.validateMetricFilters inputs
   compiled <- traverse compileOne (zip [1 :: Int ..] filters)
   pure (CompiledFilters (map fst compiled) (concatMap snd compiled))
   where
     compileOne (index, input) = do
-      dimension <- first dimensionErrorMessage (resolveDimension registry scope (Wire.dimension input))
+      dimension <- first dimensionErrorMessage (resolve (Wire.dimension input))
       let expression = dimensionExpr dimension
           kind = dimensionType dimension
           operands = case Wire.value input of

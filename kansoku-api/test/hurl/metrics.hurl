@@ -213,8 +213,34 @@ HTTP 400
 [Asserts]
 jsonpath "$.code" == "unsupported_query_parameter"
 
-GET {{base_url}}/metrics/sessions?from={{from}}&to={{to}}&groupBy=source
+GET {{base_url}}/metrics/sessions?from={{from}}&to={{to}}&attribution=event
 Authorization: Bearer {{service_token}}
 HTTP 400
 [Asserts]
 jsonpath "$.code" == "unsupported_query_parameter"
+
+GET {{base_url}}/metrics/sessions?from={{from}}&to={{to}}&measure=bounce_rate&groupBy=entry_page,exit_page
+Authorization: Bearer {{service_token}}
+HTTP 200
+[Asserts]
+jsonpath "$.metric" == "sessions"
+
+GET {{base_url}}/metrics/sessions?from={{from}}&to={{to}}&measure=average_duration_seconds&includeBots=true
+Authorization: Bearer {{service_token}}
+HTTP 200
+[Asserts]
+jsonpath "$.metric" == "sessions"
+
+GET {{base_url}}/metrics/sessions?from={{from}}&to={{to}}
+Authorization: Bearer {{service_token}}
+[QueryStringParams]
+filter: {"dimension":"prop:url","op":"set"}
+HTTP 400
+[Asserts]
+jsonpath "$.code" == "invalid_filter"
+
+GET {{base_url}}/metrics/sessions?from={{from}}&to={{to}}&groupBy=prop:url
+Authorization: Bearer {{service_token}}
+HTTP 400
+[Asserts]
+jsonpath "$.code" == "invalid_group_by"

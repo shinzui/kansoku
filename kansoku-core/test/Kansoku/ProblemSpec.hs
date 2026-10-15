@@ -147,7 +147,7 @@ spec = describe "RFC 9457 problems" $ do
               ("/metrics/events", "typo=1", [("X-Api-Key", "ksk_s_fixture")], status400, "unsupported_query_parameter"),
               ("/metrics/events", "groupBy=source&groupBy=route", [("X-Api-Key", "ksk_s_fixture")], status400, "invalid_query_parameter"),
               ("/metrics/events", "filter", [("X-Api-Key", "ksk_s_fixture")], status400, "invalid_filter"),
-              ("/metrics/sessions", "groupBy=source", [("X-Api-Key", "ksk_s_fixture")], status400, "unsupported_query_parameter")
+              ("/metrics/sessions", "attribution=event", [("X-Api-Key", "ksk_s_fixture")], status400, "unsupported_query_parameter")
             ]
       mapM_
         ( \(path, query, headers, expected, code) -> do

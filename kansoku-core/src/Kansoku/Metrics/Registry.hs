@@ -51,7 +51,7 @@ pageViews =
 
 sessions :: MetricDefinition
 sessions =
-  metric "sessions" "Distinct client-supplied session ids." [] UniqueCount [] (Just Day)
+  metric "sessions" "Whole retained web sessions keyed by account, source service and session ID; assigned to their earliest event bucket." [] UniqueCount [] (Just Day)
 
 activeUsers :: MetricDefinition
 activeUsers =

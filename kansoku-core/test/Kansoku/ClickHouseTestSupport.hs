@@ -37,5 +37,6 @@ withClickHouse action = do
     Right conn -> action conn `finally` closeConnection conn
 
 resetTable :: Connection -> IO ()
-resetTable conn =
+resetTable conn = do
   command conn "TRUNCATE TABLE analytics.events_raw"
+  command conn "TRUNCATE TABLE analytics.sessions"

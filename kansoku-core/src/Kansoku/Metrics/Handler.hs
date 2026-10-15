@@ -21,7 +21,7 @@ import Kansoku.ClickHouse (QueryPool)
 import Kansoku.Event (AccountId, defaultRegistry)
 import Kansoku.Exception (trySynchronous)
 import Kansoku.Logging (logError, runLogStderr)
-import Kansoku.Metrics.Api (AcquisitionMeasure (..), MetricResult, MetricsRoutes (..), TimeGrain (..))
+import Kansoku.Metrics.Api (AcquisitionMeasure (..), MetricResult, MetricsRoutes (..), SessionMeasure (..), TimeGrain (..))
 import Kansoku.Metrics.Filter (MetricFilter)
 import Kansoku.Metrics.Query qualified as Query
 import Kansoku.Metrics.Query.Validate (QueryLimitError (..), mkSqlName, renderSqlName, validateDateRange)
@@ -68,9 +68,9 @@ metricsServer pool =
     acquisitionHandler (MetricsPrincipal principal) fromDay toDay groupBy timeGrain filters measure bots =
       effToHandler (Query.runAcquisition defaultRegistry pool (fromMaybe AcquisitionSessions measure) (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain filters) {Query.includeBots = fromMaybe False bots})
 
-    sessionsHandler :: MetricsPrincipal -> Day -> Day -> Maybe TimeGrain -> Handler (KansokuResult MetricResult)
-    sessionsHandler (MetricsPrincipal principal) fromDay toDay timeGrain =
-      effToHandler (Query.runSessions pool (queryRequest (principal ^. #accountId) fromDay toDay Nothing timeGrain []))
+    sessionsHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> [MetricFilter] -> Maybe SessionMeasure -> Maybe Bool -> Handler (KansokuResult MetricResult)
+    sessionsHandler (MetricsPrincipal principal) fromDay toDay groupBy timeGrain filters measure bots =
+      effToHandler (Query.runSessionMetric pool (fromMaybe SessionCount measure) (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain filters) {Query.includeBots = fromMaybe False bots})
 
     funnelHandler :: MetricsPrincipal -> Day -> Day -> Text -> Maybe Int -> Handler (KansokuResult MetricResult)
     funnelHandler (MetricsPrincipal principal) fromDay toDay stepsParam requestedWindow =

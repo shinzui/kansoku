@@ -41,7 +41,7 @@ allowedParameters = \case
   ["metrics", endpoint]
     | endpoint `elem` ["events", "feature-adoption", "conversion", "revenue", "organizations", "custom"] ->
         Just ["from", "to", "groupBy", "timeGrain", "filter"]
-  ["metrics", "sessions"] -> Just ["from", "to", "timeGrain"]
+  ["metrics", "sessions"] -> Just ["from", "to", "groupBy", "timeGrain", "filter", "measure", "includeBots"]
   ["metrics", "funnel"] -> Just ["from", "to", "steps", "window"]
   ["metrics", "retention"] -> Just ["from", "to", "days"]
   ["metrics", "experiments"] -> Just ["from", "to", "experiment", "timeGrain"]

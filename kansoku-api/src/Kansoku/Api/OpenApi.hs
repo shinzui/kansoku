@@ -33,7 +33,7 @@ import Kansoku.Event
     VersionedEventSchema,
   )
 import Kansoku.Ingest.Api (BatchAck, IngestAck, IngestEvent, RejectedEvent)
-import Kansoku.Metrics.Api (AcquisitionMeasure, MetricPoint, MetricResult, TimeGrain)
+import Kansoku.Metrics.Api (AcquisitionMeasure, MetricPoint, MetricResult, SessionMeasure, TimeGrain)
 import Kansoku.Metrics.Filter (MetricFilter)
 import Kansoku.Metrics.Limits (maxMetricPoints)
 import Kansoku.Prelude
@@ -169,6 +169,9 @@ instance O.ToSchema TimeGrain where
 
 instance O.ToParamSchema AcquisitionMeasure where
   toParamSchema _ = O.toParamSchema (Proxy @Text) & O.enum_ ?~ ["sessions", "users"]
+
+instance O.ToParamSchema SessionMeasure where
+  toParamSchema _ = O.toParamSchema (Proxy @Text) & O.enum_ ?~ ["count", "bounce_rate", "average_duration_seconds"]
 
 instance O.ToParamSchema TimeGrain where
   toParamSchema =

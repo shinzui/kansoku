@@ -28,6 +28,7 @@ import Kansoku.Metrics.FilterSpec qualified
 import Kansoku.Metrics.HandlerSpec qualified
 import Kansoku.Metrics.LimitsSpec qualified
 import Kansoku.Metrics.RoutingSpec qualified
+import Kansoku.Metrics.SessionIntegrationSpec qualified
 import Kansoku.MigrationsSpec qualified
 import Kansoku.Observability (registerPipelineMetrics)
 import Kansoku.ObservabilitySpec qualified
@@ -86,6 +87,7 @@ normalTests = hspec $ do
   Kansoku.MigrationsSpec.spec
   Kansoku.Metrics.FilterSpec.spec
   Kansoku.Metrics.AcquisitionIntegrationSpec.spec
+  Kansoku.Metrics.SessionIntegrationSpec.spec
   Kansoku.Metrics.FilterIntegrationSpec.spec
   Kansoku.Metrics.HandlerSpec.spec
   Kansoku.Metrics.LimitsSpec.spec

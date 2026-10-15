@@ -23,6 +23,11 @@ provenance:
       at: 2026-10-15T15:43:15Z
       mode: "update"
       note: "Reconcile first-release APIs, domain semantics, dependencies and acceptance with the source-validated MP-5 review."
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-10-15T22:40:00Z
+      mode: "implement"
+      note: "Begin replay-idempotent whole-session state and count, bounce and observed-duration queries after EP-33 acceptance."
 ---
 
 # Session analytics: duration, bounce, entry and exit pages
@@ -38,7 +43,7 @@ must improve duration without making every visit appear engaged.
 ## Progress
 
 
-- [ ] M1: Replay-safe session aggregation matches canonical raw events across insert boundaries.
+- [x] M1: Replay-safe session aggregation matches canonical raw events across insert boundaries.
 - [ ] M2: Count, bounce and duration measures with entry/exit dimensions pass HTTP fixtures.
 
 ## Surprises & Discoveries
@@ -48,6 +53,11 @@ An incremental materialized view sees only each inserted block. Its `any(channel
 first-touch attribution, count states are not replay-safe, and appending a backfill doubles
 counts. Automatic page_leave would make the old "nothing else" bounce definition report no
 bounces. Filtering events to the requested dates before finding session start truncates sessions.
+The native equality fixture also needs the driver block-list repair already required by ADR-9;
+otherwise a multi-block replay looks different solely because returned blocks arrive reversed.
+An empty-bucket calendar must not use the narrower native DateTime epoch and silently clamp
+valid read dates. The final compiler generates at most 8784 UTC labels from the already bounded
+Haskell date range; month/week labels normalize and deduplicate before native joining.
 
 ## Decision Log
 
@@ -58,16 +68,32 @@ page view and no engagement events. session_start, page_leave, identify, identif
 group and experiment_viewed are lifecycle/identity events, not engagement. Other application
 events are engagement events. Zero-page sessions count but are not bounces.
 
+Materialized counts and ordinary acquisition use the same whole-session state. Identity-aware
+acquisition retains a canonical query-time fallback because new identity evidence can change
+the primary subject without adding a session event. Arbitrary property selection is rejected
+on sessions; acquisition's finite property selection retains its equivalent canonical fallback.
+Entry/exit names are scoped to session/acquisition sources. ADR-13 records this durable boundary.
+Backfill replaces an empty state target under stopped writes; all state operations are idempotent,
+with repeated native rebuild/replay evidence rather than additive count/sum assumptions.
+
 ## Outcomes & Retrospective
 
 
-Planning reviewed; no session implementation yet.
+M1 passes on the owned 26.8.2.7 native engine. Four session examples compare all selected
+state/attribution fields with canonical facts, retry reversed and individual-event batches,
+rebuild twice, count cross-midnight/service/account keys, verify lifecycle bounce and observed
+duration, late earlier events, bot policies, empty bucket/grain behavior and 10000/10001
+points. Four existing acquisition cases also pass after session-count projection reuse.
+`just check` passes 343 deterministic core, 17 client and four probe examples, contract/OpenAPI
+checks, all thirteen strict ADR records and telemetry/lifecycle modes. The final calendar boundary refinement also passes all four native session cases, including
+empty 1960/2199 dates, 48 hourly buckets and normalized week/month labels. Packaged public
+workflow and pinned consumer remain open before M2 and whole-child acceptance. Private development evidence is under `.dev/acceptance/identity-validation/ep34-*`.
 
 ## Context and Orientation
 
 
-`buildSessionsSQLAggregate` in `kansoku-core/src/Kansoku/Metrics/Query.hs` currently counts
-nonempty session IDs by event bucket. EP-30 establishes canonical events; EP-33 provides
+At implementation start, `buildSessionsSQLAggregate` in `kansoku-core/src/Kansoku/Metrics/Query.hs` counted
+nonempty session IDs by event bucket. The replacement compiles bounded whole-session queries. EP-30 establishes canonical events; EP-33 provides
 attributes/bot fields. Read [ADR-9](../adr/0009-bounded-complete-aggregate-responses.md).
 The browser SDK creates producer session IDs and rotates on inactivity/reset at
 `mori://shinzui/kansoku-ts/packages/kansoku-js`; server events need explicit session IDs to join.
