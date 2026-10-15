@@ -114,7 +114,7 @@ is `mori://shinzui/kansoku-ts/okf/adrs/concepts/ADR-2`.
 | 30 | Pipeline backpressure and storage-outage resilience | docs/plans/30-pipeline-backpressure-and-storage-outage-resilience.md | EP-29 | None | Complete |
 | 31 | Metric property filters and dual grouping | docs/plans/31-metric-property-filters-and-dual-grouping.md | EP-26; EP-30; EP-32 | None | Complete |
 | 32 | Time-aware identity bindings and bounded resolution cost | docs/plans/32-time-aware-identity-bindings-and-bounded-resolution-cost.md | EP-29; EP-30 | None | Complete |
-| 33 | Acquisition and device enrichment with bot flagging | docs/plans/33-acquisition-and-device-enrichment-with-bot-flagging.md | EP-26; EP-31 | None | In Progress |
+| 33 | Acquisition and device enrichment with bot flagging | docs/plans/33-acquisition-and-device-enrichment-with-bot-flagging.md | EP-26; EP-31 | None | Complete |
 | 34 | Session analytics: duration, bounce, entry and exit pages | docs/plans/34-session-analytics-duration-bounce-entry-and-exit-pages.md | EP-26; EP-30; EP-33 | None | Not Started |
 | 35 | Rolling active users, retention modes, and lifetime cohorts | docs/plans/35-rolling-active-users-retention-modes-and-lifetime-cohorts.md | EP-26; EP-31; EP-32 | None | Not Started |
 | 36 | Funnel modes and experiment exposure diagnostics | docs/plans/36-funnel-modes-and-experiment-exposure-diagnostics.md | EP-26; EP-31; EP-32 | None | Not Started |
@@ -218,10 +218,9 @@ the migration ledger; unsafe append-backfills are replaced with verified rebuild
 ## Progress
 
 
-EP-29, EP-30, EP-32 and EP-31 are Complete; EP-33 is In Progress and seven children remain
-Not Started. Accepted foundations now include bounded timestamp/rejection
+EP-29, EP-30, EP-32, EP-31 and EP-33 are Complete; seven children remain Not Started. Accepted foundations now include bounded timestamp/rejection
 handling, immutable acceptance and canonical replay-safe facts, outage recovery/admission,
-conservative exact identity resolution, typed filters and nullable dual grouping. Child plans
+conservative exact identity resolution, typed filters, nullable dual grouping and immutable device/channel/bot/trusted-country enrichment. Child plans
 hold the native, packaged and consumer evidence. The tested ten-minute outage/restart and
 finite capacity budget remain workload-specific; see `docs/guides/capacity.md`.
 
@@ -236,7 +235,9 @@ substitute for steps the shipped workflow leaves to developers.
 EP-31's final packaged gate passes 225 core examples, 18 live-client examples, 51 Hurl
 requests and native recovery/limits/replay/identity proofs. Its ten-million-event identity
 regression remains below 2× for all twelve cases (1.24–1.58×), and the pinned SDK contract
-refresh passes 60 unit and two SSR examples plus package checks. EP-33 is now active; the final joint SDK/browser and outage gates remain EP-38 obligations.
+refresh passes 60 unit and two SSR examples plus package checks. EP-33 adds 384 native core examples, public enrichment acceptance in all three telemetry modes,
+optional-geography privacy/startup checks and pinned SDK consumer `e199567` with 61 unit/two
+SSR examples. EP-34 is next; the final joint SDK/browser and outage gates remain EP-38 obligations.
 
 ## Surprises & Discoveries
 

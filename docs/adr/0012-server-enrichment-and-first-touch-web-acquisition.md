@@ -3,9 +3,9 @@ type: Architecture Decision Record
 title: Server enrichment and first-touch web acquisition
 description: Preserve categorical request enrichment in a private versioned queue envelope and assemble complete retained web sessions before acquisition selection.
 docId: ADR-12
-status: Proposed
+status: Accepted
 date: 2026-10-15
-timestamp: 2026-10-15T22:09:28Z
+timestamp: 2026-10-15T22:39:48Z
 generated:
   by: process:codex
   at: 2026-10-15T22:09:28Z
@@ -85,5 +85,6 @@ remains optional. Classification is approximate and versioned, not an authorizat
 Historical corrections and erasure must include queued envelopes, materialized context and
 derived state under fenced maintenance. Canonical query-time acquisition is the initial
 reference implementation; the later session projection must prove agreement before replacing it.
-Proposed status remains until packaged runtime, generated consumer and country observability
-acceptance pass for the whole enrichment child.
+Packaged runtime, pinned generated consumer and country observability acceptance pass for
+the whole enrichment child. The final MasterPlan gate still owns joint SDK/browser adoption
+and the enlarged pipeline capacity regression.

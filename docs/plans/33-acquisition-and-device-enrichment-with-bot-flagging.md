@@ -76,7 +76,7 @@ Source-built Nix artifacts are not a published release or proof of the user's in
 
 - [x] M1: Internal ingest enrichment survives the queue and writer unchanged.
 - [x] M2: Device, bot and channel fixtures pass with documented classification precedence.
-- [ ] M3: Acquisition and web metric dimensions use consistent session attribution and filters.
+- [x] M3: Acquisition and web metric dimensions use consistent session attribution and filters.
 - [x] M4: Optional country lookup trusts only an explicitly configured proxy boundary.
 
 ## Surprises & Discoveries
@@ -93,8 +93,7 @@ Implementation evidence (2026-10-15): GHC 9.12.4 and the Nix package build accep
 The pinned Nix package was 1.13.3; the release override adds its newly required pkg-config
 build tool. Seven native reader/proxy tests pass against owned synthetic MIT-licensed
 `mori://maxmind/MaxMind-DB` country data. Missing/corrupt DBs, strict CIDRs, IPv4/IPv6,
-spoofed, malformed, duplicate and all-trusted forwarding chains are covered. Full ingest
-and observability country acceptance remains open.
+spoofed, malformed, duplicate and all-trusted forwarding chains are covered. Full ingest and observability country acceptance subsequently passed in the packaged run below.
 
 M1's actual HTTP→PGMQ→writer→ClickHouse replay fixture passes on the packaged 26.8.2.7
 engine: producer-derived-field spoofing is ignored, first Edge/Windows/GB/paid-social values
@@ -109,8 +108,7 @@ not empirical classification accuracy. Four actual compiler/native acquisition c
 cross-midnight first touch, source-service/account isolation, first resolved-user and anonymous
 namespaces, row versus session bot populations, nullable dual grouping and 10000/10001
 complete-or-error bounds. See `docs/guides/web-enrichment.md` for the versioned rule table.
-Full packaged acceptance and legacy-message regressions are still required before this
-whole child is Complete.
+Packaged acceptance also covers legacy-message regressions; the final metadata-only rebuild remains the whole-child gate below.
 
 ## Decision Log
 
@@ -137,7 +135,7 @@ APIs come from `mori://maxmind/libmaxminddb`, project-relative `doc/libmaxminddb
 ## Outcomes & Retrospective
 
 
-M1, M2 and M4 pass native and packaged acceptance. The corrected full native run passes
+All four milestones pass native, packaged and pinned consumer acceptance. The corrected full native run passes
 384 examples, with zero failures or pending required cases; `just check` passes 343 deterministic
 core examples, 17 client examples, four probes, generated contracts, OpenAPI lint, strict
 validation of all twelve ADRs and every telemetry/lifecycle mode. Private packaged evidence:
@@ -149,12 +147,23 @@ retries with changed headers, then queries first-touch device/country/session/us
 It passes in legacy/http/http-dup telemetry modes with neither test request address in complete
 logs/spans. Configured missing, corrupt and unsupported databases fail startup clearly; a
 separate packaged run verifies geography off and missing country despite spoofed body/header
-claims. M3 remains open for the pinned SDK contract checks and final packaging verification.
+claims. M3 also passes the pinned SDK consumer checks: `mori://shinzui/kansoku-ts` commit
+`e199567` pins server candidate `e42fd1b`, checks acquisition measure/bot controls and nullable
+filters, and passes 61 unit tests, two SSR tests and post-commit `just check` (packaging,
+strict ADRs, contract drift and bundle budgets). Seven unconfigured live SDK tests remain
+explicitly assigned to the joint EP-38 gate, not counted as this child's evidence. The final metadata-only package verification also passes; EP-33 is Complete.
 
 A source-archive check caught Cabal's rejection of an extensionless fixture glob. Explicit
 fixture paths fix it, and `cabal sdist kansoku-core` now includes the binding, both MMDBs,
-their license/attribution and the synthetic user-agent corpus. The functional packaged run
-above preceded this metadata-only fix; rebuild the final package before whole-child acceptance.
+their license/attribution and the synthetic user-agent corpus. The final package rebuild and full owned acceptance pass against server candidate `e42fd1b`:
+`.dev/acceptance/run-5qir4du9/sanitized`, again 384 core examples, 18 live-client examples,
+four probes, 51 Hurl requests, native recovery/limits/replay/identity and all three telemetry
+modes. This closes the archive metadata gate. SDK consumer evidence is `e199567` above.
+
+Durable decisions are accepted in ADR-12. Session aggregate state and its equivalent
+acquisition projection now pass to EP-34; retention/reclassification of enriched state and
+queued envelopes remain EP-37 work. No empirical UA accuracy, published release or joint
+browser adoption is claimed by these synthetic/native checks.
 
 ## Context and Orientation
 
