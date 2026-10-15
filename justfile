@@ -39,6 +39,10 @@ contracts-check:
 adr-check:
     okf validate docs/adr --profile docs/adr/profile.dhall --profile-enforce --log-enforce
 
+# Enforce the shared review profile and log freshness for docs/reviews.
+reviews-check:
+    okf validate docs/reviews --strict --profile docs/reviews/profile.dhall --profile-enforce --log-enforce
+
 # Apply unapplied ClickHouse migrations in filename order, recording each in
 # analytics.schema_migrations. Migration files are immutable once applied.
 ch-migrate:

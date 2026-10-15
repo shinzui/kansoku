@@ -42,6 +42,8 @@ file by hand.
 - [Product vision](initial-spec.md) describes Kansoku's direction. It is not a list of shipped
   APIs; the guides and generated references above describe the current release.
 - [Architecture decisions](adr/) capture durable design constraints.
+- [Reviews](reviews/) record artifact examinations under the shared OKF review profile.
+  Run `just reviews-check` to validate the bundle and its log.
 - [MasterPlans](masterplans/) and [ExecPlans](plans/) are implementation history. Completed
   plans can describe an earlier state and are not user documentation.
 

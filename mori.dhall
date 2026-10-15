@@ -70,5 +70,12 @@ in  Schema.Project::{
         , okfVersion = "0.1"
         , description = Some "Durable architecture decisions"
         }
+      , Schema.OkfBundle::{
+        , name = "reviews"
+        , path = "docs/reviews"
+        , profile = Some "docs/reviews/profile.dhall"
+        , okfVersion = "0.2"
+        , description = Some "Artifact review records with stable REV handles"
+        }
       ]
     }
