@@ -50,7 +50,7 @@ This is the initial deployment: fix ambiguous encodings now rather than support 
 
 - [x] M1: Typed bounded filters work on standard metrics with explicit missing/type semantics.
 - [x] M2: Dual grouping preserves arbitrary values and namespaced dimension keys.
-- [ ] M3: Route support, exactness and generated clients match native fixtures and OpenAPI.
+- [x] M3: Route support, exactness and generated clients match native fixtures and OpenAPI.
 
 ## Surprises & Discoveries
 
@@ -68,13 +68,13 @@ and identity-scope parameters now use explicit UTF-8 bytes. The full owned nativ
 including UTF-8 account scopes, every operator, nullable/string/number/Boolean grouping, ratio
 population filters, exact resolved activity, cancellation, native memory exhaustion during
 preparation and final aggregation, and healthy reuse after disposal. Evidence is private at
-`.dev/acceptance/identity-validation/ep31-native-core.log`. Packaged acceptance and the SDK
-contract refresh remain open.
+`.dev/acceptance/identity-validation/ep31-native-core.log`. Final packaged and consumer
+evidence is recorded below.
 
 The first packaged Hurl run caught a boundary gap that direct auth-handler tests missed:
 Servant consumes WAI pathInfo during routing, so route-aware query validation must decode
 the preserved rawPathInfo. Auth checks already precede parameter decoding; retain the typed
-DTO and fix the route lookup rather than weakening parsing. Add a real Warp/Servant matrix
+DTO and fix the route lookup rather than weakening parsing. The added real Warp/Servant matrix
 covering encoded paths, malformed filters, unknown/repeated parameters and 401/403 priority.
 The first packaged run passed native recovery, limits, replay and identity, then failed the
 invalid_filter error-code assertion; it is not accepted packaged evidence.
@@ -100,10 +100,19 @@ propagates. The private Join table footprints remain separate from each query's 
 ## Outcomes & Retrospective
 
 
-M1 and M2 are accepted by the 224-example native run. The generated OpenAPI now declares
-nullable bucket/group values and repeatable JSON filters. `just check` also passes 188 deterministic core examples, 17 client examples, four probes,
-generated contracts, OpenAPI lint, strict ADR validation, all three HTTP semantic modes and
-four lifecycle cases. M3 remains open until the corrected packaged acceptance passes. Implementation candidate `97ed2e65cf5d542382a86d3da5600d0aa9550f6e` is pinned by
+All three milestones are accepted. Final `just check` passes 189 deterministic core examples,
+17 client examples, four probes, generated contracts, OpenAPI lint, strict ADR validation,
+all three HTTP semantic modes and four lifecycle cases. Corrected packaged acceptance
+passes 225 core and 18 live-client examples, four probes, native connection recovery,
+10000/10001 and multi-block result bounds, replay/rebuild proofs and identity checks.
+The 51 Hurl requests include the new filters, nullable namespaced dual groups and explicit
+unsupported-parameter failures. Startup and all three telemetry privacy/correlation modes
+also pass with zero pending required native/live cases. Private sanitized evidence:
+`.dev/acceptance/run-kls6wti3/sanitized`. The new Warp/Servant matrix and two-filter client
+case also pass focused regression runs.
+
+The generated OpenAPI declares nullable bucket/group values and repeatable JSON filters.
+Implementation candidate `97ed2e65cf5d542382a86d3da5600d0aa9550f6e` is pinned by
 `mori://shinzui/kansoku-ts` commit `a1b2d36` (contract files under `contracts/`;
 artifact-level URI pending). The regenerated consumer asserts nullable namespaced groups and
 repeatable filter parameter types. Its `just typecheck`, 60 unit examples, two native SSR
@@ -119,12 +128,16 @@ million historical facts are added, day medians are 14/19, 29/36, 12/19; month 4
 cold preparation evidence are preserved in private
 `.dev/acceptance/identity-bench-eukoy674/report.json`; this is the same EP-32 workload with
 the actual current production compiler, including execution/memory SET commands in timing.
+Highest measured resolved-query memory is 140971856 bytes. Cold preparation medians grow
+77→144 ms (day) and 175→260 ms (month), measured separately; warm latency is not a cold
+request guarantee. No criteria remain open in this child. Later analytics children consume
+this wire grammar, nullable group map, activity base predicate and work-budget boundary.
 
 ## Context and Orientation
 
 
-`kansoku-api/src/Kansoku/Metrics/Api.hs` defines `MetricPoint`, whose current group values are
-Text. `kansoku-core/src/Kansoku/Metrics/Handler.hs` dispatches to `Query.hs`; `Query/Property.hs`
+`kansoku-api/src/Kansoku/Metrics/Api.hs` defines `MetricPoint`, whose group values are now
+nullable Text with full dimension names as keys. `kansoku-core/src/Kansoku/Metrics/Handler.hs` dispatches to `Query.hs`; `Query/Property.hs`
 validates registry properties. `boundedSQL` limits final rows and supports typed hidden ordering.
 Read [ADR-3](../adr/0003-api-key-authentication-and-account-scoped-analytics.md),
 [ADR-4](../adr/0004-queryable-event-properties-and-identity-resolved-projection.md) and
