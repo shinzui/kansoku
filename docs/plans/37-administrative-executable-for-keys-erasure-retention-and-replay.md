@@ -17,186 +17,183 @@ provenance:
       at: 2026-10-15T14:24:22Z
       mode: "update"
       note: "Promote beacon route (EP-39), rejection quarantine (EP-29 M4, EP-37 M5) and person properties (EP-40) into scope after owner discussion."
+    - model: "gpt-6-astra"
+      harness: "codex-cli"
+      at: 2026-10-15T15:43:16Z
+      mode: "update"
+      note: "Reconcile first-release APIs, domain semantics, dependencies and acceptance with the source-validated MP-5 review."
+  reviews:
+    - model: "gpt-6-astra"
+      harness: "codex-cli"
+      at: 2026-10-15T15:43:16Z
+      verdict: "changes-requested"
+      note: "Original draft review found correctness gaps; findings corrected by the accompanying update, with native acceptance still required."
 ---
 
 # Administrative executable for keys, erasure, retention, and replay
 
-This ExecPlan is a living document. Update its living sections and durable ADRs as work
-proceeds. It is a child of
-`docs/masterplans/5-act-on-rev-1-close-silent-loss-paths-add-metric-filters-and-enrich-web-analytics.md`
-and acts on findings H1, H2, H3, the replay half of B1, and the purge half of the rejection
-quarantine added to EP-29 on 2026-10-15, in
-`docs/reviews/2026-10-15-architecture-and-feature-set-against-comparable-products.md`.
-
 
 ## Purpose / Big Picture
 
-An operator will run one executable, `kansoku-admin`, for every administrative task that
-today requires a hand-written SQL statement: listing and revoking credentials, erasing a
-user's identity data with the runbook's safeguards enforced by the tool, applying a raw-event
-retention period, and replaying or purging archived queue messages. Each destructive command
-previews its effect and requires an explicit confirmation flag.
 
+Provide one administrative executable for credentials, identity unlinking, explicit event deletion,
+retention and archive recovery. Commands must report their actual guarantees, survive retries,
+and prevent queue/archive replay from undoing deletion.
 
 ## Progress
 
-- [ ] M1: `kansoku-admin issue-key`, `list-keys` and `revoke-key` work against PostgreSQL; `kansoku-server issue-key` remains as a documented alias.
-- [ ] M2: `kansoku-admin erase-user` performs the runbook's discovery, writes it to a file, previews the mutations, and executes them only with `--confirm`.
-- [ ] M3: `kansoku-admin apply-retention` sets or clears the `events_raw` TTL from `KANSOKU_EVENTS_RETENTION_DAYS` idempotently.
-- [ ] M4: `kansoku-admin replay-archive` re-enqueues archived messages and records replayed ids; `purge-archive` deletes archived rows older than a given time with confirmation.
-- [ ] M5: `kansoku-admin list-rejections` and `purge-rejections` operate on the EP-29 quarantine, the purge honouring `KANSOKU_REJECTION_RETENTION_DAYS` by default.
 
+- [ ] M1: Key issue/list/revoke works through the packaged kansoku-admin executable.
+- [ ] M2: Resumable account-scoped erasure covers raw, derived, queued and quarantined data.
+- [ ] M3: Retention applies consistently to canonical facts and dependent aggregates.
+- [ ] M4: Transactional archive replay is safe across crashes and repeated invocations.
+- [ ] M5: Bounded rejection inspection and manual purge complement automatic expiry.
 
 ## Surprises & Discoveries
 
-(None yet.)
 
+The current runbook scrubs identifiers but retains user_id and arbitrary properties/context;
+it is identity unlinking, not complete personal-data deletion. Raw TTL/mutations do not retract
+materialized views. A local replay output file cannot atomically record a PostgreSQL resend.
 
 ## Decision Log
 
-- Decision: One new executable with optparse-applicative subcommands, in the `kansoku-server`
-  package next to `kansoku-migrate`, rather than more positional subcommands on
-  `kansoku-server`.
-  Rationale: `kansoku-server/app/Migrate.hs` already uses optparse-applicative; the server's
-  hand-rolled `issue-key` parser does not scale to flags like `--confirm`. The MasterPlan 4
-  exclusion of a new configuration framework is respected: the executable reads the same
-  environment variables as the server.
-  Date: 2026-10-15
-- Decision: Retention is a table TTL applied by an explicit command, not at server startup.
-  Rationale: Normal startup never migrates or alters schema (operations guide); an explicit
-  command keeps that boundary and is auditable.
-  Date: 2026-10-15
 
+On 2026-10-15 use explicit maintenance fencing for destructive cross-store jobs in this initial
+single-tenant deployment. Preserve preview/confirm and resumable job state; do not claim atomic
+transactions across PostgreSQL and ClickHouse. Retention must not leave fast/slow metric paths
+returning different populations.
 
 ## Outcomes & Retrospective
 
-(To be filled during and after implementation.)
 
+Planning reviewed; all administrative behavior remains unimplemented.
 
 ## Context and Orientation
 
-Credentials are issued by `kansoku-server issue-key` (`kansoku-server/app/Main.hs`,
-`runIssueKey` and `Kansoku.Auth.Issue`), stored hash-only in `kansoku.api_keys`, and revoked
-by setting `revoked_at` through an administrative SQL session (`docs/guides/operations.md`,
-"Credentials and accounts"; [ADR 3](../adr/0003-api-key-authentication-and-account-scoped-analytics.md)).
-The PostgreSQL migration executable is `kansoku-server/app/Migrate.hs`. Identity erasure is
-the manual runbook `docs/runbooks/identity-data-deletion.md`: a read-only discovery query,
-three `ALTER TABLE … UPDATE` scrubs, an optional `DELETE`, and signal-row deletion, each with
-an account predicate that must never be omitted. Raw events have no retention policy; monthly
-partitions (`PARTITION BY toYYYYMM(occurred_at)`) make `TTL` cheap. The queue archive is the
-PGMQ table `pgmq.a_kansoku_events`; `pgmq-effectful`
-(`mori://shinzui/pgmq-hs/packages/pgmq-effectful`) exposes `peekArchivedMessages`,
-`lookupArchivedMessage` and `batchSendMessage`. ClickHouse connections for queries use the
-pool in `kansoku-core/src/Kansoku/ClickHouse.hs`; the Postgres pool is in
-`kansoku-core/src/Kansoku/Postgres.hs`. CLI conventions for this portfolio are in
-`mori://shinzui/haskell-jitsurei/docs/cli-overview`. No cross-repository ADR applies.
 
+`kansoku-server/app/Main.hs` contains issue-key; `app/Migrate.hs` supplies the CLI pattern.
+`Kansoku.Auth.Issue`, `Auth.Store`, `Postgres.hs`, `ClickHouse.hs` provide existing boundaries.
+Read `docs/runbooks/identity-data-deletion.md`,
+[ADR-3](../adr/0003-api-key-authentication-and-account-scoped-analytics.md) and
+[ADR-10](../adr/0010-owned-executable-acceptance-environments.md).
+PGMQ APIs are at `mori://shinzui/pgmq-hs/packages/pgmq-hasql`; inspect the pinned version.
 
 ## Plan of Work
 
-### M1: Key management
 
-Create `kansoku-server/app/Admin.hs` as executable `kansoku-admin` with subcommands.
-`issue-key --kind write|service --account <id> --description <text>` reuses
-`Kansoku.Auth.Issue`; `list-keys [--account <id>] [--json]` prints id, kind, account,
-description, created and revoked timestamps, never hashes; `revoke-key <uuid>` updates
-`revoked_at` where null and reports whether exactly one row changed. Keep `kansoku-server
-issue-key` delegating to the same function and mark it as an alias in the guide.
+### M1: Credentials
 
-### M2: Erasure
 
-`erase-user --account <id> --user <id> [--delete-events] [--out <file>] [--confirm]` runs the
-runbook's discovery, writes the distinct signal kinds and values to `--out` (default
-`erase-<account>-<user>-<timestamp>.json`), prints each mutation it will submit with the
-literal values substituted, and submits them only with `--confirm`. The account predicate is
-constructed by the tool, not typed. Mutations are submitted asynchronously, so the command
-prints the mutation ids from `system.mutations` for follow-up. Update the runbook to make the
-command the primary path and keep the SQL as the fallback. Once
-`docs/plans/40-person-properties-set-and-set-once-user-traits.md` has landed, the same command
-also deletes the user's rows from `analytics.user_properties` and
-`analytics.user_properties_once`; until then it reports that no trait tables exist.
+Create `kansoku-server/app/Admin.hs` and the Cabal/Nix executable. issue-key delegates to the
+existing issuance logic and emits plaintext once. list-keys emits metadata without hashes;
+revoke-key requires --confirm, is idempotent and reports already-revoked as success. Keep the
+existing issue-key alias only as a convenience, with one implementation. Document actual
+subcommand flags and failure exit codes.
+
+### M2: Erasure jobs
+
+
+`erase-user --account ID --user ID [--delete-events] [--out PATH] [--confirm]` previews counts
+and scope, not raw SQL with sensitive literals. Save discovery and job state with 0600 permissions
+and a random safe filename, never paths derived from arbitrary user IDs. Native parameters
+carry values. Without --delete-events, name the result identity unlinking: user_id and arbitrary
+traits inside historical payloads may remain. With it, delete explicit-user facts; never delete
+another user's anonymous events solely from shared/probabilistic evidence.
+
+Require a persisted maintenance fence that rejects account ingest, stops writer/replay for that
+account, and is verified before mutation. For initial single-tenant deployment a global ingest/
+writer fence is acceptable if documented. Discover bindings before deletion; scrub matching
+queue and archive envelopes, quarantine, identity signals and trait state. Remove explicit-user
+trait events with --delete-events; unlink mode still removes current trait state and prevents
+rebuild from reintroducing it by scrubbing the relevant trait properties. Preserve minimal
+accepted-event tombstones/hashes so retry cannot reaccept deleted events. Extend source-envelope
+scrubbing to implicit cookie, all mapped kinds, session references and explicit user fields as
+appropriate to the selected operation, without copying secrets to logs.
+
+Wait for mutations to finish, fail on latest_fail_reason and rebuild affected aggregates from
+remaining canonical facts before reporting success. Queries must fail clearly while a rebuild
+would expose inconsistent state. Resume a crashed job from persisted stages; keep the fence
+until verification completes. Document that future newly generated events and backup restoration
+require operator policy; this tool cannot erase unknown identifiers embedded in arbitrary JSON.
 
 ### M3: Retention
 
-`apply-retention` reads `KANSOKU_EVENTS_RETENTION_DAYS` (0 or unset means none) and issues
-`ALTER TABLE analytics.events_raw MODIFY TTL toDateTime(occurred_at) + INTERVAL n DAY` or
-`REMOVE TTL`, after printing the current TTL from `system.tables`. Document that rollups are
-unaffected (they do not read raw rows after insert), that `identity_signals` keeps its
-fingerprint-only TTL, and that the change is recorded outside the migration ledger by design.
 
-### M4: Archive replay and purge
+`apply-retention --confirm` reads KANSOKU_EVENTS_RETENTION_DAYS (0/unset means unlimited).
+Preview before changing the policy. Define retained facts by occurred_at cutoff consistently
+across canonical queries, sessions, user first-seen and exposures; TTL is physical eventual cleanup,
+not the sole query predicate. Drop/rebuild old aggregate states so unfiltered and filtered metrics
+agree after expiry. Coordinate identity evidence/traits and their stated separate retention
+policies; do not advertise all-data retention if profiles remain. Expire replayable queue/archive
+payloads older than the policy rather than resurrecting them. Keep minimal acceptance ledger entries and deletion tombstones indefinitely in this initial
+version; payload retention does not expire logical event identity. Future ledger pruning requires
+a separate explicitly versioned retry-horizon policy. Rebuild sessions crossing the cutoff from remaining facts and state the resulting
+retained-history semantics. Keep explicit policy DDL outside normal startup and record job audit.
 
-`replay-archive [--limit n] [--before <ts>] [--after <ts>] [--out <file>]` peeks archived
-messages in id order, re-sends their bodies with `batchSendMessage`, and appends each
-archived message id and new message id to `--out`; it relies on the event-id idempotency of
-`events_raw` and says so. `purge-archive --before <ts> --confirm` deletes archived rows older
-than the time after printing the count. Add both to the operations guide's "ClickHouse
-unavailable" recovery section, next to the archive gauge from
-`docs/plans/30-pipeline-backpressure-and-storage-outage-resilience.md`.
-
-### M5: Rejection quarantine commands
-
-`list-rejections [--account <id>] [--event <name>] [--since <ts>] [--limit n] [--json]`
-reads `kansoku.ingest_rejections` (created by
-`docs/plans/29-correct-client-timestamp-skew-and-count-ingest-rejections.md` M4) and prints
-received time, event name, schema version, reasons and the payload, so an operator can diff a
-producer release against the catalog. `purge-rejections [--before <ts>] --confirm` deletes
-rows older than the given time, defaulting to now minus `KANSOKU_REJECTION_RETENTION_DAYS`,
-and prints the count first. Document a daily invocation in the operations guide as the
-retention mechanism.
+### M4: Replay/purge
 
 
-## Concrete Steps
+`replay-archive --limit N [--before TS] [--after TS] --confirm` uses a durable PostgreSQL replay
+ledger unique on queue/archive message ID. In one transaction lock selected rows, send their
+unchanged queued envelopes, and record new message IDs; concurrent/crashed invocations cannot
+resend a ledger-completed row. Archive rows may remain for audit until explicit purge; use
+keyset pagination and bounded limits, not offset loops or the output file as truth. Respect
+erasure fences, tombstones and retention. EP-30 provides downstream event idempotency.
+`purge-archive --before TS --confirm` previews scoped counts and deletes in bounded chunks.
 
-```bash
-cabal build kansoku-server:exe:kansoku-admin
-cabal run kansoku-admin -- list-keys
-cabal run kansoku-admin -- erase-user --account dev --user u-1
-cabal run kansoku-admin -- erase-user --account dev --user u-1 --confirm
-KANSOKU_EVENTS_RETENTION_DAYS=400 cabal run kansoku-admin -- apply-retention
-cabal run kansoku-admin -- replay-archive --limit 100
-cabal run kansoku-admin -- list-rejections --limit 20
-cabal run kansoku-admin -- purge-rejections --confirm
-```
+### M5: Rejections
 
-Expected: `list-keys` prints a table without secrets; the first `erase-user` prints the plan
-and exits 0 without changing data; the second prints mutation ids; `apply-retention` prints
-the TTL before and after; `replay-archive` prints the count re-enqueued.
 
+list-rejections defaults to metadata with bounded limit and optional account/event/since filters;
+--include-payload explicitly prints the sensitive event object. purge-rejections defaults to
+now minus configured retention and requires --confirm. Automatic cleanup remains EP-29's owner;
+the manual command is recovery/inspection, not the retention guarantee.
 
 ## Validation and Acceptance
 
-1. M1: issuing then revoking a key makes the next authenticated request return 401; revoking
-   again reports zero rows and exits non-zero.
-2. M2: after erasure on a fixture user, the runbook's discovery query returns no rows and the
-   user's events carry empty `identifiers` and `anonymous_id`; without `--confirm` nothing
-   changes.
-3. M3: `system.tables` shows the TTL expression after apply and none after clearing; an old
-   partition's rows disappear after `OPTIMIZE TABLE … FINAL` in a test database.
-4. M4: an archived test message is re-enqueued and written exactly once (`count(DISTINCT
-   event_id)` unchanged if it already existed), and purge removes only rows before the time.
-5. The admin executable builds in the Nix package and is listed in the operations guide.
-6. M5: a quarantined fixture rejection is listed with its reasons; purge with a `--before`
-   older than it leaves it in place and the default purge after the retention removes it.
 
+Without confirm no destructive command changes data. Verify revocation, replay transaction
+rollback, two concurrent replay processes and restart after send but before local audit output.
+Replay never changes counts/revenue/session results. Deletion followed by archive replay and
+aggregate rebuild cannot restore erased links/traits/events; verify a different account unchanged.
+Retention makes raw/rollup/filtered counts agree after cutoff. Fail and resume a mutation job
+while the fence remains active. Inspect permissions and output redaction. Run packaged CLI
+commands only against owned acceptance databases and include the executable in Nix checks.
+
+## Concrete Steps
+
+
+Run commands from the repository root inside `nix develop`. Use the private databases owned
+by `scripts/acceptance.sh` and `Kansoku.ClickHouseTestSupport`, not an ambient development
+stack: native fixtures mutate tables. Extend that harness for the scenarios in this plan.
+
+```bash
+cabal build all --enable-tests
+just openapi
+just contracts
+just check
+just acceptance
+```
+
+Use focused Hspec examples while developing. Before marking Complete, require nonzero example
+counts, no pending required integration tests, regenerated contract checks, and the packaged
+executable acceptance above. Record only the relevant evidence here. This follows
+[ADR-10](../adr/0010-owned-executable-acceptance-environments.md).
 
 ## Idempotence and Recovery
 
-Every command previews before acting; `revoke-key`, `apply-retention`, `replay-archive` and
-`purge-archive` are safe to re-run. Erasure mutations are irreversible by nature; the tool's
-saved discovery file is the audit record. Retention cannot restore deleted partitions; the
-guide states that backups are the only recovery.
 
+Destructive jobs cannot restore data; their journal is for resumability, not backup. New ingress/metrics maintenance states must be documented problems. Never clear a failed job fence automatically. All schema/table identifiers are service-owned, not interpolated user input.
 
 ## Interfaces and Dependencies
 
-Soft dependency on `docs/plans/30-pipeline-backpressure-and-storage-outage-resilience.md`
-(archive gauge), `docs/plans/32-time-aware-identity-bindings-and-bounded-resolution-cost.md`
-(the `email_hmac` kind must be included in discovery once it exists),
-`docs/plans/29-correct-client-timestamp-skew-and-count-ingest-rejections.md` M4 (the
-quarantine table M5 reads) and `docs/plans/40-person-properties-set-and-set-once-user-traits.md`
-(trait tables in erasure). Claims the
-`kansoku-admin` executable name and `KANSOKU_EVENTS_RETENTION_DAYS`. Libraries:
-optparse-applicative, hasql, pgmq-effectful, ClickHaskell. A new ADR should record the
-administrative boundary: schema changes outside the ledger (TTL), destructive operations
-requiring confirmation, and replay relying on idempotency.
+
+Required complete child artifacts: `docs/plans/29-correct-client-timestamp-skew-and-count-ingest-rejections.md`, `docs/plans/30-pipeline-backpressure-and-storage-outage-resilience.md`, `docs/plans/32-time-aware-identity-bindings-and-bounded-resolution-cost.md`, `docs/plans/34-session-analytics-duration-bounce-entry-and-exit-pages.md`, `docs/plans/40-person-properties-set-and-set-once-user-traits.md`.
+
+Hard dependencies: EP-29, EP-30, EP-32, EP-34 and EP-40 Complete; these supply quarantine, replay semantics, identity, sessions and traits. EP-40 owns trait definitions but does not depend on the admin executable. This removes the original implicit implementation cycle.
+
+Revision note (2026-10-15): reviewed against the current source and revised for first deployment.
+[ADR-11](../adr/0011-initial-release-analytics-contracts.md) records the proposed cross-plan
+contracts; implementation must supply the acceptance evidence before those contracts become
+accepted runtime guarantees.

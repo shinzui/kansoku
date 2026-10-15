@@ -1,6 +1,7 @@
 # Bundle Update Log
 
 ## 2026-10-15
+* **Update**: Propose initial-release event identity, analytics semantics and lifecycle contracts after MP-5 review.
 * **Update**: Accept executable isolation and cleanup evidence; clarify the existing disallowed-origin CORS boundary.
 * **Update**: Record owned executable acceptance environments and complete console span evidence.
 * **Update**: ADR-9: accept bounded complete aggregate responses with native boundary, numeric ordering, block-order repair and recovery evidence.

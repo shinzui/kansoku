@@ -11,164 +11,146 @@ provenance:
     model: "claude-fable-5-1"
     harness: "claude-code"
     at: 2026-10-15T14:22:40Z
+  reviews:
+    - model: "gpt-6-astra"
+      harness: "codex-cli"
+      at: 2026-10-15T15:43:16Z
+      verdict: "changes-requested"
+      note: "Original draft review found correctness gaps; findings corrected by the accompanying update, with native acceptance still required."
+  revisions:
+    - model: "gpt-6-astra"
+      harness: "codex-cli"
+      at: 2026-10-15T15:43:16Z
+      mode: "update"
+      note: "Reconcile first-release APIs, domain semantics, dependencies and acceptance with the source-validated MP-5 review."
 ---
 
 # Beacon ingest route for page-exit delivery
 
-This ExecPlan is a living document. Update its living sections and durable ADRs as work
-proceeds. It is a child of
-`docs/masterplans/5-act-on-rev-1-close-silent-loss-paths-add-metric-filters-and-enrich-web-analytics.md`
-and acts on finding A3 of
-`docs/reviews/2026-10-15-architecture-and-feature-set-against-comparable-products.md`,
-promoted into scope on 2026-10-15 (MasterPlan Decision Log).
-
 
 ## Purpose / Big Picture
 
-The events that happen on the way out of a page will stop being the ones most likely to be
-lost. A visitor who clicks "Start free trial" and is sent to the app on another origin, who
-completes signup and is redirected, who clicks an outbound link, or who closes the tab, has
-the last few seconds of events still buffered in the SDK; today they go out through a
-keepalive fetch that needs a CORS preflight and a custom header, and whatever does not make it
-is parked in sessionStorage that the next origin cannot read. After this change the server
-offers `POST /v1/beacon`, a route the browser's `navigator.sendBeacon` can reach with no
-preflight and no headers, carrying the write key inside the body. The SDK will use it for the
-exit flush only. Session duration and bounce rate (EP-34) become measurable for single-page
-visits because a page-leave event finally has a transport designed for unload.
 
+Support best-effort page-exit delivery through a dedicated write-key-only body-authenticated
+route. A queued beacon is not an acknowledgement: it can still be lost, rejected or rate limited.
+Session semantics cannot depend on a page-leave event always arriving.
 
 ## Progress
 
-- [ ] M1: `POST /v1/beacon` accepts a `text/plain` or `application/json` body holding `{"writeKey": …, "batch": […]}` from a write key, runs the batch path's validation, limits and counters, and returns the same 202 shape; service tokens, unknown keys and malformed envelopes are rejected with problems.
-- [ ] M2: The transport is documented for SDK authors, OpenAPI and the Haskell client carry the operation, and a browser demo in the kansoku-ts examples delivers a page-exit batch through the route with no preflight observed.
 
+- [ ] M1: Both media types use shared authenticated ingest validation, rate limits and counters.
+- [ ] M2: OpenAPI/client and the SDK browser test prove envelope, origin and quota behavior.
 
 ## Surprises & Discoveries
 
-(None yet.)
 
+The beacon standard permits preflight for non-safelisted content types; it does not categorically
+forbid it. text/plain avoids that dependency. The 64 KiB keepalive budget is shared in flight,
+not a fresh allowance per split call. Batch-length enforcement currently lives in the handler,
+not generic /v1 middleware. CORS response visibility alone is not ingest authorization.
 
 ## Decision Log
 
-- Decision: A dedicated route with the credential in a JSON envelope, never a query-string
-  credential on the existing batch route.
-  Rationale: `sendBeacon` cannot set headers and only CORS-safelisted content types avoid a
-  preflight; a URL credential would be written to proxy and CDN logs. Write keys are public by
-  design, so the body placement adds no exposure beyond what the page's JavaScript already
-  carries, but the route must refuse service tokens so a secret can never travel this way.
-  Date: 2026-10-15
-- Decision: The route exists for the exit flush only; the SDK keeps batching with responses for
-  everything else.
-  Rationale: Browsers discard beacon responses, so per-event rejections and 413s on this route
-  are invisible to the client; EP-29's server counters are the only record of them.
-  Date: 2026-10-15
 
+On 2026-10-15 keep body credentials only on /v1/beacon and only for public write keys.
+Use the same post-auth ingest service as normal requests. Enforce configured origin policy
+before side effects, including simple requests; do not rely on the browser reading a response.
 
 ## Outcomes & Retrospective
 
-(To be filled during and after implementation.)
 
+Planning reviewed; browser and runtime evidence pending.
 
 ## Context and Orientation
 
-The ingest routes are a Servant NamedRoutes record in
-`kansoku-api/src/Kansoku/Ingest/Api.hs`: `postEvent` and `postBatch`, both guarded by
-`IngestAuth` (an `AuthProtect` tag whose handler, `ingestAuthHandler` in
-`kansoku-core/src/Kansoku/Auth/Handler.hs`, reads `Authorization: Bearer` or `X-Api-Key`
-and looks the hash up with `lookupApiKey` in `kansoku-core/src/Kansoku/Auth/Store.hs`),
-taking `ReqBody '[JSON]` and answering through the shared `MultiVerb` response algebra
-([ADR 8](../adr/0008-rfc9457-problem-details-and-generated-client-media.md)). The batch
-handler in `kansoku-core/src/Kansoku/Ingest/Handler.hs` stamps the account and receive time,
-partitions accepted and rejected events, and enqueues. Body and batch limits and the CORS
-policy (origins from `KANSOKU_CORS_ORIGINS`, methods GET and POST, request headers
-Content-Type, X-Api-Key and Authorization, max-age 3600) are applied in
-`kansoku-core/src/Kansoku/Server.hs` around 194 to 199 and recorded in
-[ADR 1](../adr/0001-sdk-grade-ingest-contract-boundaries.md). Credential transport rules are
-in [ADR 3](../adr/0003-api-key-authentication-and-account-scoped-analytics.md); this plan adds
-a single documented exception for one route.
 
-`navigator.sendBeacon(url, data)` is the browser API that queues a POST to be delivered even
-after the document unloads. It sets no custom headers, and if `data` is a `Blob` with a
-content type outside the CORS-safelisted set (`text/plain`,
-`application/x-www-form-urlencoded`, `multipart/form-data`) the browser must preflight, which
-it cannot do for a beacon, so the request is dropped. Sending the JSON as a `text/plain` blob
-is the convention Segment's and PostHog's SDKs use. The SDK's current exit behaviour (keepalive
-fetch capped at 60 KiB, per-tab sessionStorage mirror) is documented in
-`mori://shinzui/kansoku-ts` at `docs/guides/delivery-and-privacy.md`. No cross-repository
-ADR applies.
-
+`kansoku-api/src/Kansoku/Ingest/Api.hs` declares routes; `Auth/Handler.hs` resolves header keys;
+`Auth/Store.hs` verifies hashes; `Server.hs` wraps CORS/body limits; `Ingest/Handler.hs` enforces
+batch limits. Read [ADR-1](../adr/0001-sdk-grade-ingest-contract-boundaries.md) and
+[ADR-3](../adr/0003-api-key-authentication-and-account-scoped-analytics.md).
+[W3C Beacon](https://www.w3.org/TR/beacon/) defines queueing, CORS and shared keepalive quotas.
 
 ## Plan of Work
 
-### M1: The route
 
-Add `BeaconEnvelope { writeKey :: Text, batch :: [AnalyticsEvent] }` to
-`kansoku-api/src/Kansoku/Ingest/Api.hs` with JSON instances, and a `PlainTextJSON` content
-type whose `MimeUnrender` parses the body as JSON regardless of the `text/plain` label. Add
-`postBeacon :: mode :- "v1" :> "beacon" :> ReqBody '[PlainTextJSON, JSON] BeaconEnvelope :> MultiVerb …`
-with the same `BatchAck` success and the shared error tail, deliberately without `IngestAuth`.
-In the handler, look the envelope's key up with `lookupApiKey`; answer 401 for unknown or
-revoked, 403 for a service token (the only route where a service token is refused on ingest),
-then call the existing batch partition and enqueue path with the resolved principal so limits,
-validation, account stamping and the EP-29 counters apply unchanged. Extend EP-29's
-`kansoku_ingest_events_total` with a `transport` label (`single`, `batch`, `beacon`) if EP-29
-has landed; otherwise add a `kansoku_ingest_beacon_requests_total` counter and reconcile when
-it does. The body-size and batch-length middleware already cover `/v1/*`. Confirm the access
-log and spans never capture the body, which already holds for every route.
-
-### M2: Contract and demo
-
-Regenerate OpenAPI (`just openapi`) with the envelope schema and both media types, and
-regenerate the client. Write a "Page-exit delivery" section in `docs/guides/send-events.md`
-that gives the envelope, the `text/plain` rule, the no-response caveat, and the 64 KiB quota.
-In the kansoku-ts examples (`examples/vanilla-vite`), add a small demonstration that sends a
-beacon envelope on `pagehide` using the SDK's queued events, record in this plan that the
-browser's network panel shows no OPTIONS request, and leave the production SDK change to that
-repository's own plan.
+### M1: Route and perimeter
 
 
-## Concrete Steps
+Define BeaconEnvelope with writeKey and batch, and PlainTextJSON whose encoder/decoder uses
+JSON with media type text/plain (accept a UTF-8 charset parameter). POST /v1/beacon accepts
+PlainTextJSON and JSON, returning the batch 202/problem algebra. Do not add header IngestAuth;
+resolve the bounded envelope body key with the same verification primitives, require WriteKey,
+return 401 for unknown/revoked and 403 for service credentials. Missing or ambiguous credentials
+are 400; header credentials do not substitute for a missing body key. Document deterministic
+handling of a body plus credential header (reject to avoid competing principals).
 
-```bash
-cabal build all --enable-tests
-cabal test kansoku-core --test-options='--match "Beacon"'
-just openapi && just openapi-check
-```
+After credential verification call EP-30's shared admission/idempotency and EP-29's
+normalization/validation/quarantine service; EP-33 enrichment context also passes through it.
+Enforce body bytes before decode, batch length after bounded decode, and rate limits before
+side effects. The JSON envelope adds bytes to payload budgeting. Single/batch/beacon use the
+same key bucket, so the beacon route cannot bypass throttling.
 
-Manual check with the server running and a write key in `KEY`:
+Verify the actual wai-cors policy rejects disallowed Origin on simple POST before queueing;
+add explicit origin admission if necessary. Missing Origin remains allowed for nonbrowser
+clients, because a public key is the credential and Origin is forgeable. No keys, envelopes,
+raw payloads or forwarded addresses enter logs/traces/quarantine. Extend generated 429
+Retry-After behavior and tests to this route.
 
-```bash
-curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8080/v1/beacon \
-  -H 'Content-Type: text/plain' \
-  --data-binary "{\"writeKey\":\"$KEY\",\"batch\":[{\"eventId\":\"beacon-1\",\"eventName\":\"page_leave\",\"source\":\"web\",\"occurredAt\":\"2026-07-20T12:00:00Z\",\"receivedAt\":\"2026-07-20T12:00:00Z\",\"properties\":{},\"context\":{}}]}"
-```
+### M2: Publish and exercise
 
-Expected `202`; the same request with a service token returns `403`, and with a header-only
-credential and no `writeKey` field returns `400`.
 
+Regenerate OpenAPI and the generic Haskell client, testing both media types through that client.
+Write transport examples in send-events.md with no query-string credential. Browser work is
+owned by `mori://shinzui/kansoku-ts/plans/8-serve-kansoku-masterplan-5-sentat-beacon-exit-flush-bot-flag-and-identifyonce`:
+one outstanding exit attempt per page lifecycle, total serialized envelope below a conservative
+60 KiB, false return fallback, and no server-delivered claim on true return. Retaining a mirror
+for later retry is safe only with EP-30 deduplication. Test visibilitychange followed by pagehide,
+BFCache restoration and same-origin/cross-origin behavior. The server does not need a separate
+SDK demonstration committed here.
 
 ## Validation and Acceptance
 
-1. A valid envelope with `text/plain` and with `application/json` both return 202 with
-   `accepted` and `rejected` matching the batch route for the same events.
-2. Unknown key 401, revoked key 401, service token 403, missing `writeKey` 400, over-limit
-   batch 413, all as problem documents; none of these bodies appear in access logs.
-3. A browser request from an allowed origin with a `text/plain` blob produces no preflight
-   (recorded from the demo), and a disallowed origin is still refused by CORS.
-4. Counters move for beacon-delivered events, labelled as beacon.
-5. OpenAPI conformance tests cover the operation and its media types.
 
+Both media types return the same accepted/rejected results as batch; test unknown/revoked/service
+keys, missing key, competing header, malformed JSON, 413 byte/count limits, 429 and partial invalid
+batches. No rejected perimeter request enqueues anything. A real browser from an allowed origin
+sends text/plain without OPTIONS; a disallowed origin causes zero stored rows. Simulate shared
+quota refusal and verify fallback. Inspect exported logs/spans and quarantine for credential
+absence. Required final SDK conformance cannot silently skip a missing beacon route.
+
+## Concrete Steps
+
+
+Run commands from the repository root inside `nix develop`. Use the private databases owned
+by `scripts/acceptance.sh` and `Kansoku.ClickHouseTestSupport`, not an ambient development
+stack: native fixtures mutate tables. Extend that harness for the scenarios in this plan.
+
+```bash
+cabal build all --enable-tests
+just openapi
+just contracts
+just check
+just acceptance
+```
+
+Use focused Hspec examples while developing. Before marking Complete, require nonzero example
+counts, no pending required integration tests, regenerated contract checks, and the packaged
+executable acceptance above. Record only the relevant evidence here. This follows
+[ADR-10](../adr/0010-owned-executable-acceptance-environments.md).
 
 ## Idempotence and Recovery
 
-Additive route; no schema change. If the route must be withdrawn, removing it returns the
-SDK to keepalive-only delivery with no data migration.
 
+Additive route, but first-release SDK enablement is coordinated with a server containing it. A browser cannot detect HTTP 404/429 from a successful sendBeacon return; never advertise automatic server-failure fallback.
 
 ## Interfaces and Dependencies
 
-Soft dependency on `docs/plans/29-correct-client-timestamp-skew-and-count-ingest-rejections.md`
-for the counter label. Claims the `/v1/beacon` path, the `BeaconEnvelope` wire type and the
-`PlainTextJSON` content type. The SDK change is tracked in `mori://shinzui/kansoku-ts`.
-Update ADR 3 with the body-credential exception and its write-key-only rule, and ADR 1 with
-the route's place in the CORS and limit policy.
+
+Required complete child artifacts: `docs/plans/29-correct-client-timestamp-skew-and-count-ingest-rejections.md`, `docs/plans/30-pipeline-backpressure-and-storage-outage-resilience.md`, `docs/plans/33-acquisition-and-device-enrichment-with-bot-flagging.md`.
+
+Hard dependencies: EP-29, EP-30 and EP-33 Complete. Shared ingest/admission is owned by EP-29/30; EP-33 owns request enrichment; this child owns only transport/auth adaptation. EP-38 owns final cross-repository release acceptance.
+
+Revision note (2026-10-15): reviewed against the current source and revised for first deployment.
+[ADR-11](../adr/0011-initial-release-analytics-contracts.md) records the proposed cross-plan
+contracts; implementation must supply the acceptance evidence before those contracts become
+accepted runtime guarantees.

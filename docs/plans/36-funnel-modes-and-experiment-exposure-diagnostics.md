@@ -11,153 +11,172 @@ provenance:
     model: "claude-fable-5-1"
     harness: "claude-code"
     at: 2026-10-15T13:44:34Z
+  reviews:
+    - model: "gpt-6-astra"
+      harness: "codex-cli"
+      at: 2026-10-15T15:43:15Z
+      verdict: "changes-requested"
+      note: "Original draft review found correctness gaps; findings corrected by the accompanying update, with native acceptance still required."
+  revisions:
+    - model: "gpt-6-astra"
+      harness: "codex-cli"
+      at: 2026-10-15T15:43:15Z
+      mode: "update"
+      note: "Reconcile first-release APIs, domain semantics, dependencies and acceptance with the source-validated MP-5 review."
 ---
 
 # Funnel modes and experiment exposure diagnostics
 
-This ExecPlan is a living document. Update its living sections and durable ADRs as work
-proceeds. It is a child of
-`docs/masterplans/5-act-on-rev-1-close-silent-loss-paths-add-metric-filters-and-enrich-web-analytics.md`
-and acts on findings E1 and E5 of
-`docs/reviews/2026-10-15-architecture-and-feature-set-against-comparable-products.md`.
-
 
 ## Purpose / Big Picture
 
-Funnels will support the two modes products default to besides sequential: strict order,
-where no other event may intervene, and exclusion events that remove a user who did something
-disqualifying between two steps. They will report time to convert, and they will break down
-by a declared property attributed to the user's first step. Experiment consumers will see how
-many users were exposed to more than one variant and each variant's share of exposures, so a
-sample-ratio check can be run outside Kansoku.
 
+Make funnel modes, conversion time and exposure diagnostics agree with their advertised
+meaning. Strict mode must see intervening events; variant shares must name a denominator that
+actually sums to one without hiding multi-variant users.
 
 ## Progress
 
-- [ ] M1: `mode=strict` on `/metrics/funnel` and `/metrics/experiments/funnel` proven against fixtures where an intervening event changes the answer.
-- [ ] M2: `exclude=` and `measure=time_to_convert` via an array-walk funnel engine that agrees with the `windowFunnel` path on every existing fixture.
-- [ ] M3: `groupBy=prop:<name>` on funnels with first-step attribution.
-- [ ] M4: `/metrics/experiments` returns `multiple_exposure` and `variant_share` points per experiment, documented with a sample-ratio recipe.
 
+- [ ] M1: Strict/sequential funnels have a deterministic reference evaluator and native parity.
+- [ ] M2: Exclusions, durations and first-touch breakdown use the same selected-chain semantics.
+- [ ] M3: Exposure diagnostics distinguish contamination from mutually exclusive assignment share.
 
 ## Surprises & Discoveries
 
-(None yet.)
 
+Both existing funnel builders filter event_name to the requested steps before windowFunnel;
+strict_order cannot observe excluded rows. strict_deduplication is an additional rule, not a
+synonym for strict order. Per-variant users divided by unique experiment users exceed one when
+users see multiple variants. A first-touch label must not drift to a later converting attempt.
 
 ## Decision Log
 
-- Decision: Keep `windowFunnel` for the default sequential path and add an array-walk engine
-  only for exclusions and time to convert; both must agree on the shared fixtures.
-  Rationale: `windowFunnel` returns only the reached level, not step times, so exclusions and
-  durations need per-user ordered arrays; running both lets the cheaper path stay default.
-  Date: 2026-10-15
-- Decision: Funnel breakdown attributes the property value from the user's first step-one
-  event (first touch) and reports `other` for users without the property.
-  Rationale: First touch is PostHog's schema default and Mixpanel's "first step defined";
-  per-step attribution is deferred.
-  Date: 2026-10-15
 
+On 2026-10-15 define a common deterministic funnel reference first, then use windowFunnel only
+where it proves equivalent. New diagnostics use exact resolved identities; existing approximate
+exposure counts remain explicitly separate. Only exclusive assignment counts support a simple
+sample-ratio diagnostic.
 
 ## Outcomes & Retrospective
 
-(To be filled during and after implementation.)
 
+Planning reviewed; randomized parity and native execution remain pending.
 
 ## Context and Orientation
 
-`buildFunnelSQLAggregate` in `kansoku-core/src/Kansoku/Metrics/Query.hs` runs one
-`windowFunnel(window)(toDateTime(occurred_at), cond_1, …)` per user over
-`analytics.events_resolved`, then counts users at each level; equal timestamps may satisfy
-consecutive steps and repeated step names mean repeated events. The experiment funnel applies
-the same engine after each user's first exposure
-([ADR 6](../adr/0006-exposure-based-experiment-analytics.md)). ClickHouse's `windowFunnel`
-accepts the modes `strict_order` (no intervening events), `strict_deduplication` and
-`strict_increase`. Exposure counts come from `analytics.experiment_exposures`
-(`db/clickhouse/migrations/0014_experiment_exposures.sql`), a daily `uniqCombined` rollup per
-account, experiment and variant over raw identity. Bounds (20 steps, 90-day window) are from
-`docs/plans/26-bound-analytics-query-inputs-and-result-cardinality.md` and
-[ADR 9](../adr/0009-bounded-complete-aggregate-responses.md). Property compilation follows
-[ADR 4](../adr/0004-queryable-event-properties-and-identity-resolved-projection.md). No
-cross-repository ADR applies.
 
+`buildFunnelSQLAggregate` and `buildExperimentFunnelSQLAggregate` in `Metrics/Query.hs` currently
+use second-resolution windowFunnel and IN(step names). Public responses use MetricPoint.
+`0014_experiment_exposures.sql` stores approximate raw-identity sketches.
+Read [ADR-6](../adr/0006-exposure-based-experiment-analytics.md) and
+[ClickHouse windowFunnel documentation](https://clickhouse.com/docs/sql-reference/aggregate-functions/parametric-functions).
 
 ## Plan of Work
 
-### M1: Strict mode
 
-Add `mode` (`sequential` default, `strict`) to both funnel routes; `strict` passes
-`'strict_order'` and `'strict_deduplication'` to `windowFunnel`. Document that strict order
-counts any other event by the same user, including automatic ones such as `page_view`, as an
-interruption, and point to `exclude=` for the narrower rule.
-
-### M2: Exclusions and time to convert
-
-Implement `buildFunnelArraySQL`: per user, `groupArray` of `(occurred_at, event_name)` for
-step and excluded events within the range, `arraySort` by time, and an `arrayFold` or
-`arrayReduce` lambda that walks the chain honouring the window, recording the reach time of
-each step, and aborting when an excluded event falls between the current step time and the
-next matched step. Use it whenever `exclude=` or `measure=time_to_convert` is present.
-`measure=time_to_convert` returns, per step index ≥ 2, the median and 90th percentile seconds
-from step one, computed with `quantiles(0.5, 0.9)`. Add a property test over random event
-sequences asserting that without exclusions the array engine's levels equal `windowFunnel`'s.
-
-### M3: Breakdown
-
-Accept `groupBy=prop:<name>` on `/metrics/funnel`, requiring every step event to declare the
-property (ADR 4 rule), attributing the value from the first step-one event per user, and
-emitting one point per (step, value) under the point cap.
-
-### M4: Exposure diagnostics
-
-In `buildExperimentExposuresSQL`, add two unbucketed points per experiment:
-`multiple_exposure` (exact `uniqExact` of users with more than one variant over the range,
-from `events_raw`) and `variant_share` per variant (users over total exposed). Document a
-chi-square sample-ratio check in `docs/guides/query-metrics.md` and note that users in
-`multiple_exposure` are still counted in each variant, as ADR 6 states.
+### M1: Funnel semantics
 
 
-## Concrete Steps
+Add mode=sequential|strict to both funnel routes. Build a pure reference evaluator over canonical
+user timelines ordered by millisecond occurred_at then event_id; duplicate events are removed
+first, and one physical event cannot satisfy two repeated-name steps. Sequential permits
+intervening events; strict requires adjacent events in the eligible timeline to match consecutive
+steps, including interruption by automatic events. Remove step-name prefiltering in strict mode.
+Do not add strict_deduplication implicitly. Bound each chain by window seconds from its start;
+consider subsequent starts so one failed early attempt cannot hide a valid later chain.
+Per user choose maximum reached level, then earliest chain completion, then earliest start and
+event IDs for ties. The same evaluator defines all modes and duration/breakdown behavior.
+Default native windowFunnel is retained only after parity on repeated names and same-time events;
+if parity fails, use the array evaluator for those cases rather than alter the public rule.
 
-```bash
-cabal test kansoku-core --test-options='--match "Funnel"'
-cabal test kansoku-core --test-options='--match "Experiments"'
-just openapi && just openapi-check
-```
+### M2: Exclusions, timing and breakdown
 
-Example:
 
-```bash
-curl -s --get http://localhost:8080/metrics/funnel -H "Authorization: Bearer $TOKEN" \
-  --data-urlencode from=2026-07-01 --data-urlencode to=2026-08-01 \
-  --data-urlencode steps=signup_started,signup_completed --data-urlencode exclude=support_ticket_opened \
-  --data-urlencode measure=time_to_convert
-```
+Add repeatable exclude event names, at most 20 distinct validated names. An excluded event
+strictly between matched steps invalidates that chain; later chains may qualify. Conflicting
+step/exclusion names return 400. For strict requests keep the full timeline; for sequential
+array evaluation retain steps plus exclusions. Global event filters must not hide strict
+interruptions: apply user-trait filters to eligible subjects; reject event-level filters on
+strict funnels until an explicit selection contract exists. Preserve experiment exposure gating:
+all eligible chain events occur at/after first exposure for that user/variant and inside range.
 
+`measure=count|time_to_convert` defaults to count. For time, emit per reached step >=2 points
+with group.measure=p50_seconds|p90_seconds using exact deterministic quantiles of elapsed
+milliseconds/1000 for the selected chains. Include step index/name and variant where relevant.
+Use first step-one event per user in the query population for first-touch prop breakdown,
+even if the chosen converting chain starts later. Require that property on the first-step schema,
+not every later step; missing is null under EP-31. Keep final typed ordering and point cap.
+Apply EP-31's finite memory/time limits before materializing user arrays; overflow yields an
+error, never truncated sequences. Tests must exercise all parameter combinations on both routes.
+
+The existing `/metrics/conversion` also divides unrelated signup-completed and signup-started
+user sets, so it may exceed one and count completion before start. Bring it onto the same
+ordered two-step contract: denominator is distinct users with signup_started in range; numerator
+is those users with signup_completed after a valid start within the same bounded default window
+(range length capped at 90 days). Use the common chain evaluator, return zero for empty denominator,
+and group by the starting population's supported dimensions/current traits. Explicitly reject
+unsupported timeGrain/event-property grouping instead of silently ignoring it. Test completion-only,
+completion-before-start, retry, and unrelated starters; the ratio must stay in [0,1].
+
+### M3: Experiment diagnostics
+
+
+Expose diagnostics through an explicit measure=exposures|diagnostics selector, default exposures,
+so existing exposure points are not silently mixed with other values. Diagnostics use canonical
+resolved users and emit multiple_exposure (users with >1 variant), exposed_users, and for each
+variant assigned_users and variant_share. Assign each user once to their earliest observed
+exposure ordered by occurred_at,event_id; share is assigned_users / exposed_users. Repeated
+exposures do not increase assignment counts. Multi-exposure users remain in every variant for
+existing conversion analytics, but only first assignment for these shares. With zero users,
+emit zero totals and no variant-share rows. Match requested bucket scope for every diagnostic.
+Document that first observed exposure is not an authoritative randomization log; high contamination
+invalidates a naive sample-ratio interpretation. GrowthBook receives all deduplicated exposures.
 
 ## Validation and Acceptance
 
-1. M1: a user with `signup_started`, `page_view`, `signup_completed` reaches step 2 in
-   sequential mode and step 1 in strict mode.
-2. M2: a user with an excluded event between steps is removed from step 2; without
-   exclusions the array engine equals `windowFunnel` on all funnel fixtures and on 1,000
-   random sequences; time to convert for a two-event fixture equals their difference.
-3. M3: breakdown by `plan` over two users on different plans yields two groups; a user
-   without the property lands in `other`.
-4. M4: a fixture with one user exposed to A and B reports `multiple_exposure = 1`, and
-   variant shares sum to 1 within rounding; existing exposure counts are unchanged.
 
+A/B interrupted by page_view fails strict and passes sequential. Test A,A,B; repeated requested
+A,A; equal milliseconds; duplicate replay; excluded events; failed early/valid late starts; exact
+window boundary; and pre-exposure steps. Differential tests cover at least 1000 seeded random
+sequences and the actual packaged engine. Timing/breakdown fixtures prove chain selection and
+first-touch ownership. One user exposed A then B yields multiple_exposure=1, A assignment=1,
+B assignment=0 and shares summing to one. Test account isolation, multiple buckets, missing
+variants, zero data, native block ordering and 10000/10001 results.
+
+## Concrete Steps
+
+
+Run commands from the repository root inside `nix develop`. Use the private databases owned
+by `scripts/acceptance.sh` and `Kansoku.ClickHouseTestSupport`, not an ambient development
+stack: native fixtures mutate tables. Extend that harness for the scenarios in this plan.
+
+```bash
+cabal build all --enable-tests
+just openapi
+just contracts
+just check
+just acceptance
+```
+
+Use focused Hspec examples while developing. Before marking Complete, require nonzero example
+counts, no pending required integration tests, regenerated contract checks, and the packaged
+executable acceptance above. Record only the relevant evidence here. This follows
+[ADR-10](../adr/0010-owned-executable-acceptance-environments.md).
 
 ## Idempotence and Recovery
 
-Additive parameters; defaults preserve current behaviour. No schema change. If the array
-engine proves slow, the plan's Decision Log records limiting it to requests that need it,
-which is already the design.
 
+No new persisted state is required. Keep old semantic fixtures only when their intended behavior remains valid; explicitly replace tests that accidentally let one event satisfy repeated steps.
 
 ## Interfaces and Dependencies
 
-Hard dependency: `docs/plans/26-bound-analytics-query-inputs-and-result-cardinality.md`
-Complete. Soft dependency: `docs/plans/31-metric-property-filters-and-dual-grouping.md`
-(property compile helpers reused for M3). Update ADR 6 with the diagnostics and the mode
-vocabulary.
+
+Required complete child artifacts: `docs/plans/26-bound-analytics-query-inputs-and-result-cardinality.md`, `docs/plans/31-metric-property-filters-and-dual-grouping.md`, `docs/plans/32-time-aware-identity-bindings-and-bounded-resolution-cost.md`.
+
+Hard dependencies: EP-26, EP-31 and EP-32 Complete. EP-31 owns group encoding; EP-32 canonical users. EP-38 consumes the final diagnostics in its statistics guide. Relevant paths: `docs/plans/31-metric-property-filters-and-dual-grouping.md`, `docs/plans/32-time-aware-identity-bindings-and-bounded-resolution-cost.md`.
+
+Revision note (2026-10-15): reviewed against the current source and revised for first deployment.
+[ADR-11](../adr/0011-initial-release-analytics-contracts.md) records the proposed cross-plan
+contracts; implementation must supply the acceptance evidence before those contracts become
+accepted runtime guarantees.

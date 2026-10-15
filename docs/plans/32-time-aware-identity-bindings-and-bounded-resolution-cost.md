@@ -11,187 +11,169 @@ provenance:
     model: "claude-fable-5-1"
     harness: "claude-code"
     at: 2026-10-15T13:44:34Z
+  reviews:
+    - model: "gpt-6-astra"
+      harness: "codex-cli"
+      at: 2026-10-15T15:43:15Z
+      verdict: "changes-requested"
+      note: "Original draft review found correctness gaps; findings corrected by the accompanying update, with native acceptance still required."
+  revisions:
+    - model: "gpt-6-astra"
+      harness: "codex-cli"
+      at: 2026-10-15T15:43:15Z
+      mode: "update"
+      note: "Reconcile first-release APIs, domain semantics, dependencies and acceptance with the source-validated MP-5 review."
 ---
 
 # Time-aware identity bindings and bounded resolution cost
 
-This ExecPlan is a living document. Update its living sections and durable ADRs as work
-proceeds. It is a child of
-`docs/masterplans/5-act-on-rev-1-close-silent-loss-paths-add-metric-filters-and-enrich-web-analytics.md`
-and acts on findings D1, D2 and D3 of
-`docs/reviews/2026-10-15-architecture-and-feature-set-against-comparable-products.md`.
-
 
 ## Purpose / Big Picture
 
-Two people sharing one browser will stop being merged into whoever logged in last: a cookie
-observed with user A in July and user B in September will attribute July's anonymous events
-to A, not B. Exact metrics (funnels, retention, conversion, feature adoption, experiment
-conversion) will stop rebuilding a hash table of every anonymous event the account has ever
-stored on each request; the cost of identity resolution will be measured at ten million rows
-and bounded by the request's time window. Producers will be able to send a keyed email hash
-instead of a plain SHA-256.
 
+Resolve anonymous activity without assigning a shared device's entire history to an arbitrary
+user, and measure the cost of doing so. Publish what the evidence can prove; no timestamp rule
+can infer an unrecorded logout or identify who held a shared device.
 
 ## Progress
 
-- [ ] M1: A reproducible ten-million-row benchmark with a configurable anonymous share records latency, read bytes and peak memory of the funnel, retention and conversion queries against the current view, and the same against both candidate designs.
-- [ ] M2: The chosen design is implemented; the benchmark shows the resolved-path cost growing with the query window rather than with account history, with every existing identity test battery green.
-- [ ] M3: Interval-based cookie resolution is live: the shared-device fixture attributes pre-login events to the next identifying user; conflicts remain visible.
-- [ ] M4: `email_hmac` is an accepted identifier kind with documented pepper guidance, and `email_sha256` is marked discouraged in the catalog and guides.
 
+- [ ] M1: Identity semantics pass shared-device, late-arrival and namespace-collision fixtures.
+- [ ] M2: A bounded raw-event resolution source passes a ten-million-row benchmark.
+- [ ] M3: Keyed email identifiers and SDK validation/catalog changes agree.
 
 ## Surprises & Discoveries
 
-(None yet.)
 
+`0012_identity_signals.sql` sets `observed_at = received_at`, not event time, and omits
+session_id. The proposed nearest-future binding cannot know which user owns an event between
+two logins. Restricting evidence to the query window also loses valid later identify events.
+The public seven-column view lacks fields needed by filters and session analytics.
 
 ## Decision Log
 
-- Decision: Decide between an inline time-bounded resolution join and a refreshed
-  `analytics.resolved_identity` table by benchmark, not by preference. Promotion criterion:
-  the chosen design must keep the two-step funnel over one month under twice the cost of the
-  same query without resolution at ten million rows with a 70 percent anonymous share, and must
-  not change any count in the existing EP-18 batteries.
-  Rationale: EP-17 chose property storage by measurement and the result held; the resolution
-  path deserves the same evidence.
-  Date: 2026-10-15
-- Decision: Cookie bindings resolve by interval: an anonymous event takes the earliest cookie
-  binding observed at or after the event, else the latest before it. Hashed email and device
-  bindings keep confidence-then-recency ranking. Fingerprints keep their 0.50 confidence and TTL.
-  Rationale: The whole purpose of cookie stitching is retroactive attribution of pre-login
-  events to the user who then logged in; "most recent wins" reassigns another person's history
-  on a shared device. PostHog avoids the problem by refusing re-identification; the interval
-  rule keeps Kansoku's evidence model and fixes the attribution.
-  Date: 2026-10-15
 
+On 2026-10-15 prefer unambiguous evidence to guessing. Explicit user IDs win; a uniquely
+identified session can resolve its own anonymous events, otherwise only an unambiguous
+signal binding can stitch. Conflicts stay anonymous and visible. Defer refresh-lag semantics:
+the initial exact HTTP path resolves at query time.
 
 ## Outcomes & Retrospective
 
-(To be filled during and after implementation.)
 
+Planning reviewed; benchmark and runtime evidence remain outstanding.
 
 ## Context and Orientation
 
-Identity evidence is stored in `analytics.identity_signals` and resolved at query time by the
-view `analytics.events_resolved` (currently `events_resolved_v3`), both created by
-`db/clickhouse/migrations/0012_identity_signals.sql`. The view's `event_signal_users` common
-table expression selects every anonymous event (`user_id = ''`), array-joins its cookie and
-mapped identifiers, inner-joins `analytics.identity_bindings` (a view assigning confidence
-0.95 to `email_sha256`, 0.90 to `cookie`, 0.80 to `device`, 0.50 to `fingerprint`), and picks
-`argMax(user_id, (confidence, observed_at))` per event. The outer query then left-joins that
-result to `events_raw` on account and event id. `EXPLAIN PLAN indexes=1` on ClickHouse 26.8.2.7
-(recorded in REV-1 finding D2) shows the account predicate pushed into the anonymous side but
-no time or event-name pruning there, so the build side is the account's whole anonymous
-history, and `JSONExtractKeysAndValues(identifiers)` is re-evaluated per row per query.
 
-The view's seven-column output (`event_id, event_name, occurred_at, url, account_id,
-canonical_user, properties_json`) is a frozen contract consumed by every exact metric in
-`kansoku-core/src/Kansoku/Metrics/Query.hs`; see
-[ADR 4](../adr/0004-queryable-event-properties-and-identity-resolved-projection.md) and
-[ADR 5](../adr/0005-evidence-based-multi-signal-identity-resolution.md), which this plan
-updates. The identifier vocabulary is the closed `IdentifierKind` type in
-`kansoku-api/src/Kansoku/Event/Types.hs` with validation in
-`kansoku-api/src/Kansoku/Event/Validation.hs`. EP-17's benchmark protocol (scratch table,
-five runs, median of `--time`) is recorded in
-`docs/plans/17-queryable-event-properties-typed-storage-and-property-based-grouping.md` and is
-the model for M1. The erasure runbook is `docs/runbooks/identity-data-deletion.md`.
-
-A "refreshable materialized view" is a ClickHouse view that recomputes its whole result on a
-schedule rather than per insert; it exists so a join whose inputs arrive out of order (bindings
-after events) can still be precomputed. The browser SDK (`mori://shinzui/kansoku-ts`) rotates
-the anonymous id on `reset()`, which applications are expected to call on logout.
-
+`db/clickhouse/migrations/0012_identity_signals.sql` creates identity evidence, bindings,
+conflicts and the resolved view. `Kansoku.Event.Types` owns identifier kinds, `Validation.hs`
+their values, and `Kansoku.Metrics.Query` consumes canonical_user.
+Read [ADR-4](../adr/0004-queryable-event-properties-and-identity-resolved-projection.md) and
+[ADR-5](../adr/0005-evidence-based-multi-signal-identity-resolution.md). SDK reset currently
+rotates both anonymous and session IDs at `mori://shinzui/kansoku-ts/packages/kansoku-js`.
 
 ## Plan of Work
 
-### M1: Benchmark
 
-Create `scripts/identity-bench.py` that fills a scratch table `analytics.identity_bench_raw`
-(same DDL as `events_raw`) with ten million events for one account, a configurable anonymous
-share (default 70 percent), a configurable share of anonymous cookies that later identify
-(default 40 percent), and matching `identity_signals` rows. Run the funnel, retention and
-experiment conversion SQL from `Query.hs` against (a) the current view, (b) an inline join
-where the anonymous side is also filtered by the query's account and time window, and (c) a
-`resolved_identity` table precomputed by a refreshable materialized view. Record median
-latency, `read_bytes` and `memory_usage` from `system.query_log` for each. Capture the three
-tables in this plan.
-
-### M2: Bounded resolution
-
-Implement the winner. For (b): the builders in `Query.hs` gain a `resolvedSource` helper that
-emits the resolution join inline with the window predicate on both sides, and the view stays
-for ad-hoc use. For (c): a migration creates `analytics.resolved_identity`
-(`account_id, event_id, canonical_user, resolved_at`) as a refreshable materialized view
-(`REFRESH EVERY 5 MINUTE`) over anonymous events and bindings, `events_resolved` becomes a
-left join to it, and the operations guide documents the refresh lag as the freshness bound for
-exact metrics. Either way, re-run the EP-18 batteries (`QueryIntegrationSpec` identity cases)
-and the account-predicate completeness test.
-
-### M3: Interval semantics
-
-Change the resolution expression so that for `cookie` signals the chosen binding is the one
-with the smallest `observed_at >= occurred_at`, falling back to the largest `observed_at`,
-while other kinds keep `argMax` by `(confidence, observed_at)`, and higher-confidence kinds still
-win over cookies. Add a fixture with two users identifying on one cookie and events in between.
-Keep `analytics.identity_conflicts` unchanged. Update ADR 5 and `docs/guides/send-events.md`
-("Identity") with the rule and with the `reset()` expectation.
-
-### M4: Keyed email signal
-
-Add `EmailHmac` to `IdentifierKind` (`email_hmac`), confidence 0.95, same value rules, and
-document in `send-events.md` that producers compute HMAC-SHA-256 over the normalised address
-under a deployment pepper they keep in their own secret store; Kansoku never sees the pepper.
-Mark `email_sha256` as discouraged in the guide and catalog descriptions without removing it.
-Extend the erasure runbook's discovery query with the new kind.
+### M1: Define evidence and subject identity
 
 
-## Concrete Steps
+Extend evidence with corrected event time, receive time, event ID and session ID. Session
+keys are `(account_id,source_service,session_id)` and only nonempty session IDs qualify.
+Implicit cookie evidence comes from identify, identify_once and alias carrying explicit userId;
+explicit mapped identifiers keep their documented evidence rule. Use EP-30 canonical events.
+For anonymous events first consider same-cookie, same-session evidence: if exactly one user
+is observed in that session, resolve to that user, including pre-login events. If the session
+has conflicting users, do not resolve from that cookie. Without session evidence, a cookie
+with exactly one observed user across retained history may resolve; a conflicted cookie may not.
+Apply uniqueness before confidence ranking to other signal kinds, and reject ties with different
+users at equal winning confidence. Enforce fingerprint expiry in evidence predicates as well as eventual physical TTL cleanup.
+Keep confidence and fingerprint TTL visible as policy, not a
+claim that probabilistic signals identify a person with certainty. Explicit user always wins.
 
-Inside `nix develop` with the stack running:
+Internally represent subject kind and ID separately, or encode canonical_user unambiguously as
+`user:<id>` versus `anonymous:<id>` (one fixed prefix plus original ID). Unidentified events
+with neither identity remain empty and are excluded from user counts. Traits join only resolved
+user subjects, never a coincidentally equal anonymous ID. Update all exact builders and raw-identity sketches (including experiment exposures) to avoid
+user/anonymous namespace collisions, while preserving their explicitly approximate policy. Update fixtures,
+experiment SQL and direct-consumption documentation for this initial-release contract.
 
-```bash
-python3 scripts/identity-bench.py --rows 10000000 --anonymous 0.7 --identified-cookies 0.4
-cabal test kansoku-core --test-options='--match "Identity"'
-cabal test kansoku-core --test-options='--match "QueryIntegration"'
-just openapi && just contracts && just openapi-check && just contracts-check
-```
+### M2: Bound candidate events, measure evidence lookup
 
-The benchmark prints one row per (design, query) with median seconds; paste it into M1's
-evidence. Drop the scratch table afterwards:
 
-```sql
-DROP TABLE IF EXISTS analytics.identity_bench_raw
-```
+Build a rich internal `resolvedSource` helper from EP-30's canonical raw relation with account
+and requested event-time range applied before signal expansion. Preserve raw source, session,
+URL and later enrichment columns internally; expose the historical seven columns through the
+public `events_resolved` projection. Evidence lookup must retain relevant bindings outside the
+request window, including future identify records; only the candidate event scan is window-bound.
+Index/order evidence for `(account,kind,value)` lookup and benchmark the evidence side separately.
+Do not promise total work independent of history or substitute a five-minute stale refresh into
+an exact route without a new decision.
 
+Add `scripts/identity-bench.py` using only an owned scratch database, with ten million events,
+70 percent anonymous, 40 percent identified cookies, two accounts and shared-device conflicts.
+Record five-run medians, read rows/bytes and peak memory for funnel, retention and conversion
+for one-day and one-month windows as account history grows. Target less than twice the matching
+unresolved query latency at the stated fixture; if missed, record the blocker and optimize the
+same semantics before marking M2 complete. Existing tests asserting latest-wins behavior must
+be intentionally replaced; unaffected exactness/account tests stay green.
+
+### M3: Keyed email
+
+
+Add email_hmac to the wire enum and generated clients, confidence 0.95 and the same bounded
+ASCII value rule. Document HMAC-SHA-256, an explicit UTF-8 trim/lowercase normalization convention,
+server-side pepper storage and a version prefix for rotation; a browser must never receive the
+pepper. Keep email_sha256 supported but discouraged. Extend erasure to every evidence kind.
+Coordinate SDK validator/type changes with
+`mori://shinzui/kansoku-ts/plans/8-serve-kansoku-masterplan-5-sentat-beacon-exit-flush-bot-flag-and-identifyonce`.
 
 ## Validation and Acceptance
 
-1. M1 evidence table present with all three designs.
-2. M2: the promotion criterion in the Decision Log holds; `QueryIntegrationSpec` identity and
-   experiment cases pass unchanged; `EXPLAIN PLAN indexes=1` for the funnel shows the time
-   condition applied on the anonymous side, or the resolved table read instead.
-3. M3 fixture: user A identifies on cookie C at day 10, user B at day 40; an anonymous event
-   with C on day 5 resolves to A, on day 20 to B, on day 50 to B; an `email_sha256` binding
-   still outranks a cookie.
-4. M4: an event with `identifiers.email_hmac` is accepted and bound; an unknown kind still
-   lists both email kinds in its error.
-5. Fingerprint TTL and the erasure runbook still cover every kind.
 
+Two sessions sharing cookie C, uniquely identifying A and B, resolve their own pre-login events
+correctly even if delivery order reverses. An anonymous event between sessions with conflicted
+C stays anonymous; a session containing both A and B stays ambiguous. A binding outside the
+query window still resolves an unambiguous subject. Explicit IDs, confidence ties, fingerprint
+expiry, duplicate evidence and same-text anonymous/user IDs have deterministic tests.
+Benchmark evidence covers growing account history and confirms candidate-event pruning.
+Public view column order stays seven; the internal relation exposes needed fields without
+multiplying rows. Both SDKs accept email_hmac and reject unknown kinds.
+
+## Concrete Steps
+
+
+Run commands from the repository root inside `nix develop`. Use the private databases owned
+by `scripts/acceptance.sh` and `Kansoku.ClickHouseTestSupport`, not an ambient development
+stack: native fixtures mutate tables. Extend that harness for the scenarios in this plan.
+
+```bash
+cabal build all --enable-tests
+just openapi
+just contracts
+just check
+just acceptance
+```
+
+Use focused Hspec examples while developing. Before marking Complete, require nonzero example
+counts, no pending required integration tests, regenerated contract checks, and the packaged
+executable acceptance above. Record only the relevant evidence here. This follows
+[ADR-10](../adr/0010-owned-executable-acceptance-environments.md).
 
 ## Idempotence and Recovery
 
-The benchmark uses a scratch table and is droppable. The migration for design (c) is additive;
-rollback is dropping the refreshable view and restoring the previous `events_resolved`
-definition, which is kept in the migration file as a comment. Interval semantics are a view
-change with no data mutation; reverting is re-creating the previous view.
 
+Use forward migrations and isolated fixtures. Preserve evidence while replacing views. This is a deliberate pre-release semantic correction; update ADR-5 on implementation rather than preserving latest-wins compatibility.
 
 ## Interfaces and Dependencies
 
-No hard dependency on other children; soft dependency on
-`docs/plans/31-metric-property-filters-and-dual-grouping.md` only in that both edit
-`Query.hs`, so rebase carefully. The seven-column `events_resolved` contract is preserved. The
-`email_hmac` identifier kind is claimed here. Libraries: ClickHouse 26.x refreshable
-materialized views (verify support on the deployed version before choosing design (c)),
-`clickhouse-client` for the benchmark, Python 3 standard library for the script.
+
+Required complete child artifacts: `docs/plans/29-correct-client-timestamp-skew-and-count-ingest-rejections.md`, `docs/plans/30-pipeline-backpressure-and-storage-outage-resilience.md`.
+
+Hard dependencies: EP-29 and EP-30 Complete (`docs/plans/29-correct-client-timestamp-skew-and-count-ingest-rejections.md`, `docs/plans/30-pipeline-backpressure-and-storage-outage-resilience.md`). Owns rich resolvedSource and canonical subject semantics, consumed by EP-31, EP-35, EP-36 and EP-40.
+
+Revision note (2026-10-15): reviewed against the current source and revised for first deployment.
+[ADR-11](../adr/0011-initial-release-analytics-contracts.md) records the proposed cross-plan
+contracts; implementation must supply the acceptance evidence before those contracts become
+accepted runtime guarantees.

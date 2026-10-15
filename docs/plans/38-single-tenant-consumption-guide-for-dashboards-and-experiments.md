@@ -11,142 +11,167 @@ provenance:
     model: "claude-fable-5-1"
     harness: "claude-code"
     at: 2026-10-15T13:44:34Z
+  reviews:
+    - model: "gpt-6-astra"
+      harness: "codex-cli"
+      at: 2026-10-15T15:43:16Z
+      verdict: "changes-requested"
+      note: "Original draft review found correctness gaps; findings corrected by the accompanying update, with native acceptance still required."
+  revisions:
+    - model: "gpt-6-astra"
+      harness: "codex-cli"
+      at: 2026-10-15T15:43:16Z
+      mode: "update"
+      note: "Reconcile first-release APIs, domain semantics, dependencies and acceptance with the source-validated MP-5 review."
 ---
 
 # Single-tenant consumption guide for dashboards and experiments
 
-This ExecPlan is a living document. Update its living sections and durable ADRs as work
-proceeds. It is a child of
-`docs/masterplans/5-act-on-rev-1-close-silent-loss-paths-add-metric-filters-and-enrich-web-analytics.md`
-and acts on findings G1 and E5 (documentation half) and the documentation items in E1, E2,
-E3 and E7 of
-`docs/reviews/2026-10-15-architecture-and-feature-set-against-comparable-products.md`.
-
 
 ## Purpose / Big Picture
 
-An owner-operator will be able to build dashboards in Grafana or Metabase and run experiment
-statistics in GrowthBook without Kansoku shipping a UI or a statistics engine, by following a
-guide that says which ClickHouse objects are stable, how to create a read-only role, and which
-queries reproduce the HTTP endpoints' numbers. The query guide and OpenAPI descriptions will
-state the semantics REV-1 found implicit: calendar weeks and months, "on day N" retention,
-the range-length funnel window, sessions counted per bucket, and multi-variant users counted
-in each variant.
 
+Publish the initial supported HTTP and SQL consumption surface and prove that a read-only
+consumer can reproduce metric answers. Grafana/Metabase/GrowthBook remain optional external
+consumers; the first release has no dashboard or experiment statistics engine.
 
 ## Progress
 
-- [ ] M1: `docs/guides/consume-clickhouse.md` exists with the role recipe, the stable-object table, three worked queries that match the endpoints on the fixtures, and a Grafana datasource recipe.
-- [ ] M2: The guide's GrowthBook section provides an assignment query and a fact-table query that GrowthBook accepts against the local stack.
-- [ ] M3: `docs/guides/query-metrics.md` and the route descriptions in `kansoku-api/src/Kansoku/Metrics/Api.hs` state the five semantics; OpenAPI regenerates and the conformance tests pass.
 
+- [ ] M1: A versioned stable SQL surface and working read-only role reproduce HTTP fixtures.
+- [ ] M2: GrowthBook assignment/fact queries pass a real consumer check.
+- [ ] M3: Final API documentation and cross-repository release conformance pass without skips.
 
 ## Surprises & Discoveries
 
-(None yet.)
 
+The original guide granted stable views but queried internal events_raw, and froze raw sketches
+while other children changed identity/bot semantics. EP-26 and ADR-9 are already Complete/Accepted.
+Documentation cannot finalize before the metric and retention contracts it promises.
 
 ## Decision Log
 
-- Decision: The stable read surface is `analytics.events_resolved` (seven columns, ADR 4),
-  the rollups `dau`, `wau`, `page_views_by_route`, `daily_event_counts`,
-  `experiment_exposures`, and the views `identity_bindings` and `identity_conflicts`.
-  `events_raw` and `identity_signals` are documented as internal and may change shape.
-  Rationale: The HTTP endpoints already treat these as contracts; naming them lets dashboards
-  survive migrations.
-  Date: 2026-10-15
 
+On 2026-10-15 stabilize deliberate SQL projections, not every incidental rollup or identity
+view. Direct SQL access is a trusted single-tenant operator surface; account literals in a
+query are not an access-control mechanism for an untrusted dashboard viewer.
 
 ## Outcomes & Retrospective
 
-(To be filled during and after implementation.)
 
+Planning reviewed; external-consumer and release evidence pending.
 
 ## Context and Orientation
 
-Kansoku ships no dashboard; the product vision lists one as later scope. The documentation
-index is `docs/README.md`, adopter guides are under `docs/guides/`, and the generated
-contracts are `docs/api/openapi.json` (regenerated with `just openapi`, checked with
-`just openapi-check`) and `docs/contracts/events.json`. Route descriptions that feed OpenAPI
-live in `kansoku-api/src/Kansoku/Metrics/Api.hs`. The semantics to document are implemented
-in `kansoku-core/src/Kansoku/Metrics/Query.hs`: `toMonday` weeks and `toStartOfMonth`
-months, retention offsets matched with `dateDiff(...) IN (...)`, the funnel window defaulting
-to the range length capped at 90 days, sessions counted by event bucket, and experiment
-conversion counting a multi-variant user in each variant
-([ADR 6](../adr/0006-exposure-based-experiment-analytics.md)). ClickHouse objects are created
-by `db/clickhouse/migrations/`; the seven-column view contract is in
-[ADR 4](../adr/0004-queryable-event-properties-and-identity-resolved-projection.md). GrowthBook
-reads a ClickHouse data source through an "experiment assignment query" returning an
-identifier, a timestamp, an experiment id and a variation id, plus fact tables defined by SQL
-with a timestamp and identifier column (GrowthBook documentation, retrieved 2026-10-14; verify
-the current field names when implementing). Grafana's ClickHouse data source plugin and
-Metabase's ClickHouse driver both connect with a ClickHouse user over the native or HTTP port.
-No cross-repository ADR applies.
 
+`docs/README.md` indexes guides; `Metrics/Api.hs` publishes OpenAPI descriptions;
+`Query.hs` implements metric semantics. ADRs 3, 4, 6, 9 and 10 govern accounts, properties,
+accuracy, bounded results and owned acceptance. Generated artifacts live at
+`docs/api/openapi.json` and `docs/contracts/events.json`.
 
 ## Plan of Work
 
-### M1: Consumption guide
 
-Write `docs/guides/consume-clickhouse.md`. Sections: why direct access is the single-tenant
-dashboard path; the role recipe (`CREATE USER kansoku_reader IDENTIFIED WITH sha256_password
-BY '…'`, `GRANT SELECT ON analytics.events_resolved, analytics.dau, … TO kansoku_reader`, and
-a `SETTINGS PROFILE` with `max_execution_time` and `max_memory_usage`); the stable-object
-table with one line per object and its contract; three worked queries whose results must
-equal the endpoints on the fixtures (daily active users from `dau`, a two-step
-`windowFunnel` over `events_resolved` with the same account and window predicates, revenue by
-`plan` via `getSubcolumn(properties_json, 'plan')`); a Grafana recipe (datasource, one panel
-per query, the account literal as a dashboard variable); and a note that `account_id` must
-appear in every query. Link it from `docs/README.md` and the query guide.
-
-### M2: GrowthBook section
-
-Add the assignment query over `events_raw` filtered to `experiment_viewed` returning
-`canonical_user` (from `events_resolved`) as the identifier, `occurred_at`, the `experiment`
-and `variant` subcolumns, and a fact table example for `payment_completed` with `amount`.
-Explain the exact-versus-approximate identity note from ADR 6 and that GrowthBook's
-multiple-exposure handling applies. Verify against a local GrowthBook container if
-available; otherwise record the verification as pending in Progress rather than claiming it.
-
-### M3: Semantics precision
-
-In the query guide and the route descriptions, state the five semantics in one sentence
-each, placed where the parameter is introduced. Regenerate OpenAPI and run the conformance
-tests; the committed artifact changes only in description strings.
+### M1: Stable read contract
 
 
-## Concrete Steps
+Write `docs/guides/consume-clickhouse.md` after the metric children land. Freeze the ordered
+seven-column events_resolved view with EP-32 canonical subject semantics and named explicit
+views for any additional session/enrichment fields a supported recipe needs. Keep internal
+storage, identity evidence and raw sketches changeable; do not promise all tables stable.
+Document view freshness, retained-history bounds, bot policy, exactness and group semantics.
+Create a read-only SQL role with SELECT on just these views, finite execution/memory settings
+and appropriate SQL SECURITY behavior on the packaged ClickHouse. Test with that actual role:
+it can execute the recipes and cannot read excluded base tables or mutate data. A view that
+requires unauthorized underlying reads is not accepted. Use grants supported by native SQL,
+not an assumed comma-separated multi-table GRANT syntax.
 
-```bash
-just openapi && just openapi-check
-cabal test kansoku-core --test-options='--match "OpenApi"'
-```
+Worked examples: exact daily users, a two-step funnel and revenue by prop:plan, with the same
+account/time/filter/identity/deduplication/bot semantics as HTTP. Label separate raw approximate
+sketch examples explicitly. Add a Grafana datasource/panel recipe verified for its chosen plugin
+version. Treat optional Metabase instructions as examples, not an unverified support guarantee.
 
-With the stack running and fixtures loaded, run each worked query with `clickhouse-client
---port 9000 --query` and compare with the corresponding `curl` against `just run`.
+### M2: GrowthBook
 
+
+Use the stable resolved event projection for both exposures and fact events. Assignment output
+columns are user_id (configured identifier), timestamp, experiment_id, variation_id; map arbitrary
+Kansoku variant names through an explicit documented mapping when the consumer requires it.
+Return every distinct exposure event, including re-exposures, with canonical user identity and
+account predicate. Fact rows use the same subject convention, timestamp and validated amount.
+This matches [GrowthBook datasource documentation](https://docs.growthbook.io/app/datasources).
+Validate SQL with the reader role and import the configuration into a pinned local GrowthBook
+instance or an equivalent real consumer integration test. Record version, commands and output;
+no available instance means M2 stays pending, not approved by inspection.
+
+Explain multiple exposures and first-assignment shares from EP-36; aggregate conversion counts
+are not sufficient statistics for every experiment method. Do not publish a significance claim
+from sketch counts or contaminated variant populations.
+
+### M3: First-release contract gate
+
+
+Publish a route/parameter support matrix with examples and error codes; unimplemented
+organizations/custom routes remain explicitly excluded from the first-version supported surface.
+Document that revenue is an analytical sum of payment_completed.amount in one declared
+account currency/unit; it does not perform FX conversion, refunds/net-revenue accounting or
+provide an exact monetary ledger. Producers must normalize amounts to that unit. Do not describe
+feature-adoption distinct-user counts as a percentage without a defined eligible denominator.
+State UTC closed-day requirements for rolling/cohort routes, session-start attribution, bounce
+lifecycle exclusions, current-value traits, filter JSON, null groups, retained-history lifetime,
+and exact versus explicitly approximate measures. Cross-origin attribution requires SDK handoff,
+not merely putting sites in one account.
+
+Run SDK conformance from
+`mori://shinzui/kansoku-ts/plans/8-serve-kansoku-masterplan-5-sentat-beacon-exit-flush-bot-flag-and-identifyonce`
+against the final packaged server; contract pin, generated types and all required features must
+match and tests must not skip on feature detection. Required cases include skew, duplicate retry,
+beacon limits/429, bot exclusion, email_hmac, identify v2/identify_once v1 and a user-trait metric
+query. Browser demo ownership stays in that SDK plan. Update documentation references to the
+actual final schema, not an earlier interim implementation.
 
 ## Validation and Acceptance
 
-1. M1: each worked query's result equals the endpoint's `value` for the same range on the
-   fixtures; the reader role can run them and cannot select from `kansoku`-internal objects
-   not granted.
-2. M2: the assignment query returns one row per exposure with the four columns GrowthBook
-   expects.
-3. M3: `just openapi-check` passes after regeneration, and a reader of the query guide can
-   find each semantic sentence by searching for "calendar", "on day", "capped at 90",
-   "spans", and "each variant".
 
+All three SQL recipes match HTTP on adversarial fixtures with duplicate events, anonymous-to-user
+resolution, bots and retention. Reader privileges pass positive and negative tests. GrowthBook
+accepts assignment and fact queries on the pinned version. Final `just check`, `just acceptance`
+and the SDK required conformance gate pass with zero skipped/pending features. Review feature
+exclusions and latency/capacity limits as part of the first deployment runbook.
+
+## Concrete Steps
+
+
+Run commands from the repository root inside `nix develop`. Use the private databases owned
+by `scripts/acceptance.sh` and `Kansoku.ClickHouseTestSupport`, not an ambient development
+stack: native fixtures mutate tables. Extend that harness for the scenarios in this plan.
+
+```bash
+cabal build all --enable-tests
+just openapi
+just contracts
+just check
+just acceptance
+```
+
+Use focused Hspec examples while developing. Before marking Complete, require nonzero example
+counts, no pending required integration tests, regenerated contract checks, and the packaged
+executable acceptance above. Record only the relevant evidence here. This follows
+[ADR-10](../adr/0010-owned-executable-acceptance-environments.md).
 
 ## Idempotence and Recovery
 
-Documentation and description strings only; re-running regeneration is idempotent.
 
+Documentation follows accepted behavior. Regeneration and SDK pin refresh are reviewed together. No runtime implementation or deployment is authorized merely by completing this planning review.
 
 ## Interfaces and Dependencies
 
-No hard dependencies; this plan can run first. Soft dependency on every metric-semantics
-child (`docs/plans/35-…`, `docs/plans/36-…`, `docs/plans/34-…`) in that their landing
-requires updating the sentences this plan writes; each of those plans owns its own
-documentation update. The stable-object list should be recorded in ADR 4 as the read
-contract.
+
+Required complete child artifacts: `docs/plans/31-metric-property-filters-and-dual-grouping.md`, `docs/plans/33-acquisition-and-device-enrichment-with-bot-flagging.md`, `docs/plans/34-session-analytics-duration-bounce-entry-and-exit-pages.md`, `docs/plans/35-rolling-active-users-retention-modes-and-lifetime-cohorts.md`, `docs/plans/36-funnel-modes-and-experiment-exposure-diagnostics.md`, `docs/plans/37-administrative-executable-for-keys-erasure-retention-and-replay.md`, `docs/plans/39-beacon-ingest-route-for-page-exit-delivery.md`, `docs/plans/40-person-properties-set-and-set-once-user-traits.md`.
+
+Hard dependencies: EP-31, EP-33, EP-34, EP-35, EP-36, EP-37, EP-39 and EP-40 Complete. This child owns the final release contract gate and stable SQL grants. Draft prose can be prepared earlier but the child cannot complete on interim semantics.
+
+Revision note (2026-10-15): reviewed against the current source and revised for first deployment.
+[ADR-11](../adr/0011-initial-release-analytics-contracts.md) records the proposed cross-plan
+contracts; implementation must supply the acceptance evidence before those contracts become
+accepted runtime guarantees.

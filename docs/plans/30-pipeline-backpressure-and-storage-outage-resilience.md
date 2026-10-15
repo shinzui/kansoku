@@ -11,234 +11,191 @@ provenance:
     model: "claude-fable-5-1"
     harness: "claude-code"
     at: 2026-10-15T13:44:34Z
+  reviews:
+    - model: "gpt-6-astra"
+      harness: "codex-cli"
+      at: 2026-10-15T15:43:15Z
+      verdict: "changes-requested"
+      note: "Original draft review found correctness gaps; findings corrected by the accompanying update, with native acceptance still required."
+  revisions:
+    - model: "gpt-6-astra"
+      harness: "codex-cli"
+      at: 2026-10-15T15:43:15Z
+      mode: "update"
+      note: "Reconcile first-release APIs, domain semantics, dependencies and acceptance with the source-validated MP-5 review."
 ---
 
 # Pipeline backpressure and storage-outage resilience
 
-This ExecPlan is a living document. Update its living sections and durable ADRs as work
-proceeds. It is a child of
-`docs/masterplans/5-act-on-rev-1-close-silent-loss-paths-add-metric-filters-and-enrich-web-analytics.md`
-and acts on findings B1, B2, B3 and A4 of
-`docs/reviews/2026-10-15-architecture-and-feature-set-against-comparable-products.md`.
-
 
 ## Purpose / Big Picture
 
-A ClickHouse restart, upgrade or host reboot will no longer turn queued events into archived
-rows that an operator must replay by hand while readiness reports healthy. The writer will
-stop attempting inserts while storage is unreachable, resume on its own when it returns, and
-keep its retry budget large enough to outlast any realistic maintenance window. Operators will
-see the archive size as a gauge. An abusive or runaway client holding a public write key will
-receive HTTP 429 instead of filling the queue until the whole process leaves rotation. The
-sustained ingest capacity of the default configuration will be measured and written down.
 
+Keep accepted events durable through storage outages and retries, without counting replayed
+events twice. Rate limits protect the queue, and measured recovery capacity defines an honest
+operating envelope. Automatic recovery is conditional on PostgreSQL capacity and eventual
+storage recovery; no finite system promises arbitrary outage duration.
 
 ## Progress
 
-- [ ] M1: With ClickHouse stopped for ten minutes under steady ingest, no message is archived, insert attempts stop within one breaker interval, and every accepted event is written within two flush intervals of ClickHouse returning. Exact replays of a failed insert do not double count in count-state rollups.
-- [ ] M2: `kansoku_queue_archived_messages` is exported and documented, and a deliberately archived message raises it within one poll interval.
-- [ ] M3: A client exceeding the per-key rate receives HTTP 429 with `Retry-After` and a problem document, the SDK's retry path handles it, and `kansoku_ingest_rate_limited_total` increments.
-- [ ] M4: A recorded benchmark states sustained events per second, queue depth and flush latency at default settings on named hardware, and the operations guide carries sizing guidance and the trigger for the Kafka adapter.
 
+- [ ] M1: Durable event identity and replay-safe analytical reads pass failure/rebatching tests.
+- [ ] M2: Writer pauses consumption during outages and resumes with bounded recovery evidence.
+- [ ] M3: Archive/backlog instruments and shared credential rate limits pass HTTP tests.
+- [ ] M4: Named-hardware ingest and drain benchmarks establish the deployment envelope.
 
 ## Surprises & Discoveries
 
-(None yet.)
 
+The actual raw sort key is `(account_id,event_name,occurred_at,event_id)`, not event ID alone.
+`ReplacingMergeTree` does not deduplicate additive materialized-view counts. The adapter pinned
+in `cabal.project` is 0.12.0.0: `maxRetries` counts deliveries before handler execution, zero
+archives immediately, and `AckHalt` parks an already-read message. Neither a handler-only
+breaker nor AckHalt makes outage retries unlimited. Checked the pinned tag through Mori;
+Hackage and upstream tags expose 0.16.1.0 on review day, so do not mistake local HEAD for the pin.
 
 ## Decision Log
 
-- Decision: Treat a connection-class insert failure and a malformed payload differently. The
-  former opens a storage circuit breaker and is retried indefinitely with capped backoff; the
-  latter dead-letters immediately as today.
-  Rationale: The pinned adapter archives on delivery count, not on failure class, so without a
-  breaker every outage minute consumes deliveries. The two failures have opposite correct
-  responses.
-  Date: 2026-10-15
-- Decision: Keep readiness semantics unchanged; the archive is surfaced as a gauge and an
-  alert, not as a readiness failure.
-  Rationale: Archived data needs an operator, not a load balancer; failing readiness would also
-  take metric reads out of rotation.
-  Date: 2026-10-15
-- Decision: Rate limit per credential, not per IP, with a configurable steady rate and burst,
-  returning 429 through the shared problem algebra.
-  Rationale: Kansoku never records client IPs and sits behind a proxy; the credential is the
-  stable principal. Per-key limiting matches Segment, Mixpanel and Amplitude.
-  Date: 2026-10-15
 
+On 2026-10-15 make `(account,eventId)` an immutable event identity at acceptance, and separate
+HTTP retry deduplication from queue redelivery. Finite ClickHouse block tokens are an optional
+optimization, never the correctness boundary. Exact metrics deduplicate before aggregation.
 
 ## Outcomes & Retrospective
 
-(To be filled during and after implementation.)
 
+Planning reviewed; no throughput or recovery guarantee has yet been measured.
 
 ## Context and Orientation
 
-Accepted events are enqueued in PostgreSQL through PGMQ, a queue implemented as PostgreSQL
-tables, and consumed by a supervised batch writer. `runWriter` in
-`kansoku-core/src/Kansoku/Writer/Run.hs` builds a Shibuya PGMQ adapter from
-`PgmqAdapter.defaultConfig queueName` with `visibilityTimeout` and `batchSize` overridden from
-configuration, and drives the batch handler in `kansoku-core/src/Kansoku/Writer/Batch.hs`,
-which inserts a batch into ClickHouse and answers `AckRetry (RetryDelay 5)` on failure. The
-adapter's configuration record (read it via Mori at
-`mori://shinzui/shibuya-pgmq-adapter/packages/shibuya-pgmq-adapter`, module
-`Shibuya.Adapter.Pgmq.Config`) has a `maxRetries :: Int64` field, default 3, counted from
-PGMQ's per-message delivery count; when exceeded the adapter archives the message into the
-PGMQ archive table `pgmq.a_<queue>` before the handler runs. The same configuration documents an
-optional visibility timeout for an `AckHalt` acknowledgement; read the adapter source to
-confirm whether a halted message's delivery count advances before relying on it.
-Configuration variables live in `kansoku-core/src/Kansoku/Config.hs`
-(`KANSOKU_WRITER_VT_SEC` default 60, `KANSOKU_WRITER_ADAPTER_BATCH`, `KANSOKU_WRITER_MAX_BATCH`).
 
-The writer owns a logical ClickHouse connection it discards on any failure
-([ADR 2](../adr/0002-pipeline-observability-readiness-and-writer-recovery.md)). A supervised
-poller in `kansoku-core/src/Kansoku/Observability.hs` samples PGMQ queue metrics every
-`KANSOKU_QUEUE_POLL_INTERVAL_SEC` and publishes them to Prometheus and readiness
-(`kansoku-core/src/Kansoku/Readiness.hs`). The PGMQ library's effect module exposes
-`peekArchivedMessages` and `lookupArchivedMessage`
-(`mori://shinzui/pgmq-hs/packages/pgmq-effectful`); the replay command itself belongs to
-`docs/plans/37-administrative-executable-for-keys-erasure-retention-and-replay.md`.
-
-The raw table `analytics.events_raw` is a `ReplacingMergeTree` keyed by event id, so duplicate
-rows collapse on merge, but the count-state rollups `page_views_by_route` and
-`daily_event_counts` (`db/clickhouse/migrations/0006_rollups_v2.sql`) are fed by materialized
-views that see inserted blocks before merges and cannot retract a replay. ClickHouse
-deduplicates an inserted block by hash when `non_replicated_deduplication_window` is set on a
-non-replicated table and the insert carries `insert_deduplication_token`.
-
-Ingest routes are `/v1/*` behind `AuthProtect` write-key or service-token handlers
-([ADR 3](../adr/0003-api-key-authentication-and-account-scoped-analytics.md)); the shared
-MultiVerb error tail and `application/problem+json` shape are in
-[ADR 8](../adr/0008-rfc9457-problem-details-and-generated-client-media.md). A portfolio
-precedent for route-marker-driven throttling that keeps OpenAPI 429 responses and runtime
-limits in one place is `mori://shinzui/shomei/okf/capabilities/concepts/CAP-21`; reuse the
-idea, not the code, which is coupled to that service's authentication.
-
-A "circuit breaker" here is a flag the writer sets when storage is unreachable and clears after
-a successful ping, so that it does not attempt inserts while open. "Backpressure" is the
-service's answer to a producer sending faster than it can absorb.
-
+`Ingest/Producer.hs` currently calls `Pgmq.Effectful.batchSendMessage` independently;
+`Writer/Run.hs` constructs the adapter and `Writer/Batch.hs` retries inserts after five seconds.
+`ClickHouse.hs` owns the reconnecting writer. Migrations 0004 and 0006 define the raw key and
+count-state rollups. Read [ADR-2](../adr/0002-pipeline-observability-readiness-and-writer-recovery.md).
+Dependency source is `mori://shinzui/shibuya-pgmq-adapter/packages/shibuya-pgmq-adapter`
+(`Shibuya.Adapter.Pgmq.Config` and `Internal`) and
+`mori://shinzui/pgmq-hs/packages/pgmq-hasql` (`Pgmq.Hasql.Sessions` and statements).
 
 ## Plan of Work
 
-### M1: Storage circuit breaker, retry budget and replay-safe inserts
 
-In `Kansoku.Writer.Batch`, classify insert failures: a driver connection, handshake or timeout
-exception is a storage outage; any other exception keeps today's handling. On a storage outage,
-open a breaker cell (an `IORef` or `TVar` owned by `runWriter`) with the failure time and
-answer `AckRetry` with a delay that doubles from 5 seconds to a cap of 60 seconds while the
-breaker stays open. While the breaker is open, the handler returns the retry acknowledgement
-immediately without touching ClickHouse. A background task in `runWriter` pings ClickHouse
-(the native ping already used by readiness) every `KANSOKU_WRITER_BREAKER_PROBE_SEC` (default
-5) and closes the breaker on success. Expose the breaker state to readiness diagnostics as a
-`writer_storage_breaker_open` observation on `/ready` without adding a failing check.
-
-Raise the delivery budget: read `KANSOKU_WRITER_MAX_DELIVERIES` (default 10000) into the
-adapter's `maxRetries`. With a 60-second visibility timeout this covers more than a week of
-outage before archiving; document that archiving after exhaustion remains the dead-letter path
-and that `docs/plans/37-…` replays it. If reading the adapter shows that a halted message does
-not advance its delivery count, prefer `AckHalt` with a visibility timeout equal to the probe
-interval and record the choice in the Decision Log.
-
-Make exact replays idempotent before materialized views: add a migration (the next unclaimed
-number under `db/clickhouse/migrations/`) that sets
-`non_replicated_deduplication_window = 1000` on `analytics.events_raw`, and have the writer send
-`insert_deduplication_token` set to the SHA-256 of the sorted event ids of the batch. State in
-the operations guide that this covers only a retry of the identical batch.
-
-### M2: Archive gauge
-
-Extend the poller to count rows in `pgmq.a_<queue>` once per interval through the existing
-PostgreSQL pool, publish `kansoku_queue_archived_messages` (gauge) alongside the queue length,
-and add it to the Prometheus list and alerting sentence in `docs/guides/operations.md`:
-any increase means events need operator replay.
-
-### M3: Per-key rate limiting
-
-Add a WAI middleware in a new `kansoku-core/src/Kansoku/Ingest/RateLimit.hs` applied to
-`/v1/events` and `/v1/batch` after authentication resolves the credential id. Implement a
-token bucket per credential keyed by the key's UUID with
-`KANSOKU_INGEST_RATE_EVENTS_PER_SEC` (default 2000) and `KANSOKU_INGEST_RATE_BURST` (default
-10000), counting events per request (batch length) rather than requests. An exhausted bucket
-returns HTTP 429 with `Retry-After` in whole seconds and the standard problem document with a
-new stable code `rate_limited` and `retryable: true`. Add 429 to the shared error tail and
-regenerate OpenAPI and the client. Count `kansoku_ingest_rate_limited_total`. Confirm the
-Haskell client treats 429 as retryable with backoff; the browser SDK already retries unknown
-responses. Record a Decision Log entry if the middleware must run before authentication for
-unauthenticated floods.
-
-### M4: Measured throughput
-
-Add `scripts/ingest-load.py` that posts batches of synthetic events at a target rate for a
-duration and prints achieved rate; run it against the local stack on this machine and on the
-deployment's reference hardware, capturing `kansoku_queue_length`,
-`kansoku_queue_oldest_message_age_seconds` and `kansoku_writer_batch_flush_seconds` from
-`/internal/metrics` during the run. Record sustained events per second at which the oldest
-message age stays below the flush interval, and the rate at which it grows without bound.
-Write both numbers, the hardware, PostgreSQL settings and the Kafka-adapter trigger into a
-"Sizing" section of `docs/guides/operations.md` and into this plan's Outcomes.
+### M1: Durable acceptance and logical event uniqueness
 
 
-## Concrete Steps
+Add `kansoku.accepted_events` keyed by account/event ID, storing a canonical producer-payload
+hash and first acceptance time. Hash stable original producer fields, excluding any producer accountId (authentication overrides it), server account,
+received time, transport send time and derived enrichment. Canonicalize object ordering.
+Validate the original event, then perform deduplication and queue send in one PostgreSQL
+transaction on one connection; standalone effect calls do not provide this transaction.
+Use the pinned Hasql/PGMQ statement layer (verify the version's exports) or an explicit prepared
+statement calling the installed PGMQ SQL API. Identical retries count as accepted in the wire
+acknowledgement but do not enqueue or normalize again. Changed payload under the same ID is a
+per-event `event_id_conflict` rejection (single 400, batch 202 rejection), not silent overwrite.
+Concurrent duplicate submissions and rollback after queue-send failure are required tests.
+Retain the minimal acceptance ledger indefinitely in the initial version, including erasure
+tombstones; no implicit retry horizon expires event identity. EP-37 documents its storage cost.
 
-Inside `nix develop` at the repository root with the stack running:
+Define an internal canonical event source with one row per accepted event before all metrics,
+identity and enrichment joins. With immutable acceptance, `events_raw FINAL` collapses queue
+redelivery at the existing full key; verify across restart and parts, and keep that implementation
+behind a source helper so later benchmarks may replace it without changing semantics.
+Rebuild daily count/page-view rollups using exact distinct event-ID states, not additive count
+states; sum/average/revenue read canonical rows. No query may rely on background merges having
+already happened. Check every builder and downstream view, not only `count(DISTINCT event_id)`.
+Enrichment is persisted in the queue once, so replay cannot change group placement.
 
-```bash
-cabal build all --enable-tests
-cabal test kansoku-core --test-options='--match "Writer"'
-cabal test kansoku-core --test-options='--match "RateLimit"'
-```
+ClickHouse supports `insert_deduplication_token` through the vendored driver's `passSettings`
+and `addSetting`, but a sorted-ID token and a 1000-block window do not cover regrouped or old
+replays. Do not make this optimization a prerequisite. If used, test dependent-view settings
+and ambiguous insert acknowledgements on the packaged version. See
+[ClickHouse retry deduplication](https://clickhouse.com/docs/guides/developer/deduplicating-inserts-on-retries).
 
-Controlled outage for M1 (the ClickHouse process is managed by process-compose; stop and
-start it with the process-compose CLI on the control port used to start the stack):
+### M2: Pause the source, recover storage
 
-```bash
-process-compose process stop clickhouse --port 18080
-python3 scripts/ingest-load.py --rate 200 --seconds 600 --key "$KEY"
-process-compose process start clickhouse --port 18080
-```
 
-During the outage `curl -s localhost:8080/internal/metrics | grep -E 'kansoku_queue_(length|archived)'`
-shows the queue growing and the archive at `0`; after restart the queue drains to `0` and
-`kansoku_writer_events_written_total` equals the accepted count.
+Place the breaker before the adapter reads new messages, not only inside the batch callback.
+Wrap the source pull boundary or supervise a clean stop/restart of the processor with a bounded
+in-flight batch; inspect the pinned source API before choosing. On transient connection/timeout
+failure, retain the batch, release/renew leases safely and pause further pulls. Probe with a
+separate owned connection every five seconds; a successful ping permits an insert attempt,
+whose failure reopens the breaker. No valid event may archive solely because storage is down.
+Use a non-exhausting delivery policy for infrastructure failures (the current adapter's finite
+maxRetries cannot express it); an adapter change must be an explicit prerequisite, or configure
+a practically non-exhausting maximum with a proven source pause and document the numeric bound.
+Malformed queue payloads dead-letter; server SQL/schema errors park and alert instead of
+rapidly exhausting valid events. Preserve cancellation and connection invalidation.
 
+Do not promise a ten-minute backlog drains in two flushes. Require first successful write within
+probe interval plus visibility delay plus flush latency; total drain follows backlog divided by
+measured spare throughput, with a recorded tolerance. Test process restart while the breaker
+is open and an insert committed just before its acknowledgement was lost.
+
+### M3: Limits and observability
+
+
+Publish archive size, breaker state and recovery failures alongside queue age/length. Implement
+rate admission in the shared ingest service after credential resolution and bounded decoding,
+before normalization/quarantine/queue writes. A WAI wrapper outside Servant cannot assume it
+already has an authenticated principal. Single, batch and beacon share one token bucket per
+credential; charge submitted event count, including invalid events. Defaults: 2000 events/sec,
+burst 10000; zero rate explicitly disables; enabled burst must cover maximum allowed batch.
+Use monotonic time, bounded idle eviction and atomic updates. State limits are per process;
+proxies supply outer request/byte limits. Return retryable 429 `rate_limited`, whole-second
+`Retry-After`, and shared OpenAPI/client alternatives. Verify actual SDK 429/backoff behavior.
+
+### M4: Capacity
+
+
+Add a synthetic load script using disposable credentials and private processes. Measure accepted
+rate, newly queued rate, written rate, backlog age, disk growth and drain throughput, naming
+hardware and settings. Publish a finite outage capacity estimate and alert thresholds. Reference
+hardware measurement remains pending if that machine is unavailable; do not invent a number.
 
 ## Validation and Acceptance
 
-Required acceptance:
 
-1. M1 outage scenario above: `kansoku_queue_archived_messages` stays `0`, insert failure
-   counter increments at most once per probe interval while open, and
-   `SELECT count(DISTINCT event_id) FROM analytics.events_raw` equals accepted events after
-   recovery. A unit test drives the breaker with an injected failing connection.
-2. M1 replay test: insert the same batch twice with the same token; `countMerge` from
-   `page_views_by_route` for the day equals the batch's page views once.
-3. M2: `SELECT pgmq.archive('kansoku_events', <id>)` on a test message raises the gauge within
-   one poll interval.
-4. M3: a loop sending batches above the configured rate observes 429 with `Retry-After`,
-   problem code `rate_limited`, and the counter moving; requests under the rate are unaffected.
-   `OpenApiSpec` documents 429 on both ingest operations.
-5. M4: the benchmark numbers and hardware are recorded in the plan and the guide.
+Test identical HTTP retries with restamped sentAt, simultaneous duplicates, conflicting IDs,
+queue commit rollback, ClickHouse committed-write/lost-ack, restart, different batch boundaries
+and archive replay after any block window. Counts, revenue, sessions and traits must remain
+unchanged by replay. Compare final values before and after merges. Ten-minute outage under
+200 events/sec must archive zero valid events and drain within the measured bound. Cover limits
+on all three transports, two keys, bucket eviction and concurrent requests. Tests that only
+count distinct IDs cannot establish aggregate correctness.
 
+## Concrete Steps
+
+
+Run commands from the repository root inside `nix develop`. Use the private databases owned
+by `scripts/acceptance.sh` and `Kansoku.ClickHouseTestSupport`, not an ambient development
+stack: native fixtures mutate tables. Extend that harness for the scenarios in this plan.
+
+```bash
+cabal build all --enable-tests
+just openapi
+just contracts
+just check
+just acceptance
+```
+
+Use focused Hspec examples while developing. Before marking Complete, require nonzero example
+counts, no pending required integration tests, regenerated contract checks, and the packaged
+executable acceptance above. Record only the relevant evidence here. This follows
+[ADR-10](../adr/0010-owned-executable-acceptance-environments.md).
 
 ## Idempotence and Recovery
 
-All configuration has defaults preserving current behaviour except the larger delivery
-budget, which only delays archiving. The migration adding the deduplication window is
-additive and reversible with `ALTER TABLE … RESET SETTING`. If the breaker misclassifies a
-failure, the worst case is today's behaviour (retry with delay). The rate limiter can be
-disabled by setting the per-second rate to `0` (meaning unlimited); document that value.
 
+Backfills of count states are not repeatable by appending. Build replacement tables from canonical data, verify, then swap with writer paused in an owned test. Keep schema-ledger steps explicit and test interrupted migration recovery. Archive replay is operational redelivery, not a new logical event.
 
 ## Interfaces and Dependencies
 
-No hard dependency on other children. `PipelineMetrics` gains instruments also touched by
-`docs/plans/29-correct-client-timestamp-skew-and-count-ingest-rejections.md`; coordinate the
-record edits. The archive replay command and purge are owned by
-`docs/plans/37-administrative-executable-for-keys-erasure-retention-and-replay.md`, which
-consumes this plan's gauge. Libraries: the pinned `shibuya-pgmq-adapter` (config fields
-`maxRetries`, `visibilityTimeout`, `batchSize`), `pgmq-effectful` for archive inspection,
-`prometheus-client`, `hasql` through the existing pool, and ClickHaskell's native ping.
-Update [ADR 2](../adr/0002-pipeline-observability-readiness-and-writer-recovery.md) with the
-breaker, the delivery budget and the archive gauge, and
-[ADR 1](../adr/0001-sdk-grade-ingest-contract-boundaries.md) with the 429 contract.
+
+Required complete child artifacts: `docs/plans/29-correct-client-timestamp-skew-and-count-ingest-rejections.md`.
+
+Hard dependency: EP-29 (`docs/plans/29-correct-client-timestamp-skew-and-count-ingest-rejections.md`) Complete. Owns canonical event source, acceptance ledger, writer recovery and admission. EP-32/31 consume canonical reads; EP-37 consumes replay safety. No dependency upgrade is selected by this review; recheck registry and release tags before selecting bounds.
+
+Revision note (2026-10-15): reviewed against the current source and revised for first deployment.
+[ADR-11](../adr/0011-initial-release-analytics-contracts.md) records the proposed cross-plan
+contracts; implementation must supply the acceptance evidence before those contracts become
+accepted runtime guarantees.

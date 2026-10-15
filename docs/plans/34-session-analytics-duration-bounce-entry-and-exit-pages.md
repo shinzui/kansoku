@@ -11,139 +11,148 @@ provenance:
     model: "claude-fable-5-1"
     harness: "claude-code"
     at: 2026-10-15T13:44:34Z
+  reviews:
+    - model: "gpt-6-astra"
+      harness: "codex-cli"
+      at: 2026-10-15T15:43:15Z
+      verdict: "changes-requested"
+      note: "Original draft review found correctness gaps; findings corrected by the accompanying update, with native acceptance still required."
+  revisions:
+    - model: "gpt-6-astra"
+      harness: "codex-cli"
+      at: 2026-10-15T15:43:15Z
+      mode: "update"
+      note: "Reconcile first-release APIs, domain semantics, dependencies and acceptance with the source-validated MP-5 review."
 ---
 
 # Session analytics: duration, bounce, entry and exit pages
 
-This ExecPlan is a living document. Update its living sections and durable ADRs as work
-proceeds. It is a child of
-`docs/masterplans/5-act-on-rev-1-close-silent-loss-paths-add-metric-filters-and-enrich-web-analytics.md`
-and acts on findings E4 (part 5) and E7 of
-`docs/reviews/2026-10-15-architecture-and-feature-set-against-comparable-products.md`.
-
 
 ## Purpose / Big Picture
 
-`GET /metrics/sessions` will answer the questions every web-analytics dashboard shows next to
-a session count: how long sessions last, what share bounce, and which pages they enter and
-leave on. A session will be attributed to the bucket in which it started, so a visit spanning
-midnight counts once.
 
+Give sessions a single meaning across count, bounce, duration, acquisition and grouping.
+A session belongs to its start bucket and counts once across midnight. Lifecycle telemetry
+must improve duration without making every visit appear engaged.
 
 ## Progress
 
-- [ ] M1: `analytics.sessions` is maintained by a materialized view from `events_raw` and agrees with a raw recount over the fixtures.
-- [ ] M2: `/metrics/sessions` accepts `measure=count|bounce_rate|average_duration_seconds` and `groupBy` of `entry_route`, `exit_route` or `channel`, attributed by session start.
 
+- [ ] M1: Replay-safe session aggregation matches canonical raw events across insert boundaries.
+- [ ] M2: Count, bounce and duration measures with entry/exit dimensions pass HTTP fixtures.
 
 ## Surprises & Discoveries
 
-(None yet.)
 
+An incremental materialized view sees only each inserted block. Its `any(channel)` is not
+first-touch attribution, count states are not replay-safe, and appending a backfill doubles
+counts. Automatic page_leave would make the old "nothing else" bounce definition report no
+bounces. Filtering events to the requested dates before finding session start truncates sessions.
 
 ## Decision Log
 
-- Decision: A bounce is a session whose events are `session_start` plus at most one
-  `page_view` and nothing else; duration is last event minus first event, zero for bounces.
-  Rationale: Plausible, Umami, Matomo and Rybbit all define bounce as a single-interaction
-  visit; the definition is stated so dashboards built on ClickHouse can match it.
-  Date: 2026-10-15
-- Decision: Session rollups use raw identity and the producer session id; no identity
-  resolution.
-  Rationale: Sessions are device-scoped by construction; stitching adds cost without changing
-  the answer.
-  Date: 2026-10-15
 
+On 2026-10-15 session identity is account/source_service/session_id; start is the earliest
+observed event, not an assumed session_start event. A bounce is a session with exactly one
+page view and no engagement events. session_start, page_leave, identify, identify_once, alias,
+group and experiment_viewed are lifecycle/identity events, not engagement. Other application
+events are engagement events. Zero-page sessions count but are not bounces.
 
 ## Outcomes & Retrospective
 
-(To be filled during and after implementation.)
 
+Planning reviewed; no session implementation yet.
 
 ## Context and Orientation
 
-The browser SDK (`mori://shinzui/kansoku-ts`, `packages/kansoku-js/src/session.ts`)
-generates a session id, rotates it after 30 minutes of inactivity (`sessionTimeoutMs`
-default 1800000 in `client.ts`), emits `session_start` and stamps every event's `sessionId`.
-The server stores it in `events_raw.session_id`. Today `buildSessionsSQLAggregate` in
-`kansoku-core/src/Kansoku/Metrics/Query.hs` counts distinct non-empty session ids per bucket
-of event time, so a session spanning two buckets counts in both (REV-1 E7). Rollups are
-`AggregatingMergeTree` tables fed by materialized views
-(`db/clickhouse/migrations/0006_rollups_v2.sql`); the account dimension leads every rollup key
-([ADR 3](../adr/0003-api-key-authentication-and-account-scoped-analytics.md)). Metric routes
-and bounds follow [ADR 9](../adr/0009-bounded-complete-aggregate-responses.md). If
-`docs/plans/33-acquisition-and-device-enrichment-with-bot-flagging.md` has landed, `events_raw`
-also carries `channel` and `is_bot`; this plan uses them when present and otherwise omits the
-channel dimension and bot exclusion.
 
+`buildSessionsSQLAggregate` in `kansoku-core/src/Kansoku/Metrics/Query.hs` currently counts
+nonempty session IDs by event bucket. EP-30 establishes canonical events; EP-33 provides
+attributes/bot fields. Read [ADR-9](../adr/0009-bounded-complete-aggregate-responses.md).
+The browser SDK creates producer session IDs and rotates on inactivity/reset at
+`mori://shinzui/kansoku-ts/packages/kansoku-js`; server events need explicit session IDs to join.
 
 ## Plan of Work
 
-### M1: Session rollup
 
-Add a migration (next unclaimed number) creating `analytics.sessions` as an
-`AggregatingMergeTree` ordered by `(account_id, start_day, session_id)` with aggregate states:
-`min(occurred_at)` and `max(occurred_at)`, `count()` events, `countIf(event_name = 'page_view')`
-page views, `argMin(path(url), occurred_at)` entry route, `argMax(path(url), occurred_at)` exit
-route, and, when the columns exist, `any(channel)` and `max(is_bot)`. Feed it with
-`mv_sessions` over `events_raw WHERE session_id != ''`, keying `start_day` as
-`toDate(min(occurred_at))` per session. Backfill from existing rows in the migration using the
-same select, as `0014_experiment_exposures.sql` does for exposures. Because a session's events
-arrive across several inserts, the start day stored by each partial state is the minimum seen
-so far; the query path merges by session id and recomputes the start bucket from the merged
-minimum, so partial states never produce a second row in results.
-
-### M2: Measures and dimensions
-
-Extend the sessions route with `measure` (default `count`) and `groupBy` values `entry_route`,
-`exit_route`, `channel`. Compute per bucket of start time: `count` is distinct sessions,
-`bounce_rate` is bounces divided by sessions (0 when none), `average_duration_seconds` is the
-mean of `max - min` over non-bounce sessions. Exclude `is_bot = 1` sessions when the column
-exists unless `includeBots=true`. Keep the old event-time counting available as
-`attribution=event` for one release and document the change in `docs/guides/query-metrics.md`.
-Regenerate OpenAPI and the client.
+### M1: Session projection
 
 
-## Concrete Steps
+Own `analytics.sessions` and its query helper. Build replay-idempotent aggregate states keyed
+by `(account_id,source_service,session_id)` with min/max timestamps, distinct page-view event
+IDs, distinct engagement event IDs, deterministic argMin/argMax URL attributes ordered by
+`(occurred_at,event_id)`, first-attribution tuple from EP-33 and max bot flag. Choose page-view
+entry/exit routes specifically; a session_start with empty URL must not become the entry.
+Do not key logical state by each block's start_day. A session may span arbitrary inserts;
+merge its complete retained state before applying `[from,to)` to its start time and bucketing.
+If a materialized aggregate cannot retain all dimensions/trait filtering correctly, use a
+canonical query-time projection for that request and prove agreement. Track late arrivals:
+metrics may change as the true minimum/maximum is observed. Publish retained-history limits.
 
-Inside `nix develop` with the stack running:
+Backfill only into an empty replacement target under controlled writes, or prove that every
+state is idempotent under repeated input; additive count/sum states cannot pass that proof.
+Reuse this projection for acquisition, replacing EP-33's equivalent query-time implementation.
 
-```bash
-just ch-migrate
-cabal test kansoku-core --test-options='--match "Sessions"'
-just openapi && just openapi-check
-```
+### M2: Measures
 
-Example:
 
-```bash
-curl -s --get http://localhost:8080/metrics/sessions -H "Authorization: Bearer $TOKEN" \
-  --data-urlencode from=2026-07-01 --data-urlencode to=2026-08-01 \
-  --data-urlencode measure=bounce_rate --data-urlencode groupBy=entry_route
-```
-
+`/metrics/sessions` supports measure=count (default), bounce_rate (0..1), and
+average_duration_seconds. Duration is last observed event minus first, including page_leave;
+it is elapsed observed duration, not active reading time. Average includes every selected
+session, with one-event duration zero. Bounce is independent of duration. Count denominator is
+all selected sessions; grouped results are omitted for nonexistent groups, and an ungrouped
+empty bucket has count/rates/duration zero. No legacy attribution=event parameter is needed.
+Entry/exit/channel and EP-31/33 dimensions accept one or two keys. Apply dimension filters to
+session attributes after aggregation; a user trait filter matches a session's first resolved
+user (first event with a resolved user subject), and never creates one session per participant.
+Default bot exclusion follows EP-33. Explicitly reject arbitrary prop filters on sessions:
+a future event-based session-selection API would need its own semantics.
 
 ## Validation and Acceptance
 
-1. M1: for the fixtures, `uniqExact(session_id)` from the rollup equals the raw count; a
-   session inserted in two batches yields one merged row with the earlier minimum.
-2. M2: a fixture session with only `session_start` and one `page_view` counts as a bounce; one
-   with two page views has duration equal to their difference; a session crossing midnight
-   counts once, in its start day; `groupBy=entry_route` lists the first page's route.
-3. The account-predicate completeness test covers the new builder; the point cap applies.
 
+Two batches across midnight produce one start-day session. Duplicate delivery and rebuilding
+leave page-view and engagement counts unchanged. One page_view plus page_leave remains a bounce
+with positive duration; two page views or a custom engagement event do not. Identify and
+experiment exposure alone do not change bounce. A session beginning before from is excluded,
+not reassigned to the first in-range event; late earlier events update its start. Distinguish
+identical session IDs in two accounts and two source services, empty URL lifecycle events,
+missing session IDs, same-time page views, bot sessions and multiple users. Acquisition and
+session count agree for equivalent session filters. Validate point bounds and account joins.
+
+## Concrete Steps
+
+
+Run commands from the repository root inside `nix develop`. Use the private databases owned
+by `scripts/acceptance.sh` and `Kansoku.ClickHouseTestSupport`, not an ambient development
+stack: native fixtures mutate tables. Extend that harness for the scenarios in this plan.
+
+```bash
+cabal build all --enable-tests
+just openapi
+just contracts
+just check
+just acceptance
+```
+
+Use focused Hspec examples while developing. Before marking Complete, require nonzero example
+counts, no pending required integration tests, regenerated contract checks, and the packaged
+executable acceptance above. Record only the relevant evidence here. This follows
+[ADR-10](../adr/0010-owned-executable-acceptance-environments.md).
 
 ## Idempotence and Recovery
 
-The migration is additive and its backfill is re-runnable because aggregate states merge.
-Dropping the view and table restores the previous behaviour; `attribution=event` keeps the old
-numbers reachable during the transition.
 
+A rollup rebuild uses an empty target with verification before swap. Never describe aggregate-state append as inherently idempotent. No production compatibility release is required.
 
 ## Interfaces and Dependencies
 
-Soft dependency on `docs/plans/33-acquisition-and-device-enrichment-with-bot-flagging.md`
-for `channel` and `is_bot`. Hard dependency on
-`docs/plans/26-bound-analytics-query-inputs-and-result-cardinality.md` Complete (bounded
-execution). Claims the `analytics.sessions` table and `mv_sessions` view. Update ADR 2's
-rollup inventory, or the enrichment ADR from EP-33, with the session definitions.
+
+Required complete child artifacts: `docs/plans/26-bound-analytics-query-inputs-and-result-cardinality.md`, `docs/plans/30-pipeline-backpressure-and-storage-outage-resilience.md`, `docs/plans/33-acquisition-and-device-enrichment-with-bot-flagging.md`.
+
+Hard dependencies: EP-26, EP-30 and EP-33 Complete. EP-33 is `docs/plans/33-acquisition-and-device-enrichment-with-bot-flagging.md`. Owns sessions projection; EP-37 handles retention/rebuild, EP-38 publishes its stable read semantics. EP-40 later supplies current traits under the session rule above.
+
+Revision note (2026-10-15): reviewed against the current source and revised for first deployment.
+[ADR-11](../adr/0011-initial-release-analytics-contracts.md) records the proposed cross-plan
+contracts; implementation must supply the acceptance evidence before those contracts become
+accepted runtime guarantees.

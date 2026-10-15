@@ -11,142 +11,158 @@ provenance:
     model: "claude-fable-5-1"
     harness: "claude-code"
     at: 2026-10-15T13:44:34Z
+  reviews:
+    - model: "gpt-6-astra"
+      harness: "codex-cli"
+      at: 2026-10-15T15:43:15Z
+      verdict: "changes-requested"
+      note: "Original draft review found correctness gaps; findings corrected by the accompanying update, with native acceptance still required."
+  revisions:
+    - model: "gpt-6-astra"
+      harness: "codex-cli"
+      at: 2026-10-15T15:43:15Z
+      mode: "update"
+      note: "Reconcile first-release APIs, domain semantics, dependencies and acceptance with the source-validated MP-5 review."
 ---
 
 # Rolling active users, retention modes, and lifetime cohorts
 
-This ExecPlan is a living document. Update its living sections and durable ADRs as work
-proceeds. It is a child of
-`docs/masterplans/5-act-on-rev-1-close-silent-loss-paths-add-metric-filters-and-enrich-web-analytics.md`
-and acts on findings E2 and E3 of
-`docs/reviews/2026-10-15-architecture-and-feature-set-against-comparable-products.md`.
-
 
 ## Purpose / Big Picture
 
-A reader of `/metrics/users` will get the number every other analytics product calls WAU or
-MAU: users active in the trailing seven or thirty days, evaluated per bucket, alongside the
-existing calendar counts, and a stickiness ratio derived from them. Retention will offer the
-cumulative "on or after" reading and cohorts by lifetime first activity, and a lifecycle
-breakdown will say how many of a day's users are new, returning, resurrecting or dormant.
 
+Expose exact rolling users, stickiness, retention and lifecycle with precise calendar boundaries
+and honest history limits. Prevent recent cohorts and expired history from masquerading as zero
+retention or newly acquired users.
 
 ## Progress
 
-- [ ] M1: `/metrics/users?window=rolling7|rolling30` and `/metrics/stickiness` return exact identity-resolved counts proven against fixtures; calendar semantics are stated in the guide and OpenAPI.
-- [ ] M2: `/metrics/retention` accepts `mode=on|on_or_after` and `cohort=window|lifetime`; lifetime cohorts use first activity across the account's history.
-- [ ] M3: `/metrics/lifecycle` classifies users per day as new, returning, resurrecting or dormant with counts that reconcile to the daily active count.
 
+- [ ] M1: Rolling7/rolling30 and stickiness use exact identities and half-open UTC windows.
+- [ ] M2: On/on-or-after retention distinguishes immature offsets and retained-history cohorts.
+- [ ] M3: Lifecycle counts reconcile to daily actives with bounded execution.
 
 ## Surprises & Discoveries
 
-(None yet.)
 
+The old fixture claimed days 1,3,9 produce three rolling7 users on day 9; day 1 is outside
+that window. A 366-day response range does not bound a lifetime-first-activity scan.
+Raw retention also prevents any truthful claim of first activity "ever" once older facts expire.
 
 ## Decision Log
 
-- Decision: Rolling windows and lifetime cohorts are computed at query time over
-  `analytics.events_resolved`, bounded by EP-26's 366-day range plus the window length, and
-  not from new rollups.
-  Rationale: Exactness requires stitched identity, which rollups cannot carry (ADR 6); the
-  cost is bounded by `docs/plans/32-…`'s resolution work. A `first_seen` rollup over raw
-  identity would be approximate and is deferred until the exact path proves too slow.
-  Date: 2026-10-15
-- Decision: Lifecycle definitions follow PostHog and Amplitude: new is first activity ever on
-  that day, returning is active on the day and on the previous day, resurrecting is active on
-  the day after at least one inactive day since first activity, dormant is active on the
-  previous day and not on the day (reported as a negative count, as both products do).
-  Rationale: Matching the published definitions makes the numbers comparable.
-  Date: 2026-10-15
 
+On 2026-10-15 define lifetime as first activity in retained account history and publish that
+qualification. Use exact canonical users across all HTTP user metrics. Missing observation time
+is not zero retention. Per-query database time/memory limits complement the final point cap.
 
 ## Outcomes & Retrospective
 
-(To be filled during and after implementation.)
 
+Planning reviewed; native query and performance evidence pending.
 
 ## Context and Orientation
 
-`/metrics/users` reads the `dau` and `wau` rollups at day and week grain (`uniqCombined`
-sketches over raw identity, about 0.8 percent error) and `events_resolved` with `uniqExact`
-at other grains; `toMonday` defines the week (`db/clickhouse/migrations/0006_rollups_v2.sql`,
-`kansoku-core/src/Kansoku/Metrics/Query.hs`). Retention (`buildRetentionSQLAggregate`) defines
-the cohort as first activity inside the requested range and counts a user at offset N only when
-active exactly N days later. The guide `docs/guides/query-metrics.md` and the route description
-in `kansoku-api/src/Kansoku/Metrics/Api.hs` state these semantics. Bounds and stable error codes
-come from `docs/plans/26-bound-analytics-query-inputs-and-result-cardinality.md` and
-[ADR 9](../adr/0009-bounded-complete-aggregate-responses.md); the accuracy map lives in
-[ADR 6](../adr/0006-exposure-based-experiment-analytics.md). No cross-repository ADR applies.
 
+`Query.hs` contains user, retention and conversion builders; `Metrics/Api.hs` owns parameters.
+EP-26/ADR-9 caps output, not database work. EP-32 supplies the rich resolved source; EP-31
+supplies filter/group contracts. Read [ADR-6](../adr/0006-exposure-based-experiment-analytics.md)
+and [ADR-9](../adr/0009-bounded-complete-aggregate-responses.md).
 
 ## Plan of Work
 
-### M1: Rolling windows and stickiness
 
-Add `window` to the users route with values `calendar` (default) and `rolling7`, `rolling30`.
-For rolling windows the builder selects per bucket day `d` the `uniqExact(canonical_user)`
-over events in `(d - window + 1 day, d]`, reading `events_resolved` with the range extended
-backwards by the window; `timeGrain` must be `day` for rolling windows, otherwise 400. Add
-`/metrics/stickiness` returning, per day, rolling1 divided by rolling30 as `value` with the
-two counts in `group`. State in the guide and route descriptions that `timeGrain=week` is a
-calendar week starting Monday and `month` a calendar month.
+### M1: Rolling and stickiness
 
-### M2: Retention modes and lifetime cohorts
 
-Add `mode` (`on` default, `on_or_after`) and `cohort` (`window` default, `lifetime`). For
-`on_or_after`, a user counts at offset N when active at any offset ≥ N up to the largest
-requested offset; implement as a running maximum over the per-user activity offsets. For
-`lifetime`, `first_seen` is `min(toDate(occurred_at))` over the account's entire history, and
-the cohort rows are those whose first day falls inside the requested range. Document the
-scan cost and point to EP-32.
+Users accepts window=calendar|rolling7|rolling30; rolling requires day grain (default day).
+For UTC bucket day d and N=7 or 30, count distinct canonical subjects with activity in
+`[d-(N-1) days,d+1 day)`. Extend scan by N-1 days, not N, and return only requested buckets.
+Calendar counts also use the exact identity path and activity-event population from EP-31;
+identify/identify_once/alias/group do not constitute activity. Cohorts and lifecycle use the
+same exclusion even during historical lookback, so profile updates cannot create or retain users. Stickiness uses exact daily
+active divided by rolling30 active for each day, zero when denominator zero; publish separate
+points with group.measure=daily_active, rolling30_active, ratio, rather than storing numerical
+measures in dimension labels. Apply filters identically to both populations. No percentage scale.
+
+### M2: Retention
+
+
+Retention accepts mode=on|on_or_after and cohort=window|lifetime. from/to bounds the observed
+activity interval; cohort days fall within it. Window cohort is first matching activity inside
+that range. Lifetime cohort is first matching activity over retained history for that same
+metric population; historical scans must apply identical event filters and current trait filters.
+For on, count users active on day cohort+N; for on_or_after, count those active on any day
+from cohort+N through cohort+largest-requested-offset, including unrequested intermediate days.
+Do not filter to the requested offsets before computing the cumulative result.
+
+Only emit on offsets whose full UTC day ends by to; on_or_after requires the full maximum
+offset horizon for that cohort, otherwise omit its nonzero offsets. Offset zero always gives
+cohort size. Document the omission as immature observation, distinct from a mature zero.
+Use a request-start as-of time to avoid treating future days as observed, and return the actual
+observation cutoff as response metadata or enforce an equivalent documented date validation.
+Choose one approach in the API type before implementation, and use it across lifecycle/users:
+for this initial version reject to later than the current UTC day, so all included days are closed.
+
+Lifetime may scan all retained evidence. Enforce EP-31's 30-second/512-MiB default per-query native limits, preserve cancellation, and
+report resource exhaustion as 400 query_resource_limit with no partial result. Do not claim EP-32 eliminates this scan.
+Document first-seen shifts after retention/erasure; there is no permanent first_seen guarantee.
 
 ### M3: Lifecycle
 
-Add `/metrics/lifecycle` over `events_resolved`: per day, compute each user's first day ever
-and their activity on the day and the previous day, classify per the Decision Log, and return
-four points per day with `group.status`. Verify that new plus returning plus resurrecting
-equals the exact daily active count.
 
-
-## Concrete Steps
-
-```bash
-cabal test kansoku-core --test-options='--match "Users"'
-cabal test kansoku-core --test-options='--match "Retention"'
-cabal test kansoku-core --test-options='--match "Lifecycle"'
-just openapi && just openapi-check
-```
-
-Example:
-
-```bash
-curl -s --get http://localhost:8080/metrics/users -H "Authorization: Bearer $TOKEN" \
-  --data-urlencode from=2026-07-01 --data-urlencode to=2026-07-08 --data-urlencode window=rolling7
-```
-
+Per complete UTC day, new means first retained matching activity that day; returning means
+active that day and previous day; resurrecting means active that day after an inactive previous
+day with earlier retained activity; dormant means active previous day and inactive today.
+Emit nonnegative counts with group.status; any negative plotting convention belongs to the UI.
+New+returning+resurrecting equals exact daily actives. Read one predecessor day plus retained
+history for first-seen. Validate date/offset limits before checking out a connection.
 
 ## Validation and Acceptance
 
-1. Fixture with users active on days 1, 3 and 9: rolling7 on day 7 is 2, on day 9 is 3 if
-   they are distinct users, calendar week counts match the existing rollup; stickiness on a
-   day equals rolling1 over rolling30.
-2. Retention `on_or_after` with offsets 1,7: a user active on day 5 only counts at offset 1;
-   `cohort=lifetime` excludes a user whose first activity precedes the range.
-3. Lifecycle sums reconcile to the daily exact active users for every fixture day; dormant
-   is reported as a negative value.
-4. Bounds: a rolling30 query over 366 days reads at most 396 days and still obeys the point
-   cap; EP-26's problem codes apply.
 
+Three distinct users active on days 1,3,9 produce rolling7=2 on days 7 and 9. Test exact lower
+and upper UTC boundaries, zero denominator, stitched identities and filters. For offsets 1,7,
+a user returning only on day 5 counts for cumulative offset 1 but not 7. Recent cohorts omit
+immature results; mature missing activity emits zero. A user predating the request is excluded
+from a lifetime cohort and included in window mode. Retention deletion changes the documented
+retained-history first-seen result. Test lifecycle partition sums and positive dormant count.
+Resource exhaustion and 10001-point overflow return complete-or-error problems; no pending
+native tests may count as acceptance.
+
+## Concrete Steps
+
+
+Run commands from the repository root inside `nix develop`. Use the private databases owned
+by `scripts/acceptance.sh` and `Kansoku.ClickHouseTestSupport`, not an ambient development
+stack: native fixtures mutate tables. Extend that harness for the scenarios in this plan.
+
+```bash
+cabal build all --enable-tests
+just openapi
+just contracts
+just check
+just acceptance
+```
+
+Use focused Hspec examples while developing. Before marking Complete, require nonzero example
+counts, no pending required integration tests, regenerated contract checks, and the packaged
+executable acceptance above. Record only the relevant evidence here. This follows
+[ADR-10](../adr/0010-owned-executable-acceptance-environments.md).
 
 ## Idempotence and Recovery
 
-Additive parameters and one new route; defaults preserve existing answers. No schema change.
 
+Additive routes/parameters, with deliberate pre-release correction to exact user populations. No permanent first-seen state is introduced; retention affects available historical facts.
 
 ## Interfaces and Dependencies
 
-Hard dependency: `docs/plans/26-bound-analytics-query-inputs-and-result-cardinality.md`
-Complete. Soft dependency: `docs/plans/32-time-aware-identity-bindings-and-bounded-resolution-cost.md`
-for acceptable cost on large accounts and
-`docs/plans/31-metric-property-filters-and-dual-grouping.md` for filters on the new routes.
-Update ADR 6's accuracy map with the rolling and lifecycle semantics.
+
+Required complete child artifacts: `docs/plans/26-bound-analytics-query-inputs-and-result-cardinality.md`, `docs/plans/31-metric-property-filters-and-dual-grouping.md`, `docs/plans/32-time-aware-identity-bindings-and-bounded-resolution-cost.md`.
+
+Hard dependencies: EP-26, EP-31 and EP-32 Complete. See `docs/plans/31-metric-property-filters-and-dual-grouping.md` and `docs/plans/32-time-aware-identity-bindings-and-bounded-resolution-cost.md`. EP-37 retention and EP-38 guides must preserve the retained-history qualification.
+
+Revision note (2026-10-15): reviewed against the current source and revised for first deployment.
+[ADR-11](../adr/0011-initial-release-analytics-contracts.md) records the proposed cross-plan
+contracts; implementation must supply the acceptance evidence before those contracts become
+accepted runtime guarantees.

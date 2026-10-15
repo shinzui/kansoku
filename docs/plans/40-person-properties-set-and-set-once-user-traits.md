@@ -11,179 +11,167 @@ provenance:
     model: "claude-fable-5-1"
     harness: "claude-code"
     at: 2026-10-15T14:22:40Z
+  reviews:
+    - model: "gpt-6-astra"
+      harness: "codex-cli"
+      at: 2026-10-15T15:43:16Z
+      verdict: "changes-requested"
+      note: "Original draft review found correctness gaps; findings corrected by the accompanying update, with native acceptance still required."
+  revisions:
+    - model: "gpt-6-astra"
+      harness: "codex-cli"
+      at: 2026-10-15T15:43:16Z
+      mode: "update"
+      note: "Reconcile first-release APIs, domain semantics, dependencies and acceptance with the source-validated MP-5 review."
 ---
 
 # Person properties: set and set-once user traits
 
-This ExecPlan is a living document. Update its living sections and durable ADRs as work
-proceeds. It is a child of
-`docs/masterplans/5-act-on-rev-1-close-silent-loss-paths-add-metric-filters-and-enrich-web-analytics.md`
-and acts on the person-properties half of finding E6 in
-`docs/reviews/2026-10-15-architecture-and-feature-set-against-comparable-products.md`,
-promoted into scope on 2026-10-15 (MasterPlan Decision Log).
-
 
 ## Purpose / Big Picture
 
-Questions about who did something, in terms the browser does not know, will become
-answerable over browser traffic: which documentation pages enterprise customers read, the
-onboarding funnel for companies with more than fifty seats, retention of users who arrived
-from the newsletter, revenue by billing country, experiment conversion among free-plan users.
-A backend states a user's traits once with `identify` ("set", newest value wins) or
-`identify_once` ("set-once", first value wins, for traits such as `signup_source` and
-`initial_plan` that must never be overwritten), and every metric route can then filter or
-group by `user:<name>`. Values are the user's current traits at query time; recording the
-trait as of each event is a later option, and backend producers that need it keep stamping
-traits onto their own events.
 
+Provide current user traits with consistent set/set-once semantics and typed user: filters.
+Traits can segment browser activity after identity resolution; they are analytics observations,
+not trusted authorization facts, since public write-key clients may report them.
 
 ## Progress
 
-- [ ] M1: `analytics.user_properties` and `analytics.user_properties_once` are populated from `identify` and `identify_once` events, with newest-wins and first-wins semantics proven on fixtures, ordered by corrected event time.
-- [ ] M2: `user:<name>` works in `filter=` and `groupBy=` on every route that reads the identity-resolved view, with declared-trait enforcement through `identify` schema versions.
-- [ ] M3: Both SDKs expose `identifyOnce`, the guides document traits, and erasure removes a user's trait rows.
 
+- [ ] M1: Declared typed traits have deterministic set/set-once state under replay and late delivery.
+- [ ] M2: Supported routes apply user dimensions with correct identity and population semantics.
+- [ ] M3: Haskell helper, SDK contract, catalog and trait deletion/rebuild fixtures agree.
 
 ## Surprises & Discoveries
 
-(None yet.)
 
+Omitting schemaVersion selects v1, not latest. Declaring identify v2 alone would not validate
+SDK traits. The old table type omitted its promised receivedAt tie-break, and JSON string
+values would compare as quoted text against plain filter values. Anonymous and user IDs need
+separate namespaces to prevent accidental trait joins.
 
 ## Decision Log
 
-- Decision: Current-value semantics first. Traits are joined at query time by canonical user;
-  a snapshot-at-event-time model (writing traits onto every event at ingest) is deferred.
-  Rationale: Chosen on 2026-10-15 in discussion; the snapshot model changes the write path and
-  the raw table and is a much larger plan, while set-once traits cover the historical questions
-  that matter most.
-  Date: 2026-10-15
-- Decision: Two declared events rather than reserved keys inside one event. `identify`
-  properties are "set"; a new `identify_once` event's properties are "set-once".
-  Rationale: Kansoku's property names are validated against a strict charset and declared
-  schemas, so `$set`-style reserved keys do not fit; two events keep the catalog honest and
-  give both SDKs an obvious helper.
-  Date: 2026-10-15
-- Decision: Trait names are declared through new `identify` and `identify_once` schema
-  versions, and only declared traits compile into `user:` dimensions.
-  Rationale: Keeps ADR 4's compile boundary; a deployment adds traits the way it adds event
-  properties, under ADR 7 versioning.
-  Date: 2026-10-15
-- Decision: Order trait writes by the event's `occurredAt` after EP-29 skew correction, with
-  `receivedAt` as the tie-break.
-  Rationale: Out-of-order delivery should resolve to the latest trait, not the last to arrive.
-  Date: 2026-10-15
 
+On 2026-10-15 use current-value traits ordered by `(occurredAt,receivedAt,eventId)` from the
+first durably accepted event. Set replaces; set-once initializes an otherwise unset property,
+not a permanently immutable field. If any set exists, its latest value wins; otherwise earliest
+set-once wins. Omitted keys leave values untouched. Null/deletion operations are not part of
+this initial trait API and must be rejected for declared scalar traits.
 
 ## Outcomes & Retrospective
 
-(To be filled during and after implementation.)
 
+Planning reviewed; implementation and native trait evidence pending.
 
 ## Context and Orientation
 
-The only user-level data Kansoku stores today lives on events: an `identify` event
-(declared in `kansoku-api/src/Kansoku/Event/Registry.hs` as version 1 with no properties)
-carries traits inside its `properties`, and nothing records a user's current traits.
-Metrics group and filter by event properties only, through the declared-property rule and
-`getSubcolumn(properties_json, …)` expressions of
-[ADR 4](../adr/0004-queryable-event-properties-and-identity-resolved-projection.md); the
-`filter` grammar and `prop:` prefix come from
-`docs/plans/31-metric-property-filters-and-dual-grouping.md`. Exact metrics read
-`analytics.events_resolved`, whose `canonical_user` is the explicit `user_id` or the
-identity-resolved user ([ADR 5](../adr/0005-evidence-based-multi-signal-identity-resolution.md));
-anonymous users therefore have no traits, which is correct. Rollups are `AggregatingMergeTree`
-tables fed by materialized views (`db/clickhouse/migrations/0006_rollups_v2.sql`); aggregate
-states merge safely under at-least-once replay. Schema versions are immutable and additive
-([ADR 7](../adr/0007-versioned-event-schema-governance-and-publication.md)). Erasure is the
-runbook `docs/runbooks/identity-data-deletion.md`, which
-`docs/plans/37-administrative-executable-for-keys-erasure-retention-and-replay.md` turns into
-a command. The Haskell SDK's `identify` helper is in `kansoku-client/src/Kansoku/Client.hs`;
-the browser SDK's is in `mori://shinzui/kansoku-ts` at `packages/kansoku-js/src/identity-api.ts`.
 
-A "trait" is a property of a person rather than of an event: plan, company size, signup
-source, country, role. "Set" means the newest value replaces the old; "set-once" means the
-first value stays. No cross-repository ADR applies.
-
+`Event/Registry.hs` has identify v1 with no declared properties; validation defaults to v1.
+The current Haskell helper is `kansoku-client/src/Kansoku/Client.hs`. EP-31 owns typed filters
+and nullable namespaced group values; EP-32 exposes resolved subject kind/ID. Read
+[ADR-4](../adr/0004-queryable-event-properties-and-identity-resolved-projection.md),
+[ADR-5](../adr/0005-evidence-based-multi-signal-identity-resolution.md) and
+[ADR-7](../adr/0007-versioned-event-schema-governance-and-publication.md).
 
 ## Plan of Work
 
-### M1: Storage
 
-Add a migration (next unclaimed number) creating `analytics.user_properties`
-(`account_id String, user_id String, name LowCardinality(String), value AggregateFunction(argMax, String, DateTime64(3, 'UTC'))`)
-and `analytics.user_properties_once` (same key, `argMin` state), both `AggregatingMergeTree`
-ordered by `(account_id, user_id, name)`. Feed them with materialized views over `events_raw`
-for `event_name = 'identify'` and `'identify_once'` with `user_id != ''`, array-joining
-`JSONExtractKeysAndValuesRaw(properties)` so each trait becomes one row, using `occurred_at`
-as the ordering time (EP-29 corrects it at ingest; if EP-29 has not landed, note the
-limitation) and storing values as JSON text so numbers and strings survive. Add a view
-`analytics.user_traits` that merges both tables with set-once winning over set for the same
-name only when the set table has no value, exposing `account_id, user_id, name, value`.
-Backfill from existing `identify` rows in the migration.
-
-### M2: Dimension
-
-Extend the filter and group-by grammar from EP-31 with the `user:<name>` prefix. Compile it
-only when the latest `identify` or `identify_once` schema declares `<name>` (add version 2 of
-`identify` and version 1 of `identify_once` with an initial optional trait set: `plan`,
-`signup_source`, `initial_plan`, `company_size`, `country`, `role`; deployments add more by
-new versions). In `Query.hs`, a `user:` dimension forces the identity-resolved path and adds
-one `LEFT JOIN analytics.user_traits AS t_<n> ON t_<n>.account_id = account_id AND t_<n>.user_id = canonical_user AND t_<n>.name = {trait_n}` per referenced trait, with the value cast for numeric operators. Document the join cost and
-that rollup fast paths are bypassed.
-
-### M3: SDKs, docs and erasure
-
-Add `identifyOnce` to the Haskell client; specify the matching browser helper for the
-kansoku-ts repository. Update `docs/guides/send-events.md` ("Traits") and
-`docs/guides/query-metrics.md` ("User traits") with the semantics, including that values are
-current at query time. Extend the erasure runbook and the `erase-user` command with
-`ALTER TABLE … DELETE` on both trait tables for the account and user. Regenerate the catalog
-and OpenAPI.
+### M1: Schema and state
 
 
-## Concrete Steps
+Declare identify v2 and identify_once v1 with optional string traits plan, signup_source,
+initial_plan, country, role and optional numeric company_size (finite, nonnegative integer).
+Require nonempty top-level userId for either trait operation; identify v1 remains valid as an
+identity event, but does not mutate governed traits. Current helper defaults explicitly emit
+v2 for identify and v1 for identify_once; preserve explicit caller overrides and describe v1's
+identity-only behavior. Only schema-declared, validated scalar keys feed storage; extra keys
+on an event are not silently promoted to traits. Registry changes cannot change a trait's type
+between identify/identify_once or versions without an explicit migration decision.
 
-```bash
-just ch-migrate
-cabal test kansoku-core --test-options='--match "Traits"'
-just contracts && just openapi && just contracts-check && just openapi-check
-```
+Create user_properties and user_properties_once aggregate tables keyed by account/user/name.
+Store typed scalar values or canonical scalar JSON plus type, and order argMax/argMin state
+by a Tuple(DateTime64,DateTime64,String), not just timestamp. Use declared-schema eligibility
+including actual stored schema_version. Merged user_traits returns exactly one row per key,
+latest set when present else earliest set-once. JSON strings must decode to ordinary text for
+comparison; numeric traits retain numeric comparison, not lexicographic ordering. Duplicate
+accepted/replayed events must not change state. No initial backfill from ungoverned identify v1.
 
-Example:
+### M2: Metrics
 
-```bash
-curl -s --get http://localhost:8080/metrics/page-views -H "Authorization: Bearer $TOKEN" \
-  --data-urlencode from=2026-07-01 --data-urlencode to=2026-08-01 \
-  --data-urlencode 'filter=user:plan:eq:enterprise' --data-urlencode groupBy=route
-```
 
+Add user:<name> to EP-31's dimension registry, using the common trait catalog rather than
+requiring every event to declare a person trait. Join by account and resolved user subject ID,
+never anonymous fallback text, and deduplicate referenced traits so filters and grouping do
+not multiply joins or events. Missing traits are null and use EP-31 set/unset semantics.
+Force canonical resolved reads when necessary, including page-view rollup bypass. Support all
+implemented metrics with explicit attribution: event/user metrics apply current traits to each
+resolved subject; ratios apply the same trait population to numerator and denominator; funnels
+use participant traits; cohorts/lifecycle use the same trait population across lookback; sessions
+and acquisition use their first resolved user per session, as EP-34 defines. Do not expose
+user dimensions on unimplemented organizations/custom stubs as if functional. Publish the matrix.
+
+### M3: Helpers and lifecycle
+
+
+Add identifyOnce to Haskell and specify browser behavior at
+`mori://shinzui/kansoku-ts/plans/8-serve-kansoku-masterplan-5-sentat-beacon-exit-flush-bot-flag-and-identifyonce`.
+Browser identifyOnce sets the active user just like identify and sends an explicit schemaVersion;
+identify_once also creates implicit-cookie evidence under EP-32. Examples must not skip version
+selection. Document that late events can revise trait order and current traits intentionally
+reclassify historical queries. Trusted business traits require service-owned producers and
+must never be used for access control based on this public ingest contract.
+
+Own a trait deletion/rebuild function and fixtures that EP-37's future admin command consumes;
+do not depend on that command before it exists. Delete both aggregate states and scrub/delete
+source trait events according to the erasure mode so replay/backfill cannot resurrect them.
+Regenerate catalog/OpenAPI and update the guide/runbook.
 
 ## Validation and Acceptance
 
-1. M1: two `identify` events for one user with `plan` values in reverse arrival order resolve
-   to the later `occurredAt`; `identify_once` keeps the first `signup_source`; replaying an
-   insert changes nothing.
-2. M2: page views filtered by `user:plan:eq:enterprise` count only events whose canonical user
-   currently has that plan, including anonymous events stitched to that user; an undeclared
-   trait returns 400 `invalid_filter`; `groupBy=user:plan` on revenue yields one point per plan.
-3. M3: after `erase-user`, no trait rows remain for the user; the catalog lists `identify_once`
-   and `identify` version 2; the account-predicate completeness test covers the new joins.
 
+Test reverse arrival, identical timestamps with event-ID ties, repeated insert, multiple keys,
+missing/null/type mismatches, quoted strings and numeric comparisons. Set-once before set is
+overridden by set; set-once after a set is ignored; first set-once wins if no set exists.
+V1 identify creates identity evidence but not governed traits; both SDK helpers emit correct
+versions and unknown versions reject. Anonymous pre-login traffic stitched to a user gains
+traits, while an anonymous ID equal to another user's ID does not. Exercise every supported
+route population, account isolation, repeated trait references and null groups. Delete/rebuild
+fixtures leave no restored trait state; EP-37 later proves the CLI path.
+
+## Concrete Steps
+
+
+Run commands from the repository root inside `nix develop`. Use the private databases owned
+by `scripts/acceptance.sh` and `Kansoku.ClickHouseTestSupport`, not an ambient development
+stack: native fixtures mutate tables. Extend that harness for the scenarios in this plan.
+
+```bash
+cabal build all --enable-tests
+just openapi
+just contracts
+just check
+just acceptance
+```
+
+Use focused Hspec examples while developing. Before marking Complete, require nonzero example
+counts, no pending required integration tests, regenerated contract checks, and the packaged
+executable acceptance above. Record only the relevant evidence here. This follows
+[ADR-10](../adr/0010-owned-executable-acceptance-environments.md).
 
 ## Idempotence and Recovery
 
-Additive tables and views with replay-safe states; the backfill is re-runnable. Removing the
-feature is dropping the views and tables; the events remain the source of truth.
 
+Only idempotent argMin/argMax states with total ordering may be replayed into existing trait targets. Governed storage excludes unvalidated legacy values. Do not introduce a trait-unset mutation implicitly through null; add a future versioned operation if required.
 
 ## Interfaces and Dependencies
 
-Hard dependencies: `docs/plans/26-bound-analytics-query-inputs-and-result-cardinality.md`
-Complete and `docs/plans/31-metric-property-filters-and-dual-grouping.md` Complete (the
-grammar this extends). Soft dependencies:
-`docs/plans/29-correct-client-timestamp-skew-and-count-ingest-rejections.md` (ordering),
-`docs/plans/32-time-aware-identity-bindings-and-bounded-resolution-cost.md` (resolution cost),
-`docs/plans/37-administrative-executable-for-keys-erasure-retention-and-replay.md` (erasure
-command). Claims the `user:` dimension prefix, the `identify_once` event, `identify` version
-2, and the `analytics.user_properties`, `user_properties_once` and `user_traits` objects.
-Update ADR 4 with the trait dimension and the current-value semantics.
+
+Required complete child artifacts: `docs/plans/29-correct-client-timestamp-skew-and-count-ingest-rejections.md`, `docs/plans/31-metric-property-filters-and-dual-grouping.md`, `docs/plans/32-time-aware-identity-bindings-and-bounded-resolution-cost.md`, `docs/plans/34-session-analytics-duration-bounce-entry-and-exit-pages.md`.
+
+Hard dependencies: EP-29, EP-31 and EP-32 Complete. EP-34 is a hard prerequisite for session/acquisition trait acceptance, so whole-child completion also waits for EP-34. EP-37 depends on this plan, not vice versa. Owns user: dimensions, trait schemas/storage and erasure primitives.
+
+Revision note (2026-10-15): reviewed against the current source and revised for first deployment.
+[ADR-11](../adr/0011-initial-release-analytics-contracts.md) records the proposed cross-plan
+contracts; implementation must supply the acceptance evidence before those contracts become
+accepted runtime guarantees.

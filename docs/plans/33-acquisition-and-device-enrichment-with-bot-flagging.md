@@ -11,198 +11,176 @@ provenance:
     model: "claude-fable-5-1"
     harness: "claude-code"
     at: 2026-10-15T13:44:34Z
+  reviews:
+    - model: "gpt-6-astra"
+      harness: "codex-cli"
+      at: 2026-10-15T15:43:15Z
+      verdict: "changes-requested"
+      note: "Original draft review found correctness gaps; findings corrected by the accompanying update, with native acceptance still required."
+  revisions:
+    - model: "gpt-6-astra"
+      harness: "codex-cli"
+      at: 2026-10-15T15:43:15Z
+      mode: "update"
+      note: "Reconcile first-release APIs, domain semantics, dependencies and acceptance with the source-validated MP-5 review."
 ---
 
 # Acquisition and device enrichment with bot flagging
 
-This ExecPlan is a living document. Update its living sections and durable ADRs as work
-proceeds. It is a child of
-`docs/masterplans/5-act-on-rev-1-close-silent-loss-paths-add-metric-filters-and-enrich-web-analytics.md`
-and acts on findings E4 (parts 1 to 4), A5 and C2 of
-`docs/reviews/2026-10-15-architecture-and-feature-set-against-comparable-products.md`.
-
 
 ## Purpose / Big Picture
 
-A marketing site sending page views to Kansoku will be able to answer where visitors came
-from and what they used: `GET /metrics/acquisition` will return sessions or users by channel,
-UTM source, medium, campaign and referrer host, and page views, sessions and users will group
-by browser, operating system and device class. Crawler traffic will be flagged at ingest and
-excluded from those answers by default. Deployments that opt in will record a visitor's
-country code without ever storing an IP address. The `context` object the browser SDK already
-sends will become queryable.
 
+Make acquisition and device analysis useful without storing request IP addresses. Classification
+is a deterministic, documented approximation; session attribution and bot exclusion must not
+change depending on query fast paths.
 
 ## Progress
 
-- [ ] M1: Typed `browser_family`, `os_family`, `device_class` and `is_bot` columns are populated at ingest for web-source events, `context_json` is materialized, and the fixtures classify as expected.
-- [ ] M2: A `channel` column is derived deterministically from referrer and UTM fields with a documented rule table, backfilled for existing rows.
-- [ ] M3: `GET /metrics/acquisition` is implemented and device dimensions are accepted by page-views, sessions and users, excluding bots unless `includeBots=true`.
-- [ ] M4: Optional country enrichment resolves the client address to a two-letter code at ingest and stores nothing else, proven with a local database and off by default.
 
+- [ ] M1: Internal ingest enrichment survives the queue and writer unchanged.
+- [ ] M2: Device, bot and channel fixtures pass with documented classification precedence.
+- [ ] M3: Acquisition and web metric dimensions use consistent session attribution and filters.
+- [ ] M4: Optional country lookup trusts only an explicitly configured proxy boundary.
 
 ## Surprises & Discoveries
 
-(None yet.)
 
+The current Servant ingest handler does not receive a WAI Request. Derived fields do not exist
+in AnalyticsEvent or its queue encoding. A configured header name alone does not establish
+trust. The original channel rule classified Facebook paid traffic as paid search before reaching
+its paid-social branch.
 
 ## Decision Log
 
-- Decision: Parse the user agent server-side at ingest into typed columns rather than at query
-  time, and keep the raw string inside `context`.
-  Rationale: Grouping and filtering need low-cardinality columns; parsing per query over JSON is
-  the cost ADR 4 exists to avoid. PostHog materializes the same way.
-  Date: 2026-10-15
-- Decision: Bot handling is a flag, not a drop. `is_bot = 1` when the server list matches or the
-  SDK sends `context.bot = true`; metrics exclude flagged rows by default.
-  Rationale: A dropped event cannot be counted or audited; PostHog and Plausible both keep a
-  way to see bot volume.
-  Date: 2026-10-15
-- Decision: Country enrichment is opt-in, country-only, and resolves the address from a
-  configured trusted header; the address is discarded before the event is enqueued.
-  Rationale: Kansoku's privacy posture (no IP capture) is a strength REV-1 credits; Plausible
-  shows country is achievable without retaining the address.
-  Date: 2026-10-15
 
+On 2026-10-15 separate the public AnalyticsEvent from a versioned internal queued envelope.
+Country enrichment requires trusted peer verification and a maintained MMDB reader; do not
+write a new binary database parser as a fallback. Acquisition is session-first attribution.
 
 ## Outcomes & Retrospective
 
-(To be filled during and after implementation.)
 
+Planning reviewed; parser selection and native country lookup remain implementation proofs.
 
 ## Context and Orientation
 
-`analytics.events_raw` (latest shape in `db/clickhouse/migrations/0004_events_raw_v2.sql`
-with later additive columns) stores `url`, `referrer` and the five UTM fields as columns and
-`context` as a JSON string. The browser SDK (`mori://shinzui/kansoku-ts`,
-`packages/kansoku-js/src/context.ts` and `attribution.ts`) fills `context` with
-`locale`, `timezone`, `screen`, `viewport`, `userAgent` and `sdk`, and top-level `url`,
-`referrer` and UTM fields. Nothing in the server reads `context`. The writer maps
-`AnalyticsEvent` to the insert block in `kansoku-core/src/Kansoku/ClickHouse/EventRow.hs`; the
-pinned driver cannot carry JSON on the wire, so JSON-typed columns are `MATERIALIZED` from
-strings (`properties_json` in `0009_typed_properties.sql`,
-[ADR 4](../adr/0004-queryable-event-properties-and-identity-resolved-projection.md)).
-Metric dimensions are `event_name`, `source`, `route` (`path(url)`) and `prop:<name>`
-(`kansoku-core/src/Kansoku/Metrics/Query.hs`); `/metrics/acquisition` is a contract stub
-returning 404 `not_implemented` in `kansoku-api/src/Kansoku/Metrics/Api.hs`. The ingest
-handler (`kansoku-core/src/Kansoku/Ingest/Handler.hs`) sees the WAI request, so it can read a
-trusted client-address header before the event is enqueued.
 
-"Channel" is the marketing bucket a visit is attributed to (direct, organic search, paid
-search, organic social, paid social, email, referral, other), derived from the referrer host
-and UTM parameters. "Device class" is desktop, mobile, tablet, bot or unknown. An MMDB file is
-the binary database format MaxMind and DB-IP publish for address-to-country lookup.
-
-No cross-repository ADR applies. The SDK-side bot list (REV-1 E4 part 1) is work in
-`mori://shinzui/kansoku-ts`; this plan accepts its `context.bot` flag but does not require it.
-
+`Ingest/Handler.hs` handles decoded events, `Ingest/Queue.hs` serializes them and
+`ClickHouse/EventRow.hs` writes native rows. Context is currently a stored JSON string.
+`Server.hs` owns WAI middleware. `Metrics/Api.hs` has an acquisition stub.
+Read [ADR-3](../adr/0003-api-key-authentication-and-account-scoped-analytics.md),
+[ADR-4](../adr/0004-queryable-event-properties-and-identity-resolved-projection.md) and proposed
+[ADR-11](../adr/0011-initial-release-analytics-contracts.md).
 
 ## Plan of Work
 
-### M1: User-agent parsing and context materialization
 
-Evaluate a Haskell user-agent parser through Mori (`mori registry search ua-parser`) and
-Hackage; if a maintained package builds on GHC 9.12, use it. Otherwise implement
-`kansoku-core/src/Kansoku/Ingest/UserAgent.hs`: a conservative, ordered pattern table for
-browser family (Chrome, Safari, Firefox, Edge, Opera, Samsung Internet, other), operating
-system family (Windows, macOS, iOS, Android, Linux, ChromeOS, other), device class, and a bot
-list seeded from the patterns posthog-js blocks by default plus the IAB-style generic tokens
-(`bot`, `crawler`, `spider`, `headless`, `lighthouse`). Record accuracy against a fixture of
-100 real user-agent strings in the plan. Add a migration with four additive columns
-(`browser_family`, `os_family`, `device_class` as `LowCardinality(String) DEFAULT ''`,
-`is_bot UInt8 DEFAULT 0`) and `context_json JSON MATERIALIZED CAST(context, 'JSON')` with
-`max_dynamic_paths` set to 256 and `SKIP userAgent` so the raw string is not indexed as a
-dynamic path. Populate the typed columns in the ingest handler for `source = web` from
-`context.userAgent`, or from `context.bot` when present, and carry them through `EventRow`.
-
-### M2: Channel classification
-
-Add `channel LowCardinality(String) DEFAULT ''` and compute it at ingest in a pure
-`Kansoku.Ingest.Channel` module from referrer host, `utm_medium`, `utm_source` and the
-presence of `gclid`, `fbclid`, `msclkid` in the URL, following a rule table placed in
-`docs/guides/query-metrics.md`: paid search for click ids or `utm_medium` in `cpc,ppc,paid`;
-organic search for known search engine hosts; paid social and organic social for known social
-hosts split by medium; email for `utm_medium=email`; referral for any other external host;
-direct for no referrer and no UTM. Backfill existing rows with one `ALTER TABLE … UPDATE`
-using the same rules expressed in SQL, documented as a one-time mutation in the migration
-comment.
-
-### M3: Acquisition route and device dimensions
-
-Implement `/metrics/acquisition` as a standard route whose default measure is distinct
-sessions, with `measure=users` optional, `groupBy` one or two of `channel`, `utm_source`,
-`utm_medium`, `utm_campaign`, `referrer_host`, and the common `from`, `to`, `timeGrain` and
-`filter` parameters. Add `browser`, `os` and `device` as built-in dimensions for page-views,
-sessions and users, mapping to the new columns. All these routes add `AND is_bot = 0` unless
-`includeBots=true`. Regenerate OpenAPI and the client; document the measures and the bot rule.
-
-### M4: Optional country
-
-Behind `KANSOKU_INGEST_GEOIP_DB` (path to an MMDB country database) and
-`KANSOKU_INGEST_CLIENT_IP_HEADER` (default `X-Forwarded-For`, first valid address), resolve the
-country code in the ingest handler and set `country_code LowCardinality(String) DEFAULT ''`
-on the event before validation; the address itself is never placed in the event, logs or
-spans. Evaluate a Haskell MMDB reader via Mori and Hackage. If none builds on GHC 9.12, implement a
-minimal MMDB country reader in `Kansoku.Ingest.GeoCountry` (the format is documented and the
-country lookup needs only the search tree and one data field); shelling out to an external
-binary is not acceptable. Record the choice in the Decision Log.
-Add `country` as a dimension on acquisition, page-views, sessions and users.
+### M1: Carry server enrichment
 
 
-## Concrete Steps
+Define a versioned QueuedEvent containing the validated public event plus derived fields.
+Make `Ingest/Queue.hs`, writer decoding, replay and EventRow consume it. Support decoding the
+existing queue format during development migration. Producer-supplied context remains input;
+server-derived fields are never authoritative from request JSON. EP-30 duplicate acceptance
+must retain the first enrichment, not recalculate on retry. Add typed browser_family, os_family,
+device_class, is_bot, channel and country_code columns and materialized context_json with a
+bounded dynamic-path count; validate DDL on the packaged engine.
 
-Inside `nix develop` with the stack running:
+### M2: Classify
 
-```bash
-cabal build all --enable-tests
-cabal test kansoku-core --test-options='--match "UserAgent"'
-cabal test kansoku-core --test-options='--match "Channel"'
-just ch-migrate
-cabal test kansoku-core --test-options='--match "Acquisition"'
-just openapi && just openapi-check
-```
 
-Example after `just run`:
+Use a conservative ordered parser in `Ingest/UserAgent.hs` or a maintained dependency verified
+against Mori, Hackage and upstream tags before selecting it. Mori currently has no ua-parser
+entry; Hackage reports 0.7.7.0, but this review has not proved GHC compatibility or maintenance.
+Cover overlapping Edge/Chrome, iOS/Safari, Android/Linux and tablet strings. Record accuracy on
+at least 100 diverse licensed/synthetic fixtures. Flag bots from a versioned server list OR a
+Boolean context.bot; false cannot override a server match. Non-web traffic is not implicitly
+classified as a browser. Unknown values use documented unknown/missing representations.
 
-```bash
-curl -s --get http://localhost:8080/metrics/acquisition -H "Authorization: Bearer $TOKEN" \
-  --data-urlencode from=2026-07-01 --data-urlencode to=2026-08-01 --data-urlencode groupBy=channel
-```
+In `Ingest/Channel.hs`, canonicalize referrer and event hosts, ignore self-referrals, and apply
+this precedence: explicit email medium; paid social medium/campaign on known social source;
+paid search with gclid/msclkid or search CPC/PPC; explicit remaining campaign medium; known
+search referrer; known social referrer; external referral; direct when no external referrer
+or campaign; otherwise other. fbclid alone identifies social referral, not paid traffic.
+Use complete host/suffix boundaries, not substring matches. Commit the exact rule table and
+version. Derive old test data from the same implementation; no mandatory production backfill
+exists because the service has never been deployed.
 
-Expected: HTTP 200 with one point per channel present in the fixtures and no bot sessions.
+### M3: Query attribution
 
+
+Define the common session projection consumed by EP-34: group canonical web events by
+`(account_id,source_service,session_id)`, with nonempty session IDs; choose the first page_view,
+else earliest web event, ordered by `(occurred_at,event_id)`. Attribution dimensions (channel,
+UTMs, referrer host, device, country) come from that event. Session filters select whole sessions
+by these attributes, never remove events before computing duration. EP-34 owns the reusable
+session state; until it lands, acquisition may use this canonical query-time projection.
+`/metrics/acquisition` defaults to distinct sessions and groupBy=channel; measure=users counts
+distinct primary canonical subjects among selected sessions: first resolved user, else earliest
+anonymous subject, excluding empty identity (a subject can occur in multiple channels).
+Accept one/two common or acquisition dimensions, JSON filters from EP-31 and includeBots=false.
+Page-views and users apply row-level bot exclusion; session/acquisition excludes sessions with
+any bot event. Bypass old rollups unless they encode the same policy. Extend the internal rich
+resolved source, not the public seven-column view. Regenerate route records and clients.
+
+### M4: Country
+
+
+Thread a minimal server-derived request context into ingest via an explicit Servant combinator
+or WAI Vault bridge; do not pretend ordinary handlers see the request. Enable lookup only with
+KANSOKU_INGEST_GEOIP_DB and KANSOKU_INGEST_TRUSTED_PROXY_CIDRS. Inspect the socket peer first;
+ignore forwarded headers from an untrusted peer. For trusted peers walk X-Forwarded-For right
+to left past trusted hops, select the first untrusted address, and fail closed on malformed
+chains. Do not select the first valid address supplied by a caller. Return ISO country code
+or missing; never enqueue/log/trace the address. Use a maintained reader or binding to
+libmaxminddb after checking current releases and a GHC/native build spike. Unsupported/corrupt
+database is a clear startup failure when configured. Cover IPv4, IPv6 and proxy spoofing.
 
 ## Validation and Acceptance
 
-1. M1: the 100-string fixture classifies with recorded accuracy of at least 95 percent on
-   family and 100 percent on the bot subset; a `Googlebot` page view stores `is_bot = 1`;
-   `SELECT context_json.locale FROM analytics.events_raw` returns the SDK's locale.
-2. M2: fixtures with `gclid`, a Google referrer, a Facebook referrer with `utm_medium=paid`,
-   `utm_medium=email`, an unknown host, and no referrer classify as paid_search,
-   organic_search, paid_social, email, referral and direct respectively; the backfill leaves
-   row counts unchanged.
-3. M3: acquisition by channel equals a hand-written SQL over the fixtures; `includeBots=true`
-   raises the session count by exactly the bot sessions; device dimensions group page views.
-4. M4: with a local country database the fixture request resolves to its country; with the
-   variable unset the column stays empty; grepping the access log and span attributes for the
-   test address finds nothing.
-5. OpenAPI conformance tests cover the new route and dimensions.
 
+Prove derived fields survive actual enqueue/write/replay; header/body spoofing cannot override
+server enrichment. Compare acquisition to hand-counted multi-page, cross-midnight, multi-host
+sessions, including changed campaign midway and missing session IDs. Bot defaults apply on
+day-grain paths as well as grouped paths. Test Google organic, gclid, Facebook paid,
+fbclid-only, email, self-referral, referral and direct. Geo tests use an owned local test DB;
+assert absence of test addresses in exported spans, logs and queued bodies. All new query
+builders enforce account isolation and the final point cap.
+
+## Concrete Steps
+
+
+Run commands from the repository root inside `nix develop`. Use the private databases owned
+by `scripts/acceptance.sh` and `Kansoku.ClickHouseTestSupport`, not an ambient development
+stack: native fixtures mutate tables. Extend that harness for the scenarios in this plan.
+
+```bash
+cabal build all --enable-tests
+just openapi
+just contracts
+just check
+just acceptance
+```
+
+Use focused Hspec examples while developing. Before marking Complete, require nonzero example
+counts, no pending required integration tests, regenerated contract checks, and the packaged
+executable acceptance above. Record only the relevant evidence here. This follows
+[ADR-10](../adr/0010-owned-executable-acceptance-environments.md).
 
 ## Idempotence and Recovery
 
-Migrations are additive columns with defaults. The channel backfill mutation is idempotent
-(same rules, same result) and can be re-run. Country enrichment is off unless configured. If
-the user-agent classifier misclassifies, the raw string remains in `context` and a corrected
-classifier can be re-applied by mutation.
 
+Schema additions have explicit defaults. Reclassification requires rebuilding affected aggregates from canonical data; changing raw rows does not update materialized views. Geo remains off by default.
 
 ## Interfaces and Dependencies
 
-Soft dependency on `docs/plans/31-metric-property-filters-and-dual-grouping.md` for
-`filter=` on the new dimensions; the route works without it. Consumed by
-`docs/plans/34-session-analytics-duration-bounce-entry-and-exit-pages.md` (`channel` and
-`is_bot` columns). Claims columns `browser_family`, `os_family`, `device_class`, `is_bot`,
-`channel`, `country_code` and `context_json`, and configuration `KANSOKU_INGEST_GEOIP_DB`
-and `KANSOKU_INGEST_CLIENT_IP_HEADER`. A new ADR should record the enrichment boundary (what
-is derived at ingest, the bot flag policy, and the no-address rule).
+
+Required complete child artifacts: `docs/plans/26-bound-analytics-query-inputs-and-result-cardinality.md`, `docs/plans/31-metric-property-filters-and-dual-grouping.md`.
+
+Hard dependencies: EP-26 and EP-31 Complete. EP-31 path: `docs/plans/31-metric-property-filters-and-dual-grouping.md`. Owns queued enrichment and attribution rules; EP-34 owns session aggregation, and EP-37 consumes the envelope for erasure/replay. SDK input is `mori://shinzui/kansoku-ts/plans/8-serve-kansoku-masterplan-5-sentat-beacon-exit-flush-bot-flag-and-identifyonce`.
+
+Revision note (2026-10-15): reviewed against the current source and revised for first deployment.
+[ADR-11](../adr/0011-initial-release-analytics-contracts.md) records the proposed cross-plan
+contracts; implementation must supply the acceptance evidence before those contracts become
+accepted runtime guarantees.
