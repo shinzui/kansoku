@@ -11,6 +11,12 @@ provenance:
     model: "claude-fable-5-1"
     harness: "claude-code"
     at: 2026-10-15T13:44:34Z
+  revisions:
+    - model: "claude-fable-5-1"
+      harness: "claude-code"
+      at: 2026-10-15T14:55:47Z
+      mode: "update"
+      note: "Add source_service and host built-in dimensions and the one-account-several-properties guidance."
 ---
 
 # Metric property filters and dual grouping
@@ -47,12 +53,20 @@ safety argument of ADR 4 carries over unchanged.
 ## Decision Log
 
 - Decision: Filter grammar is `filter=<dimension>:<op>:<value>`, repeatable up to eight times,
-  all conjoined with AND, where `<dimension>` is `event_name`, `source`, `route` or
-  `prop:<name>`, and `<op>` is one of `eq`, `neq`, `in`, `contains`, `gt`, `lt`, `set`, `unset`.
+  all conjoined with AND, where `<dimension>` is `event_name`, `source`, `source_service`,
+  `host`, `route` or `prop:<name>`, and `<op>` is one of `eq`, `neq`, `in`, `contains`, `gt`,
+  `lt`, `set`, `unset`.
   `in` takes a comma-separated list; `set` and `unset` take no value.
   Rationale: One parameter shape keeps generated clients simple; the operator set matches the
   intersection of PostHog's and Plausible's documented operators. OR and nesting are excluded
   from this plan.
+  Date: 2026-10-15
+- Decision: Add `source_service` and `host` as built-in dimensions for both `filter` and
+  `groupBy`, where `host` is `domain(url)` computed at query time like `route` is `path(url)`.
+  Rationale: A single account is meant to hold a marketing site and the product application
+  together so identity stitching can link them, but `route` is the path alone, so `/pricing`
+  on both properties merges, and `sourceService` is stored in `events_raw.source_service` yet
+  is not queryable. Both dimensions are columns or cheap expressions and need no storage change.
   Date: 2026-10-15
 - Decision: Property filters are allowed only when every event queried by the metric declares
   the property, the same rule as `groupBy=prop:`.
@@ -104,15 +118,19 @@ against the registry exactly as grouping does. Compile to SQL predicates in `Que
 operators compare the property expression (or the built-in column) with native parameters
 named `filter_<n>_value`; `in` binds an array parameter; `gt` and `lt` cast the property with
 `CAST(getSubcolumn(...), 'Float64')` and require a numeric declared type; `set` and `unset`
-test `isNotNull`/`isNull` on the subcolumn (for built-in dimensions, non-empty string). Apply
-filters on the raw-table and resolved-view paths alike; when a filter is present, route
+test `isNotNull`/`isNull` on the subcolumn (for built-in dimensions, non-empty string). The
+built-in dimensions compile to `event_name`, `source`, `source_service`, `domain(url)` and
+`path(url)` respectively; `host` and `route` are expressions, not columns, so grouping by them
+on the day-grain page-view rollup is only possible for `route`, which the rollup already keys.
+Apply filters on the raw-table and resolved-view paths alike; when a filter is present, route
 day-grain page views and users to the raw or resolved path instead of the rollup, and say so in
 the accuracy map comment.
 
 ### M2: Dual grouping
 
-Allow `groupBy=a,b` with exactly one or two distinct dimensions. The `group` object carries one
-key per dimension; the SQL `group_key` becomes a composite the handler splits, following the
+Allow `groupBy=a,b` with exactly one or two distinct dimensions drawn from the built-in set
+(`event_name`, `source`, `source_service`, `host`, `route`) and `prop:<name>`. The `group`
+object carries one key per dimension; the SQL `group_key` becomes a composite the handler splits, following the
 pattern the funnel order already uses for its `index|step` composite. Keep bucket-then-group
 ordering and the EP-26 point cap unchanged; a two-dimension query that overflows 10,000 points
 receives the existing `metric_result_too_large` problem. Ratio metrics keep rejecting property
@@ -123,6 +141,11 @@ dimensions.
 Regenerate `docs/api/openapi.json`, update the route description to state the grammar, operator
 set, eight-filter limit and the two-dimension rule, extend `docs/guides/query-metrics.md` with a
 "Filters" section and two examples, and add the E7 sentence about sessions spanning buckets.
+Add a short "One account, several properties" paragraph to the same guide and to
+`docs/guides/send-events.md`: set `sourceService` per property (for example `marketing-site`
+and `app`), keep both in one account so identity stitching can link a marketing visit to a
+later signup, and use `filter=source_service:eq:…` or `groupBy=host` to separate them in
+queries.
 Update ADR 4 with the filter contract.
 
 
@@ -155,7 +178,9 @@ Required acceptance over the committed fixtures:
 1. `filter=prop:plan:eq:pro` on revenue returns the sum of `amount` for `pro` rows only; the
    unfiltered call still equals the previous total.
 2. `filter=source:neq:web` on events excludes web rows; `filter=route:contains:/pricing` on
-   page-views returns only matching routes.
+   page-views returns only matching routes; with fixtures carrying two hosts and two
+   `sourceService` values, `filter=source_service:eq:marketing-site` and `groupBy=host` separate
+   them and `groupBy=host,route` distinguishes `/pricing` on each property.
 3. `filter=prop:amount:gt:100` on revenue works; the same operator on a string property returns
    400 `invalid_filter` naming the type.
 4. An undeclared property, a ninth filter, an unknown operator, and `filter=prop:plan:set:x`
@@ -176,8 +201,8 @@ to unfiltered calls while a fix ships.
 ## Interfaces and Dependencies
 
 Hard dependency: `docs/plans/26-bound-analytics-query-inputs-and-result-cardinality.md`
-Complete. `Kansoku.Metrics.Filter` and the `filter_<n>_value` parameter naming are claimed
-here and consumed by `docs/plans/33-acquisition-and-device-enrichment-with-bot-flagging.md`
+Complete. `Kansoku.Metrics.Filter`, the `filter_<n>_value` parameter naming and the built-in
+dimensions `source_service` and `host` are claimed here and consumed by `docs/plans/33-acquisition-and-device-enrichment-with-bot-flagging.md`
 (new built-in dimensions), `docs/plans/35-rolling-active-users-retention-modes-and-lifetime-cohorts.md`
 and `docs/plans/36-funnel-modes-and-experiment-exposure-diagnostics.md` (breakdowns). No new
 libraries.

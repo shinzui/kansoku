@@ -286,6 +286,13 @@ children (EP-29, EP-30, EP-37, EP-38, EP-39) are ready. Twelve children in total
   segmented. Snapshot-at-event-time traits remain deferred as a much larger change.
   Date: 2026-10-15
 
+- Decision: EP-31 also adds `source_service` and `host` as built-in filter and grouping
+  dimensions, and documents the one-account-several-properties pattern.
+  Rationale: The marketing site and the application must share an account for identity
+  stitching to link them, and without these dimensions their same-path pages merge in every
+  query. No storage change is involved, so it belongs in the filter child rather than a new one.
+  Date: 2026-10-15
+
 Revision note (2026-10-15): the registry grew from ten to twelve children and EP-29 gained a
 fourth milestone; Vision & Scope, Dependency Graph and Integration Points were updated to
 match. No child plan had started.
