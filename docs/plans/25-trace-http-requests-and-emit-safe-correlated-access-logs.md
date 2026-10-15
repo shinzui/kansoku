@@ -47,7 +47,7 @@ to work without an OpenTelemetry collector; existing Prometheus pipeline metrics
 
 - [x] (2026-10-15) M1: A real HTTP request produces one correctly parented server span named by the served route.
 - [x] (2026-10-15) M2: Access records match the serving span and exclude probe noise; both access records and exported spans exclude secrets and query values.
-- [ ] M3: Provider shutdown, disabled mode, error responses and concurrent requests pass lifecycle and isolation checks.
+- [x] (2026-10-15) M3: Provider shutdown, disabled mode, error responses and concurrent requests pass lifecycle and isolation checks.
 
 
 ## Surprises & Discoveries
@@ -96,8 +96,10 @@ Production HTTP middleware, bounded correlated access logging, and provider life
 are implemented. Six HTTP cases pass independently in each of legacy, http and http/dup
 modes; two focused access-log cases pass. Four subprocess checks prove buffered spans
 flush on normal and exceptional exit and remain unexported when disabled/unconfigured.
-Cabal builds every component with tests. The final Nix server acceptance is running after
-excluding the dependency's unused example executable; M3 remains open until it passes.
+Cabal builds every component with tests. The full core suite passes 160 examples
+(21 optional storage cases pending without databases), the probe kit passes all four
+cases, strict ADR validation passes, and the Nix server build passes after excluding
+the dependency's unused example executable. All three milestones are accepted.
 
 
 ## Context and Orientation

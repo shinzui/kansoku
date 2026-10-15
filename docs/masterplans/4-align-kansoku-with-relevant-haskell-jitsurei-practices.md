@@ -102,8 +102,8 @@ silently imported into Kansoku's aggregate API.
 |---|-------|------|-----------|-----------|--------|
 | 23 | Problem details and generated contract | [EP-23](../plans/23-standardize-problem-details-and-the-generated-api-contract.md) | None | None | Complete |
 | 24 | Shared liveness and readiness | [EP-24](../plans/24-adopt-shared-liveness-and-readiness-probes.md) | EP-23 | None | Complete |
-| 25 | HTTP tracing and safe access logs | [EP-25](../plans/25-trace-http-requests-and-emit-safe-correlated-access-logs.md) | EP-24 | EP-23 | In Progress |
-| 26 | Bounded analytics queries and results | [EP-26](../plans/26-bound-analytics-query-inputs-and-result-cardinality.md) | EP-23; EP-24 M2 (accepted bounded checks and query-pool recovery) | None | Not Started |
+| 25 | HTTP tracing and safe access logs | [EP-25](../plans/25-trace-http-requests-and-emit-safe-correlated-access-logs.md) | EP-24 | EP-23 | Complete |
+| 26 | Bounded analytics queries and results | [EP-26](../plans/26-bound-analytics-query-inputs-and-result-cardinality.md) | EP-23; EP-24 M2 (accepted bounded checks and query-pool recovery) | None | In Progress |
 | 27 | Core record and route conventions | [EP-27](../plans/27-enforce-core-record-and-route-construction-conventions.md) | None | EP-23, EP-24, EP-25, EP-26 | Not Started |
 | 28 | Isolated Hurl acceptance and CI | [EP-28](../plans/28-gate-service-releases-with-isolated-hurl-acceptance-and-ci.md) | EP-23, EP-24, EP-25, EP-26, EP-27 | None | Not Started |
 
@@ -177,9 +177,11 @@ EP-23 and EP-24 are Complete, accepted on 2026-10-15. EP-24 passes the productio
 probe kit, core suite, strict ADR validation, unchanged public OpenAPI and Nix server
 build. Its required isolated native regression passes four examples with no pending
 cases; stalled operations, cancellation and size-one pool recovery are accepted.
-EP-25 is In Progress: HTTP privacy and lifecycle tests pass; final Nix acceptance
-is running. EP-26 may consume EP-24 M2 while that build finishes, as permitted by
-the dependency graph. EP-26 through EP-28 remain Not Started; required full executable/storage acceptance remains owned by EP-28.
+EP-25 is Complete: six HTTP privacy/context cases pass in each semantic mode, four
+buffered lifecycle subprocesses pass, the full core/probe suites pass, and Cabal/Nix
+server builds and strict ADR validation pass. EP-26 is In Progress under the accepted
+EP-24 M2 handoff. EP-27 and EP-28 remain Not Started. The final required executable
+and isolated-storage integration gate remains owned by EP-28.
 
 
 ## Surprises & Discoveries
