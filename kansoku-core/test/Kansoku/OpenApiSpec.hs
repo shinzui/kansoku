@@ -53,7 +53,7 @@ spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
     lookupText ["components", "securitySchemes", "serviceToken", "scheme"] documentValue `shouldBe` Just "bearer"
     traverse_ assertSecurity operationValues
 
-  it "documents exactly the eighteen analytics paths with stable operation IDs" $ do
+  it "documents exactly the twenty analytics paths with stable operation IDs" $ do
     documentedPaths `shouldBe` expectedServedPaths
     fmap operationIdentity operationValues `shouldMatchList` expectedOperationIds
 
@@ -83,10 +83,10 @@ spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
       `shouldSatisfy` maybe False (Text.isInfixOf "performed steps 1..N in order")
     operationParameterNames funnelOperation `shouldContain` ["window"]
 
-  it "labels retention as new-in-window cohorts with offset zero included" $ do
+  it "documents closed-day retained-history retention modes and offset zero" $ do
     let retentionOperation = fromMaybe Aeson.Null (valueAt ["paths", "/metrics/retention", "get"] documentValue)
     lookupText ["description"] retentionOperation
-      `shouldSatisfy` maybe False (Text.isInfixOf "new-in-window cohorts")
+      `shouldSatisfy` maybe False (Text.isInfixOf "first matching activity in retained history")
     lookupText ["description"] retentionOperation
       `shouldSatisfy` maybe False (Text.isInfixOf "Offset 0")
 
@@ -215,11 +215,13 @@ expectedServedPaths =
       "/metrics/experiments/funnel",
       "/metrics/feature-adoption",
       "/metrics/funnel",
+      "/metrics/lifecycle",
       "/metrics/organizations",
       "/metrics/page-views",
       "/metrics/retention",
       "/metrics/revenue",
       "/metrics/sessions",
+      "/metrics/stickiness",
       "/metrics/users",
       "/v1/batch",
       "/v1/events",
@@ -240,11 +242,13 @@ expectedOperationIds =
     ("/metrics/experiments/funnel", "get", "getMetricsExperimentsFunnel"),
     ("/metrics/feature-adoption", "get", "getMetricsFeatureAdoption"),
     ("/metrics/funnel", "get", "getMetricsFunnel"),
+    ("/metrics/lifecycle", "get", "getMetricsLifecycle"),
     ("/metrics/organizations", "get", "getMetricsOrganizations"),
     ("/metrics/page-views", "get", "getMetricsPageViews"),
     ("/metrics/retention", "get", "getMetricsRetention"),
     ("/metrics/revenue", "get", "getMetricsRevenue"),
     ("/metrics/sessions", "get", "getMetricsSessions"),
+    ("/metrics/stickiness", "get", "getMetricsStickiness"),
     ("/metrics/users", "get", "getMetricsUsers"),
     ("/v1/batch", "post", "postV1Batch"),
     ("/v1/events", "post", "postV1Events"),

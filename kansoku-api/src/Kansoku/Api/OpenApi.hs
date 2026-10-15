@@ -33,7 +33,7 @@ import Kansoku.Event
     VersionedEventSchema,
   )
 import Kansoku.Ingest.Api (BatchAck, IngestAck, IngestEvent, RejectedEvent)
-import Kansoku.Metrics.Api (AcquisitionMeasure, MetricPoint, MetricResult, SessionMeasure, TimeGrain)
+import Kansoku.Metrics.Api (AcquisitionMeasure, CohortMode, MetricPoint, MetricResult, RetentionMode, SessionMeasure, TimeGrain, UserWindow)
 import Kansoku.Metrics.Filter (MetricFilter)
 import Kansoku.Metrics.Limits (maxMetricPoints)
 import Kansoku.Prelude
@@ -172,6 +172,15 @@ instance O.ToParamSchema AcquisitionMeasure where
 
 instance O.ToParamSchema SessionMeasure where
   toParamSchema _ = O.toParamSchema (Proxy @Text) & O.enum_ ?~ ["count", "bounce_rate", "average_duration_seconds"]
+
+instance O.ToParamSchema UserWindow where
+  toParamSchema _ = O.toParamSchema (Proxy @Text) & O.enum_ ?~ ["calendar", "rolling7", "rolling30"]
+
+instance O.ToParamSchema RetentionMode where
+  toParamSchema _ = O.toParamSchema (Proxy @Text) & O.enum_ ?~ ["on", "on_or_after"]
+
+instance O.ToParamSchema CohortMode where
+  toParamSchema _ = O.toParamSchema (Proxy @Text) & O.enum_ ?~ ["window", "lifetime"]
 
 instance O.ToParamSchema TimeGrain where
   toParamSchema =

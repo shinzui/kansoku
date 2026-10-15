@@ -14,7 +14,7 @@ import Data.String (fromString)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
-import Data.Time (Day)
+import Data.Time (Day, addDays, fromGregorian)
 import GHC.Clock (getMonotonicTime)
 import GHC.Generics (Generic)
 import Kansoku.ClickHouse
@@ -22,6 +22,7 @@ import Kansoku.Config (loadConfig)
 import Kansoku.Event (AccountId (..), defaultRegistry)
 import Kansoku.Exception (trySynchronous)
 import Kansoku.Identity.Cache (identityCacheRevisionSQL, identityCacheSql)
+import Kansoku.Metrics.Api (CohortMode (LifetimeCohort), RetentionMode (RetentionOn), UserWindow (Rolling7))
 import Kansoku.Metrics.Query
 import Kansoku.Metrics.Query.Validate (mkSqlName)
 import Kansoku.Metrics.Registry (BuiltinMetric (Ratioed), conversionRate)
@@ -37,7 +38,11 @@ queriesFor fromDay toDay =
    in Map.fromList
         [ ("source", resolvedSource req),
           ("funnel", buildFunnelSQL req 604800 (step <$> ["signup_started", "signup_completed"])),
-          ("retention", buildRetentionSQL req [0, 1, 7]),
+          ("retention", either (error . show) id (buildRetentionSQL req [1, 7])),
+          ("rolling7", either (error . show) id (buildUsersSQL defaultRegistry Rolling7 req)),
+          ("stickiness", either (error . show) id (buildStickinessSQL defaultRegistry req)),
+          ("lifecycle", either (error . show) id (buildLifecycleSQL defaultRegistry req)),
+          ("lifetime_retention", either (error . show) id (buildRetentionMetricSQL defaultRegistry RetentionOn LifetimeCohort req [1, 7])),
           ("conversion", ratio)
         ]
 
@@ -87,14 +92,23 @@ runSession = do
       unless (Text.all (\c -> isAlphaNum c || c == '_') tag) (fail "invalid benchmark tag")
       let sql = maybe (error "unknown benchmark query") id (Map.lookup queryName (queriesFor fromDay toDay))
           chosen = if evidenceOnly then "SELECT CAST('evidence','String') AS bucket,CAST('','String') AS group_key,toFloat64(0) AS value" else if baseline then Text.replace "analytics.events_resolved_http" "analytics.events_unresolved_http" sql else sql
-          checkout = if baseline then withMetricsQueryConnection pool else withIdentityQueryConnection pool "bench-a" (Text.pack (show fromDay)) (Text.pack (show toDay))
+          scopeFrom = case queryName of
+            "rolling7" -> addDays (-6) fromDay
+            "stickiness" -> addDays (-29) fromDay
+            "lifecycle" -> min fromDay (fromGregorian 1970 1 1)
+            "lifetime_retention" -> min fromDay (fromGregorian 1970 1 1)
+            _ -> fromDay
+          checkout = if baseline then withMetricsQueryConnection pool else withIdentityQueryConnection pool "bench-a" (Text.pack (show scopeFrom)) (Text.pack (show toDay))
+      -- Fail if the compiler and this connection's evidence scope drift apart.
+      let expectedSource = resolvedSource (QueryRequest (AccountId "bench-a") scopeFrom toDay Nothing Nothing [] False)
+      unless (expectedSource `Text.isInfixOf` sql) (fail "benchmark evidence scope differs from compiler source")
       if cold then closeQueryPool pool else pure ()
       -- Instrumentation setup stays outside measured application time.
       withQueryConnection pool $ \conn -> command conn (fromString ("SET log_queries=1,log_comment='" <> Text.unpack tag <> "'"))
       began <- getMonotonicTime
       count <- checkout $ \conn -> sum . fmap length <$> select (statement chosen) conn pure
       ended <- getMonotonicTime
-      pure (Aeson.object ["wall_seconds" Aeson..= (ended - began), "result_rows" Aeson..= count])
+      pure (Aeson.object ["wall_seconds" Aeson..= (ended - began), "result_rows" Aeson..= count, "scope_from" Aeson..= scopeFrom, "scope_to" Aeson..= toDay])
 
 statement :: Text -> Select '[Column "bucket" ChString, Column "group_key" ChString, Column "value" Float64] Row
 statement sql =

@@ -104,6 +104,8 @@ GET /metrics/retention
 GET /metrics/feature-adoption
 GET /metrics/conversion
 GET /metrics/users
+GET /metrics/stickiness
+GET /metrics/lifecycle
 GET /metrics/revenue
 GET /metrics/experiments
 GET /metrics/experiments/conversion

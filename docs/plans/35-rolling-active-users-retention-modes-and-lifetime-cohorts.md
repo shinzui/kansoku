@@ -23,6 +23,11 @@ provenance:
       at: 2026-10-15T15:43:15Z
       mode: "update"
       note: "Reconcile first-release APIs, domain semantics, dependencies and acceptance with the source-validated MP-5 review."
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-10-15T23:02:27Z
+      mode: "implement"
+      note: "Begin exact rolling users, closed-day retention modes and retained-history lifecycle after EP-34 whole-child acceptance."
 ---
 
 # Rolling active users, retention modes, and lifetime cohorts
@@ -54,12 +59,29 @@ Raw retention also prevents any truthful claim of first activity "ever" once old
 
 On 2026-10-15 define lifetime as first activity in retained account history and publish that
 qualification. Use exact canonical users across all HTTP user metrics. Missing observation time
-is not zero retention. Per-query database time/memory limits complement the final point cap.
+is not zero retention.
+
+Capture the request-start UTC date and reject an exclusive `to` after it on users, stickiness,
+retention and lifecycle. This is the plan's chosen equivalent to response as-of metadata.
+User filters and up to two group dimensions define the same population throughout historical
+lookback; each group has its own first matching retained activity. Reserved measure/status/
+cohort/offset labels are metadata alongside those nullable groups. Ungrouped rolling/daily
+measure series fill closed-day zeroes; absent dimension groups remain absent. Calendar users
+retain the existing exact grain semantics. Lifetime scans remain native-budgeted work.
+The expanded `scripts/identity-bench.py --activity` gate measures all seven compiler query
+families with their actual extended/retained cache scopes, including valid empty lifetime
+results after older history is appended. Per-query database time/memory limits complement the final point cap.
 
 ## Outcomes & Retrospective
 
 
-Planning reviewed; native query and performance evidence pending.
+Implementation in progress. The first focused owned run passes six examples: two no-storage
+observation/grain validations and four native families covering all three milestones, hand
+counts, current exact subjects, historical filters, retained deletion, maturity, metadata,
+point boundaries and native memory exhaustion on every family. Final source `just check` also passes 345 deterministic core, 17 client and four probe
+examples, generated/OpenAPI checks, all fourteen strict ADR records and telemetry/lifecycle
+modes. The public packaged workflow, pinned SDK and expanded ten-million-event activity
+performance gates remain open.
 
 ## Context and Orientation
 

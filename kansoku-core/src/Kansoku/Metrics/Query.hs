@@ -11,6 +11,10 @@ module Kansoku.Metrics.Query
     buildExperimentFunnelSQL,
     buildFunnelSQL,
     buildRetentionSQL,
+    buildRetentionMetricSQL,
+    buildUsersSQL,
+    buildStickinessSQL,
+    buildLifecycleSQL,
     buildSQL,
     buildAcquisitionSQL,
     activityPredicate,
@@ -28,6 +32,10 @@ module Kansoku.Metrics.Query
     runExperimentFunnel,
     runFunnel,
     runRetention,
+    runRetentionMetric,
+    runUsers,
+    runStickiness,
+    runLifecycle,
     runSessions,
     runSessionMetric,
     runAcquisition,
@@ -57,7 +65,7 @@ import Data.List qualified as List
 import Data.Map.Strict qualified as Map
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
-import Data.Time (Day, addDays, dayOfWeek, diffDays, fromGregorian, toGregorian)
+import Data.Time (Day, addDays, dayOfWeek, diffDays, fromGregorian, getCurrentTime, toGregorian, utctDay)
 import Data.Time.Format (defaultTimeLocale, formatTime)
 import Effectful (Eff, IOE, type (:>))
 import Kansoku.ClickHouse (QueryPool, queryDeadlineMicros, withIdentityQueryConnection, withMetricsQueryConnection)
@@ -68,7 +76,7 @@ import Kansoku.Event
     defaultRegistry,
   )
 import Kansoku.Exception (trySynchronous)
-import Kansoku.Metrics.Api (AcquisitionMeasure (..), MetricPoint (..), MetricResult (..), SessionMeasure (..), TimeGrain (..))
+import Kansoku.Metrics.Api (AcquisitionMeasure (..), CohortMode (..), MetricPoint (..), MetricResult (..), RetentionMode (..), SessionMeasure (..), TimeGrain (..), UserWindow (..))
 import Kansoku.Metrics.Definition (Aggregation (..), MetricDefinition (..), RatioMetric (..))
 import Kansoku.Metrics.Filter (MetricFilter)
 import Kansoku.Metrics.Filter qualified as WireFilter
@@ -82,8 +90,8 @@ import Kansoku.Metrics.Query.Property
     resolveNumericProperty,
   )
 import Kansoku.Metrics.Query.Session (materializedSessionProjection, sessionProjection)
-import Kansoku.Metrics.Query.Validate (QueryLimitError (..), SqlName, mkSqlName, renderSqlName, validateDateRange, validateOffsets, validateSteps)
-import Kansoku.Metrics.Registry (BuiltinMetric (..))
+import Kansoku.Metrics.Query.Validate (QueryLimitError (..), SqlName, mkSqlName, renderSqlName, validateDateRange, validateObservationCutoff, validateOffsets, validateSteps)
+import Kansoku.Metrics.Registry (BuiltinMetric (..), activeUsers)
 import Kansoku.Prelude
 import System.Timeout (timeout)
 
@@ -139,7 +147,7 @@ data QueryExecutionError
   deriving stock (Generic, Eq, Show)
 
 -- No caller-supplied SQL may select a result ordering.
-data ResultOrder = BucketDimensions | BucketGroup | ExperimentExposureOrder | ExperimentConversionOrder | RetentionOrder | FunnelOrder | ExperimentFunnelOrder
+data ResultOrder = BucketDimensions | BucketDimensionsMeasure | RetentionDimensionsOrder | BucketGroup | ExperimentExposureOrder | ExperimentConversionOrder | RetentionOrder | FunnelOrder | ExperimentFunnelOrder
   deriving stock (Generic)
 
 buildSQL :: EventRegistry -> BuiltinMetric -> QueryRequest -> Either QueryCompileError Text
@@ -219,12 +227,58 @@ runSessionMetric pool measure req =
           (boundedSQL BucketDimensions (compiled ^. #sql))
 
 runRetention :: (IOE :> es) => QueryPool -> QueryRequest -> [Int] -> Eff es (Either QueryExecutionError MetricResult)
-runRetention pool req offsets =
+runRetention pool = runRetentionMetric defaultRegistry pool RetentionOn WindowCohort
+
+runRetentionMetric :: (IOE :> es) => EventRegistry -> QueryPool -> RetentionMode -> CohortMode -> QueryRequest -> [Int] -> Eff es (Either QueryExecutionError MetricResult)
+runRetentionMetric registry pool mode cohort req offsets =
   case validateOffsets offsets of
-    Left err -> pure (Left (QueryLimitFailure err))
-    Right normalized ->
-      checked req (Right ()) $
-        runSQLWith pool "retention" retentionPoint (accountParameter req) (buildRetentionSQL req normalized)
+    Left failure -> pure (Left (QueryLimitFailure failure))
+    Right normalized -> runObserved pool "retention" req (if cohort == LifetimeCohort then historicalScope req else req) (dailyGrain req) (compileRetention registry mode cohort req normalized)
+
+runUsers :: (IOE :> es) => EventRegistry -> QueryPool -> UserWindow -> QueryRequest -> Eff es (Either QueryExecutionError MetricResult)
+runUsers registry pool window req =
+  runObserved
+    pool
+    "active_users"
+    req
+    (rollingScope window req)
+    (if window == CalendarWindow then Right () else dailyGrain req)
+    (compileUsers registry window req)
+
+runStickiness :: (IOE :> es) => EventRegistry -> QueryPool -> QueryRequest -> Eff es (Either QueryExecutionError MetricResult)
+runStickiness registry pool req = runObserved pool "stickiness" req (rollingScope Rolling30 req) (dailyGrain req) (compileRolling registry 30 True req)
+
+runLifecycle :: (IOE :> es) => EventRegistry -> QueryPool -> QueryRequest -> Eff es (Either QueryExecutionError MetricResult)
+runLifecycle registry pool req = runObserved pool "lifecycle" req (historicalScope req) (dailyGrain req) (compileLifecycle registry req)
+
+runObserved :: (IOE :> es) => QueryPool -> Text -> QueryRequest -> QueryRequest -> Either QueryLimitError () -> Either QueryCompileError CompiledMetric -> Eff es (Either QueryExecutionError MetricResult)
+runObserved pool name req scope checks compiled = do
+  today <- liftIO (utctDay <$> getCurrentTime)
+  case first QueryLimitFailure (validateDateRange (req ^. #from) (req ^. #to) >> validateObservationCutoff today (req ^. #to) >> checks)
+    >> first QueryCompileFailure compiled of
+    Left failure -> pure (Left failure)
+    Right result ->
+      liftIO $
+        runSQL
+          pool
+          name
+          (result ^. #groupLabels)
+          (accountParameter scope <> result ^. #filterParameters)
+          (boundedSQL (result ^. #ordering) (result ^. #sql))
+
+dailyGrain :: QueryRequest -> Either QueryLimitError ()
+dailyGrain req = unless (req ^. #timeGrain `elem` [Nothing, Just Day]) (Left (QueryLimitError "invalid_time_grain" "this activity mode requires day grain"))
+
+historicalScope :: QueryRequest -> QueryRequest
+historicalScope req = req {from = min (fromGregorian 1970 1 1) (req ^. #from)}
+
+rollingScope :: UserWindow -> QueryRequest -> QueryRequest
+rollingScope window req = req {from = addDays (negate (windowDays window - 1)) (req ^. #from)}
+
+windowDays :: UserWindow -> Integer
+windowDays CalendarWindow = 1
+windowDays Rolling7 = 7
+windowDays Rolling30 = 30
 
 runFunnel :: (IOE :> es) => QueryPool -> QueryRequest -> Int -> [SqlName] -> Eff es (Either QueryExecutionError MetricResult)
 runFunnel pool req window steps =
@@ -295,6 +349,8 @@ boundedSQL order sql =
       ")",
       "ORDER BY " <> case order of
         BucketDimensions -> "bucket, sort_group_1 NULLS FIRST, sort_group_2 NULLS FIRST"
+        BucketDimensionsMeasure -> "bucket, sort_group_1 NULLS FIRST, sort_group_2 NULLS FIRST, sort_measure"
+        RetentionDimensionsOrder -> "sort_cohort, sort_group_1 NULLS FIRST, sort_group_2 NULLS FIRST, sort_offset"
         BucketGroup -> "bucket, group_key"
         ExperimentExposureOrder -> "bucket, sort_experiment, sort_variant"
         ExperimentConversionOrder -> "sort_measure, sort_variant"
@@ -357,12 +413,6 @@ defaultPoint labels AggRow {bucket, group_key, value} = do
   key <- decodeUtf8 group_key
   group <- decodeGroups labels key
   pure MetricPoint {bucket = nonEmpty bucketText, group, value}
-
-retentionPoint :: AggRow -> Either Text MetricPoint
-retentionPoint row@AggRow {bucket} = do
-  point <- defaultPoint ["offset"] row
-  cohort <- decodeUtf8 bucket
-  pure (point & #bucket .~ Nothing & #group %~ Map.insert "cohort" (Just cohort))
 
 funnelPoint :: AggRow -> Either Text MetricPoint
 funnelPoint = defaultPoint ["index", "step"]
@@ -572,46 +622,130 @@ sessionCalendar req = "SELECT arrayJoin([" <> Text.intercalate "," (map (\label 
       _ -> map date days
     date = Text.pack . formatTime defaultTimeLocale "%Y-%m-%d"
 
--- | Retention over new-in-window cohorts. first_seen deliberately computes
--- min(day) inside the requested window; lifetime cohorts require a first-seen
--- rollup and are outside the MVP contract.
-buildRetentionSQL :: QueryRequest -> [Int] -> Text
-buildRetentionSQL req offsets = boundedSQL RetentionOrder (buildRetentionSQLAggregate req offsets)
+-- Closed-day activity builders share exact subjects, filters and group populations.
+buildUsersSQL :: EventRegistry -> UserWindow -> QueryRequest -> Either QueryCompileError Text
+buildUsersSQL registry window req = boundedCompiled (compileUsers registry window req)
 
-buildRetentionSQLAggregate :: QueryRequest -> [Int] -> Text
-buildRetentionSQLAggregate req offsets =
-  Text.unlines
-    [ "WITH",
-      "  first_seen AS",
-      "  (",
-      "    SELECT canonical_user, min(toDate(occurred_at)) AS cohort_day",
-      "    FROM " <> resolvedSource req,
-      "    WHERE " <> accountPredicate,
-      "      AND canonical_user != ''",
-      "      AND " <> activityPredicate,
-      "      AND " <> timestampPredicate req,
-      "    GROUP BY canonical_user",
-      "  ),",
-      "  activity AS",
-      "  (",
-      "    SELECT DISTINCT canonical_user, toDate(occurred_at) AS active_day",
-      "    FROM " <> resolvedSource req,
-      "    WHERE " <> accountPredicate,
-      "      AND canonical_user != ''",
-      "      AND " <> activityPredicate,
-      "      AND " <> timestampPredicate req,
-      "  )",
-      "SELECT",
-      "    f.cohort_day AS sort_cohort, dateDiff('day', f.cohort_day, a.active_day) AS sort_offset,",
-      "    toString(f.cohort_day) AS bucket,",
-      "    toJSONString([toString(dateDiff('day', f.cohort_day, a.active_day))]) AS group_key,",
-      "    toFloat64(uniqExact(f.canonical_user)) AS value",
-      "FROM first_seen AS f",
-      "INNER JOIN activity AS a ON a.canonical_user = f.canonical_user",
-      "WHERE dateDiff('day', f.cohort_day, a.active_day) IN (" <> Text.intercalate "," (Text.pack . show <$> normalizeOffsets offsets) <> ")",
-      "GROUP BY f.cohort_day, dateDiff('day', f.cohort_day, a.active_day)",
-      "ORDER BY f.cohort_day, dateDiff('day', f.cohort_day, a.active_day)"
-    ]
+buildStickinessSQL :: EventRegistry -> QueryRequest -> Either QueryCompileError Text
+buildStickinessSQL registry req = boundedCompiled (compileRolling registry 30 True req)
+
+buildLifecycleSQL :: EventRegistry -> QueryRequest -> Either QueryCompileError Text
+buildLifecycleSQL registry req = boundedCompiled (compileLifecycle registry req)
+
+boundedCompiled :: Either QueryCompileError CompiledMetric -> Either QueryCompileError Text
+boundedCompiled result = do
+  compiled <- result
+  pure (boundedSQL (compiled ^. #ordering) (compiled ^. #sql))
+
+compileUsers :: EventRegistry -> UserWindow -> QueryRequest -> Either QueryCompileError CompiledMetric
+compileUsers registry CalendarWindow req = compileMetric registry (Simple activeUsers) req
+compileUsers registry window req = compileRolling registry (windowDays window) False req
+
+activityPopulation :: EventRegistry -> QueryRequest -> QueryRequest -> Either QueryCompileError ([GroupDimension], Filters.CompiledFilters, Text)
+activityPopulation registry req scope = do
+  let events = Filters.filteredEventScope [] (req ^. #filters)
+  grouping <- requestedGrouping registry events (req ^. #groupBy) []
+  filters <- first QueryCompileFilterError (Filters.compileMetricFilters registry events (req ^. #filters))
+  let population =
+        Text.unlines
+          [ "SELECT DISTINCT canonical_user,toDate(occurred_at) AS active_day," <> groupProjection grouping,
+            "FROM " <> resolvedSource scope,
+            "WHERE " <> accountPredicate <> " AND canonical_user!='' AND " <> activityPredicate,
+            "AND " <> timestampPredicate scope <> propertyFilterClause (["NOT is_bot" | not (req ^. #includeBots)] <> Filters.predicates filters)
+          ]
+  pure (grouping, filters, population)
+
+-- Missing ungrouped UTC buckets are zeros; absent dimension groups stay absent.
+fillActivity :: QueryRequest -> [GroupDimension] -> [Text] -> Text -> Text
+fillActivity req grouping fields aggregate
+  | not (null grouping) = aggregate
+  | otherwise =
+      "SELECT calendar.bucket AS bucket,'[]' AS group_key,CAST(NULL,'Nullable(String)') AS sort_group_1,CAST(NULL,'Nullable(String)') AS sort_group_2,"
+        <> Text.intercalate "," ["ifNull(answer." <> field <> ",0) AS " <> field | field <- fields]
+        <> " FROM ("
+        <> sessionCalendar req
+        <> ") AS calendar LEFT JOIN ("
+        <> aggregate
+        <> ") AS answer USING(bucket)"
+
+extendGroups :: [Text] -> Text
+extendGroups fields = "toJSONString(arrayConcat(JSONExtract(group_key,'Array(Nullable(String))'),[" <> Text.intercalate "," fields <> "]))"
+
+compileRolling :: EventRegistry -> Integer -> Bool -> QueryRequest -> Either QueryCompileError CompiledMetric
+compileRolling registry width stickiness req = do
+  first (QueryCompileFilterError . Text.pack . show) (dailyGrain req)
+  let scope = req {from = addDays (negate (width - 1)) (req ^. #from)}
+  (grouping, filters, population) <- activityPopulation registry req scope
+  let aggregate =
+        Text.unlines
+          [ "WITH population AS (" <> population <> "),expanded AS (SELECT *,addDays(active_day,arrayJoin(range(" <> Text.pack (show width) <> "))) AS series_day FROM population)",
+            "SELECT toString(series_day) AS bucket,group_key,sort_group_1,sort_group_2,uniqExact(canonical_user) AS rolling_active,uniqExactIf(canonical_user,active_day=series_day) AS daily_active",
+            "FROM expanded WHERE series_day>=toDate(" <> sqlString (renderDay (req ^. #from)) <> ") AND series_day<toDate(" <> sqlString (renderDay (req ^. #to)) <> ")",
+            "GROUP BY series_day,group_key,sort_group_1,sort_group_2"
+          ]
+      series = fillActivity req grouping ["rolling_active", "daily_active"] aggregate
+      sql
+        | stickiness = "SELECT bucket," <> extendGroups ["measure.2"] <> " AS group_key,sort_group_1,sort_group_2,measure.1 AS sort_measure,toFloat64(measure.3) AS value FROM (" <> series <> ") ARRAY JOIN [(1,'daily_active',toFloat64(daily_active)),(2,'rolling30_active',toFloat64(rolling_active)),(3,'ratio',if(rolling_active=0,0,daily_active/rolling_active))] AS measure"
+        | otherwise = "SELECT bucket,group_key,sort_group_1,sort_group_2,toFloat64(rolling_active) AS value FROM (" <> series <> ")"
+  pure CompiledMetric {sql, groupLabels = map dimensionLabel grouping <> ["measure" | stickiness], filterParameters = Filters.parameters filters, ordering = if stickiness then BucketDimensionsMeasure else BucketDimensions}
+
+compileLifecycle :: EventRegistry -> QueryRequest -> Either QueryCompileError CompiledMetric
+compileLifecycle registry req = do
+  first (QueryCompileFilterError . Text.pack . show) (dailyGrain req)
+  (grouping, filters, population) <- activityPopulation registry req (historicalScope req)
+  let earliest = sqlString (renderDay (addDays (-1) (req ^. #from)))
+      latest = sqlString (renderDay (req ^. #to))
+      aggregate =
+        Text.unlines
+          [ "WITH population AS (" <> population <> "), histories AS (SELECT canonical_user,group_key,sort_group_1,sort_group_2,min(active_day) AS first_seen,groupUniqArray(active_day) AS days FROM population GROUP BY canonical_user,group_key,sort_group_1,sort_group_2),",
+            "candidates AS (SELECT *,arrayFilter(day->day>=toDate(" <> earliest <> ") AND day<toDate(" <> latest <> "),days) AS recent FROM histories),",
+            "expanded AS (SELECT *,arrayJoin(arrayDistinct(arrayConcat(recent,arrayMap(day->addDays(day,1),recent)))) AS series_day FROM candidates)",
+            "SELECT toString(series_day) AS bucket,group_key,sort_group_1,sort_group_2,",
+            "uniqExactIf(canonical_user,has(days,series_day) AND first_seen=series_day) AS new_count,",
+            "uniqExactIf(canonical_user,has(days,series_day) AND has(days,addDays(series_day,-1))) AS returning_count,",
+            "uniqExactIf(canonical_user,has(days,series_day) AND NOT has(days,addDays(series_day,-1)) AND first_seen<series_day) AS resurrecting_count,",
+            "uniqExactIf(canonical_user,NOT has(days,series_day) AND has(days,addDays(series_day,-1))) AS dormant_count",
+            "FROM expanded WHERE series_day>=toDate(" <> sqlString (renderDay (req ^. #from)) <> ") AND series_day<toDate(" <> latest <> ") GROUP BY series_day,group_key,sort_group_1,sort_group_2"
+          ]
+      series = fillActivity req grouping ["new_count", "returning_count", "resurrecting_count", "dormant_count"] aggregate
+      sql = "SELECT bucket," <> extendGroups ["measure.2"] <> " AS group_key,sort_group_1,sort_group_2,measure.1 AS sort_measure,toFloat64(measure.3) AS value FROM (" <> series <> ") ARRAY JOIN [(1,'new',new_count),(2,'returning',returning_count),(3,'resurrecting',resurrecting_count),(4,'dormant',dormant_count)] AS measure"
+  pure CompiledMetric {sql, groupLabels = map dimensionLabel grouping <> ["status"], filterParameters = Filters.parameters filters, ordering = BucketDimensionsMeasure}
+
+buildRetentionSQL :: QueryRequest -> [Int] -> Either QueryCompileError Text
+buildRetentionSQL = buildRetentionMetricSQL defaultRegistry RetentionOn WindowCohort
+
+buildRetentionMetricSQL :: EventRegistry -> RetentionMode -> CohortMode -> QueryRequest -> [Int] -> Either QueryCompileError Text
+buildRetentionMetricSQL registry mode cohort req offsets = boundedCompiled (compileRetention registry mode cohort req offsets)
+
+compileRetention :: EventRegistry -> RetentionMode -> CohortMode -> QueryRequest -> [Int] -> Either QueryCompileError CompiledMetric
+compileRetention registry mode cohort req offsets = do
+  first (QueryCompileFilterError . Text.pack . show) (dailyGrain req)
+  void (first (QueryCompileFilterError . Text.pack . show) (validateOffsets offsets))
+  let scope = if cohort == LifetimeCohort then historicalScope req else req
+  (grouping, filters, population) <- activityPopulation registry req scope
+  let normalized = normalizeOffsets offsets
+      horizon = maximum normalized
+      maturity = case mode of
+        RetentionOn -> "addDays(f.cohort_day,f.offset+1)<=toDate(" <> sqlString (renderDay (req ^. #to)) <> ")"
+        RetentionOnOrAfter -> "addDays(f.cohort_day," <> Text.pack (show (horizon + 1)) <> ")<=toDate(" <> sqlString (renderDay (req ^. #to)) <> ")"
+      returned = case mode of
+        RetentionOn -> "a.active_day=addDays(f.cohort_day,f.offset)"
+        RetentionOnOrAfter -> "a.active_day>=addDays(f.cohort_day,f.offset) AND a.active_day<=addDays(f.cohort_day," <> Text.pack (show horizon) <> ")"
+      sql =
+        Text.unlines
+          [ "WITH population AS (" <> population <> "),first_seen AS (",
+            "SELECT canonical_user,group_key,sort_group_1,sort_group_2,min(active_day) AS cohort_day FROM population GROUP BY canonical_user,group_key,sort_group_1,sort_group_2",
+            "HAVING cohort_day>=toDate(" <> sqlString (renderDay (req ^. #from)) <> ") AND cohort_day<toDate(" <> sqlString (renderDay (req ^. #to)) <> ")),",
+            "cohort_offsets AS (SELECT *,arrayJoin([" <> Text.intercalate "," (map (Text.pack . show) normalized) <> "]) AS offset FROM first_seen),",
+            "activity AS (SELECT canonical_user,group_key,active_day FROM population WHERE active_day>=toDate(" <> sqlString (renderDay (req ^. #from)) <> "))",
+            "SELECT f.cohort_day AS sort_cohort,f.offset AS sort_offset,f.sort_group_1 AS sort_group_1,f.sort_group_2 AS sort_group_2,'' AS bucket,",
+            "toJSONString(arrayConcat(JSONExtract(f.group_key,'Array(Nullable(String))'),[toString(f.cohort_day),toString(f.offset)])) AS group_key,",
+            "toFloat64(uniqExactIf(f.canonical_user,f.offset=0 OR (a.canonical_user!='' AND " <> returned <> "))) AS value",
+            "FROM cohort_offsets AS f LEFT JOIN activity AS a ON a.canonical_user=f.canonical_user AND a.group_key=f.group_key",
+            "WHERE f.offset=0 OR " <> maturity,
+            "GROUP BY f.cohort_day,f.offset,f.group_key,f.sort_group_1,f.sort_group_2"
+          ]
+  pure CompiledMetric {sql, groupLabels = map dimensionLabel grouping <> ["cohort", "offset"], filterParameters = Filters.parameters filters, ordering = RetentionDimensionsOrder}
 
 -- | One-pass ordered funnel over identity-resolved users. Converting
 -- DateTime64 to DateTime is load-bearing: windowFunnel measures its window in

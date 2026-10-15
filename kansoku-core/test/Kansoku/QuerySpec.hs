@@ -69,9 +69,11 @@ spec = describe "Kansoku.Query.buildSQL" $ do
     sql `shouldContainText` "NOT is_bot"
     sql `shouldNotContainText` "uniqExact(session_id)"
 
-  it "builds retention SQL with default offsets plus cohort size" $
-    buildRetentionSQL dayRequest [1, 7, 14, 30]
-      `shouldContainText` "WHERE dateDiff('day', f.cohort_day, a.active_day) IN (0,1,7,14,30)"
+  it "keeps cohort size and gates nonzero retention offsets by closed observation days" $ do
+    let sql = retentionSQL dayRequest [1, 7, 14, 30]
+    sql `shouldContainText` "arrayJoin([0,1,7,14,30])"
+    sql `shouldContainText` "f.offset=0 OR addDays(f.cohort_day,f.offset+1)<="
+    sql `shouldContainText` "LEFT JOIN activity"
 
   it "builds a single-pass ordered funnel with native placeholders" $ do
     let sql = buildFunnelSQL dayRequest 604800 (sqlName <$> ["signup_started", "signup_completed"])
@@ -180,7 +182,7 @@ spec = describe "Kansoku.Query.buildSQL" $ do
             buildSQL (requiredMetric "revenue") dayRequest,
             buildSQL (Ratioed conversionRate) dayRequest,
             sessionSQL dayRequest,
-            buildRetentionSQL dayRequest [1, 7],
+            retentionSQL dayRequest [1, 7],
             buildFunnelSQL dayRequest 604800 (sqlName <$> ["signup_started", "signup_completed"]),
             buildExperimentExposuresSQL dayRequest (Just (sqlName "checkout_v2")),
             buildExperimentConversionSQL dayRequest (sqlName "checkout_v2") (sqlName "purchase_completed"),
@@ -203,7 +205,7 @@ spec = describe "Kansoku.Query.buildSQL" $ do
         buildSQL (requiredMetric "revenue") dayRequest,
         buildSQL (Ratioed conversionRate) dayRequest,
         sessionSQL dayRequest,
-        buildRetentionSQL dayRequest [1, 7],
+        retentionSQL dayRequest [1, 7],
         buildFunnelSQL dayRequest 604800 (sqlName <$> ["signup_started", "signup_completed"]),
         buildExperimentExposuresSQL dayRequest (Just (sqlName "checkout_v2")),
         buildExperimentConversionSQL dayRequest (sqlName "checkout_v2") (sqlName "purchase_completed"),
@@ -332,3 +334,6 @@ assertNumericDeclaration property event =
 
 sessionSQL :: QueryRequest -> Text
 sessionSQL = either (error . show) id . buildSessionsSQL
+
+retentionSQL :: QueryRequest -> [Int] -> Text
+retentionSQL req = either (error . show) id . buildRetentionSQL req

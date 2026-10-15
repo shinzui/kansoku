@@ -23,6 +23,7 @@ import Kansoku.Ingest.ServiceSpec qualified
 import Kansoku.Ingest.TimestampSpec qualified
 import Kansoku.LimitsSpec qualified
 import Kansoku.Metrics.AcquisitionIntegrationSpec qualified
+import Kansoku.Metrics.ActivityIntegrationSpec qualified
 import Kansoku.Metrics.FilterIntegrationSpec qualified
 import Kansoku.Metrics.FilterSpec qualified
 import Kansoku.Metrics.HandlerSpec qualified
@@ -87,6 +88,7 @@ normalTests = hspec $ do
   Kansoku.MigrationsSpec.spec
   Kansoku.Metrics.FilterSpec.spec
   Kansoku.Metrics.AcquisitionIntegrationSpec.spec
+  Kansoku.Metrics.ActivityIntegrationSpec.spec
   Kansoku.Metrics.SessionIntegrationSpec.spec
   Kansoku.Metrics.FilterIntegrationSpec.spec
   Kansoku.Metrics.HandlerSpec.spec

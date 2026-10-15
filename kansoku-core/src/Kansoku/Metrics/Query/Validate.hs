@@ -5,6 +5,7 @@
 module Kansoku.Metrics.Query.Validate
   ( QueryLimitError (..),
     validateDateRange,
+    validateObservationCutoff,
     validateSteps,
     validateOffsets,
     SqlName,
@@ -55,6 +56,12 @@ validateDateRange fromDay toDay
   | otherwise = Right ()
   where
     days = diffDays toDay fromDay
+
+-- Every included UTC day must have closed at request start.
+validateObservationCutoff :: Day -> Day -> Either QueryLimitError ()
+validateObservationCutoff today toDay
+  | toDay > today = Left (QueryLimitError "unclosed_observation_window" "to must be no later than the current UTC day; only closed days are observed")
+  | otherwise = Right ()
 
 validateSteps :: [a] -> Either QueryLimitError ()
 validateSteps steps

@@ -171,6 +171,7 @@ test-suite kansoku-core-test
     Kansoku.Ingest.TimestampSpec
     Kansoku.LimitsSpec
     Kansoku.Metrics.AcquisitionIntegrationSpec
+    Kansoku.Metrics.ActivityIntegrationSpec
     Kansoku.Metrics.FilterIntegrationSpec
     Kansoku.Metrics.FilterSpec
     Kansoku.Metrics.HandlerSpec

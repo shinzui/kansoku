@@ -21,7 +21,7 @@ import Kansoku.ClickHouse (QueryPool)
 import Kansoku.Event (AccountId, defaultRegistry)
 import Kansoku.Exception (trySynchronous)
 import Kansoku.Logging (logError, runLogStderr)
-import Kansoku.Metrics.Api (AcquisitionMeasure (..), MetricResult, MetricsRoutes (..), SessionMeasure (..), TimeGrain (..))
+import Kansoku.Metrics.Api (AcquisitionMeasure (..), CohortMode (..), MetricResult, MetricsRoutes (..), RetentionMode (..), SessionMeasure (..), TimeGrain (..), UserWindow (..))
 import Kansoku.Metrics.Filter (MetricFilter)
 import Kansoku.Metrics.Query qualified as Query
 import Kansoku.Metrics.Query.Validate (QueryLimitError (..), mkSqlName, renderSqlName, validateDateRange)
@@ -41,7 +41,9 @@ metricsServer pool =
       acquisition = acquisitionHandler,
       featureAdoption = metricHandler "feature_adoption",
       conversion = metricHandler "conversion_rate",
-      users = webMetricHandler "active_users",
+      users = usersHandler,
+      stickiness = stickinessHandler,
+      lifecycle = lifecycleHandler,
       revenue = metricHandler "revenue",
       organizations = notImplemented "organizations",
       custom = notImplemented "custom",
@@ -63,6 +65,18 @@ metricsServer pool =
       case builtinMetric key of
         Nothing -> pure (KansokuNotFound (notFound "metric_not_found" ("no such metric: " <> key)))
         Just metric -> metricEffToHandler (Query.run defaultRegistry pool metric (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain filters) {Query.includeBots = fromMaybe False bots})
+
+    usersHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> [MetricFilter] -> Maybe UserWindow -> Maybe Bool -> Handler (KansokuResult MetricResult)
+    usersHandler (MetricsPrincipal principal) fromDay toDay groupBy timeGrain filters window bots =
+      effToHandler (Query.runUsers defaultRegistry pool (fromMaybe CalendarWindow window) (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain filters) {Query.includeBots = fromMaybe False bots})
+
+    stickinessHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> [MetricFilter] -> Maybe Bool -> Handler (KansokuResult MetricResult)
+    stickinessHandler (MetricsPrincipal principal) fromDay toDay groupBy timeGrain filters bots =
+      effToHandler (Query.runStickiness defaultRegistry pool (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain filters) {Query.includeBots = fromMaybe False bots})
+
+    lifecycleHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> [MetricFilter] -> Maybe Bool -> Handler (KansokuResult MetricResult)
+    lifecycleHandler (MetricsPrincipal principal) fromDay toDay groupBy timeGrain filters bots =
+      effToHandler (Query.runLifecycle defaultRegistry pool (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain filters) {Query.includeBots = fromMaybe False bots})
 
     acquisitionHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> [MetricFilter] -> Maybe AcquisitionMeasure -> Maybe Bool -> Handler (KansokuResult MetricResult)
     acquisitionHandler (MetricsPrincipal principal) fromDay toDay groupBy timeGrain filters measure bots =
@@ -94,11 +108,11 @@ metricsServer pool =
                   Right window ->
                     effToHandler (Query.runFunnel pool (queryRequest (principal ^. #accountId) fromDay toDay Nothing Nothing []) window steps)
 
-    retentionHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Handler (KansokuResult MetricResult)
-    retentionHandler (MetricsPrincipal principal) fromDay toDay daysParam =
+    retentionHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> [MetricFilter] -> Maybe Text -> Maybe RetentionMode -> Maybe CohortMode -> Maybe Bool -> Handler (KansokuResult MetricResult)
+    retentionHandler (MetricsPrincipal principal) fromDay toDay groupBy timeGrain filters daysParam mode cohort bots =
       case parseOffsets daysParam of
         Left message -> pure (KansokuBadRequest (badRequest "invalid_retention_days" message))
-        Right offsets -> effToHandler (Query.runRetention pool (queryRequest (principal ^. #accountId) fromDay toDay Nothing Nothing []) offsets)
+        Right offsets -> effToHandler (Query.runRetentionMetric defaultRegistry pool (fromMaybe RetentionOn mode) (fromMaybe WindowCohort cohort) (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain filters) {Query.includeBots = fromMaybe False bots} offsets)
 
     experimentsHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> Handler (KansokuResult MetricResult)
     experimentsHandler (MetricsPrincipal principal) fromDay toDay experimentParam timeGrain =

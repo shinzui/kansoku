@@ -19,6 +19,7 @@ from test_support import binary
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--rows', type=int, default=10_000_000)
+    parser.add_argument('--activity', action='store_true', help='include rolling, stickiness, lifecycle and lifetime retention')
     args = parser.parse_args()
     assert args.rows >= 1000
     os.umask(0o077)
@@ -30,7 +31,7 @@ def main():
     test = binary('kansoku-core:test:kansoku-core-test')
     clean = {k: v for k, v in os.environ.items() if not k.startswith(('PG', 'CLICKHOUSE', 'KANSOKU_', 'OTEL_'))}
     report = dict(rows=args.rows, required_size=args.rows >= 10_000_000,
-                  platform=platform.platform(), architecture=platform.machine(), max_threads=4,
+                  platform=platform.platform(), architecture=platform.machine(), max_threads=4, activity=args.activity,
                   settings=dict(anonymous_fraction=.70, identified_cookie_fraction=.40,
                                 accounts=2, runs=5, shared_cookie_conflicts=True), results=[])
     if platform.system() == 'Darwin':
@@ -107,7 +108,7 @@ def main():
                 if 'error' in measured:
                     (root/'query-error.json').write_text(json.dumps(measured,indent=2)+'\n')
                     raise RuntimeError(measured['error'][:700])
-                assert measured['result_rows'] > 0
+                assert measured['result_rows'] >= 0 if name == 'lifetime_retention' else measured['result_rows'] > 0
                 ch('SYSTEM FLUSH LOGS')
                 stats = json.loads(ch("SELECT sum(query_duration_ms) AS total_ms,sum(read_rows) AS total_rows,sum(read_bytes) AS total_bytes,max(memory_usage) AS peak_bytes,count() AS native_statements,min(is_initial_query) AS all_initial,groupArray(tuple(query_kind,left(query,90),query_duration_ms,read_rows,memory_usage)) AS statements FROM system.query_log WHERE type='QueryFinish' AND client_name='ClickHaskell' AND (query_kind!='Set' OR startsWith(query,'SET max_execution_time=')) AND log_comment='" + tag + "' FORMAT JSONEachRow"))
                 for output,source in [('query_duration_ms','total_ms'),('read_rows','total_rows'),('read_bytes','total_bytes'),('memory_usage','peak_bytes')]:
@@ -138,9 +139,10 @@ def main():
                         physical_index_bytes=int(ch("SELECT coalesce(sum(bytes_on_disk),0) FROM system.parts WHERE database='analytics' AND table IN ('identity_signal_users','identity_session_users','identity_context_signals') AND active"))))
                     generated = sql_for(start)
                     queries = generated['queries']
-                    for name in ['funnel','retention','conversion']:
+                    names=['funnel','retention','conversion'] + (['rolling7','stickiness','lifecycle','lifetime_retention'] if args.activity else [])
+                    for name in names:
                         sql = queries[name]
-                        assert queries['source'] in sql, 'benchmark did not exercise the actual bounded resolver'
+                        assert 'analytics.events_resolved_http(' in sql, 'benchmark did not exercise the actual bounded resolver'
                         unresolved = median(name,start,True)
                         resolved = median(name,start,False)
                         ratio = resolved['median_ms'] / max(1, unresolved['median_ms'])

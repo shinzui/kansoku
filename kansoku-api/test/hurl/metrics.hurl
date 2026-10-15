@@ -244,3 +244,41 @@ Authorization: Bearer {{service_token}}
 HTTP 400
 [Asserts]
 jsonpath "$.code" == "invalid_group_by"
+
+GET {{base_url}}/metrics/users?from={{from}}&to={{to}}&window=rolling7&timeGrain=day
+Authorization: Bearer {{service_token}}
+HTTP 200
+[Asserts]
+jsonpath "$.metric" == "active_users"
+
+GET {{base_url}}/metrics/users?from={{from}}&to={{to}}&window=rolling30&timeGrain=week
+Authorization: Bearer {{service_token}}
+HTTP 400
+[Asserts]
+jsonpath "$.code" == "invalid_time_grain"
+
+GET {{base_url}}/metrics/stickiness?from={{from}}&to={{to}}
+Authorization: Bearer {{service_token}}
+HTTP 200
+[Asserts]
+jsonpath "$.metric" == "stickiness"
+jsonpath "$.points[0].group.measure" == "daily_active"
+
+GET {{base_url}}/metrics/lifecycle?from={{from}}&to={{to}}
+Authorization: Bearer {{service_token}}
+HTTP 200
+[Asserts]
+jsonpath "$.metric" == "lifecycle"
+jsonpath "$.points[0].group.status" == "new"
+
+GET {{base_url}}/metrics/retention?from={{from}}&to={{to}}&days=1,7&mode=on_or_after&cohort=lifetime
+Authorization: Bearer {{service_token}}
+HTTP 200
+[Asserts]
+jsonpath "$.metric" == "retention"
+
+GET {{base_url}}/metrics/users?from=2099-07-01&to=2099-07-02
+Authorization: Bearer {{service_token}}
+HTTP 400
+[Asserts]
+jsonpath "$.code" == "unclosed_observation_window"

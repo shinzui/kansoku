@@ -99,11 +99,13 @@ Invalid JSON/filter grammar or incompatible filter types return `invalid_filter`
 | Route | Parameters in addition to required `from`, `to` |
 | --- | --- |
 | events, feature-adoption, revenue, conversion | `groupBy`, `timeGrain`, repeatable `filter` |
-| page-views, users | `groupBy`, `timeGrain`, repeatable `filter`, `includeBots` (default false) |
+| page-views | `groupBy`, `timeGrain`, repeatable `filter`, `includeBots` (default false) |
 | acquisition | `groupBy` (default channel), `timeGrain`, repeatable session-attribute `filter`, `measure` (sessions/users), `includeBots` (default false) |
 | sessions | `groupBy`, `timeGrain`, repeatable session-attribute `filter`, `measure` (count/bounce_rate/average_duration_seconds), `includeBots` (default false) |
 | funnel | required `steps`; optional `window` |
-| retention | `days` |
+| users | `groupBy`, `timeGrain`, repeatable `filter`, `window` (calendar/rolling7/rolling30), `includeBots` |
+| stickiness, lifecycle | `groupBy`, `timeGrain` (day only), repeatable `filter`, `includeBots` |
+| retention | `groupBy`, `timeGrain` (day only), repeatable `filter`, `days`, `mode` (on/on_or_after), `cohort` (window/lifetime), `includeBots` |
 | experiments | `experiment`, `timeGrain` (day/week/month) |
 | experiments/conversion | required `experiment`, `event` |
 | experiments/funnel | required `experiment`, `steps`; optional `window` |
@@ -143,10 +145,12 @@ conversion returns a single zero when its denominator is zero.
 | `/metrics/acquisition` | Complete retained web sessions, first-touch attribution and exact primary-subject users; defaults to sessions grouped by channel, excluding any-bot sessions. |
 | `/metrics/sessions` | Whole retained web sessions, assigned to their earliest event bucket; count, bounce rate and observed duration, excluding any-bot sessions by default. |
 | `/metrics/funnel` | Exact identity-resolved users completing ordered event steps. |
-| `/metrics/retention` | Exact identity-resolved activity by new-in-window cohort and day offset. |
+| `/metrics/retention` | Exact closed-day on/on-or-after retention for window or retained-history lifetime cohorts, omitting immature offsets. |
 | `/metrics/feature-adoption` | Exact identity-resolved users emitting `feature_used`, grouped by its `feature` property by default. |
 | `/metrics/conversion` | Users with `signup_completed` divided by users with `signup_started`; returns 0 when the denominator is 0. |
-| `/metrics/users` | Exact canonical resolved active users at every grain, excluding identify, identify_once, alias, group and bot rows (unless includeBots=true). |
+| `/metrics/users` | Exact calendar or rolling7/rolling30 active subjects, excluding profile-only and default bot rows. |
+| `/metrics/stickiness` | Exact daily active, rolling30 active and their ratio as separate numeric measures. |
+| `/metrics/lifecycle` | Nonnegative new/returning/resurrecting/dormant counts based on retained matching activity. |
 | `/metrics/revenue` | Sum of numeric `amount` on `payment_completed` events. |
 | `/metrics/experiments` | Approximate raw identities exposed per experiment and variant. |
 | `/metrics/experiments/conversion` | Exact identity-resolved exposed and post-exposure converted users per variant, plus rate. |
@@ -211,22 +215,66 @@ curl --fail-with-body --get http://localhost:8080/metrics/funnel \
 Funnel points put `step` and one-based `index` values in `group`. Equal event timestamps may
 satisfy the ordering rule.
 
-## Retention
+## Closed-day users, stickiness and lifecycle
 
-`days` is an optional comma-separated list of positive day offsets and defaults to
-`1,7,14,30`. Offset 0 is always included as the cohort size. A user's cohort day is their first
-activity inside the requested range, not their lifetime first activity; someone active before
-the range can appear as new again.
+Users, stickiness, retention and lifecycle observe complete UTC days: the exclusive `to` must
+be no later than the current UTC date. A later value returns permanent HTTP 400
+`unclosed_observation_window`. Query through today's date to include yesterday; a partially
+observed day is not a mature zero. The ordinary date, filter, work and point limits still apply.
+
+Users defaults to `window=calendar` and supports normal hour/day/week/month grains. `rolling7`
+and `rolling30` require day grain (default): day d counts exact distinct subjects active in
+`[d-(N-1) days,d+1 day)`. Only requested output days are returned. Three different users active
+on days 1,3,9 yield rolling7=2 on days 7 and 9. `/metrics/stickiness` emits separate points with
+`group.measure=daily_active`, `rolling30_active`, and `ratio`; the ratio is daily/rolling30 on
+0..1, or zero for an empty denominator. Counts remain numeric `value` fields.
+
+`/metrics/lifecycle` emits nonnegative `group.status` values per closed day: new is first
+retained matching activity that day; returning is active today and yesterday; resurrecting is
+active today after an inactive yesterday with earlier retained activity; dormant is active
+yesterday and inactive today. New+returning+resurrecting equals exact daily actives. Profile
+updates (`identify`, `identify_once`, `alias`, `group`) do not count as activity anywhere in
+lookback. Bot rows are excluded unless `includeBots=true`. Filters and one/two group dimensions
+apply identically throughout lookback; each group defines its own matching population. Missing
+group values remain null. Ungrouped rolling/daily series fill zero days; nonexistent dimension
+groups are omitted. Retention/erasure can move first retained activity; it is not first ever.
 
 ```bash
-curl --fail-with-body --get http://localhost:8080/metrics/retention \
-  --header "X-Api-Key: $KANSOKU_SERVICE_TOKEN" \
-  --data-urlencode 'from=2026-07-01' \
-  --data-urlencode 'to=2026-08-01' \
-  --data-urlencode 'days=1,7,14' | jq .
+curl --get "$KANSOKU_URL/metrics/users" \
+  --header "Authorization: Bearer $KANSOKU_SERVICE_TOKEN" \
+  --data-urlencode 'from=2026-07-01' --data-urlencode 'to=2026-07-10' \
+  --data-urlencode 'window=rolling7' --data-urlencode 'timeGrain=day'
 ```
 
-Each point puts `cohort` and `offset` in `group` and the retained user count in `value`.
+## Retention
+
+`days` defaults to `1,7,14,30`, with at most 32 distinct positive offsets in 1..365. Offset 0
+always gives cohort size. `cohort=window` (default) means first matching activity inside the
+observed range; a previously active subject can appear as new again. `cohort=lifetime` means
+first matching activity over retained account history, with identical historical filters and
+current identity/trait population; subjects whose first retained activity predates `from` are
+excluded. There is no permanent first-seen store or first-ever claim after history expires.
+
+`mode=on` (default) counts activity on exactly cohort+N, emitting an offset only when that entire
+UTC day has closed by `to`. `mode=on_or_after` counts any activity from cohort+N through the
+largest requested offset, including intermediate days not requested. For example, with offsets
+1,7 a day-5-only return counts for cumulative offset 1 and not 7. Cumulative nonzero offsets
+are omitted unless the whole maximum horizon is closed. Offset 0 is always present. A mature
+missing return is zero; an immature result is absent. Day grain only.
+
+```bash
+curl --get "$KANSOKU_URL/metrics/retention" \
+  --header "Authorization: Bearer $KANSOKU_SERVICE_TOKEN" \
+  --data-urlencode 'from=2026-07-01' --data-urlencode 'to=2026-08-01' \
+  --data-urlencode 'days=1,7,14' --data-urlencode 'mode=on_or_after' \
+  --data-urlencode 'cohort=lifetime'
+```
+
+Each point puts `cohort` and `offset` beside any requested dimensions in `group`; `bucket` is
+null and `value` is an exact subject count. Lifetime/lifecycle scans can read all retained
+matching history. The default 30-second/512-MiB query budgets and identity snapshot footprint
+limits apply; resource exhaustion returns 400 `query_resource_limit` with no partial result.
+Narrowing the output range does not itself bound lifetime lookback work.
 
 ## Experiments
 

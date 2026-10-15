@@ -22,3 +22,5 @@ okf_version: "0.2"
 - [Server enrichment and first-touch web acquisition](0012-server-enrichment-and-first-touch-web-acquisition.md) - Preserve categorical request enrichment in a private versioned queue envelope and assemble complete retained web sessions before acquisition selection.
 
 - [Whole retained replay-safe web sessions](0013-whole-retained-replay-safe-web-sessions.md) - Merge idempotent session state before date and attribute selection.
+
+- [Closed-day exact activity and retained-history cohorts](0014-closed-day-exact-activity-and-retained-history-cohorts.md) - Preserve exact activity populations and honest closed-day/history boundaries.

@@ -37,13 +37,14 @@ validateMetricRequest request = case allowedParameters (decodePathSegments (rawP
 allowedParameters :: [Text] -> Maybe [Text]
 allowedParameters = \case
   ["metrics", "acquisition"] -> Just ["from", "to", "groupBy", "timeGrain", "filter", "measure", "includeBots"]
-  ["metrics", endpoint] | endpoint `elem` ["page-views", "users"] -> Just ["from", "to", "groupBy", "timeGrain", "filter", "includeBots"]
+  ["metrics", "users"] -> Just ["from", "to", "groupBy", "timeGrain", "filter", "window", "includeBots"]
+  ["metrics", endpoint] | endpoint `elem` ["page-views", "stickiness", "lifecycle"] -> Just ["from", "to", "groupBy", "timeGrain", "filter", "includeBots"]
   ["metrics", endpoint]
     | endpoint `elem` ["events", "feature-adoption", "conversion", "revenue", "organizations", "custom"] ->
         Just ["from", "to", "groupBy", "timeGrain", "filter"]
   ["metrics", "sessions"] -> Just ["from", "to", "groupBy", "timeGrain", "filter", "measure", "includeBots"]
   ["metrics", "funnel"] -> Just ["from", "to", "steps", "window"]
-  ["metrics", "retention"] -> Just ["from", "to", "days"]
+  ["metrics", "retention"] -> Just ["from", "to", "groupBy", "timeGrain", "filter", "days", "mode", "cohort", "includeBots"]
   ["metrics", "experiments"] -> Just ["from", "to", "experiment", "timeGrain"]
   ["metrics", "experiments", "conversion"] -> Just ["from", "to", "experiment", "event"]
   ["metrics", "experiments", "funnel"] -> Just ["from", "to", "experiment", "steps", "window"]
