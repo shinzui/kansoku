@@ -1,6 +1,7 @@
 # Bundle Update Log
 
 ## 2026-10-15
+* **Update**: Accept ADR-13 and update ADR-12 after whole-session native, packaged public and pinned SDK acceptance.
 * **Update**: Propose ADR-13 for whole retained idempotent session state, measures and acquisition agreement.
 * **Update**: Accept ADR-12 after final packaged enrichment, country privacy and pinned SDK contract acceptance.
 * **Update**: Record the private enrichment envelope, trusted country lookup and first-touch acquisition boundary; retain proposed status until packaged consumer acceptance.

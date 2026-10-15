@@ -3,9 +3,9 @@ type: Architecture Decision Record
 title: Whole retained replay-safe web sessions
 description: Merge idempotent session state before date and attribute selection so counts, bounce, duration and acquisition share one retained population.
 docId: ADR-13
-status: Proposed
+status: Accepted
 date: 2026-10-15
-timestamp: 2026-10-15T22:46:52Z
+timestamp: 2026-10-15T23:01:06Z
 generated:
   by: process:codex
   at: 2026-10-15T22:46:52Z
@@ -74,4 +74,6 @@ Late earlier/later events can move the start bucket or extend observed duration.
 retained history only: expiry or erasure can change a session's true retained minimum and
 attribution. There is no timeout-based server splitting or inferred stitching of missing IDs.
 The browser SDK supplies its inactivity rotation; other producers must supply a session ID.
-Proposed status remains until native, public packaged and pinned consumer acceptance passes.
+Native canonical-state equality, repeated replay/rebuilds, packaged public workflow in three
+telemetry modes and the pinned generated SDK consumer all pass. The final MasterPlan gate
+still owns joint browser adoption and capacity regression with the enlarged derived schema.

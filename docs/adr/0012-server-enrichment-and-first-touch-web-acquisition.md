@@ -83,8 +83,9 @@ before finding session start would change analytical populations. All were rejec
 The locked Nix shell/server closure includes the maintained reader, while runtime geography
 remains optional. Classification is approximate and versioned, not an authorization fact.
 Historical corrections and erasure must include queued envelopes, materialized context and
-derived state under fenced maintenance. Canonical query-time acquisition is the initial
-reference implementation; the later session projection must prove agreement before replacing it.
+derived state under fenced maintenance. Canonical query-time acquisition remains the identity-aware/finite-property reference.
+[ADR-13](0013-whole-retained-replay-safe-web-sessions.md) now supplies the accepted equivalent
+materialized session state for ordinary session counts and acquisition.
 Packaged runtime, pinned generated consumer and country observability acceptance pass for
 the whole enrichment child. The final MasterPlan gate still owns joint SDK/browser adoption
 and the enlarged pipeline capacity regression.

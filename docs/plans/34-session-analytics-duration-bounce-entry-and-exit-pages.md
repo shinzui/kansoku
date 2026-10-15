@@ -44,7 +44,7 @@ must improve duration without making every visit appear engaged.
 
 
 - [x] M1: Replay-safe session aggregation matches canonical raw events across insert boundaries.
-- [ ] M2: Count, bounce and duration measures with entry/exit dimensions pass HTTP fixtures.
+- [x] M2: Count, bounce and duration measures with entry/exit dimensions pass HTTP fixtures.
 
 ## Surprises & Discoveries
 
@@ -78,16 +78,28 @@ with repeated native rebuild/replay evidence rather than additive count/sum assu
 
 ## Outcomes & Retrospective
 
+Both milestones are Complete. The final server candidate is `d91ba99`; full owned package
+acceptance passes at `.dev/acceptance/run-chw3mjy4/sanitized`: 388 core examples, 18 live-client
+examples, four probes, 52 Hurl requests, native recovery/limits/replay/identity proofs and all
+three telemetry modes. The public producer workflow proves cross-midnight count/attribution,
+entry/exit routes, bot inclusion, a one-page/page-leave positive-duration bounce, duplicate
+acceptance and final duration through the actual asynchronous writer and reporting API.
 
-M1 passes on the owned 26.8.2.7 native engine. Four session examples compare all selected
-state/attribution fields with canonical facts, retry reversed and individual-event batches,
-rebuild twice, count cross-midnight/service/account keys, verify lifecycle bounce and observed
-duration, late earlier events, bot policies, empty bucket/grain behavior and 10000/10001
-points. Four existing acquisition cases also pass after session-count projection reuse.
-`just check` passes 343 deterministic core, 17 client and four probe examples, contract/OpenAPI
-checks, all thirteen strict ADR records and telemetry/lifecycle modes. The final calendar boundary refinement also passes all four native session cases, including
-empty 1960/2199 dates, 48 hourly buckets and normalized week/month labels. Packaged public
-workflow and pinned consumer remain open before M2 and whole-child acceptance. Private development evidence is under `.dev/acceptance/identity-validation/ep34-*`.
+Four focused session examples compare every attribution/state field with canonical facts,
+retry reversed and single-event batches, rebuild twice, isolate account/service keys and test
+late earlier arrivals, identity/lifecycle exclusions, exact hand-counted measures, empty buckets
+at every grain, 1960/2199 labels and 10000/10001 complete-or-error boundaries. Four acquisition
+regressions pass after projection reuse. Final `just check` passes 343 deterministic core,
+17 client and four probe examples, generated/OpenAPI checks, thirteen strict ADR records,
+three telemetry and four lifecycle modes.
+
+Pinned consumer `mori://shinzui/kansoku-ts` commit `bfe281c` consumes `d91ba99`, verifies the
+session measure union, repeatable filters and bot option, and passes 61 unit examples, two SSR
+examples and post-commit `just check` including contract drift, package validation and bundle
+budgets. Seven unconfigured SDK live tests remain explicitly assigned to EP-38's joint gate.
+ADR-13 is Accepted; ADR-12 links the shared state boundary. EP-37 must rebuild all current
+derived state under maintenance, and EP-40 must apply current traits to the first resolved
+user without splitting a session. No permanent first-seen/active-reading claim is introduced.
 
 ## Context and Orientation
 
