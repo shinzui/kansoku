@@ -140,7 +140,7 @@ All four milestones pass native, packaged and pinned consumer acceptance. The co
 core examples, 17 client examples, four probes, generated contracts, OpenAPI lint, strict
 validation of all twelve ADRs and every telemetry/lifecycle mode. Private packaged evidence:
 `.dev/acceptance/run-20n0yu1x/sanitized` (384 core, 18 live-client examples, four probes,
-48 Hurl requests and native recovery/limits/replay/identity proofs).
+51 Hurl requests and native recovery/limits/replay/identity proofs).
 
 The packaged public workflow sends ordinary event JSON through the real asynchronous writer,
 retries with changed headers, then queries first-touch device/country/session/user results.
@@ -157,7 +157,7 @@ A source-archive check caught Cabal's rejection of an extensionless fixture glob
 fixture paths fix it, and `cabal sdist kansoku-core` now includes the binding, both MMDBs,
 their license/attribution and the synthetic user-agent corpus. The final package rebuild and full owned acceptance pass against server candidate `e42fd1b`:
 `.dev/acceptance/run-5qir4du9/sanitized`, again 384 core examples, 18 live-client examples,
-four probes, 48 Hurl requests, native recovery/limits/replay/identity and all three telemetry
+four probes, 51 Hurl requests, native recovery/limits/replay/identity and all three telemetry
 modes. This closes the archive metadata gate. SDK consumer evidence is `e199567` above.
 
 Durable decisions are accepted in ADR-12. Session aggregate state and its equivalent
