@@ -95,7 +95,7 @@ silently imported into Kansoku's aggregate API.
 
 | # | Title | Path | Hard Deps | Soft Deps | Status |
 |---|-------|------|-----------|-----------|--------|
-| 23 | Problem details and generated contract | [EP-23](../plans/23-standardize-problem-details-and-the-generated-api-contract.md) | None | None | In Progress |
+| 23 | Problem details and generated contract | [EP-23](../plans/23-standardize-problem-details-and-the-generated-api-contract.md) | None | None | Complete |
 | 24 | Shared liveness and readiness | [EP-24](../plans/24-adopt-shared-liveness-and-readiness-probes.md) | EP-23 | None | Not Started |
 | 25 | HTTP tracing and safe access logs | [EP-25](../plans/25-trace-http-requests-and-emit-safe-correlated-access-logs.md) | EP-24 | EP-23 | Not Started |
 | 26 | Bounded analytics queries and results | [EP-26](../plans/26-bound-analytics-query-inputs-and-result-cardinality.md) | EP-23 | None | Not Started |
@@ -155,14 +155,21 @@ ownership if not already covered. Allocate new handles using the profiled OKF wo
 
 ## Progress
 
-EP-23 is In Progress: the problem migration, generated-client round trips, Cabal build,
-core/client tests, generated OpenAPI and ADR distillation pass. Its Nix server/client build
-is underway. The other five children remain Not Started. The current implementation scope
-is EP-23 only. Full executable/storage acceptance remains owned by EP-28; optional live
-checks pending in EP-23 are not reported as passing integration evidence.
+EP-23 is Complete, accepted on 2026-10-15. Its Cabal and Nix server/client builds pass,
+core/client tests pass with optional live checks reported as pending, and generated artifacts
+and strict ADR validation pass. The other five children remain Not Started. The current
+implementation scope was EP-23 only. Required executable/storage acceptance remains owned
+by EP-28; no passing live database gate is claimed here.
 
 
 ## Surprises & Discoveries
+
+EP-23's released OpenAPI cohort builds under both Cabal and Nix. Its typed successes and
+problems decode through real generated clients, while 401/403 auth rejections decode from
+client-failure bodies. Later children must use `ProblemDetails`/`ProblemJSON` and preserve the
+CORS and synchronous-exception boundary; `Kansoku.Exception` exposes cancellation-preserving
+helpers. [ADR-8](../adr/0008-rfc9457-problem-details-and-generated-client-media.md) records the
+accepted error/media contract. Query-pool disposal and recovery remain owned by EP-24.
 
 The catalog's prose is not sufficient dependency evidence. Hackage and upstream tags were
 checked: the selected OpenAPI releases are 5.0.0 and 5.1.0; servant-health 0.1.0.0 is released

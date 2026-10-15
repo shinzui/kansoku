@@ -46,7 +46,7 @@ round trip and public HTTP assertions will demonstrate the change.
 
 ## Progress
 
-- [ ] M1: Compatible released OpenAPI packages build in Cabal and Nix, and a generated client decodes a representative typed problem response.
+- [x] (2026-10-15) M1: Cabal builds all components with tests enabled; Nix builds both server/client outputs successfully on the released 5.0.0/5.1.0 cohort. A generated client decodes real Warp 400 problems and 202 acknowledgements; 401/403 client-failure bodies also decode against the shared schema.
 - [x] (2026-10-15) M2: Handler, authentication, parser, request-limit and routing failures use the common problem contract. Real HTTP checks cover 400/401/403/404/405/406/413/415/500/503, CORS, chunked limits, cancellation and schema agreement; 157 generated error responses have problem media and schema references.
 - [x] (2026-10-15) M3: SDK retry and partial-batch behavior pass (14 examples, one optional live-server pending); generated artifacts and migration guides agree. Event contracts remain byte-for-byte unchanged. ADR-1/ADR-3 and accepted ADR-8 record the contract; strict ADR validation passes.
 
@@ -85,11 +85,31 @@ while stable extension codes retain the service-specific distinction between fai
 
 ## Outcomes & Retrospective
 
-The RFC 9457 migration, leaf authentication, explicit response media, complete generated error
-schemas, SDK retry fixes and migration guides are implemented. The Cabal build and deterministic
-core/client checks pass. Nix server/client acceptance is still running; M1 remains open until
-both outputs build. Durable decisions have been distilled into ADR-8 and the affected ADR-1/ADR-3.
-The current user scope is EP-23 only; other child plans are not implementation work in this turn.
+All three milestones are accepted on 2026-10-15. RFC 9457 errors, leaf authentication,
+explicit response media, complete generated error schemas, safe exception handling and SDK
+retry behavior are implemented. The 18-operation OpenAPI document describes 157 problem
+responses, including authentication and framework failures. The event contract is unchanged.
+Migration guides and the architecture atlas reflect the new wire shape; ADR-8, ADR-1 and ADR-3
+hold the durable decisions.
+
+Acceptance evidence from the repository root:
+
+```text
+nix develop -c cabal build all --enable-tests: PASS
+cabal test kansoku-core-test: 143 examples, 0 failures, 17 pending
+cabal test kansoku-client-test: 14 examples, 0 failures, 1 pending
+OpenAPI-focused tests after final header-schema edit: 16 examples, 0 failures
+nix build .#kansoku-server .#kansoku-client --no-link: PASS (exit 0)
+just openapi-check contracts-check: PASS
+okf validate docs/adr --strict --profile docs/adr/profile.dhall --profile-enforce --log-enforce:
+OK: 8 concepts (okf_version 0.2)
+```
+
+The pending checks require live databases or an explicitly configured running server. They
+are not counted as passing integration evidence; EP-28 owns the required executable/storage
+gate. This session implements EP-23 only. The main implementation is commit `0bf59f4`.
+The important integration lesson is that media admission, per-alternative encoding, schema
+content and pre-handler auth rejection need separate checks against real HTTP clients.
 
 
 ## Context and Orientation

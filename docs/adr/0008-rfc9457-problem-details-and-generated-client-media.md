@@ -5,7 +5,7 @@ description: Use one RFC 9457 error shape and explicit per-response media types 
 docId: ADR-8
 status: Accepted
 date: 2026-10-15
-timestamp: 2026-10-15T03:43:15Z
+timestamp: 2026-10-15T03:59:59Z
 generated:
   by: codex-cli/gpt-6.1-sol
   at: 2026-10-15T03:43:15Z
@@ -40,7 +40,8 @@ analytics-storage outages. Unexpected synchronous faults return a generic non-re
 
 Routes admit JSON and problem JSON. Successful MultiVerb alternatives explicitly use
 `RespondAs JSON`, and failed alternatives use `RespondAs ProblemJSON`. The released
-`openapi-hs` 5.0.0 and `servant-openapi-hs` 5.1.0 cohort preserves these response-specific
+[openapi-hs 5.0.0](mori://shinzui/openapi-hs/packages/openapi-hs) and
+[servant-openapi-hs 5.1.0](mori://shinzui/servant-openapi-hs/packages/servant-openapi-hs) cohort preserves these response-specific
 media types in the generated document. Authentication belongs to each protected leaf;
 the public schema catalog remains unauthenticated. Authentication docs include problem
 content, a schema, and the Bearer challenge header for 401.
