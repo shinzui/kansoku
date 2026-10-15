@@ -43,9 +43,9 @@ retention or newly acquired users.
 ## Progress
 
 
-- [ ] M1: Rolling7/rolling30 and stickiness use exact identities and half-open UTC windows.
-- [ ] M2: On/on-or-after retention distinguishes immature offsets and retained-history cohorts.
-- [ ] M3: Lifecycle counts reconcile to daily actives with bounded execution.
+- [x] M1: Rolling7/rolling30 and stickiness use exact identities and half-open UTC windows.
+- [x] M2: On/on-or-after retention distinguishes immature offsets and retained-history cohorts.
+- [x] M3: Lifecycle counts reconcile to daily actives with bounded execution.
 
 ## Surprises & Discoveries
 
@@ -75,13 +75,39 @@ results after older history is appended. Per-query database time/memory limits c
 ## Outcomes & Retrospective
 
 
-Implementation in progress. The first focused owned run passes six examples: two no-storage
+All three milestones are Complete. The first focused owned run passes six examples: two no-storage
 observation/grain validations and four native families covering all three milestones, hand
 counts, current exact subjects, historical filters, retained deletion, maturity, metadata,
 point boundaries and native memory exhaustion on every family. Final source `just check` also passes 345 deterministic core, 17 client and four probe
 examples, generated/OpenAPI checks, all fourteen strict ADR records and telemetry/lifecycle
-modes. The public packaged workflow, pinned SDK and expanded ten-million-event activity
-performance gates remain open.
+modes. Packaged acceptance now passes on server candidate `c37cc06`:
+`.dev/acceptance/run-rk0e6ksi/sanitized` (394 core, 18 live-client examples, four probes,
+63 executed Hurl requests, recovery/limits/replay/identity, geography startup/privacy/defaults
+and all three telemetry modes). The actual ordinary-producer workflow proves rolling and
+stickiness counts, mature/cumulative retained-history retention, lifecycle and closed-day
+validation through real asynchronous publication and public HTTP.
+
+Consumer `mori://shinzui/kansoku-ts` commit `3501e45` pins `c37cc06`; generated activity
+window/mode/cohort and shared controls type-check, with 62 unit examples, two SSR examples
+and post-commit `just check` including contract drift, package validation and unchanged bundle
+budgets. Seven unconfigured live SDK cases remain EP-38's joint obligation. M3's partition/cap/resource and large-history performance acceptance now passes as well.
+
+The owned `--activity` benchmark passes all 28 five-run-median comparisons over three million
+recent facts plus seven million older facts, with the actual public/extended/history evidence
+scopes checked against compiler SQL. Private report:
+`.dev/acceptance/identity-bench-zyat93dw/report.json`. Apple M1 Max, 64 GiB, native 26.8.2.7,
+four database threads: all resolved/raw ratios are 1.09–1.54 (below 2×); the largest resolved
+native median is 589 ms and largest recorded cold native duration 1291 ms. Peak native memory
+is 449500257 bytes warm and 450115541 cold, below the 536870912-byte default query budget.
+Lifetime/lifecycle cost increases with retained history: grown day lifecycle is 291/399 ms
+raw/resolved and lifetime retention 291/360; grown month is 337/441 and 397/589. These are
+workload measurements, not constant-cost or unrestricted-history guarantees. Required empty
+lifetime results after older history are measured rather than treated as missing tests.
+
+ADR-14 is Accepted. EP-40 must preserve the same current-trait population throughout lookback;
+EP-37 retention/erasure can move retained first-seen; EP-38 must rerun this expanded performance
+gate alongside final SDK/browser and capacity acceptance. No permanent first-seen state or
+future-day zeroes are introduced.
 
 ## Context and Orientation
 

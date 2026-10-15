@@ -3,9 +3,9 @@ type: Architecture Decision Record
 title: Closed-day exact activity and retained-history cohorts
 description: Use exact canonical activity populations across rolling users, stickiness, retention and lifecycle with closed UTC observation days and explicit retained-history limits.
 docId: ADR-14
-status: Proposed
+status: Accepted
 date: 2026-10-15
-timestamp: 2026-10-15T23:17:08Z
+timestamp: 2026-10-15T23:44:28Z
 generated:
   by: process:codex
   at: 2026-10-15T23:17:08Z
@@ -78,6 +78,6 @@ specified by the activity contract.
 Retention, erasure or historical correction can move first retained activity and cohort/status
 answers. Group membership and current identity/trait changes can also change historical results.
 There is no permanent acquisition-history guarantee. Resource exhaustion asks clients to narrow
-work and returns a complete error rather than partial sequences or counts. Native functional,
-public packaged, pinned consumer and large retained-history performance acceptance are required
-before Proposed status becomes Accepted.
+work and returns a complete error rather than partial sequences or counts. Native functional, public packaged, pinned consumer and ten-million-event retained-history
+performance acceptance pass. The final MasterPlan gate must repeat the expanded performance
+workload with later identity/trait/funnel changes and joint SDK/browser adoption.
