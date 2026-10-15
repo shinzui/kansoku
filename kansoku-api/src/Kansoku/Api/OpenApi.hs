@@ -10,9 +10,10 @@ where
 
 import Data.Char (toLower, toUpper)
 import Data.OpenApi qualified as O
+import Data.OpenApi.Declare (runDeclare)
 import Data.Text qualified as Text
 import Kansoku.Api (kansokuAPI)
-import Kansoku.Api.Response (ErrorEnvelopeWire)
+import Kansoku.Api.Response (ProblemDetails, problemFieldName)
 import Kansoku.Event
   ( AccountId,
     AnalyticsEvent,
@@ -41,7 +42,7 @@ import Servant.OpenApi (HasOpenApi, toOpenApi)
 instance (HasOpenApi sub) => HasOpenApi (AuthProtect "kansoku-ingest" :> sub) where
   toOpenApi _ =
     toOpenApi (Proxy @sub)
-      & addSecurity "writeKey" [(401, "Missing, malformed, unknown, or revoked credential")]
+      & addSecurity "writeKey" [(401, "Missing, malformed, unknown, or revoked credential"), (503, "Storage or credential store unavailable")]
 
 instance (HasOpenApi sub) => HasOpenApi (AuthProtect "kansoku-metrics" :> sub) where
   toOpenApi _ =
@@ -49,7 +50,8 @@ instance (HasOpenApi sub) => HasOpenApi (AuthProtect "kansoku-metrics" :> sub) w
       & addSecurity
         "serviceToken"
         [ (401, "Missing, malformed, unknown, or revoked credential"),
-          (403, "A valid credential lacks metrics-read permission")
+          (403, "A valid credential lacks metrics-read permission"),
+          (503, "Storage or credential store unavailable")
         ]
 
 instance O.ToSchema AccountId where
@@ -90,7 +92,8 @@ instance O.ToSchema EventSource where
 
 instance O.ToSchema EventVersions
 
-instance O.ToSchema ErrorEnvelopeWire
+instance O.ToSchema ProblemDetails where
+  declareNamedSchema = O.genericDeclareNamedSchema O.defaultSchemaOptions {O.fieldLabelModifier = problemFieldName}
 
 instance O.ToSchema IngestAck
 
@@ -169,6 +172,8 @@ kansokuOpenApi =
         O.Tag "metrics" (Just "Typed metric query endpoints") Nothing,
         O.Tag "schemas" (Just "Published event schema contracts") Nothing
       ]
+    & addProblemResponses [(405, "Method not allowed"), (406, "Not acceptable"), (413, "Payload too large"), (500, "Internal server error")]
+    & withUnsupportedBodyMedia
     & withOperationIds
 
 authSecuritySchemes :: O.SecurityDefinitions
@@ -187,17 +192,49 @@ authSecuritySchemes =
 
 addSecurity :: Text -> [(Int, Text)] -> O.OpenApi -> O.OpenApi
 addSecurity schemeName responses document =
-  foldr addResponse secured responses
-  where
-    secured =
-      document
+  addProblemResponses
+    responses
+    ( document
         & O.allOperations
         . O.security
         .~ [O.SecurityRequirement (mempty & at schemeName ?~ [])]
+    )
+
+-- | Pre-handler and typed failures share one schema reference and media type.
+addProblemResponses :: [(Int, Text)] -> O.OpenApi -> O.OpenApi
+addProblemResponses responses document =
+  foldr addResponse (document & O.components . O.schemas %~ (<> definitions)) responses
+  where
+    (definitions, problemSchema) = runDeclare (O.declareSchemaRef (Proxy @ProblemDetails)) mempty
     addResponse (status, responseDescription) =
       O.allOperations
         . at (fromIntegral status)
-        ?~ O.Inline (mempty & O.description .~ responseDescription)
+        ?~ problemResponse problemSchema status responseDescription
+
+problemResponse :: O.Referenced O.Schema -> Int -> Text -> O.Referenced O.Response
+problemResponse problemSchema status responseDescription =
+  O.Inline
+    ( mempty
+        & O.description
+        .~ responseDescription
+        & O.content
+        . at "application/problem+json"
+        ?~ (mempty & O.schema ?~ problemSchema)
+        & O.headers
+        .~ ( if status == 401
+               then mempty & at "WWW-Authenticate" ?~ O.Inline (mempty & O.description ?~ "Bearer authentication challenge" & O.required ?~ True & O.schema ?~ O.Inline (O.toSchema (Proxy @Text)))
+               else mempty
+           )
+    )
+
+withUnsupportedBodyMedia :: O.OpenApi -> O.OpenApi
+withUnsupportedBodyMedia document =
+  document & O.allOperations %~ \operation ->
+    if isJust (operation ^. O.requestBody)
+      then operation & at 415 ?~ problemResponse problemSchema 415 "Unsupported media type"
+      else operation
+  where
+    (_, problemSchema) = runDeclare (O.declareSchemaRef (Proxy @ProblemDetails)) mempty
 
 -- | Assign deterministic operation identifiers from method and path. They are
 -- derived rather than authored, so a path rename intentionally changes the id.

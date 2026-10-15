@@ -11,6 +11,23 @@ provenance:
     model: "gpt-6.1-sol"
     harness: "codex-cli"
     at: 2026-10-15T03:10:58Z
+  reviews:
+    - model: "gpt-6-astra"
+      harness: "codex-cli"
+      at: 2026-10-15T03:29:26Z
+      verdict: "comments"
+      note: "Contract migration is coherent; clarify that about:blank titles use the HTTP status phrase rather than distinct per-code titles."
+  revisions:
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-10-15T03:32:46Z
+      mode: "implement"
+      note: "Implement the RFC 9457 contract and released OpenAPI cohort; about:blank titles use status phrases."
+    - model: "gpt-6-astra"
+      harness: "codex-cli"
+      at: 2026-10-15T03:37:31Z
+      mode: "update"
+      note: "Clarify status-phrase titles for about:blank and matching catalog/schema acceptance."
 ---
 
 # Standardize problem details and the generated API contract
@@ -30,13 +47,27 @@ round trip and public HTTP assertions will demonstrate the change.
 ## Progress
 
 - [ ] M1: Compatible released OpenAPI packages build in Cabal and Nix, and a generated client decodes a representative typed problem response.
-- [ ] M2: Handler, authentication, parser, request-limit and routing failures use the common problem contract with complete schemas.
-- [ ] M3: SDK retry behavior, conformance tests, generated artifacts, guides and ADRs agree with the migrated contract.
+- [x] (2026-10-15) M2: Handler, authentication, parser, request-limit and routing failures use the common problem contract. Real HTTP checks cover 400/401/403/404/405/406/413/415/500/503, CORS, chunked limits, cancellation and schema agreement; 157 generated error responses have problem media and schema references.
+- [x] (2026-10-15) M3: SDK retry and partial-batch behavior pass (14 examples, one optional live-server pending); generated artifacts and migration guides agree. Event contracts remain byte-for-byte unchanged. ADR-1/ADR-3 and accepted ADR-8 record the contract; strict ADR validation passes.
 
 
 ## Surprises & Discoveries
 
-None during implementation yet.
+The generated client needs both endpoint-level admission of JSON/problem JSON and explicit
+per-response encoders. A real Warp round trip now decodes typed 400 and 202 alternatives;
+auth 401/403 are explicitly decoded from `FailureResponse` bodies rather than described as
+typed handler results.
+
+Raising the Hackage index-state to the locally verified 2026-10-14T22:38:45Z permits the
+released 5.0.0/5.1.0 pair. Nix `callHackageDirect` needs unpacked source hashes, obtained with
+`nix-prefetch-url --unpack`, rather than archive byte hashes. Existing explicit runtime pins
+are preserved.
+
+The SDK previously retried every Servant client error, including pre-handler 401s. Permanent
+4xx and decode/content-type failures now stop immediately; connection errors and retryable
+server failures retain bounded backoff. Deterministic tests prove the 401 attempt count is one.
+Live database and configured-server checks remain optional/pending in this child's test run;
+full executable/storage acceptance belongs to EP-28.
 
 
 ## Decision Log
@@ -48,10 +79,17 @@ payloads, partial batch acknowledgements and credential semantics remain unchang
 On 2026-10-15, require a generated-client round trip before broad conversion. Route-level media
 admission and per-response encoding are separate parts of Servant's contract.
 
+On 2026-10-15, clarify the reviewed title policy: about:blank uses the HTTP status phrase,
+while stable extension codes retain the service-specific distinction between failures.
+
 
 ## Outcomes & Retrospective
 
-Not implemented. Record verified results and remaining limitations here at completion.
+The RFC 9457 migration, leaf authentication, explicit response media, complete generated error
+schemas, SDK retry fixes and migration guides are implemented. The Cabal build and deterministic
+core/client checks pass. Nix server/client acceptance is still running; M1 remains open until
+both outputs build. Durable decisions have been distilled into ADR-8 and the affected ADR-1/ADR-3.
+The current user scope is EP-23 only; other child plans are not implementation work in this turn.
 
 
 ## Context and Orientation
@@ -100,8 +138,12 @@ media types and 5.0 replaces insertion-ordered container imports with compatibil
 Recheck registry and tags if implementation is delayed. Use real fetched hashes, never placeholders.
 
 Introduce `ProblemDetails` and `ProblemJSON` in `Kansoku.Api.Response`, with fields on the wire
-exactly `type`, `title`, `status`, `detail`, `code`, `retryable`. Use `about:blank` for type,
-a stable title per code, and one shared codec/schema field mapping for the reserved name `type`.
+exactly `type`, `title`, `status`, `detail`, `code`, `retryable`. Use `about:blank` for type
+and the recommended HTTP status phrase for title, as specified by
+[RFC 9457 section 4.2.1](https://www.rfc-editor.org/rfc/rfc9457.html#section-4.2.1).
+For example, all 400 codes share `Bad Request`, and all 404 codes share `Not Found`.
+Keep code-specific meaning in `code` and `detail`; titles remain stable per code because each
+catalog code has one status. Use one shared codec/schema field mapping for the reserved name `type`.
 Keep `KansokuResult` as the public result algebra with problem payloads. Admit both content types
 on failing routes, use `RespondAs JSON` for successes and `RespondAs ProblemJSON` for failures,
 and retain explicit `AsUnion` mappings with the empty-case witness. Prove a generated
@@ -175,6 +217,8 @@ reads, 404 unknown routes/placeholders, 413 length and chunked-body limits, fram
 503 auth/queue/query outages, and sanitized unexpected 500. Test only appropriate status/route
 pairs; do not manufacture unreachable handler faults. Assert HTTP status equals problem.status,
 code remains stable, retryable is correct, and Content-Type is application/problem+json.
+Assert different codes with the same status share its status-phrase title, including malformed
+request and query-validation failures; examples and generated schemas must agree with the catalog.
 Generated clients must decode typed success and error results. Auth rejections occur before
 MultiVerb handlers and may remain Servant ClientError failures; tests must explicitly decode
 those bodies and verify their documented schema instead of falsely claiming typed auth results.

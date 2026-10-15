@@ -6,7 +6,6 @@ module Kansoku.Metrics.Handler
   )
 where
 
-import Control.Exception (SomeException, try)
 import Data.Text qualified as Text
 import Data.Time (Day, diffDays)
 import Effectful (Eff, IOE, runEff)
@@ -16,9 +15,11 @@ import Kansoku.Api.Response
     notFound,
     unavailable,
   )
-import Kansoku.Auth.Types (AuthenticatedPrincipal)
+import Kansoku.Auth.Handler ()
+import Kansoku.Auth.Types (MetricsPrincipal (..))
 import Kansoku.ClickHouse (QueryPool)
 import Kansoku.Event (AccountId, defaultRegistry)
+import Kansoku.Exception (trySynchronous)
 import Kansoku.Logging (logError, runLogStderr)
 import Kansoku.Metrics.Api (MetricResult, MetricsRoutes (..), TimeGrain (..))
 import Kansoku.Metrics.Query qualified as Query
@@ -28,8 +29,8 @@ import Kansoku.Prelude
 import Servant (Handler)
 import Servant.Server.Generic (AsServerT)
 
-metricsServer :: AuthenticatedPrincipal -> QueryPool -> MetricsRoutes (AsServerT Handler)
-metricsServer principal pool =
+metricsServer :: QueryPool -> MetricsRoutes (AsServerT Handler)
+metricsServer pool =
   MetricsRoutes
     { events = metricHandler "events",
       pageViews = metricHandler "page_views",
@@ -48,20 +49,20 @@ metricsServer principal pool =
       experimentFunnel = experimentFunnelHandler
     }
   where
-    metricHandler :: Text -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> Handler (KansokuResult MetricResult)
-    metricHandler key fromDay toDay groupBy timeGrain =
+    metricHandler :: Text -> MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> Handler (KansokuResult MetricResult)
+    metricHandler key (MetricsPrincipal principal) fromDay toDay groupBy timeGrain =
       case builtinMetric key of
         Nothing -> pure (KansokuNotFound (notFound "metric_not_found" ("no such metric: " <> key)))
         Just metric ->
           metricEffToHandler
-            (Query.run defaultRegistry pool metric (queryRequest account fromDay toDay groupBy timeGrain))
+            (Query.run defaultRegistry pool metric (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain))
 
-    sessionsHandler :: Day -> Day -> Maybe Text -> Maybe TimeGrain -> Handler (KansokuResult MetricResult)
-    sessionsHandler fromDay toDay groupBy timeGrain =
-      effToHandler (Query.runSessions pool (queryRequest account fromDay toDay groupBy timeGrain))
+    sessionsHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> Handler (KansokuResult MetricResult)
+    sessionsHandler (MetricsPrincipal principal) fromDay toDay groupBy timeGrain =
+      effToHandler (Query.runSessions pool (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain))
 
-    funnelHandler :: Day -> Day -> Text -> Maybe Int -> Handler (KansokuResult MetricResult)
-    funnelHandler fromDay toDay stepsParam requestedWindow =
+    funnelHandler :: MetricsPrincipal -> Day -> Day -> Text -> Maybe Int -> Handler (KansokuResult MetricResult)
+    funnelHandler (MetricsPrincipal principal) fromDay toDay stepsParam requestedWindow =
       case nonEmptyCsv stepsParam of
         [] -> pure (KansokuBadRequest (badRequest "invalid_funnel_steps" ("invalid funnel steps: " <> stepsParam)))
         rawSteps ->
@@ -79,16 +80,16 @@ metricsServer principal pool =
                         (badRequest "invalid_funnel_window" ("invalid funnel window: " <> invalid <> "; expected 1..7776000 seconds"))
                     )
                 Right window ->
-                  effToHandler (Query.runFunnel pool (queryRequest account fromDay toDay Nothing Nothing) window steps)
+                  effToHandler (Query.runFunnel pool (queryRequest (principal ^. #accountId) fromDay toDay Nothing Nothing) window steps)
 
-    retentionHandler :: Day -> Day -> Maybe Text -> Handler (KansokuResult MetricResult)
-    retentionHandler fromDay toDay daysParam =
+    retentionHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Handler (KansokuResult MetricResult)
+    retentionHandler (MetricsPrincipal principal) fromDay toDay daysParam =
       case parseOffsets daysParam of
         Left message -> pure (KansokuBadRequest (badRequest "invalid_retention_days" message))
-        Right offsets -> effToHandler (Query.runRetention pool (queryRequest account fromDay toDay Nothing Nothing) offsets)
+        Right offsets -> effToHandler (Query.runRetention pool (queryRequest (principal ^. #accountId) fromDay toDay Nothing Nothing) offsets)
 
-    experimentsHandler :: Day -> Day -> Maybe Text -> Maybe TimeGrain -> Handler (KansokuResult MetricResult)
-    experimentsHandler fromDay toDay experimentParam timeGrain =
+    experimentsHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> Handler (KansokuResult MetricResult)
+    experimentsHandler (MetricsPrincipal principal) fromDay toDay experimentParam timeGrain =
       case timeGrain of
         Just Hour ->
           pure
@@ -106,12 +107,12 @@ metricsServer principal pool =
               effToHandler
                 ( Query.runExperimentExposures
                     pool
-                    (queryRequest account fromDay toDay Nothing timeGrain)
+                    (queryRequest (principal ^. #accountId) fromDay toDay Nothing timeGrain)
                     experiment
                 )
 
-    experimentConversionHandler :: Text -> Text -> Day -> Day -> Handler (KansokuResult MetricResult)
-    experimentConversionHandler experimentParam eventParam fromDay toDay =
+    experimentConversionHandler :: MetricsPrincipal -> Text -> Text -> Day -> Day -> Handler (KansokuResult MetricResult)
+    experimentConversionHandler (MetricsPrincipal principal) experimentParam eventParam fromDay toDay =
       case mkSqlName experimentParam of
         Left invalid ->
           pure
@@ -135,13 +136,13 @@ metricsServer principal pool =
                   effToHandler
                     ( Query.runExperimentConversion
                         pool
-                        (queryRequest account fromDay toDay Nothing Nothing)
+                        (queryRequest (principal ^. #accountId) fromDay toDay Nothing Nothing)
                         experiment
                         conversionEvent
                     )
 
-    experimentFunnelHandler :: Text -> Text -> Day -> Day -> Maybe Int -> Handler (KansokuResult MetricResult)
-    experimentFunnelHandler experimentParam stepsParam fromDay toDay requestedWindow =
+    experimentFunnelHandler :: MetricsPrincipal -> Text -> Text -> Day -> Day -> Maybe Int -> Handler (KansokuResult MetricResult)
+    experimentFunnelHandler (MetricsPrincipal principal) experimentParam stepsParam fromDay toDay requestedWindow =
       case mkSqlName experimentParam of
         Left invalid ->
           pure
@@ -169,20 +170,18 @@ metricsServer principal pool =
                       effToHandler
                         ( Query.runExperimentFunnel
                             pool
-                            (queryRequest account fromDay toDay Nothing Nothing)
+                            (queryRequest (principal ^. #accountId) fromDay toDay Nothing Nothing)
                             experiment
                             window
                             steps
                         )
 
-    notImplemented :: Text -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> Handler (KansokuResult MetricResult)
-    notImplemented name _ _ _ _ =
+    notImplemented :: Text -> MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> Handler (KansokuResult MetricResult)
+    notImplemented name _principal _ _ _ _ =
       pure
         ( KansokuNotFound
             (notFound "not_implemented" ("metric endpoint is stubbed in the MVP: " <> name))
         )
-
-    account = principal ^. #accountId
 
 queryRequest :: AccountId -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> Query.QueryRequest
 queryRequest accountId fromDay toDay groupBy timeGrain =
@@ -230,7 +229,7 @@ maxFunnelWindowSeconds = 7776000
 
 effToHandler :: Eff '[IOE] MetricResult -> Handler (KansokuResult MetricResult)
 effToHandler action = do
-  result <- liftIO (try @SomeException (runEff action))
+  result <- liftIO (trySynchronous (runEff action))
   case result of
     Left err -> do
       liftIO . runEff . runLogStderr $
@@ -241,7 +240,7 @@ effToHandler action = do
 
 metricEffToHandler :: Eff '[IOE] (Either Query.QueryCompileError MetricResult) -> Handler (KansokuResult MetricResult)
 metricEffToHandler action = do
-  result <- liftIO (try @SomeException (runEff action))
+  result <- liftIO (trySynchronous (runEff action))
   case result of
     Left err -> do
       liftIO . runEff . runLogStderr $

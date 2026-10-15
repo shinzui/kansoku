@@ -18,7 +18,7 @@ import Kansoku.Auth.Api (MetricsAuth)
 import Kansoku.Metrics.Api (MetricResult, MetricsRoutes, TimeGrain)
 import Kansoku.Metrics.Api qualified as Metrics
 import Kansoku.Prelude
-import Servant.API (NamedRoutes, type (:>))
+import Servant.API (NamedRoutes)
 import Servant.API.Experimental.Auth (AuthProtect)
 import Servant.Client (ClientM)
 import Servant.Client qualified as ServantClient
@@ -33,17 +33,17 @@ kansokuMetricsCredential token =
   mkAuthenticatedRequest token $ \value ->
     ClientRequest.addHeader "Authorization" ("Bearer " <> value)
 
-metricsClient :: AuthenticatedRequest MetricsAuth -> MetricsRoutes (AsClientT ClientM)
-metricsClient = ServantClient.client (Proxy @(MetricsAuth :> NamedRoutes MetricsRoutes))
+metricsClient :: MetricsRoutes (AsClientT ClientM)
+metricsClient = ServantClient.client (Proxy @(NamedRoutes MetricsRoutes))
 
 experimentsClient :: AuthenticatedRequest MetricsAuth -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> ClientM (KansokuResult MetricResult)
 experimentsClient credential =
-  Metrics.experiments (metricsClient credential)
+  Metrics.experiments metricsClient credential
 
 experimentConversionClient :: AuthenticatedRequest MetricsAuth -> Text -> Text -> Day -> Day -> ClientM (KansokuResult MetricResult)
 experimentConversionClient credential =
-  Metrics.experimentConversion (metricsClient credential)
+  Metrics.experimentConversion metricsClient credential
 
 experimentFunnelClient :: AuthenticatedRequest MetricsAuth -> Text -> Text -> Day -> Day -> Maybe Int -> ClientM (KansokuResult MetricResult)
 experimentFunnelClient credential =
-  Metrics.experimentFunnel (metricsClient credential)
+  Metrics.experimentFunnel metricsClient credential

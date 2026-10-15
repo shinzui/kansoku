@@ -163,8 +163,8 @@
                   { }
               );
 
-            openapi-hs = callHackageNoCheck "openapi-hs" "4.1.0" "0pn1ml34hphjx8xfzhmdz3a53xicfl6694i7zvi9zi8pw1pb60s9";
-            servant-openapi-hs = callHackageNoCheck "servant-openapi-hs" "4.1.0" "1pm1563js3hl9xxv5pzkbclpx47dkjvyfcynv6alb69f5zhmdkl0";
+            openapi-hs = callHackageNoCheck "openapi-hs" "5.0.0" "194lng0czgk0ma9463yydj9hnr2hpq99kxfx0p06xvwg36b11cin";
+            servant-openapi-hs = callHackageNoCheck "servant-openapi-hs" "5.1.0" "19mvvlzfk7ffh5gbmqhpy587rjjd0xcgydbkcy1b48wxx061h8im";
 
             pg-migrate = callHackageNoCheck "pg-migrate" "1.1.0.0" "103y2bddn50pvrjnlhnfcqznlfihp68bpm72xg8s9xv2x8kv3s2b";
             pg-migrate-cli = callHackageNoCheck "pg-migrate-cli" "1.1.0.0" "1mc2scspfr1p872lxxl8pcpgf3gm2kp2xhjfwad9xv2wcnz1dj6w";

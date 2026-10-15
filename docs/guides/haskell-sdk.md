@@ -115,7 +115,9 @@ semantics.
 ## Typed metric clients
 
 `Kansoku.Client.Metrics.metricsClient` exposes the complete generated route record. Authenticate
-it with `kansokuMetricsCredential` and run the resulting `ClientM` action in a `ClientEnv`.
+each operation with `kansokuMetricsCredential` and run the resulting `ClientM` action in a `ClientEnv`.
+For example, `Metrics.events metricsClient credential fromDay toDay Nothing Nothing` supplies
+the credential to the selected leaf operation (`Metrics` is `Kansoku.Metrics.Api`).
 Convenience functions are currently provided for:
 
 - `experimentsClient`
@@ -124,5 +126,22 @@ Convenience functions are currently provided for:
 
 These return the same typed `KansokuResult MetricResult` alternatives as the HTTP API. See
 [Query metrics](query-metrics.md) before interpreting exposure and stitched conversion counts.
+
+## Problem response migration
+
+Errors now use `Kansoku.Api.Response.ProblemDetails` and `application/problem+json`.
+The fields are `type`, `title`, `status`, `detail`, `code`, and `retryable`; the old
+`ErrorEnvelopeWire` and its `message` field are removed. Generated clients advertise JSON and
+problem JSON, decode handler errors into `KansokuResult`, and retain the existing retry policy:
+permanent problems are dropped and retryable 503s use bounded backoff. Partial 202 batches
+remain acknowledgements, including per-event rejections.
+
+Authentication runs before the typed handler. Its 401/403/503 responses may arrive as a
+Servant `FailureResponse`; decode that response body as `ProblemDetails`. The buffering client
+uses HTTP status for those failures: 401/403 are permanent and 503 is retried. The generated
+`ingestClient` and `metricsClient` records now take a credential on each protected operation;
+the experiment convenience functions keep their credential-first signatures.
+
+Upgrade the API, server and client from the same checkout. There is no legacy error decoder.
 
 [Documentation index](../README.md)

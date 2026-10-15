@@ -17,6 +17,7 @@ import Kansoku.MigrationsSpec qualified
 import Kansoku.Observability (registerPipelineMetrics)
 import Kansoku.ObservabilitySpec qualified
 import Kansoku.OpenApiSpec qualified
+import Kansoku.ProblemSpec qualified
 import Kansoku.QueryIntegrationSpec qualified
 import Kansoku.QuerySpec qualified
 import Kansoku.ReadinessSpec qualified
@@ -41,6 +42,7 @@ main = hspec $ do
   Kansoku.Metrics.HandlerSpec.spec
   Kansoku.Metrics.RoutingSpec.spec
   Kansoku.OpenApiSpec.spec
+  Kansoku.ProblemSpec.spec
   Kansoku.ObservabilitySpec.spec metrics
   Kansoku.QueryIntegrationSpec.spec
   Kansoku.QuerySpec.spec

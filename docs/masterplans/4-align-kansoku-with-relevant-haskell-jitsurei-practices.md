@@ -10,6 +10,23 @@ provenance:
     model: "gpt-6.1-sol"
     harness: "codex-cli"
     at: 2026-10-15T03:10:58Z
+  reviews:
+    - model: "gpt-6-astra"
+      harness: "codex-cli"
+      at: 2026-10-15T03:29:25Z
+      verdict: "changes-requested"
+      note: "Assign query-pool cancellation/recovery ownership and the EP-24/EP-26 handoff; EP-25 needs span-export privacy coverage."
+  revisions:
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-10-15T03:32:46Z
+      mode: "implement"
+      note: "Begin EP-23 implementation, preserving existing review notes."
+    - model: "gpt-6-astra"
+      harness: "codex-cli"
+      at: 2026-10-15T03:37:31Z
+      mode: "update"
+      note: "Apply review: assign EP-24 M2 pool recovery prerequisite, span privacy ownership and acceptance handoffs."
 ---
 
 # Align Kansoku with relevant Haskell Jitsurei practices
@@ -78,7 +95,7 @@ silently imported into Kansoku's aggregate API.
 
 | # | Title | Path | Hard Deps | Soft Deps | Status |
 |---|-------|------|-----------|-----------|--------|
-| 23 | Problem details and generated contract | [EP-23](../plans/23-standardize-problem-details-and-the-generated-api-contract.md) | None | None | Not Started |
+| 23 | Problem details and generated contract | [EP-23](../plans/23-standardize-problem-details-and-the-generated-api-contract.md) | None | None | In Progress |
 | 24 | Shared liveness and readiness | [EP-24](../plans/24-adopt-shared-liveness-and-readiness-probes.md) | EP-23 | None | Not Started |
 | 25 | HTTP tracing and safe access logs | [EP-25](../plans/25-trace-http-requests-and-emit-safe-correlated-access-logs.md) | EP-24 | EP-23 | Not Started |
 | 26 | Bounded analytics queries and results | [EP-26](../plans/26-bound-analytics-query-inputs-and-result-cardinality.md) | EP-23 | None | Not Started |
@@ -138,11 +155,11 @@ ownership if not already covered. Allocate new handles using the profiled OKF wo
 
 ## Progress
 
-Planning is complete; all six children are Not Started. No implementation is blocked by
-missing user input. The audit's targeted offline Cabal test could not start because source
-archives were absent from the cache; it is not a passing baseline. Implementers must restore
-the reproducible dependency environment and record real test results. Final acceptance is
-owned by EP-28, with no additional unowned integration gate.
+EP-23 is In Progress: the problem migration, generated-client round trips, Cabal build,
+core/client tests, generated OpenAPI and ADR distillation pass. Its Nix server/client build
+is underway. The other five children remain Not Started. The current implementation scope
+is EP-23 only. Full executable/storage acceptance remains owned by EP-28; optional live
+checks pending in EP-23 are not reported as passing integration evidence.
 
 
 ## Surprises & Discoveries

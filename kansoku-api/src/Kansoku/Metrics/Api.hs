@@ -13,7 +13,8 @@ import Data.Aeson qualified as Aeson
 import Data.Map.Strict (Map)
 import Data.Text qualified as Text
 import Data.Time (Day)
-import Kansoku.Api.Response (KansokuResult, OkResponses)
+import Kansoku.Api.Response (KansokuResult, OkResponses, ProblemJSON)
+import Kansoku.Auth.Api (MetricsAuth)
 import Kansoku.Prelude
 import Servant.API
   ( Description,
@@ -82,54 +83,58 @@ type MetricQuery =
     :> QueryParam' '[Required] "to" Day
     :> QueryParam "groupBy" Text
     :> QueryParam "timeGrain" TimeGrain
-    :> MultiVerb 'Servant.GET '[JSON] (OkResponses "Metric result" MetricResult) (KansokuResult MetricResult)
+    :> MultiVerb 'Servant.GET '[JSON, ProblemJSON] (OkResponses "Metric result" MetricResult) (KansokuResult MetricResult)
 
 -- | Metric routes keyed by field name. Ten fields deliberately share
 -- 'MetricQuery'; their runtime path-to-handler guard lives in RoutingSpec.
 -- Record field order is not load-bearing for servant routing.
 data MetricsRoutes mode = MetricsRoutes
-  { events :: mode :- "metrics" :> "events" :> MetricQuery,
-    pageViews :: mode :- "metrics" :> "page-views" :> MetricQuery,
-    sessions :: mode :- "metrics" :> "sessions" :> MetricQuery,
+  { events :: mode :- MetricsAuth :> "metrics" :> "events" :> MetricQuery,
+    pageViews :: mode :- MetricsAuth :> "metrics" :> "page-views" :> MetricQuery,
+    sessions :: mode :- MetricsAuth :> "metrics" :> "sessions" :> MetricQuery,
     funnel ::
       mode
-        :- "metrics"
+        :- MetricsAuth
+          :> "metrics"
           :> "funnel"
           :> Description "Users counted at step N performed steps 1..N in order within `window` seconds of the chain's first step. Default window: the full from/to range, capped at 90 days (7776000 s)."
           :> QueryParam' '[Required] "from" Day
           :> QueryParam' '[Required] "to" Day
           :> QueryParam' '[Required] "steps" Text
           :> QueryParam "window" Int
-          :> MultiVerb 'Servant.GET '[JSON] (OkResponses "Metric result" MetricResult) (KansokuResult MetricResult),
+          :> MultiVerb 'Servant.GET '[JSON, ProblemJSON] (OkResponses "Metric result" MetricResult) (KansokuResult MetricResult),
     retention ::
       mode
-        :- "metrics"
+        :- MetricsAuth
+          :> "metrics"
           :> "retention"
           :> Description "Retention over new-in-window cohorts: a user's cohort day is their first activity within the requested from/to window (users active before the window re-appear as new). Offset 0 (the cohort day itself) is always included."
           :> QueryParam' '[Required] "from" Day
           :> QueryParam' '[Required] "to" Day
           :> QueryParam "days" Text
-          :> MultiVerb 'Servant.GET '[JSON] (OkResponses "Metric result" MetricResult) (KansokuResult MetricResult),
-    acquisition :: mode :- "metrics" :> "acquisition" :> MetricQuery,
-    featureAdoption :: mode :- "metrics" :> "feature-adoption" :> MetricQuery,
-    conversion :: mode :- "metrics" :> "conversion" :> MetricQuery,
-    users :: mode :- "metrics" :> "users" :> MetricQuery,
-    revenue :: mode :- "metrics" :> "revenue" :> MetricQuery,
-    organizations :: mode :- "metrics" :> "organizations" :> MetricQuery,
-    custom :: mode :- "metrics" :> "custom" :> MetricQuery,
+          :> MultiVerb 'Servant.GET '[JSON, ProblemJSON] (OkResponses "Metric result" MetricResult) (KansokuResult MetricResult),
+    acquisition :: mode :- MetricsAuth :> "metrics" :> "acquisition" :> MetricQuery,
+    featureAdoption :: mode :- MetricsAuth :> "metrics" :> "feature-adoption" :> MetricQuery,
+    conversion :: mode :- MetricsAuth :> "metrics" :> "conversion" :> MetricQuery,
+    users :: mode :- MetricsAuth :> "metrics" :> "users" :> MetricQuery,
+    revenue :: mode :- MetricsAuth :> "metrics" :> "revenue" :> MetricQuery,
+    organizations :: mode :- MetricsAuth :> "metrics" :> "organizations" :> MetricQuery,
+    custom :: mode :- MetricsAuth :> "metrics" :> "custom" :> MetricQuery,
     experiments ::
       mode
-        :- "metrics"
+        :- MetricsAuth
+          :> "metrics"
           :> "experiments"
           :> Description "Unique users exposed per experiment and variant, from the experiment_exposures rollup. Counts raw identities (user_id, else anonymous_id) with a uniqCombined sketch (~0.8% error at scale; exact for small sets); identity-stitched exact numbers are served by the conversion and funnel endpoints. timeGrain: day, week, or month (hour is rejected; the rollup is daily); omitted = one bucket for the whole range. Re-exposures never double-count."
           :> QueryParam' '[Required] "from" Day
           :> QueryParam' '[Required] "to" Day
           :> QueryParam "experiment" Text
           :> QueryParam "timeGrain" TimeGrain
-          :> MultiVerb 'Servant.GET '[JSON] (OkResponses "Metric result" MetricResult) (KansokuResult MetricResult),
+          :> MultiVerb 'Servant.GET '[JSON, ProblemJSON] (OkResponses "Metric result" MetricResult) (KansokuResult MetricResult),
     experimentConversion ::
       mode
-        :- "metrics"
+        :- MetricsAuth
+          :> "metrics"
           :> "experiments"
           :> "conversion"
           :> Description "Per-variant conversion for one experiment: exposed unique users, users with a conversion event at or after their first exposure (earlier conversions do not count), and the rate. Users exposed to multiple variants count in each. Counts and rates only; no significance testing."
@@ -137,10 +142,11 @@ data MetricsRoutes mode = MetricsRoutes
           :> QueryParam' '[Required] "event" Text
           :> QueryParam' '[Required] "from" Day
           :> QueryParam' '[Required] "to" Day
-          :> MultiVerb 'Servant.GET '[JSON] (OkResponses "Metric result" MetricResult) (KansokuResult MetricResult),
+          :> MultiVerb 'Servant.GET '[JSON, ProblemJSON] (OkResponses "Metric result" MetricResult) (KansokuResult MetricResult),
     experimentFunnel ::
       mode
-        :- "metrics"
+        :- MetricsAuth
+          :> "metrics"
           :> "experiments"
           :> "funnel"
           :> Description "Ordered funnel per variant of one experiment. Users counted at step N performed steps 1..N in order, all at or after their first exposure to the experiment, within `window` seconds of the chain's first step (default: the full from/to range, capped at 90 days). Steps before first exposure do not count."
@@ -149,6 +155,6 @@ data MetricsRoutes mode = MetricsRoutes
           :> QueryParam' '[Required] "from" Day
           :> QueryParam' '[Required] "to" Day
           :> QueryParam "window" Int
-          :> MultiVerb 'Servant.GET '[JSON] (OkResponses "Metric result" MetricResult) (KansokuResult MetricResult)
+          :> MultiVerb 'Servant.GET '[JSON, ProblemJSON] (OkResponses "Metric result" MetricResult) (KansokuResult MetricResult)
   }
   deriving stock (Generic)

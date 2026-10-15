@@ -2,7 +2,7 @@
 type: Architecture Decision Record
 title: SDK-grade ingest contract boundaries
 description: Accept syntactically valid ingest batches partially, cap request size and count, and scope CORS to /v1/* so SDKs get stable retry semantics.
-timestamp: 2026-07-19T00:00:00Z
+timestamp: 2026-10-15T03:43:15Z
 generated:
   by: human:kansoku-maintainers
   at: 2026-07-19T00:00:00Z
@@ -46,7 +46,7 @@ query surface is not CORS-opened.
 
 The analytics application has a configurable positive request-body cap, defaulting to 5 MiB, and
 the batch handler has a configurable positive event-count cap, defaulting to 500. Both violations
-return HTTP 413 with the standard non-retryable JSON error envelope. CORS wraps the size-limit
+return HTTP 413 with the standard non-retryable RFC 9457 problem document. CORS wraps the size-limit
 middleware so browser JavaScript can read the 413 response. The body middleware rejects known
 oversized lengths immediately and guards chunked bodies incrementally as the application reads
 them.
@@ -64,7 +64,7 @@ client, and generated OpenAPI document derived from one response algebra.
 - Opening CORS on the whole service was rejected because browser producers need ingest access,
   while metrics reads should remain same-origin or server-mediated and authenticated.
 - Putting the size middleware outside CORS was rejected because browsers would receive an opaque
-  network failure instead of a readable 413 envelope.
+  network failure instead of a readable 413 problem.
 - Route-specific body limits were rejected in favor of one operational knob plus the semantic
   batch-count limit.
 - Adding 413 only to ingest response types was rejected because it would break the total shared
@@ -81,3 +81,6 @@ Every analytics operation documents the shared 413 alternative even when its usu
 no body. This is a deliberate cost of preserving one total response algebra. Changes to these
 semantics must update the server, `kansoku-client`, OpenAPI conformance tests and artifact, and
 this ADR together.
+
+The coordinated problem migration is recorded in [ADR-8](0008-rfc9457-problem-details-and-generated-client-media.md).
+It changes error media and fields while preserving partial 202 batches, permanent 413s and CORS ordering.

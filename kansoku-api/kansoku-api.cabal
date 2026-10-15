@@ -1,20 +1,24 @@
 cabal-version: 3.0
-name:          kansoku-api
-version:       0.1.0.0
-synopsis:      Servant API and wire DTO types for Kansoku.
+name: kansoku-api
+version: 0.1.0.0
+synopsis: Servant API and wire DTO types for Kansoku.
 description:
   Shared Servant route types, analytics event types, metric DTOs, validation,
   and the Kansoku prelude used by Kansoku packages and clients.
 
-license:       BSD-3-Clause
-author:        Nadeem Bitar
-maintainer:    nadeem@gmail.com
-category:      Web
-build-type:    Simple
+license: BSD-3-Clause
+author: Nadeem Bitar
+maintainer: nadeem@gmail.com
+category: Web
+build-type: Simple
 
 common common
-  ghc-options:        -Wall -Wcompat -Wredundant-constraints
-  default-language:   GHC2024
+  ghc-options:
+    -Wall
+    -Wcompat
+    -Wredundant-constraints
+
+  default-language: GHC2024
   default-extensions:
     DeriveAnyClass
     DuplicateRecordFields
@@ -23,8 +27,8 @@ common common
     OverloadedStrings
 
 library
-  import:          common
-  hs-source-dirs:  src
+  import: common
+  hs-source-dirs: src
   exposed-modules:
     Kansoku.Api
     Kansoku.Api.OpenApi
@@ -40,40 +44,42 @@ library
     Kansoku.Prelude
 
   build-depends:
-    , aeson
-    , base                >=4.21 && <5
-    , containers
-    , generic-lens        >=2.2  && <2.4
-    , http-api-data
-    , lens                ^>=5.3
-    , openapi-hs
-    , servant
-    , servant-openapi-hs
-    , sop-core
-    , text
-    , time
-    , uuid
+    aeson,
+    base >=4.21 && <5,
+    containers,
+    generic-lens >=2.2 && <2.4,
+    http-api-data,
+    http-media,
+    http-types,
+    lens ^>=5.3,
+    openapi-hs,
+    servant,
+    servant-openapi-hs,
+    sop-core,
+    text,
+    time,
+    uuid,
 
 -- Writes docs/api/openapi.json deterministically from the served route type.
 executable kansoku-openapi
-  import:         common
-  main-is:        OpenApi.hs
+  import: common
+  main-is: OpenApi.hs
   hs-source-dirs: app
   build-depends:
-    , aeson-pretty
-    , base          >=4.21 && <5
-    , bytestring
-    , directory
-    , kansoku-api
+    aeson-pretty,
+    base >=4.21 && <5,
+    bytestring,
+    directory,
+    kansoku-api,
 
 -- Writes docs/contracts/events.json deterministically from the event registry.
 executable kansoku-contracts
-  import:         common
-  main-is:        Contracts.hs
+  import: common
+  main-is: Contracts.hs
   hs-source-dirs: app
   build-depends:
-    , aeson-pretty
-    , base          >=4.21 && <5
-    , bytestring
-    , directory
-    , kansoku-api
+    aeson-pretty,
+    base >=4.21 && <5,
+    bytestring,
+    directory,
+    kansoku-api,

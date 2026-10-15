@@ -15,13 +15,14 @@ import Effectful (Eff, IOE, runEff)
 import Effectful.Error.Static qualified as Error
 import Hasql.Pool qualified as Pool
 import Kansoku.Api.Response
-  ( ErrorEnvelopeWire,
-    KansokuResult (..),
+  ( KansokuResult (..),
+    ProblemDetails,
     badRequest,
     tooLarge,
     unavailable,
   )
-import Kansoku.Auth.Types (AuthenticatedPrincipal)
+import Kansoku.Auth.Handler ()
+import Kansoku.Auth.Types (AuthenticatedPrincipal, IngestPrincipal (..))
 import Kansoku.Event
   ( AnalyticsEvent,
     EventId (..),
@@ -49,15 +50,15 @@ type HandlerEff =
      IOE
    ]
 
-ingestServer :: Int -> AuthenticatedPrincipal -> Pool.Pool -> QueueName -> IngestRoutes (AsServerT Handler)
-ingestServer maxBatchLength principal pool queueName =
+ingestServer :: Int -> Pool.Pool -> QueueName -> IngestRoutes (AsServerT Handler)
+ingestServer maxBatchLength pool queueName =
   IngestRoutes
-    { postEvent = postEventHandler,
-      postBatch = postBatchHandler
+    { postEvent = \(IngestPrincipal principal) -> postEventHandler principal,
+      postBatch = \(IngestPrincipal principal) -> postBatchHandler principal
     }
   where
-    postEventHandler :: AnalyticsEvent -> Handler (KansokuResult IngestAck)
-    postEventHandler raw = do
+    postEventHandler :: AuthenticatedPrincipal -> AnalyticsEvent -> Handler (KansokuResult IngestAck)
+    postEventHandler principal raw = do
       now <- liftIO getCurrentTime
       case validateEvent (stampAuthenticatedEvent now principal raw) of
         Left errs -> pure (validationFailure errs)
@@ -70,8 +71,8 @@ ingestServer maxBatchLength principal pool queueName =
                   eventId = unEventId (event ^. #eventId)
                 }
 
-    postBatchHandler :: [AnalyticsEvent] -> Handler (KansokuResult BatchAck)
-    postBatchHandler raw =
+    postBatchHandler :: AuthenticatedPrincipal -> [AnalyticsEvent] -> Handler (KansokuResult BatchAck)
+    postBatchHandler principal raw =
       case batchLengthError maxBatchLength (length raw) of
         Just err -> pure (KansokuTooLarge err)
         Nothing -> do
@@ -91,7 +92,7 @@ stampAuthenticatedEvent receivedAt principal event =
     ?~ (principal ^. #accountId)
 
 -- | Build the non-retryable 413 envelope for an overlong batch.
-batchLengthError :: Int -> Int -> Maybe ErrorEnvelopeWire
+batchLengthError :: Int -> Int -> Maybe ProblemDetails
 batchLengthError maxBatchLength actualLength
   | actualLength > maxBatchLength =
       Just

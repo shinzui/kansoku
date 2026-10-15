@@ -83,18 +83,29 @@ A valid single event returns HTTP 202:
 {"accepted": 1, "eventId": "01j2y8m8f5q6c3v4b7n9p0r2st"}
 ```
 
-A validation failure returns HTTP 400 with the common envelope:
+A validation failure returns HTTP 400 with an RFC 9457 problem document and
+`Content-Type: application/problem+json`:
 
 ```json
 {
+  "type": "about:blank",
+  "title": "Bad Request",
+  "status": 400,
   "code": "validation_failed",
-  "message": "validation failed: event 'page_view': missing required property 'url'",
+  "detail": "validation failed: event 'page_view': missing required property 'url'",
   "retryable": false
 }
 ```
 
-Treat the `code` and `retryable` fields as the machine-readable contract. Error messages and
+Treat the `code` and `retryable` fields as the machine-readable contract. The HTTP status matches `status`; `about:blank` titles use the HTTP status phrase.
+Human-readable details and
 batch rejection text are for people and may change.
+
+Clients should send `Accept: application/json, application/problem+json` to admit both successful
+responses and problems. This replaces the earlier `{code, message, retryable}` error shape;
+update decoders to use `detail`. Success bodies and parsed-batch rejection records keep their
+existing JSON shape. Authentication problems use the same schema, and 401 retains
+`WWW-Authenticate: Bearer`. Browser callers can read ingest problems through CORS.
 
 ## Partial batch acceptance
 
@@ -148,7 +159,7 @@ Kansoku enqueues accepted events in PostgreSQL and returns before ClickHouse ins
 queue-to-ClickHouse boundary is at-least-once; `eventId` provides storage idempotency. Keep the
 same `eventId` when retrying an uncertain request.
 
-Retry transient network failures, HTTP 503 responses whose envelope has `retryable: true`, and
+Retry transient network failures, HTTP 503 responses whose problem document has `retryable: true`, and
 an interrupted request for which no response was received. Use bounded exponential backoff.
 Do not automatically retry HTTP 400, 401, 403, 404, or 413, or per-event batch rejections.
 

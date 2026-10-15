@@ -9,7 +9,7 @@ import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.UUID qualified as UUID
 import Hasql.Pool qualified as Pool
-import Kansoku.Api.Response (ErrorEnvelopeWire (..))
+import Kansoku.Api.Response (ProblemDetails (..))
 import Kansoku.Auth.Handler
 import Kansoku.Auth.Store (AuthStoreError (..))
 import Kansoku.Auth.Token (Token (..), hashToken)
@@ -34,7 +34,7 @@ spec = describe "Kansoku.Auth.Handler" $ do
   it "returns the same 401 for an unknown credential" $ do
     result <- runAuth (ingestAuthHandlerWith fixtureLookup) [(hAuthorization, "Bearer ksk_w_unknown")]
     err <- expectServerError 401 result
-    message <$> decodeEnvelope err `shouldReturn` "missing or unknown credential"
+    detail <$> decodeEnvelope err `shouldReturn` "missing or unknown credential"
 
   it "accepts write keys through X-Api-Key and case-insensitive Bearer transport" $ do
     xApiKey <- runAuth (ingestAuthHandlerWith fixtureLookup) [("X-Api-Key", writeToken)]
@@ -81,7 +81,7 @@ expectServerError expected = \case
   Left err -> err <$ (errHTTPCode err `shouldBe` expected)
   Right _ -> expectationFailure ("expected HTTP " <> show expected) >> fail "authentication unexpectedly succeeded"
 
-decodeEnvelope :: ServerError -> IO ErrorEnvelopeWire
+decodeEnvelope :: ServerError -> IO ProblemDetails
 decodeEnvelope err =
   case Aeson.eitherDecode (errBody err) of
     Right envelope -> pure envelope

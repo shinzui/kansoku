@@ -158,25 +158,6 @@
       "CorrelationId": {
         "type": "string"
       },
-      "ErrorEnvelopeWire": {
-        "properties": {
-          "code": {
-            "type": "string"
-          },
-          "message": {
-            "type": "string"
-          },
-          "retryable": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "code",
-          "message",
-          "retryable"
-        ],
-        "type": "object"
-      },
       "EventId": {
         "type": "string"
       },
@@ -273,6 +254,39 @@
       },
       "OrganizationId": {
         "type": "string"
+      },
+      "ProblemDetails": {
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "retryable": {
+            "type": "boolean"
+          },
+          "status": {
+            "maximum": 9223372036854775807,
+            "minimum": -9223372036854775808,
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "detail",
+          "code",
+          "retryable"
+        ],
+        "type": "object"
       },
       "RejectedEvent": {
         "properties": {
@@ -445,69 +459,102 @@
           },
           "400": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Malformed request or `timeGrain` or `groupBy` or `to` or `from`"
           },
           "401": {
-            "description": "Missing, malformed, unknown, or revoked credential"
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Missing, malformed, unknown, or revoked credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer authentication challenge",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
             "description": "A valid credential lacks metrics-read permission"
           },
           "404": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Not found"
           },
+          "405": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Method not allowed"
+          },
+          "406": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not acceptable"
+          },
           "413": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Payload too large"
           },
-          "503": {
+          "500": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
-            "description": "Storage unavailable"
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Storage or credential store unavailable"
           }
         },
         "security": [
@@ -586,69 +633,102 @@
           },
           "400": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Malformed request or `timeGrain` or `groupBy` or `to` or `from`"
           },
           "401": {
-            "description": "Missing, malformed, unknown, or revoked credential"
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Missing, malformed, unknown, or revoked credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer authentication challenge",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
             "description": "A valid credential lacks metrics-read permission"
           },
           "404": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Not found"
           },
+          "405": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Method not allowed"
+          },
+          "406": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not acceptable"
+          },
           "413": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Payload too large"
           },
-          "503": {
+          "500": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
-            "description": "Storage unavailable"
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Storage or credential store unavailable"
           }
         },
         "security": [
@@ -727,69 +807,102 @@
           },
           "400": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Malformed request or `timeGrain` or `groupBy` or `to` or `from`"
           },
           "401": {
-            "description": "Missing, malformed, unknown, or revoked credential"
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Missing, malformed, unknown, or revoked credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer authentication challenge",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
             "description": "A valid credential lacks metrics-read permission"
           },
           "404": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Not found"
           },
+          "405": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Method not allowed"
+          },
+          "406": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not acceptable"
+          },
           "413": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Payload too large"
           },
-          "503": {
+          "500": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
-            "description": "Storage unavailable"
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Storage or credential store unavailable"
           }
         },
         "security": [
@@ -868,69 +981,102 @@
           },
           "400": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Malformed request or `timeGrain` or `groupBy` or `to` or `from`"
           },
           "401": {
-            "description": "Missing, malformed, unknown, or revoked credential"
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Missing, malformed, unknown, or revoked credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer authentication challenge",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
             "description": "A valid credential lacks metrics-read permission"
           },
           "404": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Not found"
           },
+          "405": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Method not allowed"
+          },
+          "406": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not acceptable"
+          },
           "413": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Payload too large"
           },
-          "503": {
+          "500": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
-            "description": "Storage unavailable"
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Storage or credential store unavailable"
           }
         },
         "security": [
@@ -1009,69 +1155,102 @@
           },
           "400": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Malformed request or `timeGrain` or `experiment` or `to` or `from`"
           },
           "401": {
-            "description": "Missing, malformed, unknown, or revoked credential"
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Missing, malformed, unknown, or revoked credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer authentication challenge",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
             "description": "A valid credential lacks metrics-read permission"
           },
           "404": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Not found"
           },
+          "405": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Method not allowed"
+          },
+          "406": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not acceptable"
+          },
           "413": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Payload too large"
           },
-          "503": {
+          "500": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
-            "description": "Storage unavailable"
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Storage or credential store unavailable"
           }
         },
         "security": [
@@ -1144,69 +1323,102 @@
           },
           "400": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Malformed request or `to` or `from` or `event` or `experiment`"
           },
           "401": {
-            "description": "Missing, malformed, unknown, or revoked credential"
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Missing, malformed, unknown, or revoked credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer authentication challenge",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
             "description": "A valid credential lacks metrics-read permission"
           },
           "404": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Not found"
           },
+          "405": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Method not allowed"
+          },
+          "406": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not acceptable"
+          },
           "413": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Payload too large"
           },
-          "503": {
+          "500": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
-            "description": "Storage unavailable"
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Storage or credential store unavailable"
           }
         },
         "security": [
@@ -1289,69 +1501,102 @@
           },
           "400": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Malformed request or `window` or `to` or `from` or `steps` or `experiment`"
           },
           "401": {
-            "description": "Missing, malformed, unknown, or revoked credential"
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Missing, malformed, unknown, or revoked credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer authentication challenge",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
             "description": "A valid credential lacks metrics-read permission"
           },
           "404": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Not found"
           },
+          "405": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Method not allowed"
+          },
+          "406": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not acceptable"
+          },
           "413": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Payload too large"
           },
-          "503": {
+          "500": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
-            "description": "Storage unavailable"
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Storage or credential store unavailable"
           }
         },
         "security": [
@@ -1430,69 +1675,102 @@
           },
           "400": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Malformed request or `timeGrain` or `groupBy` or `to` or `from`"
           },
           "401": {
-            "description": "Missing, malformed, unknown, or revoked credential"
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Missing, malformed, unknown, or revoked credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer authentication challenge",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
             "description": "A valid credential lacks metrics-read permission"
           },
           "404": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Not found"
           },
+          "405": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Method not allowed"
+          },
+          "406": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not acceptable"
+          },
           "413": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Payload too large"
           },
-          "503": {
+          "500": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
-            "description": "Storage unavailable"
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Storage or credential store unavailable"
           }
         },
         "security": [
@@ -1567,69 +1845,102 @@
           },
           "400": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Malformed request or `window` or `steps` or `to` or `from`"
           },
           "401": {
-            "description": "Missing, malformed, unknown, or revoked credential"
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Missing, malformed, unknown, or revoked credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer authentication challenge",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
             "description": "A valid credential lacks metrics-read permission"
           },
           "404": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Not found"
           },
+          "405": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Method not allowed"
+          },
+          "406": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not acceptable"
+          },
           "413": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Payload too large"
           },
-          "503": {
+          "500": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
-            "description": "Storage unavailable"
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Storage or credential store unavailable"
           }
         },
         "security": [
@@ -1708,69 +2019,102 @@
           },
           "400": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Malformed request or `timeGrain` or `groupBy` or `to` or `from`"
           },
           "401": {
-            "description": "Missing, malformed, unknown, or revoked credential"
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Missing, malformed, unknown, or revoked credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer authentication challenge",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
             "description": "A valid credential lacks metrics-read permission"
           },
           "404": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Not found"
           },
+          "405": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Method not allowed"
+          },
+          "406": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not acceptable"
+          },
           "413": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Payload too large"
           },
-          "503": {
+          "500": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
-            "description": "Storage unavailable"
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Storage or credential store unavailable"
           }
         },
         "security": [
@@ -1849,69 +2193,102 @@
           },
           "400": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Malformed request or `timeGrain` or `groupBy` or `to` or `from`"
           },
           "401": {
-            "description": "Missing, malformed, unknown, or revoked credential"
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Missing, malformed, unknown, or revoked credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer authentication challenge",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
             "description": "A valid credential lacks metrics-read permission"
           },
           "404": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Not found"
           },
+          "405": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Method not allowed"
+          },
+          "406": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not acceptable"
+          },
           "413": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Payload too large"
           },
-          "503": {
+          "500": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
-            "description": "Storage unavailable"
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Storage or credential store unavailable"
           }
         },
         "security": [
@@ -1976,69 +2353,102 @@
           },
           "400": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Malformed request or `days` or `to` or `from`"
           },
           "401": {
-            "description": "Missing, malformed, unknown, or revoked credential"
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Missing, malformed, unknown, or revoked credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer authentication challenge",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
             "description": "A valid credential lacks metrics-read permission"
           },
           "404": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Not found"
           },
+          "405": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Method not allowed"
+          },
+          "406": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not acceptable"
+          },
           "413": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Payload too large"
           },
-          "503": {
+          "500": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
-            "description": "Storage unavailable"
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Storage or credential store unavailable"
           }
         },
         "security": [
@@ -2117,69 +2527,102 @@
           },
           "400": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Malformed request or `timeGrain` or `groupBy` or `to` or `from`"
           },
           "401": {
-            "description": "Missing, malformed, unknown, or revoked credential"
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Missing, malformed, unknown, or revoked credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer authentication challenge",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
             "description": "A valid credential lacks metrics-read permission"
           },
           "404": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Not found"
           },
+          "405": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Method not allowed"
+          },
+          "406": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not acceptable"
+          },
           "413": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Payload too large"
           },
-          "503": {
+          "500": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
-            "description": "Storage unavailable"
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Storage or credential store unavailable"
           }
         },
         "security": [
@@ -2258,69 +2701,102 @@
           },
           "400": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Malformed request or `timeGrain` or `groupBy` or `to` or `from`"
           },
           "401": {
-            "description": "Missing, malformed, unknown, or revoked credential"
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Missing, malformed, unknown, or revoked credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer authentication challenge",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
             "description": "A valid credential lacks metrics-read permission"
           },
           "404": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Not found"
           },
+          "405": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Method not allowed"
+          },
+          "406": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not acceptable"
+          },
           "413": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Payload too large"
           },
-          "503": {
+          "500": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
-            "description": "Storage unavailable"
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Storage or credential store unavailable"
           }
         },
         "security": [
@@ -2399,69 +2875,102 @@
           },
           "400": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Malformed request or `timeGrain` or `groupBy` or `to` or `from`"
           },
           "401": {
-            "description": "Missing, malformed, unknown, or revoked credential"
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Missing, malformed, unknown, or revoked credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer authentication challenge",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
             "description": "A valid credential lacks metrics-read permission"
           },
           "404": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Not found"
           },
+          "405": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Method not allowed"
+          },
+          "406": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not acceptable"
+          },
           "413": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Payload too large"
           },
-          "503": {
+          "500": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
-            "description": "Storage unavailable"
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Storage or credential store unavailable"
           }
         },
         "security": [
@@ -2509,66 +3018,102 @@
           },
           "400": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Malformed request or `body`"
           },
           "401": {
-            "description": "Missing, malformed, unknown, or revoked credential"
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Missing, malformed, unknown, or revoked credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer authentication challenge",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Not found"
           },
+          "405": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Method not allowed"
+          },
+          "406": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not acceptable"
+          },
           "413": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Payload too large"
           },
-          "503": {
+          "415": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
-            "description": "Storage unavailable"
+            "description": "Unsupported media type"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Storage or credential store unavailable"
           }
         },
         "security": [
@@ -2613,66 +3158,102 @@
           },
           "400": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Malformed request or `body`"
           },
           "401": {
-            "description": "Missing, malformed, unknown, or revoked credential"
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Missing, malformed, unknown, or revoked credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer authentication challenge",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Not found"
           },
+          "405": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Method not allowed"
+          },
+          "406": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not acceptable"
+          },
           "413": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
             "description": "Payload too large"
           },
-          "503": {
+          "415": {
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
-                }
-              },
-              "application/json;charset=utf-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelopeWire"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },
-            "description": "Storage unavailable"
+            "description": "Unsupported media type"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Storage or credential store unavailable"
           }
         },
         "security": [
@@ -2701,6 +3282,46 @@
               }
             },
             "description": ""
+          },
+          "405": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Method not allowed"
+          },
+          "406": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not acceptable"
+          },
+          "413": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Payload too large"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal server error"
           }
         },
         "tags": [

@@ -15,7 +15,7 @@ import Hasql.Encoders qualified as Encoders
 import Hasql.Pool qualified as Pool
 import Hasql.Session qualified as Session
 import Hasql.Statement qualified as Statement
-import Kansoku.Api.Response (ErrorEnvelopeWire)
+import Kansoku.Api.Response (ProblemDetails)
 import Kansoku.Auth.Issue (issueKey)
 import Kansoku.Auth.Token (Token (..))
 import Kansoku.Auth.Types (CredentialKind (ServiceToken))
@@ -77,9 +77,9 @@ spec = describe "Kansoku property metrics HTTP integration" $ do
 
               rejected <- authorizedGet manager port token "/metrics/revenue?from=2026-07-10&to=2026-07-11&groupBy=prop:nope"
               Http.responseStatus rejected `shouldBe` status400
-              envelope <- decodeBody rejected :: IO ErrorEnvelopeWire
+              envelope <- decodeBody rejected :: IO ProblemDetails
               envelope ^. #code `shouldBe` "unknown_property"
-              envelope ^. #message `shouldBe` "unknown property nope for event payment_completed"
+              envelope ^. #detail `shouldBe` "unknown property nope for event payment_completed"
 
       case migrated of
         Left err -> expectationFailure ("ephemeral HTTP integration database failed: " <> show err)

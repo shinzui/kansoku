@@ -2,7 +2,7 @@
 type: Architecture Decision Record
 title: API-key authentication and account-scoped analytics
 description: Require write-key or service-token bearer authentication on ingest and metrics routes, scoped to an account, via SHA-256-hashed credentials.
-timestamp: 2026-07-19T00:00:00Z
+timestamp: 2026-10-15T03:43:15Z
 generated:
   by: human:kansoku-maintainers
   at: 2026-07-19T00:00:00Z
@@ -37,7 +37,7 @@ encodes them as unpadded base64url, prints the credential once, and stores only 
 SHA-256 hash in `kansoku.api_keys`. PostgreSQL DDL is an application-owned component in the
 explicit pg-migrate plan. Normal server startup never applies migrations.
 
-Authentication is always enabled and is declared in the Servant route type with two distinct
+Authentication is always enabled on each protected leaf operation and is declared in the Servant route type with two distinct
 `AuthProtect` tags and principal newtypes. Distinct result types make selecting the wrong auth
 handler a type error. Both route families accept `Authorization: Bearer <token>` and
 `X-Api-Key: <token>`; `Authorization` takes precedence when both are present, including when it
@@ -88,3 +88,9 @@ identity-resolved, ratio, retention, funnel, session, and rollup paths; future b
 the completeness test that asserts this predicate. Future changes to credential kinds, header
 precedence, account stamping, query scoping, rollup dimensions, or revocation latency must update
 the server, client, OpenAPI artifact, EP-15, and this ADR together.
+
+Authentication failures use the RFC 9457 schema and `application/problem+json`, with
+`WWW-Authenticate: Bearer` on 401. Every protected operation documents its auth problem
+body; the public schema catalog stays unauthenticated. See
+[ADR-8](0008-rfc9457-problem-details-and-generated-client-media.md) for the coordinated
+server/client migration and the distinction between typed handler results and pre-handler failures.

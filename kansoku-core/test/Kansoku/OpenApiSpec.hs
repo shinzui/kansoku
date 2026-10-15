@@ -15,7 +15,7 @@ import Data.OpenApi (ToSchema, validateToJSON)
 import Data.Text qualified as Text
 import Kansoku.Api (kansokuAPI)
 import Kansoku.Api.OpenApi (kansokuOpenApi)
-import Kansoku.Api.Response (ErrorEnvelopeWire (..))
+import Kansoku.Api.Response (ProblemDetails (..), problem)
 import Kansoku.Event
 import Kansoku.Ingest.Api qualified as Ingest
 import Kansoku.Metrics.Api qualified as Metrics
@@ -58,6 +58,23 @@ spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
 
   it "declares one success and the shared error tail on every operation" $
     traverse_ assertStatuses operationValues
+
+  it "documents problem JSON with schemas on every error, including authentication" $
+    traverse_
+      ( \(_path, _method, operation) ->
+          traverse_
+            ( \(key, response) ->
+                if Key.toText key < "400"
+                  then pure ()
+                  else do
+                    let contents = objectAt ["content"] response
+                    KeyMap.keys contents `shouldBe` ["application/problem+json"]
+                    lookupText ["content", "application/problem+json", "schema", "$ref"] response
+                      `shouldBe` Just "#/components/schemas/ProblemDetails"
+            )
+            (KeyMap.toList (objectAt ["responses"] operation))
+      )
+      operationValues
 
   it "documents ordered funnel semantics and the optional window parameter" $ do
     let funnelOperation = fromMaybe Aeson.Null (valueAt ["paths", "/metrics/funnel", "get"] documentValue)
@@ -107,7 +124,7 @@ spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
     conforms "MetricPoint" sampleMetricPoint
     conforms "MetricResult" Metrics.MetricResult {Metrics.metric = "events", Metrics.points = [sampleMetricPoint]}
     conforms "TimeGrain" Metrics.Hour
-    conforms "ErrorEnvelopeWire" ErrorEnvelopeWire {code = "not_found", message = "no such endpoint", retryable = False}
+    conforms "ProblemDetails" (problem 404 "not_found" "no such endpoint")
     conforms "SchemaCatalog" (schemaCatalog defaultRegistry)
     conforms "EventId" (EventId "evt_openapi")
     conforms "EventName" (EventName "page_view")
@@ -146,7 +163,7 @@ spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
       traverse_ (assertRouted manager port) expectedServedPaths
       missing <- get manager port "/v1/definitely-missing"
       HTTP.responseStatus missing `shouldBe` status404
-      envelope <- decodeBody @ErrorEnvelopeWire (HTTP.responseBody missing)
+      envelope <- decodeBody @ProblemDetails (HTTP.responseBody missing)
       code envelope `shouldBe` "not_found"
 
   it "pins health, readiness, internal metrics, and OpenAPI as the WAI-level allowlist" $ do
@@ -264,9 +281,14 @@ assertStatuses (path, method, operation) = do
         | "/metrics/" `Text.isPrefixOf` path = ["401", "403"]
         | otherwise = ["401"]
       expected
-        | path == "/v1/schemas" = ["200"]
-        | otherwise = [success, "400", "404", "413", "503"] <> authStatuses
+        | path == "/v1/schemas" = ["200", "405", "406", "413", "500"]
+        | otherwise = [success, "400", "404", "405", "406", "413", "500", "503"] <> authStatuses <> ["415" | method == "post"]
   actual `shouldBe` List.sort expected
+  when (path /= "/v1/schemas") $ do
+    lookupText ["responses", "401", "headers", "WWW-Authenticate", "schema", "type"] operation
+      `shouldBe` Just "string"
+    valueAt ["responses", "401", "headers", "WWW-Authenticate", "required"] operation
+      `shouldBe` Just (Aeson.Bool True)
   path `shouldSatisfy` (`elem` expectedServedPaths)
 
 assertSecurity :: OperationValue -> Expectation
@@ -339,7 +361,7 @@ assertRouted manager port path = do
   response <- requestForPath manager port path
   HTTP.responseStatus response `shouldBe` expectedStatus path
   when (HTTP.responseStatus response == status404) $ do
-    envelope <- decodeBody @ErrorEnvelopeWire (HTTP.responseBody response)
+    envelope <- decodeBody @ProblemDetails (HTTP.responseBody response)
     code envelope `shouldBe` "not_implemented"
 
 expectedStatus :: Text -> Status

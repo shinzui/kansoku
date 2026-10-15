@@ -13,14 +13,14 @@ import Data.Generics.Labels ()
 import Data.Map.Strict qualified as Map
 import Data.Text qualified as Text
 import Data.Time.Format (defaultTimeLocale, formatTime)
-import Kansoku.Api.Response (ErrorEnvelopeWire (..), KansokuResult (..))
+import Kansoku.Api.Response (KansokuResult (..), problem)
 import Kansoku.Client
 import Kansoku.Client.Metrics
 import Kansoku.Event
 import Kansoku.Metrics.Api (MetricResult (..), TimeGrain (Day))
 import Kansoku.Prelude
 import Network.HTTP.Client qualified as HTTP
-import Network.HTTP.Types (Status, status200, status202, status400, status401, status404, status413, status503)
+import Network.HTTP.Types (Status, status200, status202, status400, status401, status404, status413, status503, statusCode)
 import Network.HTTP.Types.Header (hAuthorization)
 import Network.Wai (Application, Request, pathInfo, queryString, requestHeaders, requestMethod, responseLBS, strictRequestBody)
 import Network.Wai.Handler.Warp qualified as Warp
@@ -118,6 +118,15 @@ spec = describe "Kansoku.Client" $ do
     withRecorder (const (pure status400)) $ \port _ attempts -> do
       client <- newClient ((testConfig port) & #maxRetries .~ 3 & #retryBaseDelayMicros .~ 1_000)
       trackEvent client emptyIds "invalid_event" []
+      flush client
+      readTVarIO attempts `shouldReturn` 1
+      droppedCount client `shouldReturn` 1
+      close client
+
+  it "does not retry an authentication rejection received before the typed handler" $
+    withRecorder (const (pure status401)) $ \port _ attempts -> do
+      client <- newClient ((testConfig port) & #maxRetries .~ 3 & #retryBaseDelayMicros .~ 1_000)
+      trackEvent client emptyIds "unauthorized_event" []
       flush client
       readTVarIO attempts `shouldReturn` 1
       droppedCount client `shouldReturn` 1
@@ -224,16 +233,17 @@ recorderApp received attempts nextStatus request respond = do
       status <- nextStatus attempts
       when (requestMethod request == "POST" && pathInfo request == ["v1", "batch"]) $
         atomically (modifyTVar' received (<> [body]))
-      respond (responseLBS status [("content-type", "application/json")] (responseBodyFor status request body))
+      respond (responseLBS status [("content-type", if statusCode status >= 400 then "application/problem+json" else "application/json")] (responseBodyFor status request body))
 
 responseBodyFor :: Status -> Request -> LBS.ByteString -> LBS.ByteString
 responseBodyFor status _request _body
+  | status == status401 = Aeson.encode (problem 401 "unauthorized" "missing or unknown credential")
   | status == status400 =
-      Aeson.encode ErrorEnvelopeWire {code = "validation_failed", message = "validation failed", retryable = False}
+      Aeson.encode (problem 400 "validation_failed" "validation failed")
   | status == status503 =
-      Aeson.encode ErrorEnvelopeWire {code = "queue_unavailable", message = "analytics queue is unavailable", retryable = True}
+      Aeson.encode (problem 503 "queue_unavailable" "analytics queue is unavailable")
   | status == status413 =
-      Aeson.encode ErrorEnvelopeWire {code = "batch_too_large", message = "batch exceeds limit", retryable = False}
+      Aeson.encode (problem 413 "batch_too_large" "batch exceeds limit")
 responseBodyFor _status request body
   | pathInfo request == ["v1", "events"] = "{\"accepted\":1,\"eventId\":\"test\"}"
   | otherwise =
@@ -273,7 +283,7 @@ metricsRecorderApp request respond =
           queryValue "steps" request == Just "checkout_started,purchase_completed",
           queryValue "window" request == Just "604800" ->
             ok "experiment_funnel"
-      _ -> respond (responseLBS status400 [("content-type", "application/json")] (Aeson.encode ErrorEnvelopeWire {code = "bad_request", message = "unexpected metrics request", retryable = False}))
+      _ -> respond (responseLBS status400 [("content-type", "application/json")] (Aeson.encode (problem 400 "bad_request" "unexpected metrics request")))
   where
     ok name =
       respond

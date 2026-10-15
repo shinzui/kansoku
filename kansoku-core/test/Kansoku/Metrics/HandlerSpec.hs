@@ -7,10 +7,9 @@ import Data.Foldable (traverse_)
 import Data.Text qualified as Text
 import Kansoku.Api qualified as Api
 import Kansoku.Api.Response qualified as Response
-import Kansoku.Auth.Types (IngestPrincipal, MetricsPrincipal)
 import Kansoku.Event (defaultRegistry, schemaCatalog)
 import Kansoku.Metrics.Handler (metricsServer)
-import Kansoku.Metrics.RoutingSpec (sentinelContext, sentinelIngestServer, sentinelPrincipal)
+import Kansoku.Metrics.RoutingSpec (sentinelContext, sentinelIngestServer)
 import Network.HTTP.Client qualified as HTTP
 import Network.HTTP.Types (status400, status503)
 import Network.Wai (Application)
@@ -36,7 +35,7 @@ spec = describe "Kansoku.Metrics.Handler" $ do
           Right value -> pure value
           Left err -> expectationFailure ("JSON decode failed: " <> err) >> fail err
       Response.code envelope `shouldBe` "invalid_funnel_step"
-      Response.message envelope `shouldSatisfy` Text.isInfixOf "bad'step"
+      Response.detail envelope `shouldSatisfy` Text.isInfixOf "bad'step"
 
   it "rejects a funnel window outside 1..7776000 before forcing the query pool" $
     Warp.testWithApplication (pure validationApplication) $ \port -> do
@@ -54,7 +53,7 @@ spec = describe "Kansoku.Metrics.Handler" $ do
           Right value -> pure value
           Left err -> expectationFailure ("JSON decode failed: " <> err) >> fail err
       Response.code envelope `shouldBe` "invalid_funnel_window"
-      Response.message envelope `shouldSatisfy` Text.isInfixOf "0"
+      Response.detail envelope `shouldSatisfy` Text.isInfixOf "0"
 
   it "rejects an undeclared property before forcing the query pool" $
     Warp.testWithApplication (pure validationApplication) $ \port -> do
@@ -72,7 +71,7 @@ spec = describe "Kansoku.Metrics.Handler" $ do
           Right value -> pure value
           Left err -> expectationFailure ("JSON decode failed: " <> err) >> fail err
       Response.code envelope `shouldBe` "unknown_property"
-      Response.message envelope `shouldSatisfy` Text.isInfixOf "nope"
+      Response.detail envelope `shouldSatisfy` Text.isInfixOf "nope"
 
   it "rejects invalid experiment query inputs before forcing the query pool" $
     Warp.testWithApplication (pure validationApplication) $ \port -> do
@@ -141,7 +140,7 @@ assertBadRequest manager port path expectedCode messageFragment = do
       Right value -> pure value
       Left err -> expectationFailure ("JSON decode failed: " <> err) >> fail err
   Response.code envelope `shouldBe` expectedCode
-  Response.message envelope `shouldSatisfy` Text.isInfixOf messageFragment
+  Response.detail envelope `shouldSatisfy` Text.isInfixOf messageFragment
 
 validationApplication :: Application
 validationApplication =
@@ -149,7 +148,7 @@ validationApplication =
     Api.kansokuAPI
     sentinelContext
     Api.KansokuAPI
-      { Api.ingest = \(_principal :: IngestPrincipal) -> sentinelIngestServer,
-        Api.metrics = \(_principal :: MetricsPrincipal) -> metricsServer sentinelPrincipal (error "query pool must not be forced by validation"),
+      { Api.ingest = sentinelIngestServer,
+        Api.metrics = metricsServer (error "query pool must not be forced by validation"),
         Api.schemas = pure (schemaCatalog defaultRegistry)
       }

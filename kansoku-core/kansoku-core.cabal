@@ -1,6 +1,6 @@
 cabal-version: 3.0
-name:          kansoku-core
-version:       0.1.0.0
+name: kansoku-core
+version: 0.1.0.0
 synopsis:
   Core Kansoku runtime, storage, ingestion, and metrics logic.
 
@@ -9,15 +9,19 @@ description:
   persistence adapters, ingestion queueing, metric query implementation, OpenAPI
   generation, and HTTP application assembly shared by the server executable.
 
-license:       BSD-3-Clause
-author:        Nadeem Bitar
-maintainer:    nadeem@gmail.com
-category:      Web
-build-type:    Simple
+license: BSD-3-Clause
+author: Nadeem Bitar
+maintainer: nadeem@gmail.com
+category: Web
+build-type: Simple
 
 common common
-  ghc-options:        -Wall -Wcompat -Wredundant-constraints
-  default-language:   GHC2024
+  ghc-options:
+    -Wall
+    -Wcompat
+    -Wredundant-constraints
+
+  default-language: GHC2024
   default-extensions:
     DeriveAnyClass
     DuplicateRecordFields
@@ -26,8 +30,8 @@ common common
     OverloadedStrings
 
 library
-  import:          common
-  hs-source-dirs:  src
+  import: common
+  hs-source-dirs: src
   exposed-modules:
     Kansoku
     Kansoku.Auth.Handler
@@ -38,6 +42,7 @@ library
     Kansoku.ClickHouse
     Kansoku.ClickHouse.EventRow
     Kansoku.Config
+    Kansoku.Exception
     Kansoku.Ingest.Handler
     Kansoku.Ingest.Producer
     Kansoku.Ingest.Queue
@@ -59,50 +64,50 @@ library
     Kansoku.Writer.Run
 
   build-depends:
-    , aeson
-    , async
-    , base                              >=4.21 && <5
-    , base64-bytestring
-    , bytestring
-    , ClickHaskell
-    , containers
-    , crypton
-    , effectful
-    , effectful-core
-    , generic-lens                      >=2.2  && <2.4
-    , hasql
-    , hasql-pool
-    , hs-opentelemetry-api
-    , hs-opentelemetry-exporter-handle
-    , hs-opentelemetry-sdk
-    , http-types
-    , kansoku-api
-    , pg-migrate
-    , pgmq-core
-    , pgmq-effectful
-    , pgmq-hasql
-    , pgmq-migration
-    , prometheus-client
-    , resource-pool
-    , servant
-    , servant-server
-    , shibuya-core
-    , shibuya-pgmq-adapter
-    , text
-    , time
-    , unordered-containers
-    , uuid
-    , wai
-    , wai-cors
-    , wai-extra
-    , warp
+    ClickHaskell,
+    aeson,
+    async,
+    base >=4.21 && <5,
+    base64-bytestring,
+    bytestring,
+    containers,
+    crypton,
+    effectful,
+    effectful-core,
+    generic-lens >=2.2 && <2.4,
+    hasql,
+    hasql-pool,
+    hs-opentelemetry-api,
+    hs-opentelemetry-exporter-handle,
+    hs-opentelemetry-sdk,
+    http-types,
+    kansoku-api,
+    pg-migrate,
+    pgmq-core,
+    pgmq-effectful,
+    pgmq-hasql,
+    pgmq-migration,
+    prometheus-client,
+    resource-pool,
+    servant,
+    servant-server,
+    shibuya-core,
+    shibuya-pgmq-adapter,
+    text,
+    time,
+    unordered-containers,
+    uuid,
+    wai,
+    wai-cors,
+    wai-extra,
+    warp,
 
 test-suite kansoku-core-test
-  import:         common
-  ghc-options:    -threaded
-  type:           exitcode-stdio-1.0
+  import: common
+  ghc-options: -threaded
+  type: exitcode-stdio-1.0
   hs-source-dirs: test
-  main-is:        Spec.hs
+  main-is: Spec.hs
   other-modules:
     Kansoku.Auth.HandlerSpec
     Kansoku.Auth.TokenSpec
@@ -121,6 +126,7 @@ test-suite kansoku-core-test
     Kansoku.MigrationsSpec
     Kansoku.ObservabilitySpec
     Kansoku.OpenApiSpec
+    Kansoku.ProblemSpec
     Kansoku.Query.ValidateSpec
     Kansoku.QueryIntegrationSpec
     Kansoku.QuerySpec
@@ -128,33 +134,36 @@ test-suite kansoku-core-test
     Kansoku.Writer.BatchSpec
 
   build-depends:
-    , aeson
-    , async
-    , base                     >=4.21 && <5
-    , bytestring
-    , ClickHaskell
-    , containers
-    , directory
-    , effectful
-    , generic-lens
-    , hasql
-    , hasql-pool
-    , hspec
-    , http-client
-    , http-types
-    , kansoku-api
-    , kansoku-core
-    , openapi-hs
-    , pg-migrate
-    , pg-migrate-test-support
-    , pgmq-core
-    , pgmq-hasql
-    , prometheus-client
-    , servant-server
-    , shibuya-core
-    , text
-    , time
-    , unordered-containers
-    , uuid
-    , wai
-    , warp
+    ClickHaskell,
+    aeson,
+    async,
+    base >=4.21 && <5,
+    bytestring,
+    containers,
+    directory,
+    effectful,
+    generic-lens,
+    hasql,
+    hasql-pool,
+    hspec,
+    http-client,
+    http-types,
+    kansoku-api,
+    kansoku-core,
+    openapi-hs,
+    pg-migrate,
+    pg-migrate-test-support,
+    pgmq-core,
+    pgmq-hasql,
+    prometheus-client,
+    servant,
+    servant-client,
+    servant-client-core,
+    servant-server,
+    shibuya-core,
+    text,
+    time,
+    unordered-containers,
+    uuid,
+    wai,
+    warp,

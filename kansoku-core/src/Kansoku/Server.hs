@@ -4,6 +4,7 @@
 module Kansoku.Server
   ( ReadyProbe (..),
     bodySizeLimit,
+    problemBoundary,
     envelopeFormatters,
     healthApp,
     ingestCors,
@@ -17,6 +18,8 @@ module Kansoku.Server
 where
 
 import Data.Aeson qualified as Aeson
+import Data.ByteString.Builder (toLazyByteString)
+import Data.ByteString.Lazy qualified as LBS
 import Data.Either (isRight)
 import Data.Generics.Labels ()
 import Data.List (find)
@@ -28,23 +31,24 @@ import Effectful.Reader.Static (Reader, asks)
 import Hasql.Pool qualified as Pool
 import Kansoku.Api (KansokuAPI (..), kansokuAPI)
 import Kansoku.Api.OpenApi (kansokuOpenApi)
-import Kansoku.Api.Response (ErrorEnvelopeWire, badRequest, tooLarge)
+import Kansoku.Api.Response (ProblemDetails, badRequest, tooLarge)
 import Kansoku.Api.Response qualified as Response
 import Kansoku.Auth.Handler (ingestAuthHandler, metricsAuthHandler)
-import Kansoku.Auth.Types (IngestPrincipal (..), MetricsPrincipal (..))
 import Kansoku.ClickHouse (QueryPool)
 import Kansoku.Config (Config)
 import Kansoku.Event.Contract (schemaCatalog)
 import Kansoku.Event.Registry (defaultRegistry)
+import Kansoku.Exception (catchSynchronous)
 import Kansoku.Ingest.Handler (ingestServer)
-import Kansoku.Logging (Log, logInfo)
+import Kansoku.Logging (Log, logError, logInfo, runLogStderr)
 import Kansoku.Metrics.Handler (metricsServer)
 import Kansoku.Prelude
 import Kansoku.Readiness (ReadyCheckFailure (..), checkName)
-import Network.HTTP.Types (status200, status404, status413, status503)
+import Network.HTTP.Types (status200, status404, status413, status500, status503, statusCode)
 import Network.HTTP.Types.Header (hContentType)
 import Network.Wai (Application, Middleware, Response, pathInfo, responseLBS)
 import Network.Wai.Handler.Warp qualified as Warp
+import Network.Wai.Internal qualified as Wai
 import Network.Wai.Middleware.Cors qualified as Cors
 import Network.Wai.Middleware.RequestSizeLimit qualified as SizeLimit
 import Pgmq.Effectful (QueueName, queueMetrics, runPgmq)
@@ -81,8 +85,8 @@ healthApp req respond =
 kansokuServer :: Int -> Pool.Pool -> QueueName -> QueryPool -> KansokuAPI (AsServerT Handler)
 kansokuServer maxBatchLength pool queueName queryPool =
   KansokuAPI
-    { ingest = \(IngestPrincipal principal) -> ingestServer maxBatchLength principal pool queueName,
-      metrics = \(MetricsPrincipal principal) -> metricsServer principal queryPool,
+    { ingest = ingestServer maxBatchLength pool queueName,
+      metrics = metricsServer queryPool,
       schemas = pure (schemaCatalog defaultRegistry)
     }
 
@@ -94,17 +98,18 @@ kansokuApp config probe pool queueName queryPool =
         (config ^. #internalMetricsEnabled)
         ( ingestCors
             (config ^. #corsAllowedOrigins)
-            ( bodySizeLimit
-                (config ^. #ingestMaxBodyBytes)
-                ( serveWithContext
-                    kansokuAPI
-                    ( envelopeFormatters
-                        :. ingestAuthHandler pool
-                        :. metricsAuthHandler pool
-                        :. EmptyContext
-                    )
-                    (kansokuServer (config ^. #ingestMaxBatchLength) pool queueName queryPool)
-                )
+            ( problemBoundary $
+                bodySizeLimit
+                  (config ^. #ingestMaxBodyBytes)
+                  ( serveWithContext
+                      kansokuAPI
+                      ( envelopeFormatters
+                          :. ingestAuthHandler pool
+                          :. metricsAuthHandler pool
+                          :. EmptyContext
+                      )
+                      (kansokuServer (config ^. #ingestMaxBatchLength) pool queueName queryPool)
+                  )
             )
         )
     )
@@ -163,7 +168,7 @@ payloadTooLarge :: Int -> Response
 payloadTooLarge maxBytes =
   responseLBS
     status413
-    [(hContentType, "application/json")]
+    [(hContentType, "application/problem+json")]
     ( Aeson.encode
         ( tooLarge
             "payload_too_large"
@@ -247,9 +252,7 @@ renderPipelineFailure = \case
         "backlog" Aeson..= backlog
       ]
 
--- | Make Servant's pre-handler rejections use the same envelope as typed
--- handler results. Servant raises 405 and 415 outside ErrorFormatters; those
--- responses retain its empty body.
+-- | Make Servant's parser and routing rejections use the typed problem contract.
 envelopeFormatters :: ErrorFormatters
 envelopeFormatters =
   defaultErrorFormatters
@@ -266,12 +269,40 @@ envelopeFormatters =
     unknownPath =
       envelopeError err404 (Response.notFound "not_found" "no such endpoint")
 
-envelopeError :: ServerError -> ErrorEnvelopeWire -> ServerError
+envelopeError :: ServerError -> ProblemDetails -> ServerError
 envelopeError err envelope =
   err
     { errBody = Aeson.encode envelope,
-      errHeaders = [(hContentType, "application/json")]
+      errHeaders = [(hContentType, "application/problem+json")]
     }
+
+-- | Fill only empty framework rejections; never consume a streaming body.
+-- This boundary is inside CORS so browser clients can read every failure.
+problemBoundary :: Middleware
+problemBoundary inner req respond =
+  catchSynchronous (inner req (respond . frameworkProblem)) handle
+  where
+    handle err = do
+      runEff . runLogStderr $ logError ("HTTP request failed: " <> Text.pack (show err))
+      respond
+        ( responseLBS
+            status500
+            [(hContentType, "application/problem+json")]
+            (Aeson.encode (Response.problem 500 "internal_error" "an unexpected error occurred"))
+        )
+    frameworkProblem response =
+      case response of
+        Wai.ResponseBuilder status headers builder
+          | Just code <-
+              lookup
+                (statusCode status)
+                [(405, "method_not_allowed"), (406, "not_acceptable"), (415, "unsupported_media_type")],
+            LBS.null (toLazyByteString builder) ->
+              responseLBS
+                status
+                ((hContentType, "application/problem+json") : filter ((/= hContentType) . fst) headers)
+                (Aeson.encode (Response.problem (statusCode status) code "the request is not supported by this endpoint"))
+        _ -> response
 
 -- | Check that PostgreSQL and pgmq answer one inexpensive metrics query.
 pgmqReady :: Pool.Pool -> QueueName -> IO (Either Text ())

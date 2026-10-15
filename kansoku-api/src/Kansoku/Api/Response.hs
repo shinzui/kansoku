@@ -4,8 +4,12 @@
 -- | Shared response machinery for every Kansoku API slice.
 module Kansoku.Api.Response
   ( AcceptedResponses,
-    ErrorEnvelopeWire (..),
+    ProblemDetails (..),
     KansokuResult (..),
+    ProblemJSON,
+    problemFieldName,
+    problem,
+    problemCatalog,
     OkResponses,
     badRequest,
     notFound,
@@ -16,44 +20,73 @@ module Kansoku.Api.Response
   )
 where
 
+import Data.Aeson qualified as Aeson
 import Data.SOP (I (..), NS (..))
+import Data.Text.Encoding qualified as Text.Encoding
 import GHC.TypeLits (Symbol)
 import Kansoku.Prelude
-import Servant.API.MultiVerb (AsUnion (..), Respond)
+import Network.HTTP.Media ((//))
+import Network.HTTP.Types.Status (status400, status401, status403, status404, status405, status406, status413, status415, status500, status503, statusMessage)
+import Servant.API (Accept (..), JSON, MimeRender (..), MimeUnrender (..))
+import Servant.API.MultiVerb (AsUnion (..), RespondAs)
 
--- | The one error-body shape returned across the service.
-data ErrorEnvelopeWire = ErrorEnvelopeWire
-  { code :: !Text,
-    message :: !Text,
+-- | RFC 9457 problem document. `about:blank` uses the HTTP status phrase.
+data ProblemDetails = ProblemDetails
+  { problemType :: !Text,
+    title :: !Text,
+    status :: !Int,
+    detail :: !Text,
+    code :: !Text,
     retryable :: !Bool
   }
   deriving stock (Generic, Eq, Show)
-  deriving anyclass (FromJSON, ToJSON)
+
+problemFieldName :: String -> String
+problemFieldName "problemType" = "type"
+problemFieldName field = field
+
+instance ToJSON ProblemDetails where
+  toJSON = Aeson.genericToJSON Aeson.defaultOptions {Aeson.fieldLabelModifier = problemFieldName}
+
+instance FromJSON ProblemDetails where
+  parseJSON = Aeson.genericParseJSON Aeson.defaultOptions {Aeson.fieldLabelModifier = problemFieldName}
+
+-- | Errors have a distinct media type; successful payloads remain JSON.
+data ProblemJSON
+
+instance Accept ProblemJSON where
+  contentType _ = "application" // "problem+json"
+
+instance MimeRender ProblemJSON ProblemDetails where
+  mimeRender _ = Aeson.encode
+
+instance MimeUnrender ProblemJSON ProblemDetails where
+  mimeUnrender _ = Aeson.eitherDecode
 
 -- | What every analytics handler returns. The success status is selected by
 -- the route's response list; error constructors map to fixed statuses.
 data KansokuResult a
   = KansokuOk a
-  | KansokuBadRequest !ErrorEnvelopeWire
-  | KansokuNotFound !ErrorEnvelopeWire
-  | KansokuTooLarge !ErrorEnvelopeWire
-  | KansokuUnavailable !ErrorEnvelopeWire
+  | KansokuBadRequest !ProblemDetails
+  | KansokuNotFound !ProblemDetails
+  | KansokuTooLarge !ProblemDetails
+  | KansokuUnavailable !ProblemDetails
   deriving stock (Generic, Eq, Show)
 
 type OkResponses (desc :: Symbol) a =
-  '[ Respond 200 desc a,
-     Respond 400 "Malformed request" ErrorEnvelopeWire,
-     Respond 404 "Not found" ErrorEnvelopeWire,
-     Respond 413 "Payload too large" ErrorEnvelopeWire,
-     Respond 503 "Storage unavailable" ErrorEnvelopeWire
+  '[ RespondAs JSON 200 desc a,
+     RespondAs ProblemJSON 400 "Malformed request" ProblemDetails,
+     RespondAs ProblemJSON 404 "Not found" ProblemDetails,
+     RespondAs ProblemJSON 413 "Payload too large" ProblemDetails,
+     RespondAs ProblemJSON 503 "Storage unavailable" ProblemDetails
    ]
 
 type AcceptedResponses (desc :: Symbol) a =
-  '[ Respond 202 desc a,
-     Respond 400 "Malformed request" ErrorEnvelopeWire,
-     Respond 404 "Not found" ErrorEnvelopeWire,
-     Respond 413 "Payload too large" ErrorEnvelopeWire,
-     Respond 503 "Storage unavailable" ErrorEnvelopeWire
+  '[ RespondAs JSON 202 desc a,
+     RespondAs ProblemJSON 400 "Malformed request" ProblemDetails,
+     RespondAs ProblemJSON 404 "Not found" ProblemDetails,
+     RespondAs ProblemJSON 413 "Payload too large" ProblemDetails,
+     RespondAs ProblemJSON 503 "Storage unavailable" ProblemDetails
    ]
 
 -- These instances deliberately spell out the positional mapping. The final
@@ -61,11 +94,11 @@ type AcceptedResponses (desc :: Symbol) a =
 -- the instance stop compiling until the result mapping is updated.
 instance
   AsUnion
-    '[ Respond 200 desc a,
-       Respond 400 "Malformed request" ErrorEnvelopeWire,
-       Respond 404 "Not found" ErrorEnvelopeWire,
-       Respond 413 "Payload too large" ErrorEnvelopeWire,
-       Respond 503 "Storage unavailable" ErrorEnvelopeWire
+    '[ RespondAs JSON 200 desc a,
+       RespondAs ProblemJSON 400 "Malformed request" ProblemDetails,
+       RespondAs ProblemJSON 404 "Not found" ProblemDetails,
+       RespondAs ProblemJSON 413 "Payload too large" ProblemDetails,
+       RespondAs ProblemJSON 503 "Storage unavailable" ProblemDetails
      ]
     (KansokuResult a)
   where
@@ -85,11 +118,11 @@ instance
 
 instance
   AsUnion
-    '[ Respond 202 desc a,
-       Respond 400 "Malformed request" ErrorEnvelopeWire,
-       Respond 404 "Not found" ErrorEnvelopeWire,
-       Respond 413 "Payload too large" ErrorEnvelopeWire,
-       Respond 503 "Storage unavailable" ErrorEnvelopeWire
+    '[ RespondAs JSON 202 desc a,
+       RespondAs ProblemJSON 400 "Malformed request" ProblemDetails,
+       RespondAs ProblemJSON 404 "Not found" ProblemDetails,
+       RespondAs ProblemJSON 413 "Payload too large" ProblemDetails,
+       RespondAs ProblemJSON 503 "Storage unavailable" ProblemDetails
      ]
     (KansokuResult a)
   where
@@ -107,20 +140,75 @@ instance
     S (S (S (S (Z (I err))))) -> KansokuUnavailable err
     S (S (S (S (S impossible)))) -> case impossible of {}
 
-badRequest :: Text -> Text -> ErrorEnvelopeWire
-badRequest code message = ErrorEnvelopeWire {code, message, retryable = False}
+-- | Central status/title/retry policy. Callers supply a stable code and safe detail.
+problem :: Int -> Text -> Text -> ProblemDetails
+problem status code detail =
+  ProblemDetails
+    { problemType = "about:blank",
+      title =
+        Text.Encoding.decodeUtf8
+          ( statusMessage
+              ( case status of
+                  400 -> status400
+                  401 -> status401
+                  403 -> status403
+                  404 -> status404
+                  405 -> status405
+                  406 -> status406
+                  413 -> status413
+                  415 -> status415
+                  503 -> status503
+                  _ -> status500
+              )
+          ),
+      status,
+      detail,
+      code,
+      retryable = status == 503
+    }
 
-notFound :: Text -> Text -> ErrorEnvelopeWire
-notFound code message = ErrorEnvelopeWire {code, message, retryable = False}
+badRequest, notFound, tooLarge, unauthorized, forbidden, unavailable :: Text -> Text -> ProblemDetails
+badRequest = catalogProblem 400
+notFound = catalogProblem 404
+tooLarge = catalogProblem 413
+unauthorized = catalogProblem 401
+forbidden = catalogProblem 403
+unavailable = catalogProblem 503
 
-tooLarge :: Text -> Text -> ErrorEnvelopeWire
-tooLarge code message = ErrorEnvelopeWire {code, message, retryable = False}
+-- | Stable public codes and their HTTP statuses. Titles and retry policy come
+-- from 'problem'; human-readable detail is supplied by the failure producer.
+problemCatalog :: [(Text, Int)]
+problemCatalog =
+  [ ("malformed_request", 400),
+    ("validation_failed", 400),
+    ("invalid_funnel_steps", 400),
+    ("invalid_funnel_step", 400),
+    ("invalid_funnel_window", 400),
+    ("invalid_retention_days", 400),
+    ("invalid_experiment_time_grain", 400),
+    ("invalid_experiment_name", 400),
+    ("invalid_event_name", 400),
+    ("invalid_conversion_event", 400),
+    ("unknown_property", 400),
+    ("invalid_property_filter", 400),
+    ("invalid_property", 400),
+    ("invalid_group_by", 400),
+    ("invalid_metric_definition", 400),
+    ("unauthorized", 401),
+    ("forbidden", 403),
+    ("not_found", 404),
+    ("metric_not_found", 404),
+    ("not_implemented", 404),
+    ("method_not_allowed", 405),
+    ("not_acceptable", 406),
+    ("payload_too_large", 413),
+    ("batch_too_large", 413),
+    ("unsupported_media_type", 415),
+    ("internal_error", 500),
+    ("auth_store_unavailable", 503),
+    ("queue_unavailable", 503),
+    ("clickhouse_unavailable", 503)
+  ]
 
-unauthorized :: Text -> Text -> ErrorEnvelopeWire
-unauthorized code message = ErrorEnvelopeWire {code, message, retryable = False}
-
-forbidden :: Text -> Text -> ErrorEnvelopeWire
-forbidden code message = ErrorEnvelopeWire {code, message, retryable = False}
-
-unavailable :: Text -> Text -> ErrorEnvelopeWire
-unavailable code message = ErrorEnvelopeWire {code, message, retryable = True}
+catalogProblem :: Int -> Text -> Text -> ProblemDetails
+catalogProblem fallbackStatus code = problem (fromMaybe fallbackStatus (lookup code problemCatalog)) code

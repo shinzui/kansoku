@@ -4,11 +4,11 @@ packages:
   ./kansoku-server
   ./kansoku-client
 
-index-state: 2026-07-14T19:01:33Z
+index-state: 2026-10-14T22:38:45Z
 constraints:
-  openapi-hs ==4.1.0,
+  openapi-hs ==5.0.0,
   optparse-applicative ==0.19.0.0,
-  servant-openapi-hs ==4.1.0,
+  servant-openapi-hs ==5.1.0,
   pg-migrate ==1.1.0.0,
   pg-migrate-cli ==1.1.0.0,
   pg-migrate-test-support ==1.1.0.0,

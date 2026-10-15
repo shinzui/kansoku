@@ -5,7 +5,7 @@ module Kansoku.LimitsSpec (spec) where
 import Data.Aeson qualified as Aeson
 import Data.ByteString.Lazy qualified as BSL
 import Data.IORef (newIORef, readIORef, writeIORef)
-import Kansoku.Api.Response (ErrorEnvelopeWire (..))
+import Kansoku.Api.Response (ProblemDetails (..))
 import Kansoku.Server (bodySizeLimit, ingestCors)
 import Network.HTTP.Client qualified as HTTP
 import Network.HTTP.Types (status200, status413)
@@ -39,9 +39,9 @@ spec = describe "Kansoku.Server.bodySizeLimit" $
           manager
       HTTP.responseStatus response `shouldBe` status413
       lookup "Access-Control-Allow-Origin" (HTTP.responseHeaders response) `shouldBe` Just "*"
-      envelope <- decodeBody @ErrorEnvelopeWire (HTTP.responseBody response)
+      envelope <- decodeBody @ProblemDetails (HTTP.responseBody response)
       code envelope `shouldBe` "payload_too_large"
-      message envelope `shouldBe` "request body exceeds the 10-byte limit"
+      detail envelope `shouldBe` "request body exceeds the 10-byte limit"
       retryable envelope `shouldBe` False
       readIORef bodyConsumed `shouldReturn` False
 

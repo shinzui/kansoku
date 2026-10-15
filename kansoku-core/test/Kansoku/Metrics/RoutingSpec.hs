@@ -1,4 +1,6 @@
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 -- | Pins every analytics-contract path to a distinct sentinel handler.
 --
@@ -26,6 +28,7 @@ import Data.Time (Day)
 import Data.UUID qualified as UUID
 import Kansoku.Api qualified as Api
 import Kansoku.Api.Response qualified as Response
+import Kansoku.Auth.Api (IngestAuth)
 import Kansoku.Auth.Handler ()
 import Kansoku.Auth.Types
   ( ApiKeyId (..),
@@ -63,10 +66,18 @@ import Servant
     Handler,
     serveWithContext,
   )
+import Servant.API.Experimental.Auth (AuthProtect)
+import Servant.Client (ClientM, mkClientEnv, parseBaseUrl, runClientM)
+import Servant.Client.Core.Auth (AuthClientData, mkAuthenticatedRequest)
+import Servant.Client.Generic (genericClient)
 import Servant.Server (ErrorFormatters)
 import Servant.Server.Experimental.Auth (AuthHandler, mkAuthHandler)
 import Servant.Server.Generic (AsServerT)
 import Test.Hspec
+
+type instance AuthClientData (AuthProtect "kansoku-ingest") = ()
+
+type instance AuthClientData (AuthProtect "kansoku-metrics") = ()
 
 spec :: Spec
 spec = describe "Kansoku analytics route dispatch" $ do
@@ -85,14 +96,34 @@ spec = describe "Kansoku analytics route dispatch" $ do
       manager <- HTTP.newManager HTTP.defaultManagerSettings
       malformed <- postJson manager port "/v1/events" "{"
       HTTP.responseStatus malformed `shouldBe` status400
-      malformedEnvelope <- decodeBody @Response.ErrorEnvelopeWire (HTTP.responseBody malformed)
+      malformedEnvelope <- decodeBody @Response.ProblemDetails (HTTP.responseBody malformed)
       Response.code malformedEnvelope `shouldBe` "malformed_request"
 
       request <- HTTP.parseRequest (baseUrl port <> "/not-a-route")
       missing <- HTTP.httpLbs request manager
       HTTP.responseStatus missing `shouldBe` status404
-      missingEnvelope <- decodeBody @Response.ErrorEnvelopeWire (HTTP.responseBody missing)
+      missingEnvelope <- decodeBody @Response.ProblemDetails (HTTP.responseBody missing)
       Response.code missingEnvelope `shouldBe` "not_found"
+
+  it "decodes a typed 400 problem through the actual generated Haskell client" $ do
+    let problem = Response.badRequest "validation_failed" "invalid event"
+        server =
+          sentinelKansokuServer
+            { Api.ingest =
+                sentinelIngestServer
+                  { Ingest.postEvent = \_ _ -> pure (Response.KansokuBadRequest problem)
+                  }
+            }
+        app = serveWithContext Api.kansokuAPI sentinelContext server
+    Warp.testWithApplication (pure app) $ \port -> do
+      manager <- HTTP.newManager HTTP.defaultManagerSettings
+      url <- parseBaseUrl (baseUrl port)
+      let client = genericClient @Api.KansokuAPI @ClientM
+          credential = mkAuthenticatedRequest @IngestAuth () (const id)
+      result <- runClientM (Ingest.postEvent (Api.ingest client) credential sampleEvent) (mkClientEnv manager url)
+      result `shouldBe` Right (Response.KansokuBadRequest problem)
+      success <- runClientM (Ingest.postBatch (Api.ingest client) credential []) (mkClientEnv manager url)
+      success `shouldBe` Right (Response.KansokuOk Ingest.BatchAck {Ingest.accepted = 2, Ingest.rejected = []})
 
 metricRoutes :: [(String, Text)]
 metricRoutes =
@@ -132,9 +163,9 @@ assertMetricRoute manager port (path, expected) = do
   if path `elem` stubPaths
     then do
       HTTP.responseStatus response `shouldBe` status404
-      envelope <- decodeBody @Response.ErrorEnvelopeWire (HTTP.responseBody response)
+      envelope <- decodeBody @Response.ProblemDetails (HTTP.responseBody response)
       Response.code envelope `shouldBe` "not_implemented"
-      Response.message envelope `shouldSatisfy` Text.isSuffixOf expected
+      Response.detail envelope `shouldSatisfy` Text.isSuffixOf expected
     else do
       HTTP.responseStatus response `shouldBe` status200
       result <- decodeBody @Metrics.MetricResult (HTTP.responseBody response)
@@ -213,16 +244,16 @@ sentinelPrincipal =
 sentinelKansokuServer :: Api.KansokuAPI (AsServerT Handler)
 sentinelKansokuServer =
   Api.KansokuAPI
-    { Api.ingest = const sentinelIngestServer,
-      Api.metrics = const sentinelMetricsServer,
+    { Api.ingest = sentinelIngestServer,
+      Api.metrics = sentinelMetricsServer,
       Api.schemas = pure (schemaCatalog defaultRegistry)
     }
 
 sentinelIngestServer :: Ingest.IngestRoutes (AsServerT Handler)
 sentinelIngestServer =
   Ingest.IngestRoutes
-    { Ingest.postEvent = \_event -> pure (Response.KansokuOk Ingest.IngestAck {Ingest.accepted = 1, Ingest.eventId = "events"}),
-      Ingest.postBatch = \_events -> pure (Response.KansokuOk Ingest.BatchAck {Ingest.accepted = 2, Ingest.rejected = []})
+    { Ingest.postEvent = \_principal _event -> pure (Response.KansokuOk Ingest.IngestAck {Ingest.accepted = 1, Ingest.eventId = "events"}),
+      Ingest.postBatch = \_principal _events -> pure (Response.KansokuOk Ingest.BatchAck {Ingest.accepted = 2, Ingest.rejected = []})
     }
 
 sentinelMetricsServer :: Metrics.MetricsRoutes (AsServerT Handler)
@@ -245,25 +276,25 @@ sentinelMetricsServer =
       Metrics.experimentFunnel = experimentFunnelSentinel
     }
   where
-    metricSentinel :: Text -> Day -> Day -> Maybe Text -> Maybe Metrics.TimeGrain -> Handler (Response.KansokuResult Metrics.MetricResult)
-    metricSentinel name _fromDay _toDay _groupBy _timeGrain = pure (Response.KansokuOk (sentinelResult name))
+    metricSentinel :: Text -> MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe Metrics.TimeGrain -> Handler (Response.KansokuResult Metrics.MetricResult)
+    metricSentinel name _principal _fromDay _toDay _groupBy _timeGrain = pure (Response.KansokuOk (sentinelResult name))
 
-    stubSentinel :: Text -> Day -> Day -> Maybe Text -> Maybe Metrics.TimeGrain -> Handler (Response.KansokuResult Metrics.MetricResult)
-    stubSentinel name _fromDay _toDay _groupBy _timeGrain =
+    stubSentinel :: Text -> MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe Metrics.TimeGrain -> Handler (Response.KansokuResult Metrics.MetricResult)
+    stubSentinel name _principal _fromDay _toDay _groupBy _timeGrain =
       pure (Response.KansokuNotFound (Response.notFound "not_implemented" ("metric endpoint is stubbed in the MVP: " <> name)))
 
-    funnelSentinel :: Day -> Day -> Text -> Maybe Int -> Handler (Response.KansokuResult Metrics.MetricResult)
-    funnelSentinel _fromDay _toDay _steps _window = pure (Response.KansokuOk (sentinelResult "funnel"))
+    funnelSentinel :: MetricsPrincipal -> Day -> Day -> Text -> Maybe Int -> Handler (Response.KansokuResult Metrics.MetricResult)
+    funnelSentinel _principal _fromDay _toDay _steps _window = pure (Response.KansokuOk (sentinelResult "funnel"))
 
-    retentionSentinel :: Day -> Day -> Maybe Text -> Handler (Response.KansokuResult Metrics.MetricResult)
-    retentionSentinel _fromDay _toDay _days = pure (Response.KansokuOk (sentinelResult "retention"))
+    retentionSentinel :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Handler (Response.KansokuResult Metrics.MetricResult)
+    retentionSentinel _principal _fromDay _toDay _days = pure (Response.KansokuOk (sentinelResult "retention"))
 
-    experimentConversionSentinel :: Text -> Text -> Day -> Day -> Handler (Response.KansokuResult Metrics.MetricResult)
-    experimentConversionSentinel _experiment _event _fromDay _toDay =
+    experimentConversionSentinel :: MetricsPrincipal -> Text -> Text -> Day -> Day -> Handler (Response.KansokuResult Metrics.MetricResult)
+    experimentConversionSentinel _principal _experiment _event _fromDay _toDay =
       pure (Response.KansokuOk (sentinelResult "experiment-conversion"))
 
-    experimentFunnelSentinel :: Text -> Text -> Day -> Day -> Maybe Int -> Handler (Response.KansokuResult Metrics.MetricResult)
-    experimentFunnelSentinel _experiment _steps _fromDay _toDay _window =
+    experimentFunnelSentinel :: MetricsPrincipal -> Text -> Text -> Day -> Day -> Maybe Int -> Handler (Response.KansokuResult Metrics.MetricResult)
+    experimentFunnelSentinel _principal _experiment _steps _fromDay _toDay _window =
       pure (Response.KansokuOk (sentinelResult "experiment-funnel"))
 
 sentinelResult :: Text -> Metrics.MetricResult

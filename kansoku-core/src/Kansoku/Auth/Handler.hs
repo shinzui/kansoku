@@ -23,7 +23,7 @@ import Data.Generics.Labels ()
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text.Encoding
 import Hasql.Pool qualified as Pool
-import Kansoku.Api.Response (ErrorEnvelopeWire, forbidden, unauthorized, unavailable)
+import Kansoku.Api.Response (ProblemDetails, forbidden, unauthorized, unavailable)
 import Kansoku.Auth.Store (AuthStoreError, lookupApiKey)
 import Kansoku.Auth.Token (Token (..), hashToken, tokenKind)
 import Kansoku.Auth.Types
@@ -133,13 +133,13 @@ rejectUnauthorized =
     [(hWWWAuthenticate, "Bearer")]
     (unauthorized "unauthorized" "missing or unknown credential")
 
-throwEnvelope :: ServerError -> ErrorEnvelopeWire -> Handler a
+throwEnvelope :: ServerError -> ProblemDetails -> Handler a
 throwEnvelope err = throwEnvelopeWith err []
 
-throwEnvelopeWith :: ServerError -> RequestHeaders -> ErrorEnvelopeWire -> Handler a
+throwEnvelopeWith :: ServerError -> RequestHeaders -> ProblemDetails -> Handler a
 throwEnvelopeWith err extraHeaders envelope =
   throwError
     err
       { errBody = Aeson.encode envelope,
-        errHeaders = (hContentType, "application/json") : extraHeaders
+        errHeaders = (hContentType, "application/problem+json") : extraHeaders
       }

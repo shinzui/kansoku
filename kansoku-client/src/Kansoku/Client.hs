@@ -41,7 +41,7 @@ import Data.Text qualified as Text
 import Data.UUID qualified as UUID
 import Data.UUID.V4 qualified as UUID
 import Kansoku.Api (SchemaAPI)
-import Kansoku.Api.Response (ErrorEnvelopeWire, KansokuResult (..))
+import Kansoku.Api.Response (KansokuResult (..), ProblemDetails)
 import Kansoku.Auth.Api (IngestAuth)
 import Kansoku.Event (AccountId (..), AnalyticsEvent (..), AnonymousId (..), EventId (..), EventName (..), EventSource (..), OrganizationId (..), SessionId (..), UserId (..), baseEvent)
 import Kansoku.Event.Contract (SchemaCatalog)
@@ -50,12 +50,14 @@ import Kansoku.Ingest.Api qualified as Ingest
 import Kansoku.Prelude
 import Network.HTTP.Client qualified as HTTP
 import Network.HTTP.Client.TLS qualified as HTTP.TLS
-import Servant.API (NamedRoutes, type (:>))
+import Network.HTTP.Types.Status (statusCode)
+import Servant.API (NamedRoutes)
 import Servant.API.Experimental.Auth (AuthProtect)
 import Servant.Client (BaseUrl, ClientEnv, ClientM, mkClientEnv, parseBaseUrl, runClientM)
 import Servant.Client qualified as ServantClient
 import Servant.Client.Core.Auth (AuthClientData, AuthenticatedRequest, mkAuthenticatedRequest)
 import Servant.Client.Core.Request qualified as ClientRequest
+import Servant.Client.Core.Response qualified as ClientResponse
 import Servant.Client.Generic (AsClientT)
 
 data ClientConfig = ClientConfig
@@ -117,7 +119,7 @@ data Client = Client
 
 data ClientError
   = DeliveryFailed !ServantClient.ClientError
-  | DeliveryRejected !ErrorEnvelopeWire
+  | DeliveryRejected !ProblemDetails
   deriving stock (Eq, Show)
 
 -- NamedRoutes fields are type-family applications, so record-dot syntax cannot
@@ -129,8 +131,8 @@ kansokuCredential token =
   mkAuthenticatedRequest token $ \value ->
     ClientRequest.addHeader "Authorization" ("Bearer " <> value)
 
-ingestClient :: AuthenticatedRequest IngestAuth -> IngestRoutes (AsClientT ClientM)
-ingestClient = ServantClient.client (Proxy @(IngestAuth :> NamedRoutes IngestRoutes))
+ingestClient :: IngestRoutes (AsClientT ClientM)
+ingestClient = ServantClient.client (Proxy @(NamedRoutes IngestRoutes))
 
 schemaClient :: ClientM SchemaCatalog
 schemaClient = ServantClient.client (Proxy @SchemaAPI)
@@ -281,7 +283,7 @@ deliverWithRetry cfg env events =
     go attempt = do
       result <-
         runClientM
-          (Ingest.postBatch (ingestClient (kansokuCredential (cfg ^. #credential))) events)
+          (Ingest.postBatch ingestClient (kansokuCredential (cfg ^. #credential)) events)
           env
       case result of
         Right (KansokuOk ack) -> pure (Right ack)
@@ -294,6 +296,7 @@ deliverWithRetry cfg env events =
         Right (KansokuNotFound envelope) -> pure (Left (DeliveryRejected envelope))
         Right (KansokuTooLarge envelope) -> pure (Left (DeliveryRejected envelope))
         Left err
+          | not (retryClientError err) -> pure (Left (DeliveryFailed err))
           | attempt >= cfg ^. #maxRetries -> pure (Left (DeliveryFailed err))
           | otherwise -> do
               threadDelay (backoff attempt)
@@ -301,6 +304,18 @@ deliverWithRetry cfg env events =
 
     backoff attempt =
       max 0 (cfg ^. #retryBaseDelayMicros) * (2 ^ attempt)
+
+-- Authentication failures occur before MultiVerb and arrive as ClientError.
+-- Only transport failures and retryable server failures merit another attempt.
+retryClientError :: ServantClient.ClientError -> Bool
+retryClientError = \case
+  ServantClient.ConnectionError {} -> True
+  ServantClient.FailureResponse _ response ->
+    let status = statusCode (ClientResponse.responseStatusCode response)
+     in status >= 500 && case Aeson.eitherDecode @ProblemDetails (ClientResponse.responseBody response) of
+          Right problem -> problem ^. #retryable
+          Left _ -> True
+  _ -> False
 
 chunksOf :: Int -> [a] -> [[a]]
 chunksOf _ [] = []

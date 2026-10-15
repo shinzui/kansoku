@@ -8,7 +8,7 @@ import Data.Aeson.KeyMap qualified as KeyMap
 import Data.Generics.Labels ()
 import Data.List qualified as List
 import Data.UUID qualified as UUID
-import Kansoku.Api.Response (ErrorEnvelopeWire (..))
+import Kansoku.Api.Response (problem)
 import Kansoku.Auth.Types
 import Kansoku.Event
 import Kansoku.Ingest.Api (BatchAck (..), RejectedEvent (..))
@@ -64,11 +64,7 @@ spec = describe "Kansoku.Ingest.Handler" $ do
     batchLengthError 500 500 `shouldBe` Nothing
     batchLengthError 500 501
       `shouldBe` Just
-        ErrorEnvelopeWire
-          { code = "batch_too_large",
-            message = "batch of 501 events exceeds the limit of 500",
-            retryable = False
-          }
+        (problem 413 "batch_too_large" "batch of 501 events exceeds the limit of 500")
 
   it "renders every validation error as human-readable text" $ do
     renderValidationError EmptyEventId `shouldBe` "eventId must not be empty"
