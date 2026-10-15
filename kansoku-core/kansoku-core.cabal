@@ -45,6 +45,7 @@ library
     Kansoku.Config
     Kansoku.Exception
     Kansoku.Health
+    Kansoku.Ingest.Acceptance
     Kansoku.Ingest.Handler
     Kansoku.Ingest.Producer
     Kansoku.Ingest.Quarantine
@@ -70,7 +71,7 @@ library
 
   build-depends:
     ClickHaskell,
-    aeson,
+    aeson >=2.2.1,
     async,
     base >=4.21 && <5,
     base64-bytestring,
@@ -82,6 +83,7 @@ library
     generic-lens >=2.2 && <2.4,
     hasql,
     hasql-pool,
+    hasql-transaction,
     hs-opentelemetry-api,
     hs-opentelemetry-exporter-handle,
     hs-opentelemetry-instrumentation-servant,
@@ -129,6 +131,7 @@ test-suite kansoku-core-test
     Kansoku.HealthSpec
     Kansoku.HttpIntegrationSpec
     Kansoku.HttpTelemetrySpec
+    Kansoku.Ingest.AcceptanceSpec
     Kansoku.Ingest.HandlerSpec
     Kansoku.Ingest.QueueSpec
     Kansoku.Ingest.ServiceSpec

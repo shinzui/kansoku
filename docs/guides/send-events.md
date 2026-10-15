@@ -138,8 +138,8 @@ their zero-based input index:
 }
 ```
 
-Do not retry entries in `rejected`: Kansoku has finished processing that batch, and a retry would
-duplicate accepted events. Correct rejected payloads and send them as new submissions. A body
+Do not automatically retry entries in `rejected`: Kansoku has finished processing that batch.
+Correct rejected payloads before submitting again. A body
 that cannot decode as an event array returns HTTP 400 instead.
 
 The default limits are 500 events per batch and 5 MiB per request body. Either limit can be
@@ -170,6 +170,19 @@ raw fingerprint retention.
 Kansoku enqueues accepted events in PostgreSQL and returns before ClickHouse insertion. The
 queue-to-ClickHouse boundary is at-least-once; `eventId` provides storage idempotency. Keep the
 same `eventId` when retrying an uncertain request.
+
+An account/event ID permanently identifies its first accepted producer payload. Acceptance and
+queue publication commit together in PostgreSQL. Equal retries are acknowledged without another
+queue message or another timestamp normalization. Delivery `receivedAt`, `sentAt` and the ignored
+producer `accountId` do not change identity; all other original fields, including unknown fields,
+do. Nested object order and equivalent JSON numbers do not change the payload hash. Changing an
+accepted payload requires a new event ID. Reusing its ID returns HTTP 400 `event_id_conflict` for
+a single event, or an indexed rejection inside a batch's HTTP 202 acknowledgement.
+
+Queue redelivery remains at-least-once. Canonical analytical reads and exact distinct-ID count
+states prevent it changing counts, revenue or averages before background merges. The minimal
+acceptance ledger has no automatic expiry; erasure tombstones also prevent restoration by retry.
+
 
 Retry transient network failures, HTTP 503 responses whose problem document has `retryable: true`, and
 an interrupted request for which no response was received. Use bounded exponential backoff.

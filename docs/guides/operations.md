@@ -206,6 +206,26 @@ Send SIGTERM or SIGINT. The supervisor cancels the server, writer, poller, and r
 down the trace provider. Stop accepting traffic before termination and allow the platform's grace
 period to complete. Producer-side Haskell clients still need their own `flush`/`close` handling.
 
+## Event identity and analytical replay
+
+`kansoku.accepted_events` retains account/event IDs, canonical producer SHA-256 hashes, first
+acceptance times and optional erasure tombstones indefinitely. Budget PostgreSQL disk for this
+ledger as well as queued payloads. Do not truncate it during queue maintenance: that would allow
+an old ID to be normalized and accepted again. It contains no complete event payload.
+
+`analytics.events_canonical` is the internal logical source, currently `events_raw FINAL` with
+its native JSON column explicitly projected. Query-time sums, averages, sessions and identity
+joins use that source. Daily event/page-view rollups store exact distinct event-ID states; use
+`uniqExactMerge`, not `countMerge`. Duplicate physical raw rows are expected after uncertain
+insert acknowledgements. Their logical identity does not depend on background merges or a
+finite insert-block token window.
+
+Migration `0017_replay_safe_sources.sql` requires the writer stopped for its entire execution.
+It builds replacement rollups from canonical retained rows, verifies every aggregate group,
+then atomically swaps each public table name. If interrupted, leave the writer stopped and
+reapply the migration; appending an additive backfill to an existing table is unsafe. Fresh
+install and interrupted-rebuild native checks verify this administrative boundary.
+
 ## Data maintenance
 
 Identity evidence and raw identifiers require special handling for erasure and fingerprint

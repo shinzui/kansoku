@@ -3,14 +3,13 @@
 module Kansoku.Writer.LifecycleSpec (spec) where
 
 import Control.Concurrent (newEmptyMVar, putMVar, takeMVar)
-import Control.Exception (bracket, finally)
+import Control.Exception (bracket)
 import Control.Monad (void)
 import Data.Aeson (Value (..), toJSON)
 import Data.Either (isRight)
 import Data.IORef (modifyIORef', newIORef, readIORef)
 import Data.Map.Strict qualified as Map
 import Data.Text (Text)
-import Data.Text qualified as Text
 import Effectful (Eff, IOE, liftIO, runEff)
 import Effectful.Concurrent (Concurrent, runConcurrent)
 import Effectful.Error.Static (Error, runErrorNoCallStack)
@@ -24,7 +23,7 @@ import Kansoku.Event (EventId (..), EventName (..), EventSource (..), baseEvent)
 import Kansoku.Ingest.Queue (eventsQueueName)
 import Kansoku.Observability (PipelineMetrics, newWriterHeartbeat)
 import Kansoku.Postgres (createPool)
-import Kansoku.PostgresTestSupport (withMigratedStore)
+import Kansoku.PostgresTestSupport (withCommitFault, withMigratedStore)
 import Kansoku.Writer.Batch (writerBatchHandler)
 import Pgmq qualified
 import Pgmq.Effectful (Pgmq, PgmqRuntimeError, runPgmq)
@@ -36,9 +35,7 @@ import Shibuya.App
 import Shibuya.Internal.Runner.Master (ProcessorLifecycle (..), getLifecycleSnapshot)
 import Shibuya.Telemetry.Effect (Tracing, runTracingNoop)
 import Streamly.Data.Stream qualified as Stream
-import System.Directory (doesFileExist)
-import System.IO (Handle, hGetLine)
-import System.Process
+import System.IO (hGetLine)
 import System.Timeout (timeout)
 import Test.Hspec
 
@@ -146,21 +143,3 @@ execute connection sql = Connection.use connection (Session.script sql) >>= eith
 
 countRows :: Connection.Connection -> Text -> IO Integer
 countRows connection table = fromIntegral <$> (Connection.use connection (Session.statement () (Statement.preparable ("SELECT count(*) FROM " <> table) E.noParams (D.singleRow (D.column (D.nonNullable D.int8))))) >>= either (fail . show) pure)
-
-withCommitFault :: Text -> (Text -> Handle -> IO a) -> IO a
-withCommitFault settings action = do
-  script <- doesFileExist "scripts/pg_commit_fault.py" >>= \exists -> pure (if exists then "scripts/pg_commit_fault.py" else "../scripts/pg_commit_fault.py")
-  let fields = Text.words settings
-      field key = maybe (error "missing private PostgreSQL setting") (Text.drop (Text.length key + 1)) (findField key fields)
-      socket = Text.unpack (field "host" <> "/.s.PGSQL." <> field "port")
-      process = (proc "python3" [script, socket]) {std_out = CreatePipe}
-  withCreateProcess process $ \_ output _ handle -> (`finally` terminateProcess handle) $ do
-    pipe <- maybe (fail "missing proxy output") pure output
-    port <- bounded (hGetLine pipe)
-    let target = Text.unwords (filter (\s -> not ("host=" `Text.isPrefixOf` s || "port=" `Text.isPrefixOf` s)) fields) <> " host=127.0.0.1 port=" <> Text.pack port <> " sslmode=disable gssencmode=disable"
-    action target pipe
-  where
-    findField _ [] = Nothing
-    findField key (x : xs)
-      | (key <> "=") `Text.isPrefixOf` x = Just x
-      | otherwise = findField key xs

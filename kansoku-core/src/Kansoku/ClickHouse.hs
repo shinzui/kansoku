@@ -155,9 +155,9 @@ countEvents conn = do
 projectionSelect :: Select ProjectionColumns EventProjection
 projectionSelect =
   unsafeMkSelect $ \_ ->
-    "SELECT event_id, CAST(event_name, 'String') AS event_name, CAST(source, 'String') AS source, account_id, user_id FROM events_raw"
+    "SELECT event_id, CAST(event_name, 'String') AS event_name, CAST(source, 'String') AS source, account_id, user_id FROM events_canonical"
 
 countSelect :: Select CountColumns CountRow
 countSelect =
   unsafeMkSelect $ \_ ->
-    "SELECT count() AS count FROM events_raw"
+    "SELECT count() AS count FROM events_canonical"

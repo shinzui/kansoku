@@ -33,7 +33,8 @@ kansokuApplicationMigrations :: Either DefinitionError MigrationComponent
 kansokuApplicationMigrations = do
   apiKeys <- sqlMigration "0001-api-keys" apiKeysSql
   rejections <- sqlMigration "0002-ingest-rejections" rejectionsSql
-  migrationComponent "kansoku" (Set.singleton "pgmq") (apiKeys :| [rejections])
+  acceptance <- sqlMigration "0003-accepted-events" acceptanceSql
+  migrationComponent "kansoku" (Set.singleton "pgmq") (apiKeys :| [rejections, acceptance])
 
 apiKeysSql :: ByteString
 apiKeysSql =
@@ -80,4 +81,18 @@ rejectionsSql =
   );
   CREATE INDEX ingest_rejections_account_received_idx
       ON kansoku.ingest_rejections (account_id, received_at, id);
+  """
+
+acceptanceSql :: ByteString
+acceptanceSql =
+  """
+  CREATE TABLE kansoku.accepted_events
+  (
+      account_id text NOT NULL,
+      event_id text NOT NULL,
+      producer_payload_hash text NOT NULL CHECK (length(producer_payload_hash) = 64),
+      first_accepted_at timestamptz NOT NULL DEFAULT now(),
+      erased_at timestamptz,
+      PRIMARY KEY (account_id, event_id)
+  );
   """

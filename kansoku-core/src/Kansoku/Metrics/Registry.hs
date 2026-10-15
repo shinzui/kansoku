@@ -47,7 +47,7 @@ events =
 
 pageViews :: MetricDefinition
 pageViews =
-  metric "page_views" "Page view event rows from the daily rollup." ["page_view"] Count [] (Just Day)
+  metric "page_views" "Distinct logical page-view events from the daily rollup." ["page_view"] Count [] (Just Day)
 
 sessions :: MetricDefinition
 sessions =

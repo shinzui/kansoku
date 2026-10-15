@@ -9,13 +9,11 @@ module Kansoku.Ingest.Handler
   )
 where
 
-import Control.Monad (replicateM_)
 import Data.Foldable (forM_)
 import Data.Generics.Labels ()
 import Data.List (nub)
 import Data.Text qualified as Text
-import Effectful (Eff, IOE, runEff)
-import Effectful.Error.Static qualified as Error
+import Effectful (runEff)
 import Hasql.Pool qualified as Pool
 import Kansoku.Api.Response
   ( KansokuResult (..),
@@ -30,11 +28,12 @@ import Kansoku.Config (Config)
 import Kansoku.Event
   ( AnalyticsEvent,
     EventId (..),
-    ValidationError,
+    ValidationError (..),
     renderValidationError,
     validateEvent,
     validationReason,
   )
+import Kansoku.Ingest.Acceptance (Acceptance (..), acceptBatch)
 import Kansoku.Ingest.Api
   ( BatchAck (..),
     IngestAck (..),
@@ -42,82 +41,73 @@ import Kansoku.Ingest.Api
     IngestRoutes (..),
     RejectedEvent (..),
   )
-import Kansoku.Ingest.Producer (enqueueMany)
 import Kansoku.Ingest.Quarantine (captureRejections)
 import Kansoku.Ingest.Timestamp
 import Kansoku.Logging (logError, runLogStderr)
 import Kansoku.Observability (PipelineMetrics)
 import Kansoku.Prelude
-import Pgmq.Effectful (Pgmq, QueueName, runPgmq)
-import Pgmq.Effectful.Interpreter (PgmqRuntimeError)
+import Pgmq.Types (QueueName)
 import Prometheus qualified as P
 import Servant (Handler)
 import Servant.Server.Generic (AsServerT)
-
-type HandlerEff =
-  '[ Pgmq,
-     Error.Error PgmqRuntimeError,
-     IOE
-   ]
 
 ingestServer :: Config -> PipelineMetrics -> Pool.Pool -> QueueName -> IngestRoutes (AsServerT Handler)
 ingestServer cfg metrics pool queueName =
   IngestRoutes
     { postEvent = \(IngestPrincipal principal) raw -> do
-        (events, rejectedEvents) <- prepare "single" principal [raw]
-        case rejectedEvents of
-          (_, errs) : _ -> pure (validationFailure errs)
-          [] -> do
-            result <- enqueue "single" events
-            pure (fmap (\_ -> IngestAck {accepted = 1, eventId = unEventId (parsedEvent raw ^. #eventId)}) result),
+        result <- submit "single" principal [raw]
+        pure $ case result of
+          KansokuOk [Rejected errs] -> validationFailure errs
+          _ -> (\_ -> IngestAck {accepted = 1, eventId = unEventId (parsedEvent raw ^. #eventId)}) <$> result,
       postBatch = \(IngestPrincipal principal) raw ->
         case batchLengthError (cfg ^. #ingestMaxBatchLength) (length raw) of
           Just err -> pure (KansokuTooLarge err)
           Nothing -> do
-            (events, rejectedEvents) <- prepare "batch" principal raw
-            result <- enqueue "batch" events
-            pure (fmap (\_ -> BatchAck {accepted = length events, rejected = [rejection eventIndex event errs | ((eventIndex, event), errs) <- rejectedEvents]}) result)
+            result <- submit "batch" principal raw
+            pure $
+              ( \outcomes ->
+                  BatchAck
+                    { accepted = length [() | outcome <- outcomes, case outcome of Rejected _ -> False; _ -> True],
+                      rejected = [rejection i (parsedEvent input) errs | (i, input, Rejected errs) <- zip3 [0 ..] raw outcomes]
+                    }
+              )
+                <$> result
     }
   where
-    prepare transport principal raw = do
+    submit transport principal raw = do
       now <- liftIO getCurrentTime
-      let checked =
-            [ (i, original, originalPayload input, adjusted, adjustment, validateEvent adjusted)
-            | (i, input) <- zip [0 ..] raw,
-              let original = parsedEvent input,
-              let (adjusted, adjustment) = normalizeOccurredAt (fromIntegral (cfg ^. #ingestFutureToleranceSec)) now (stampAuthenticatedEvent now principal original)
-            ]
-      liftIO $ forM_ checked $ \(_, _, _, _, adjustment, verdict) -> do
-        forM_ adjustment $ \kind ->
-          P.withLabel
-            (metrics ^. #ingestTimestampAdjustmentsTotal)
-            (case kind of SkewCorrected -> "skew_corrected"; Clamped -> "clamped", transport)
-            P.incCounter
-        case verdict of
-          Right _ -> pure ()
-          Left errs -> do
-            P.withLabel (metrics ^. #ingestEventsTotal) ("rejected", transport) P.incCounter
-            forM_ (nub (validationReason <$> errs)) $ \reason ->
-              P.withLabel (metrics ^. #ingestRejectionsTotal) (reason, transport) P.incCounter
-      liftIO $
-        captureRejections
-          cfg
-          metrics
-          transport
-          (principal ^. #accountId)
-          now
-          [(original, originalObject, errs) | (_, original, originalObject, _, _, Left errs) <- checked]
-      pure ([event | (_, _, _, _, _, Right event) <- checked], [((i, original), errs) | (i, original, _, _, _, Left errs) <- checked])
-
-    enqueue transport events = do
-      result <- effToHandler pool (enqueueMany queueName events)
+      let validate input =
+            let (adjusted, adjustment) = normalizeOccurredAt (fromIntegral (cfg ^. #ingestFutureToleranceSec)) now (stampAuthenticatedEvent now principal (parsedEvent input))
+             in (\event -> (event, adjustment)) <$> validateEvent adjusted
+      result <- liftIO $ acceptBatch pool queueName (principal ^. #accountId) validate raw
       case result of
-        KansokuOk _ ->
+        Left _ -> do
+          liftIO . runEff . runLogStderr $ logError "ingest enqueue failed"
+          pure (KansokuUnavailable (unavailable "queue_unavailable" "analytics queue is unavailable"))
+        Right outcomes -> do
+          liftIO $ forM_ outcomes $ \case
+            NewEvent _ adjustment -> do
+              accepted transport
+              forM_ adjustment $ \kind ->
+                P.withLabel
+                  (metrics ^. #ingestTimestampAdjustmentsTotal)
+                  (case kind of SkewCorrected -> "skew_corrected"; Clamped -> "clamped", transport)
+                  P.incCounter
+            Replay -> accepted transport
+            Rejected errs -> do
+              P.withLabel (metrics ^. #ingestEventsTotal) ("rejected", transport) P.incCounter
+              forM_ (nub (validationReason <$> errs)) $ \reason ->
+                P.withLabel (metrics ^. #ingestRejectionsTotal) (reason, transport) P.incCounter
           liftIO $
-            replicateM_ (length events) $
-              P.withLabel (metrics ^. #ingestEventsTotal) ("accepted", transport) P.incCounter
-        _ -> pure ()
-      pure result
+            captureRejections
+              cfg
+              metrics
+              transport
+              (principal ^. #accountId)
+              now
+              [(parsedEvent input, originalPayload input, errs) | (input, Rejected errs) <- zip raw outcomes]
+          pure (KansokuOk outcomes)
+    accepted transport = P.withLabel (metrics ^. #ingestEventsTotal) ("accepted", transport) P.incCounter
 
 rejection :: Int -> AnalyticsEvent -> [ValidationError] -> RejectedEvent
 rejection eventIndex event errs =
@@ -172,25 +162,10 @@ partitionBatch events =
               : rejectedEvents
           )
 
-effToHandler :: Pool.Pool -> Eff HandlerEff a -> Handler (KansokuResult a)
-effToHandler pool action = do
-  result <-
-    liftIO $
-      runEff $
-        Error.runErrorNoCallStack @PgmqRuntimeError $
-          runPgmq pool action
-  case result of
-    Left _ -> do
-      liftIO . runEff . runLogStderr $
-        logError "ingest enqueue failed"
-      pure (KansokuUnavailable (unavailable "queue_unavailable" "analytics queue is unavailable"))
-    Right value ->
-      pure (KansokuOk value)
-
 validationFailure :: [ValidationError] -> KansokuResult a
 validationFailure validationErrs =
   KansokuBadRequest
     ( badRequest
-        "validation_failed"
+        (if EventIdConflict `elem` validationErrs then "event_id_conflict" else "validation_failed")
         ("validation failed: " <> Text.intercalate "; " (renderValidationError <$> validationErrs))
     )

@@ -3,6 +3,7 @@
 Imported only by the owned executable acceptance harness.
 """
 from datetime import datetime, timedelta, timezone
+from concurrent.futures import ThreadPoolExecutor
 import json
 import subprocess
 import time
@@ -83,3 +84,24 @@ def verify_ingest(base, token, env):
                 '--query', f"SELECT toUnixTimestamp64Milli(toDateTime64('2099-12-31 23:59:59.999',3,'UTC'))"]
     assert int(subprocess.check_output(boundary, env=env)) == upper
     print('EP-29 native ingest: timestamp milliseconds, boundaries, rejections and original quarantine passed.', flush=True)
+
+    # Equal producer payloads retry with fresh delivery clocks and an ignored
+    # producer account. The first normalized payload remains immutable.
+    retries = [dict(value, sentAt=iso(datetime.now(timezone.utc)),
+                    receivedAt=iso(datetime.now(timezone.utc)), accountId='ignored-producer-account')
+               for value in events]
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        acks = list(executor.map(lambda _: post('/v1/batch', retries), range(8)))
+    assert all(ack['accepted'] == len(events) and not ack['rejected'] for ack in acks)
+    conflict = dict(retries[0], eventName='changed_producer_content')
+    assert post('/v1/events', conflict, 400)['code'] == 'event_id_conflict'
+    ack = post('/v1/batch', [retries[0], conflict])
+    assert ack['accepted'] == 1 and len(ack['rejected']) == 1 and ack['rejected'][0]['index'] == 1
+    assert 'event_id_conflict' in ack['rejected'][0]['errors'][0]
+    assert int(psql(f"SELECT count(*) FROM kansoku.accepted_events WHERE starts_with(event_id, '{prefix}')")) == len(events)
+    after = [json.loads(line) for line in subprocess.check_output(command, env=env, text=True).splitlines()]
+    assert sorted(rows, key=lambda row: row['event_id']) == sorted(after, key=lambda row: row['event_id'])
+    physical = ['clickhouse-client', '--host', '127.0.0.1', '--port', env['CLICKHOUSE_TCP_PORT'],
+                '--query', f"SELECT count() FROM analytics.events_raw WHERE startsWith(event_id, '{prefix}')"]
+    assert int(subprocess.check_output(physical, env=env)) == len(events)
+    print('EP-30 native ingest: concurrent HTTP replay, immutable normalized values and per-event conflicts passed.', flush=True)

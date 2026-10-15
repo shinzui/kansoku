@@ -2,7 +2,7 @@
 type: Architecture Decision Record
 title: Queryable event properties and identity-resolved projection
 description: Store event properties as native ClickHouse JSON and expose them for metric grouping only after registry declaration.
-timestamp: 2026-07-19T00:00:00Z
+timestamp: 2026-10-15T17:23:33Z
 generated:
   by: human:kansoku-maintainers
   at: 2026-07-19T00:00:00Z
@@ -80,3 +80,20 @@ identity work, must preserve the ordered seven-column contract: `event_id`, `eve
 `occurred_at`, `url`, `account_id`, `canonical_user`, `properties_json`. Experiment
 rollups consume the same native JSON expressions. If ClickHaskell later gains JSON wire
 support, changing the insert or result protocol remains a separate measured decision.
+
+## Canonical replay source
+
+`analytics.events_canonical` is the internal source for query-time aggregation and identity
+joins. Its current implementation reads immutable accepted rows from `events_raw FINAL` and
+explicitly includes `properties_json`, since ClickHouse's default asterisk excludes materialized
+columns. Identity evidence projections also apply FINAL before observations are joined/counted.
+The ordered seven-column public resolved view remains unchanged.
+
+Daily event/page-view rollups union `uniqExact` event-ID states. Sums and averages read canonical
+rows; additive materialized-view count states cannot retract a duplicate insert. Correctness
+holds before background merges, across regrouped retries and after restart, independently of
+any finite insert-block deduplication window. These guarantees require the immutable acceptance
+boundary in [ADR-1](0001-sdk-grade-ingest-contract-boundaries.md). Administrative rebuilds keep
+the writer stopped and replace states from canonical data; interrupted rebuilds can restart.
+The earlier JSON representation benchmark does not establish the cost of FINAL; the deployment
+capacity measurement must include this canonical source.

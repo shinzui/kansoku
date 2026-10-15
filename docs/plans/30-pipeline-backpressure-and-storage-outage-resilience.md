@@ -53,7 +53,7 @@ without staged rollout, legacy compatibility or downstream release coordination.
 
 
 - [x] M0: Released Shibuya/adapter/PGMQ baseline builds and passes fresh-install and writer lifecycle checks.
-- [ ] M1: Durable event identity and replay-safe analytical reads pass failure/rebatching tests.
+- [x] M1: Durable event identity and replay-safe analytical reads pass failure/rebatching tests.
 - [ ] M2: Writer pauses consumption during outages and resumes with bounded recovery evidence.
 - [ ] M3: Archive/backlog instruments and shared credential rate limits pass HTTP tests.
 - [ ] M4: Named-hardware ingest and drain benchmarks establish the deployment envelope.
@@ -78,6 +78,25 @@ successful in-memory acknowledgement handle. Failure snapshots are inspected und
 IgnoreFailures so the supervisor's linked exception cannot interrupt the assertion; the
 production writer retains StopAllOnFailure. A blocked insert shutdown exposed the narrower
 AsyncException catch; it now propagates SomeAsyncException, including AsyncCancelled.
+
+M1 uses `analytics.events_canonical` as the internal database source helper. A default
+ClickHouse asterisk omits materialized columns, so its explicit `properties_json` projection
+is necessary for the existing seven-column resolved contract and property SQL. Exact-ID states
+replace count states through verified replacement tables and atomic name swaps in a new
+writer-stopped administrative migration. Native corruption checks refuse publication, and
+interruption before verification, between swaps, and before trigger recreation recovers on reapply. Native replay beyond 1000 intervening insert blocks and a real
+ClickHouse restart also passes, independent of block tokens. Current built-in count, page-view,
+revenue, average, user and session queries retain their values before/after regrouped replays
+and merges. Trait analytics is introduced by the later trait child and must consume this
+canonical boundary rather than introduce an insert-time additive projection.
+
+The acceptance ledger hashes original JSON with Aeson's lossless RFC8785 encoder (available
+since 2.2.1.0; the existing resolved 2.2.4.1 is retained; current upstream/Hackage preferred is
+2.3.2.0). It excludes receive/send clocks and ignored producer account, while preserving unknown
+producer content in the hash. Validation/normalization is lazy and skipped for known equal
+payloads. Claims and sends share one Hasql transaction; stable key order avoids opposing batch
+lock order. Native tests cover concurrent equal/conflicting IDs, rollback, tombstones and a
+real discarded acceptance-COMMIT response. Only hash/identity/time/tombstone metadata persists.
 
 The actual raw sort key is `(account_id,event_name,occurred_at,event_id)`, not event ID alone.
 `ReplacingMergeTree` does not deduplicate additive materialized-view counts. The adapter pinned
@@ -255,6 +274,21 @@ and reapply without work. Nix evaluation and Cabal's build plan agree on all six
 queue packages. The production writer handles the new finite total shutdown budget.
 
 
+
+M1 accepted 2026-10-15: developer checks pass; the final packaged run
+`.dev/acceptance/run-k9dxz19h/sanitized` passes 195 core examples, 16 client examples,
+four probes, native recovery/limits/replay and 45 Hurl requests, without required skips/pending.
+The new ledger cases cover lazy normalization on equal retries, tombstones, concurrent equal
+and conflicting submissions, reversed batch lock order, queue-send rollback and a real lost
+PostgreSQL acceptance-COMMIT result. Packaged HTTP checks concurrently restamp delivery clocks
+and confirm one unchanged physical queue/writer result and indexed conflicts. Native analytical
+checks preserve count, page-view, revenue, average, identity and session values before merges;
+the lost-insert-confirmation test commits natively before injecting its failure and redelivery.
+A separate owned ClickHouse test executes 1001 intervening insert blocks, restarts the real
+server, replays old rows, rejects corrupt replacement states before publication, and recovers
+from interruption before verification, between atomic swaps and before trigger recreation.
+Existing query-pool fault fixtures now apply real migrations rather than assuming a raw-only
+schema. No insert deduplication token/window is used as a correctness dependency.
 
 M0 requires agreement between Cabal's resolved build plan and Nix's packaged dependency
 versions, successful fresh native migrations and repeat verification, a real queue roundtrip,

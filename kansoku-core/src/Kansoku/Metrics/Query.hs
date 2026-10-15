@@ -432,27 +432,9 @@ buildSimpleSQL registry grouping predicates def req
           resolveNumericProperty registry (definitionEvents def) propertyText
       pure (propertyAggregateSQL functionName property grouping predicates def req)
 
--- Metric source and accuracy map:
---
-
--- * active_users at day/week grain is an approximate pre-aggregated raw-
-
---   identity count from dau/wau (uniqCombined, about 0.8% relative error at
---   high cardinality).
-
--- * page_views at day grain is an exact inserted-row countMerge rollup, but is
-
---   replay-sensitive because count states cannot retract a replay later
---   collapsed by events_raw.
-
--- * unique-user, ratio, retention, and funnel metrics read events_resolved for
-
---   exact, query-time identity stitching. Its FINAL-free view is safe because
---   these queries use distinct/min/ordered per-user aggregation, not row count.
-
--- * events, property aggregates, and sessions read events_raw directly;
-
---   events remains replay-proof via count(DISTINCT event_id).
+-- Canonical rows deduplicate queue replay before every query-time aggregate
+-- or identity join. Day/week raw-identity sketches remain approximate; exact
+-- page-view states union event IDs across arbitrary insert boundaries.
 
 buildRatioSQL :: RatioMetric -> QueryRequest -> Text
 buildRatioSQL RatioMetric {numerator, denominator} req =
@@ -484,7 +466,7 @@ countEventsSQL grouping predicates def req =
   Text.unlines
     [ "SELECT " <> bucketExpr (effectiveGrain def req) <> " AS bucket, " <> groupExpr grouping <> " AS group_key,",
       "       toFloat64(count(DISTINCT event_id)) AS value",
-      "FROM analytics.events_raw",
+      "FROM analytics.events_canonical",
       "WHERE " <> accountPredicate,
       "  AND " <> timestampPredicate req <> eventNameClause "event_name" (validatedEventNames def) <> propertyFilterClause predicates,
       "GROUP BY bucket, group_key",
@@ -509,7 +491,7 @@ propertyAggregateSQL fn property grouping predicates def req =
   Text.unlines
     [ "SELECT " <> bucketExpr (effectiveGrain def req) <> " AS bucket, " <> groupExpr grouping <> " AS group_key,",
       "       toFloat64(" <> fn <> "(" <> propertyFloatExpr property <> ")) AS value",
-      "FROM analytics.events_raw",
+      "FROM analytics.events_canonical",
       "WHERE " <> accountPredicate,
       "  AND " <> timestampPredicate req <> eventNameClause "event_name" (validatedEventNames def) <> propertyFilterClause predicates,
       "GROUP BY bucket, group_key",
@@ -546,7 +528,7 @@ pageViewsDaySQL grouping req =
     Just GroupByRoute ->
       Text.unlines
         [ "SELECT toString(day) AS bucket, route AS group_key,",
-          "       toFloat64(countMerge(views)) AS value",
+          "       toFloat64(uniqExactMerge(views)) AS value",
           "FROM analytics.page_views_by_route",
           "WHERE " <> accountPredicate,
           "  AND day >= " <> sqlString (renderDay (req ^. #from)) <> " AND day < " <> sqlString (renderDay (req ^. #to)),
@@ -556,7 +538,7 @@ pageViewsDaySQL grouping req =
     _ ->
       Text.unlines
         [ "SELECT toString(day) AS bucket, '' AS group_key,",
-          "       toFloat64(countMerge(views)) AS value",
+          "       toFloat64(uniqExactMerge(views)) AS value",
           "FROM analytics.page_views_by_route",
           "WHERE " <> accountPredicate,
           "  AND day >= " <> sqlString (renderDay (req ^. #from)) <> " AND day < " <> sqlString (renderDay (req ^. #to)),
@@ -573,7 +555,7 @@ buildSessionsSQLAggregate req =
     <> bucketExpr (req ^. #timeGrain <|> Just Day)
     <> """ AS bucket, '' AS group_key,
               toFloat64(uniqExact(session_id)) AS value
-       FROM analytics.events_raw
+       FROM analytics.events_canonical
        WHERE """
     <> accountPredicate
     <> "\n  AND "

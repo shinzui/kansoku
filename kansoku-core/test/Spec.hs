@@ -10,6 +10,7 @@ import Kansoku.EventSpec qualified
 import Kansoku.HealthSpec qualified
 import Kansoku.HttpIntegrationSpec qualified
 import Kansoku.HttpTelemetrySpec qualified
+import Kansoku.Ingest.AcceptanceSpec qualified
 import Kansoku.Ingest.HandlerSpec qualified
 import Kansoku.Ingest.QueueSpec qualified
 import Kansoku.Ingest.ServiceSpec qualified
@@ -51,6 +52,7 @@ normalTests = hspec $ do
   Kansoku.ClickHouseSpec.spec
   Kansoku.EventSpec.spec
   Kansoku.HealthSpec.spec
+  Kansoku.Ingest.AcceptanceSpec.spec metrics
   Kansoku.Ingest.HandlerSpec.spec
   Kansoku.Ingest.QueueSpec.spec
   Kansoku.Ingest.TimestampSpec.spec

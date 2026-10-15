@@ -3,6 +3,7 @@ module Kansoku.ClickHouseSpec (spec) where
 import ClickHaskell (ChString, ClickHaskell, ClientError (UnmatchedResult), Column, DateTime64, Float64, Select, UInt8, command, select, unsafeMkSelect)
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (wait, withAsync)
+import Control.Exception (bracket_)
 import Data.Aeson.KeyMap qualified as KeyMap
 import Data.ByteString (ByteString)
 import Data.Generics.Labels ()
@@ -37,13 +38,16 @@ spec = describe "Kansoku.ClickHouse" $ do
       rows <- concat <$> select timestampSelect conn pure
       rows `shouldMatchList` [TimestampRow lower, TimestampRow upper]
 
-  it "collapses replayed events after a final ReplacingMergeTree merge" $
+  it "collapses replayed parts before background merges and remains stable after merging" $
     withClickHouse $ \conn -> do
       resetTable conn
       let event = sampleEvent "evt_storage_dedup" "page_view"
-      insertEvents conn [event]
-      insertEvents conn [event]
-      countEvents conn `shouldReturn` 2
+      bracket_ (command conn "SYSTEM STOP MERGES analytics.events_raw") (command conn "SYSTEM START MERGES analytics.events_raw") $ do
+        insertEvents conn [event]
+        insertEvents conn [event]
+        physical <- concat <$> select (unsafeMkSelect (const "SELECT toFloat64(count()) AS value FROM analytics.events_raw") :: Select MistypedColumns MistypedRow) conn pure
+        physical `shouldBe` [MistypedRow 2]
+        countEvents conn `shouldReturn` 1
       command conn "OPTIMIZE TABLE analytics.events_raw FINAL"
       countEvents conn `shouldReturn` 1
 

@@ -2,7 +2,7 @@
 type: Architecture Decision Record
 title: SDK-grade ingest contract boundaries
 description: Accept syntactically valid ingest batches partially, cap request size and count, and scope CORS to /v1/* so SDKs get stable retry semantics.
-timestamp: 2026-10-15T16:24:04Z
+timestamp: 2026-10-15T17:23:33Z
 generated:
   by: human:kansoku-maintainers
   at: 2026-07-19T00:00:00Z
@@ -107,3 +107,14 @@ cancellation escapes. Payloads larger than the configured byte cap become an emp
 with truncation/size metadata. The supervised cleanup runs at startup and hourly, enforcing
 14-day default retention and a 10000-row default per-account cap, including after capture is
 disabled. Failed cleanup retries each minute; expiry is eventual, not a hard deadline.
+
+## Immutable acceptance
+
+PostgreSQL's account/event-ID ledger and PGMQ publication share one Hasql transaction on one
+connection. Equal retries acknowledge without publishing or normalizing again. Different
+producer content returns `event_id_conflict` (single 400 or indexed batch rejection). SHA-256
+covers canonical original JSON, including unknown fields, excluding only authenticated account
+overrides and receive/send clocks. Nested order and equivalent numbers canonicalize through
+Aeson's lossless RFC8785 encoder. Claims roll back with failed queue sends; concurrent batches
+acquire identity claims in stable key order. The minimal ledger persists indefinitely, including
+erasure tombstones. It stores no full event payload.

@@ -1,7 +1,9 @@
 module Kansoku.QueryIntegrationSpec (spec) where
 
-import ClickHaskell (ClickHaskell, Column, Select, UInt8, select, unsafeMkSelect)
+import ClickHaskell (ClickHaskell, Column, Select, UInt8, command, select, unsafeMkSelect)
 import Control.Concurrent.Async (mapConcurrently)
+import Control.Exception (bracket, bracket_)
+import Control.Monad (forM_)
 import Data.Aeson qualified as Aeson
 import Data.Aeson.Key (Key)
 import Data.Aeson.KeyMap qualified as KeyMap
@@ -16,14 +18,47 @@ import Kansoku.ClickHouse
 import Kansoku.ClickHouseTestSupport
 import Kansoku.Event
 import Kansoku.Metrics.Api (TimeGrain (Day))
+import Kansoku.Metrics.Definition (Aggregation (Average))
 import Kansoku.Metrics.Query qualified as Query
 import Kansoku.Metrics.Query.Validate (SqlName, mkSqlName)
-import Kansoku.Metrics.Registry (BuiltinMetric, builtinMetric)
+import Kansoku.Metrics.Registry (BuiltinMetric (..), builtinMetric)
 import Kansoku.Prelude
 import Test.Hspec
 
 spec :: Spec
 spec = describe "Kansoku.Query integration" $ do
+  it "keeps revenue, average, page views, users and sessions stable across regrouped replays before merges" $
+    withClickHouse $ \conn -> do
+      cfg <- clickHouseConfigFromConfig <$> requireConfig
+      let rows =
+            [ propertyEvent "replay-payment-1" "payment_completed" "replay-user" [("amount", Aeson.Number 3)],
+              propertyEvent "replay-payment-2" "payment_completed" "replay-user" [("amount", Aeson.Number 7)],
+              propertyEvent "replay-page-1" "page_view" "replay-user" [],
+              propertyEvent "replay-page-2" "page_view" "replay-user" [],
+              propertyEvent "replay-start" "signup_started" "replay-user" [],
+              propertyEvent "replay-complete" "signup_completed" "replay-user" [],
+              propertyEvent "replay-identify" "identify" "replay-user" [] & #anonymousId ?~ AnonymousId "replay-anon"
+            ]
+              <&> (\event -> (if event ^. #eventName == EventName "page_view" then event & #userId .~ Nothing & #anonymousId ?~ AnonymousId "replay-anon" else event) & #accountId ?~ AccountId "acct_replay" & #sessionId ?~ SessionId "replay-session" & #url ?~ "https://example.com/replay")
+          req = Query.QueryRequest (AccountId "acct_replay") (fromGregorian 2026 7 1) (fromGregorian 2026 7 2) Nothing (Just Day)
+      metrics <- traverse requireBuiltinMetric ["events", "revenue", "page_views", "sessions", "active_users", "conversion_rate"]
+      revenue <- requireBuiltinMetric "revenue"
+      average <- case revenue of Simple definition -> pure (Simple (definition & #name .~ "payment_average" & #aggregation .~ Average)); _ -> fail "expected revenue definition"
+      let snapshot pool = traverse (\metric -> runEff (Query.run defaultRegistry pool metric req) >>= expectCompiled >>= pure . sum . fmap (view #value) . view #points) (metrics <> [average])
+      bracket (newQueryPool cfg 2) closeQueryPool $ \pool -> do
+        bracket_ (command conn "SYSTEM STOP MERGES analytics.events_raw") (command conn "SYSTEM START MERGES analytics.events_raw") $ do
+          insertEvents conn rows
+          initial <- snapshot pool
+          initial `shouldBe` [7, 10, 2, 1, 2, 1, 5]
+          -- Simulate restart/rebatching and old archive replays: every copy is
+          -- byte-identical to its first queued payload, in different blocks.
+          insertEvents conn (reverse rows)
+          forM_ rows (insertEvents conn . pure)
+          insertEvents conn (drop 2 rows <> take 2 rows)
+          snapshot pool `shouldReturn` initial
+        command conn "OPTIMIZE TABLE analytics.events_raw FINAL"
+        snapshot pool `shouldReturn` [7, 10, 2, 1, 2, 1, 5]
+
   it "runs concurrent queries in parallel across the pool" $
     withClickHouse $ \_conn -> do
       cfg <- clickHouseConfigFromConfig <$> requireConfig

@@ -82,6 +82,17 @@ spec metrics = describe "Kansoku.Writer.Batch" $ do
       Left err -> (fromException err :: Maybe AsyncCancelled) `shouldBe` Just AsyncCancelled
       Right _ -> expectationFailure "writer swallowed asynchronous cancellation"
 
+  it "keeps a committed insert logically unique after its result is lost and the queue redelivers" $
+    withClickHouse $ \conn -> do
+      command conn "TRUNCATE TABLE analytics.events_raw"
+      heartbeat <- newWriterHeartbeat
+      let lostResult events = insertEvents conn events >> ioError (userError "injected lost insert confirmation")
+      retried <- runEff (writerBatchHandler metrics heartbeat lostResult batchInfo (handlerMessage :| []))
+      retried ^. #fallback `shouldBe` AckRetry (RetryDelay 5)
+      countEvents conn `shouldReturn` 1
+      _ <- runEff (writerBatchHandler metrics heartbeat (insertEvents conn) batchInfo (handlerMessage :| []))
+      countEvents conn `shouldReturn` 1
+
   it "retries every decodable message when the ClickHouse insert fails" $ do
     failuresBefore <- Prometheus.getCounter (metrics ^. #writerInsertFailuresTotal)
     eventsBefore <- Prometheus.getCounter (metrics ^. #writerEventsWrittenTotal)

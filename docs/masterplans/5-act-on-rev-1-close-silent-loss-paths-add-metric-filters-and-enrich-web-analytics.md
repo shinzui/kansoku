@@ -216,6 +216,8 @@ EP-29 is Complete, EP-30 is In Progress, and ten children remain Not Started. It
 examples, 16 client examples, four probes, extra native recovery/limit checks and 45 Hurl
 requests with no required skips or pending cases. EP-30 now owns
 the released queue baseline, event uniqueness, outage recovery, admission and capacity proofs.
+Its M0 and M1 are accepted; M1 introduces `analytics.events_canonical` as the internal replay-safe source
+for subsequent identity, grouping and enrichment work, preserving the public resolved projection.
 
 Final integration gate (owned by EP-38): packaged server acceptance, generated API/catalog,
 SDK contracts and required live/browser cases all agree with zero feature skips. Performance,

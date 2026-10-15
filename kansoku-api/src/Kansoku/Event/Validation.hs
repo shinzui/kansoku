@@ -23,6 +23,7 @@ import Kansoku.Prelude
 
 data ValidationError
   = EmptyEventId
+  | EventIdConflict
   | EmptyEventName
   | ReceivedBeforeOccurred UTCTime UTCTime
   | UnsupportedTimestamp Text UTCTime
@@ -123,6 +124,8 @@ renderValidationError :: ValidationError -> Text
 renderValidationError = \case
   EmptyEventId ->
     "eventId must not be empty"
+  EventIdConflict ->
+    "event_id_conflict: eventId already identifies different producer content"
   EmptyEventName ->
     "eventName must not be empty"
   ReceivedBeforeOccurred occurred received ->
@@ -249,6 +252,7 @@ isSqlSafeName value =
 validationReason :: ValidationError -> Text
 validationReason = \case
   EmptyEventId -> "empty_event_id"
+  EventIdConflict -> "event_id_conflict"
   EmptyEventName -> "empty_event_name"
   ReceivedBeforeOccurred {} -> "future_timestamp"
   UnsupportedTimestamp {} -> "unsupported_timestamp"

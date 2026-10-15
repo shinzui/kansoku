@@ -38,11 +38,11 @@ spec = describe "Kansoku.Query.buildSQL" $ do
           "ORDER BY day"
         ]
 
-  it "reads page views at day grain from the count-state rollup" $
+  it "reads page views at day grain from the exact distinct-ID rollup" $
     buildSQL (Simple pageViews) dayRequest
       `shouldContainText` Text.unlines
         [ "SELECT toString(day) AS bucket, '' AS group_key,",
-          "       toFloat64(countMerge(views)) AS value",
+          "       toFloat64(uniqExactMerge(views)) AS value",
           "FROM analytics.page_views_by_route",
           "WHERE account_id = {account_id:String}",
           "  AND day >= '2026-06-01' AND day < '2026-06-08'",
@@ -55,7 +55,7 @@ spec = describe "Kansoku.Query.buildSQL" $ do
       `shouldContainText` Text.unlines
         [ "SELECT toString(toDate(occurred_at)) AS bucket, '' AS group_key,",
           "       toFloat64(count(DISTINCT event_id)) AS value",
-          "FROM analytics.events_raw",
+          "FROM analytics.events_canonical",
           "WHERE account_id = {account_id:String}",
           "  AND occurred_at >= '2026-06-01 00:00:00' AND occurred_at < '2026-06-08 00:00:00'",
           "GROUP BY bucket, group_key",
@@ -78,7 +78,7 @@ spec = describe "Kansoku.Query.buildSQL" $ do
       `shouldContainText` """
                           SELECT toString(toDate(occurred_at)) AS bucket, '' AS group_key,
                                  toFloat64(uniqExact(session_id)) AS value
-                          FROM analytics.events_raw
+                          FROM analytics.events_canonical
                           WHERE account_id = {account_id:String}
                             AND occurred_at >= '2026-06-01 00:00:00' AND occurred_at < '2026-06-08 00:00:00'
                             AND session_id != ''
@@ -231,7 +231,7 @@ spec = describe "Kansoku.Query.buildSQL" $ do
       `shouldContainText` Text.unlines
         [ "SELECT toString(toDate(occurred_at)) AS bucket, toString(getSubcolumn(properties_json, 'plan')) AS group_key,",
           "       toFloat64(sum(CAST(getSubcolumn(properties_json, 'amount'), 'Float64'))) AS value",
-          "FROM analytics.events_raw",
+          "FROM analytics.events_canonical",
           "WHERE account_id = {account_id:String}",
           "  AND occurred_at >= '2026-06-01 00:00:00' AND occurred_at < '2026-06-08 00:00:00'",
           "  AND event_name IN ({event_name_1:String})",
