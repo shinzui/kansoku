@@ -98,12 +98,13 @@ silently imported into Kansoku's aggregate API.
 | 23 | Problem details and generated contract | [EP-23](../plans/23-standardize-problem-details-and-the-generated-api-contract.md) | None | None | Complete |
 | 24 | Shared liveness and readiness | [EP-24](../plans/24-adopt-shared-liveness-and-readiness-probes.md) | EP-23 | None | Not Started |
 | 25 | HTTP tracing and safe access logs | [EP-25](../plans/25-trace-http-requests-and-emit-safe-correlated-access-logs.md) | EP-24 | EP-23 | Not Started |
-| 26 | Bounded analytics queries and results | [EP-26](../plans/26-bound-analytics-query-inputs-and-result-cardinality.md) | EP-23 | None | Not Started |
+| 26 | Bounded analytics queries and results | [EP-26](../plans/26-bound-analytics-query-inputs-and-result-cardinality.md) | EP-23; EP-24 M2 (accepted bounded checks and query-pool recovery) | None | Not Started |
 | 27 | Core record and route conventions | [EP-27](../plans/27-enforce-core-record-and-route-construction-conventions.md) | None | EP-23, EP-24, EP-25, EP-26 | Not Started |
 | 28 | Isolated Hurl acceptance and CI | [EP-28](../plans/28-gate-service-releases-with-isolated-hurl-acceptance-and-ci.md) | EP-23, EP-24, EP-25, EP-26, EP-27 | None | Not Started |
 
-Status values are Not Started, In Progress, Complete, and Cancelled. Every hard dependency
-above names the entire child; it must be Complete before dependent implementation starts.
+Status values are Not Started, In Progress, Complete, and Cancelled. A hard dependency naming
+a whole child requires Complete status. EP-26's EP-24 M2 dependency requires that milestone's
+accepted native timeout, cancellation and pool-recovery evidence; EP-24 may still be In Progress.
 
 
 ## Dependency Graph
@@ -111,8 +112,9 @@ above names the entire child; it must be Complete before dependent implementatio
 Default execution order is EP-23, EP-24, EP-25, EP-26, EP-27, EP-28. EP-24 needs EP-23's
 OpenAPI 5.x cohort because the released health library depends on it. EP-25 needs EP-24's
 final probe paths and application assembly. EP-26 needs EP-23's error catalog and response
-media types for bounded-query failures. After EP-23, EP-26 can proceed independently of the
-probe and observability work if shared edits are coordinated. EP-27 can start immediately,
+media types for bounded-query failures and EP-24 M2's recovered query-pool boundary. After
+EP-23 is Complete and EP-24 M2 is accepted, EP-26 may proceed alongside EP-24's remaining
+documentation and EP-25's observability work if shared edits are coordinated. EP-27 can start immediately,
 but doing it after the behavioral work avoids repeating record edits. EP-28 consumes all
 final public and operational contracts; no temporary contract becomes its release gate.
 
@@ -135,8 +137,19 @@ and compatibility probe path from access records. EP-28 reuses this same assembl
 the packaged executable. The first shared check is the probe test kit against production
 assembly, not an unrelated miniature service.
 
+EP-24 also owns `Kansoku.ClickHouse.QueryPool`, `withQueryConnection`, connection disposal,
+cancellation behavior and any necessary native-driver compatibility repair. EP-24 M2 must
+prove a timed-out or failed native operation cannot return a broken handle to the pool and
+that a later probe and analytics query recover without a process restart. EP-26 consumes that
+accepted boundary and translates storage failures only after resource cleanup; it does not
+introduce a second pool or recovery policy. EP-24 owns the isolated native failure fixture;
+EP-26 reuses it for its query execution path and EP-28 runs it in required-integration mode.
+
 EP-25 owns the bracketed telemetry lifecycle in `kansoku-server/app/Main.hs` and
-`Kansoku.Telemetry`; pipeline Prometheus metrics keep their current ownership. EP-26 owns
+`Kansoku.Telemetry`, including the sanitized request view supplied to HTTP instrumentation.
+Privacy acceptance covers exported span attributes and events as well as access records;
+EP-28 checks console export through the packaged executable. Pipeline Prometheus metrics keep
+their current ownership. EP-26 owns
 query limits and explicit typed overflow errors; EP-28 seeds isolated high-cardinality data
 to exercise them. EP-27 owns warning flags and schema-registry record names and must preserve
 all generated wire artifacts byte-for-byte relative to its starting revision.
@@ -160,6 +173,9 @@ core/client tests pass with optional live checks reported as pending, and genera
 and strict ADR validation pass. The other five children remain Not Started. The current
 implementation scope was EP-23 only. Required executable/storage acceptance remains owned
 by EP-28; no passing live database gate is claimed here.
+
+The review fixes are incorporated into the child instructions. EP-24 M2's native recovery proof
+is now an explicit prerequisite for EP-26; no runtime evidence is claimed by this plan update.
 
 
 ## Surprises & Discoveries
@@ -194,6 +210,11 @@ policy, requiring an ADR and boundary tests; it must not be reported as Relay co
 
 On 2026-10-15, keep production changes out of this planning change. ADR acceptance, dependency
 edits and application implementation occur in the responsible child rather than during plan creation.
+
+On 2026-10-15, apply the review by assigning query-pool recovery to EP-24 M2 and making its
+accepted behavior a hard prerequisite for EP-26. Include exported spans in EP-25's privacy
+boundary, preserve family-specific query ordering, and use HTTP status phrases for about:blank
+titles. ADR-2 records the planned operational constraints without claiming implementation.
 
 
 ## Outcomes & Retrospective

@@ -2,7 +2,7 @@
 type: Architecture Decision Record
 title: Pipeline observability, readiness, and writer recovery
 description: Add OpenTelemetry tracing, Prometheus pipeline metrics, ordered readiness checks, and logical writer-connection recovery for the PGMQ-to-ClickHouse pipeline.
-timestamp: 2026-07-19T00:00:00Z
+timestamp: 2026-10-15T03:31:27Z
 generated:
   by: human:kansoku-maintainers
   at: 2026-07-19T00:00:00Z
@@ -59,6 +59,35 @@ operation throws, and opens a fresh connection on the next Shibuya delivery. Que
 remain in EP-11's separate bounded pool. The batch handler converts synchronous insert failures
 to `AckRetry` and rethrows asynchronous cancellation so supervision and graceful shutdown remain
 effective.
+
+## Planned extension: query recovery and HTTP tracing privacy
+
+The review of [MasterPlan 4](../masterplans/4-align-kansoku-with-relevant-haskell-jitsurei-practices.md)
+on 2026-10-15 established the following implementation constraints. This extension is planned;
+the existing accepted behavior above remains the runtime baseline until the named child plans
+record acceptance evidence.
+
+[EP-24](../plans/24-adopt-shared-liveness-and-readiness-probes.md) owns the query-pool lifetime
+used by both readiness and analytics. Failed or interrupted native operations must dispose
+their physical connection before propagating failure, and a later checkout creates a fresh
+connection. Cancellation cleanup must not synchronously reconnect. Probe budgets include pool
+wait and cleanup; neither abandoned background operations nor forgotten sockets satisfy a
+bounded probe contract. A native stalled-I/O and recovery proof is required before adoption.
+[EP-26](../plans/26-bound-analytics-query-inputs-and-result-cardinality.md) consumes that accepted
+boundary and classifies storage errors after resource cleanup. The writer retains its separate
+connection ownership and retry policy.
+
+[EP-25](../plans/25-trace-http-requests-and-emit-safe-correlated-access-logs.md) owns HTTP tracing
+privacy before instrumentation records attributes. Instrumentation receives a sanitized request
+view with no query values; the application receives the original query and the instrumented
+request's trace context. Credentials, bodies and query values must be absent from exported HTTP
+span attributes/events and access records in both legacy and stable semantic-convention modes.
+Query-free access logs alone are insufficient, and export-only redaction would leave sensitive
+values visible to earlier span processors. The production assembly must expose the sanitizing
+adapter as its tracing middleware, preserving request semantics and W3C parent correlation.
+
+The owning children must update this section with the implemented boundary and native/export
+evidence when accepted. Their execution ordering and temporary fixtures remain in the plans.
 
 ## Alternatives considered
 

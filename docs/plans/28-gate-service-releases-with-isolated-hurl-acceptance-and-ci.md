@@ -11,6 +11,18 @@ provenance:
     model: "gpt-6.1-sol"
     harness: "codex-cli"
     at: 2026-10-15T03:10:58Z
+  reviews:
+    - model: "gpt-6-astra"
+      harness: "codex-cli"
+      at: 2026-10-15T03:29:26Z
+      verdict: "approved"
+      note: "Isolated executable acceptance, required integration mode, cleanup and CI ownership are coherent once prerequisites are accepted."
+  revisions:
+    - model: "gpt-6-astra"
+      harness: "codex-cli"
+      at: 2026-10-15T03:37:31Z
+      mode: "update"
+      note: "Cascade native pool-recovery and console-span privacy checks into executable acceptance."
 ---
 
 # Gate service releases with isolated Hurl acceptance and CI
@@ -50,6 +62,10 @@ explicitly selected stateful scenarios. Neither command silently targets a remot
 On 2026-10-15, use the built Nix server/migration binaries in executable acceptance, and Cabal
 for the existing test suites, proving both dependency/build paths rather than substituting a
 sentinel application for production startup.
+
+On 2026-10-15, carry the review fixes into final acceptance: require the query-pool native
+failure/recovery cases and inspect console-exported spans as well as access records for query
+secrets. These consume the preceding children's production fixes rather than masking them here.
 
 
 ## Outcomes & Retrospective
@@ -141,6 +157,14 @@ start, or reset only the private fixtures between phases, so suites cannot race 
 Exercise the final probe test kit and live client case as well. Capture a console-export trace
 and bounded access record for a known request to complement deterministic telemetry unit tests.
 
+Run the native failure/cancellation/recovery fixture from EP-24 M2 and the EP-26 consumer cases
+as required integration tests, including their independent watchdog and post-recovery query.
+For console export, send a unique disposable query sentinel alongside valid metrics parameters
+and assert it is absent from complete exported spans and access records. Repeat for default/legacy,
+`http`, and `http/dup` semantic-convention modes. Prove the query still returns the expected
+fixture result, so passing privacy assertions cannot hide erased application parameters. Keep
+raw captured output private until checked and publish sanitized evidence only.
+
 `just acceptance` performs this entire lifecycle and exits nonzero on any build, setup, test,
 readiness or HTTP failure. A deliberately broken startup configuration must fail within a bound
 and retain the relevant logs, not continue with an unrelated listening process. Cleanup stops
@@ -212,6 +236,10 @@ a partial batch acknowledges exactly accepted/rejected entries, and eventually o
 account sees the accepted events. High-cardinality fixtures must provoke the permanent query
 limit problem without partial success. Canonical probe paths must not emit access records;
 a known authenticated request must emit a sanitized record with the expected trace correlation.
+
+Exported HTTP spans must also omit the disposable query sentinel in every tested semantic mode;
+legacy `http.target` is path-only and stable `url.query` is absent or empty. The native recovery
+cases must prove the same pool can serve a successful query after failure without restart.
 
 Demonstrate failing gates by changing a generated artifact in a temporary controlled edit,
 providing invalid startup configuration, and causing one Hurl assertion to fail. Each must

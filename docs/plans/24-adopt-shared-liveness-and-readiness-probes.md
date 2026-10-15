@@ -11,6 +11,18 @@ provenance:
     model: "gpt-6.1-sol"
     harness: "codex-cli"
     at: 2026-10-15T03:10:58Z
+  reviews:
+    - model: "gpt-6-astra"
+      harness: "codex-cli"
+      at: 2026-10-15T03:29:26Z
+      verdict: "changes-requested"
+      note: "Specify cancellation-safe query-pool recovery and prove native driver timeout/reconnect behavior before relying on 750ms check bounds."
+  revisions:
+    - model: "gpt-6-astra"
+      harness: "codex-cli"
+      at: 2026-10-15T03:37:31Z
+      mode: "update"
+      note: "Specify native timeout/recovery proof, failed-connection disposal, driver repair ownership and EP-26 handoff."
 ---
 
 # Adopt shared liveness and readiness probes
@@ -29,13 +41,16 @@ onset, demonstrated against actual application assembly with the library's test 
 ## Progress
 
 - [ ] M1: Shared typed probes and production assembly pass the independent live/ready failure matrix.
-- [ ] M2: Real checks handle timeouts, exceptions, pipeline degradation and recovery while retaining diagnostic compatibility routes.
+- [ ] M2: Native timeout/cancellation and query-pool recovery pass the early failure proof; real checks retain bounded behavior and diagnostic compatibility routes.
 - [ ] M3: Operations documentation, probe exclusions and separate contract tests agree with the final routes.
 
 
 ## Surprises & Discoveries
 
-None during implementation yet.
+Source review found that `withQueryConnection` catches exceptions inside its pool callback,
+so a failed opaque handle is returned for reuse before the exception is rethrown. The pinned
+driver also reconnects during exception cleanup, including timeout interruption. These are
+implementation inputs, not a passing timeout or recovery baseline.
 
 
 ## Decision Log
@@ -48,6 +63,10 @@ fixed wire type. This preserves useful diagnostics without reimplementing shared
 On 2026-10-15, check ClickHouse query reachability as well as queue/writer health in readiness,
 because this executable directly serves metrics reads. Do not make ClickHouse a liveness check.
 The durable queue still buffers writer outages; no extra unrelated downstream service is probed.
+
+On 2026-10-15, assign query-pool disposal and cancellation ownership to this child. Its M2
+native proof is a hard prerequisite for the bounded-query child. Reject a timeout wrapper that
+returns promptly only by abandoning an unbounded background operation or leaking a connection.
 
 
 ## Outcomes & Retrospective
@@ -102,6 +121,31 @@ production checks. Inspect Tasty's source via Mori before invoking any unfamilia
 
 ### M2: Bound and preserve service-owned checks
 
+First prove the native resource boundary before mounting real database checks. This child owns
+`kansoku-core/src/Kansoku/ClickHouse.hs`, including query connection creation, checkout, failure
+disposal and shutdown. Preserve the separate writer connection. Inspect the pinned
+`mori://KovalevDima/ClickHaskell` source: its exception cleanup attempts reconnection, whose
+connect timeout alone is 3 seconds and whose handshake can block. Wrapping that path in
+`withProbeTimeout` does not by itself prove a 750-millisecond operation deadline.
+
+Use a bounded prototype in `kansoku-core/test/Kansoku/QueryPoolSpec.hs`, wired into Cabal and
+`kansoku-core/test/Spec.hs`, with a private native endpoint or controllable TCP fault proxy.
+Exercise failed connect, a stalled handshake, a stalled query, failed reconnect, and cancellation
+with a pool size of one. The deadline covers acquisition, operation and cleanup. On an operation
+exception, let the pool observe the failure so it discards the resource; catch and classify
+errors only outside that resource boundary. Disposal must close native resources, not merely
+forget a handle, and asynchronous cancellation must propagate after bounded cleanup.
+
+The chosen behavior is to invalidate and dispose an interrupted connection, with fresh connection
+creation on the next checkout; never reconnect synchronously while unwinding cancellation. If
+the pinned driver cannot supply that behavior and a close operation through a supported API,
+this child owns a minimal driver compatibility repair and its matching Cabal/Nix pin, verified
+against current registry releases and upstream tags. Record its canonical source reference and
+exact revision in this plan. Do not claim M2 accepted until the repaired real path passes; do not
+substitute a timeout around a fake IO action, detach leaking workers, or relax the deadlines.
+The prototype is promoted into regression coverage once it proves recovery and bounded resource
+use; an unsuccessful approach is discarded before expanding probe wiring.
+
 Allocate independent failure trackers once at startup, not per request. Liveness checks an
 in-process heartbeat/state read; wrap it with `safeCheck` inside a 2-second timeout. Readiness
 runs named checks in order: writer_alive, pgmq_reachable, clickhouse_query_reachable,
@@ -120,6 +164,13 @@ service-owned, but the canonical 200/503 mapping is library-owned. Preserve lega
 behavior. Add deterministic tests for timeouts, synchronous exceptions, cancellation, repeated
 failure onset, recovery reset, idle empty queues and stale samples. Pool failures must not poison
 later probes; prove a recovered pool can answer again.
+
+M2's handoff to `docs/plans/26-bound-analytics-query-inputs-and-result-cardinality.md` is the
+accepted `withQueryConnection` contract: exceptions escape only after disposal/release, failed
+handles are never reused, and later native operations succeed after dependency recovery.
+Retain the general query callback interface where possible; document any necessary signature
+change here and in the consuming plan in the same change. Expose probe deadlines explicitly
+without introducing a new analytics query-duration policy.
 
 ### M3: Document and verify the operational surface
 
@@ -146,6 +197,7 @@ After implementation:
 
 ```bash
 cabal test kansoku-probe-test --test-show-details=direct
+cabal test kansoku-core-test --test-options='--match Kansoku.QueryPool' --test-show-details=direct
 cabal test kansoku-core-test --test-options='--match Kansoku.Readiness' --test-show-details=direct
 cabal test kansoku-core-test --test-options='--match Kansoku.Api.OpenApi.kansokuOpenApi' --test-show-details=direct
 nix build .#kansoku-server
@@ -166,6 +218,14 @@ an indefinitely pending request. Query-pool recovery must restore readiness. Leg
 fields and documented routes remain testable. Ensure probes are public without credentials and
 outside ingestion CORS/body limits, and canonical paths never enter customer OpenAPI.
 
+Measure external checks against their 750 ms budget and whole readiness against 2 seconds,
+with an explicitly recorded scheduling tolerance of at most 250 ms in tests. Include pool wait
+and cleanup time. Use an independent test-process watchdog so a broken timeout fails rather than
+hangs the suite. Repeat stalled-operation/cancellation cases and show sockets/workers do not
+accumulate; after recovery, the same size-one pool must answer both a probe and an analytics
+query without restarting the service. Record nonzero native-case counts and isolated setup
+commands for the later acceptance harness. These cases are required before M2 is accepted.
+
 
 ## Idempotence and Recovery
 
@@ -179,6 +239,8 @@ wiring together if rollback is needed, preserving the previous public analytics 
 
 Hard dependency: all of `docs/plans/23-standardize-problem-details-and-the-generated-api-contract.md`.
 This child owns `Kansoku.Health`, the operational proxy, injectable check seam and exact probe
-path inventory. Later tracing uses these artifacts rather than inventing path strings. Keep
+path inventory, plus the query-pool lifetime and driver repair described in M2. The bounded-query
+child requires accepted M2 evidence and consumes this pool; it does not redefine disposal or
+reconnection. Later tracing uses these artifacts rather than inventing path strings. Keep
 test-kit dependencies out of production stanzas. Commit trailers use the parent, this plan and
 intention from frontmatter.

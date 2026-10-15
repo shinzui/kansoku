@@ -11,6 +11,18 @@ provenance:
     model: "gpt-6.1-sol"
     harness: "codex-cli"
     at: 2026-10-15T03:10:58Z
+  reviews:
+    - model: "gpt-6-astra"
+      harness: "codex-cli"
+      at: 2026-10-15T03:29:26Z
+      verdict: "changes-requested"
+      note: "WAI instrumentation exports raw query attributes; add span sanitization and exported-span secret tests, not only access-log assertions."
+  revisions:
+    - model: "gpt-6-astra"
+      harness: "codex-cli"
+      at: 2026-10-15T03:37:31Z
+      mode: "update"
+      note: "Require sanitized instrumentation request views and exported-span privacy tests in all HTTP semantic modes."
 ---
 
 # Trace HTTP requests and emit safe correlated access logs
@@ -29,7 +41,7 @@ to work without an OpenTelemetry collector; existing Prometheus pipeline metrics
 ## Progress
 
 - [ ] M1: A real HTTP request produces one correctly parented server span named by the served route.
-- [ ] M2: Access records have the required bounded field set, match the serving span and exclude probe noise and secrets.
+- [ ] M2: Access records match the serving span and exclude probe noise; both access records and exported spans exclude secrets and query values.
 - [ ] M3: Provider shutdown, disabled mode, error responses and concurrent requests pass lifecycle and isolation checks.
 
 
@@ -38,6 +50,11 @@ to work without an OpenTelemetry collector; existing Prometheus pipeline metrics
 None during implementation yet. Dependency research found the catalog's compatibility commit
 on a feature branch while remote main had moved; verify source at the immutable pin, not the
 working checkout. This is a known input to M1, not evidence of a completed runtime check.
+
+Source review of released WAI instrumentation 1.0.0.0 found raw query capture in legacy
+`http.target` and stable `url.query` attributes. A safe access logger alone does not satisfy
+the privacy contract. The response callback does rename the server span from `http.route`;
+no additional span or independent route-name implementation is required for that behavior.
 
 
 ## Decision Log
@@ -50,6 +67,10 @@ metrics to OTel as a side effect.
 On 2026-10-15, group HTTP span setup and access logging in one child because middleware order
 and request context are one integration boundary. Durable cross-queue trace propagation is
 outside this work; do not claim writer batches are children of ingest requests without evidence.
+
+On 2026-10-15, sanitize the request view before HTTP instrumentation records attributes, restore
+the original application query inside that boundary, and prove privacy at the exported-span
+boundary in all supported HTTP semantic-convention modes. Access-output checks alone are insufficient.
 
 
 ## Outcomes & Retrospective
@@ -111,6 +132,24 @@ span. Keep operations outside public OpenAPI even though the outer WAI span obse
 Prove incoming W3C traceparent becomes the parent of exactly one server span before adding the
 full logging behavior. Confirm a metric route, a typed problem and a canonical probe all compile
 and trace through their production wiring.
+
+Add a service-owned adapter in `Kansoku.Telemetry` around the constructed WAI middleware.
+For each request, retain the original request in the request-local closure and pass a copy
+with empty `rawQueryString` and `queryString` to instrumentation. Its inner application restores
+the original request fields while retaining the instrumented request's vault, so handlers and
+authentication receive the original parameters and the access logger still sees the server
+context. Both the initial instrumentation and its response callback must capture the sanitized
+copy. Do not mutate shared state or erase queries on the request delivered to Servant. Bound
+the instrumentation copy's path and user-agent inputs to the same limits as the access logger;
+preserve W3C propagation headers. Trace attribute capture must not be expanded to arbitrary
+headers, bodies or query values. Verify the exact middleware's use of these request fields
+before implementing the adapter, using the Mori-discovered source at the selected cohort.
+
+This adapter prevents raw query data from entering HTTP span attributes before processors or
+exporters see them. It must cover default/legacy, `http`, and `http/dup` values of
+`OTEL_SEMCONV_STABILITY_OPT_IN`. Keep `http.target` path-only and `url.query` absent or empty.
+The telemetry handle must expose only the wrapped middleware for production assembly, so the
+packaged executable cannot accidentally install the unsanitized middleware.
 
 ### M2: Add safe access records under the serving span
 
@@ -179,7 +218,15 @@ A request with traceparent `00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7
 produce the same trace ID in the access record and a new server span with that remote parent.
 Representative span names include `GET metrics/events`; raw query values never enter names or
 labels. A 503 records the actual status and error span state. Credentials placed in headers,
-query and body must be absent from captured access output, including oversized/invalid requests.
+query and body must be absent from captured access output and exported span attributes, events
+and status descriptions, including oversized/invalid requests. Exercise the default/legacy,
+`http`, and `http/dup` modes independently. Send a unique sentinel in an otherwise ignored query
+parameter alongside valid metric parameters; inspect complete exported spans and console-export
+output for the sentinel, and assert legacy `http.target` has no query while `url.query` is absent
+or empty. A handler-level assertion must prove the original raw and parsed query reach the
+application unchanged; concurrent distinct queries must not cross-contaminate requests. Verify
+traceparent correlation still works through the sanitizing adapter. Repeat the packaged-server
+sentinel check in the final acceptance child.
 Probe requests emit no access records. Concurrent requests must not inherit each other's context.
 All retained records remain independently parseable JSON lines. A configured exporter flushes
 buffered spans on shutdown, and disabled/unconfigured runs remain functional without network
@@ -200,4 +247,6 @@ Hard dependency: all of `docs/plans/24-adopt-shared-liveness-and-readiness-probe
 That child supplies the real application/probe seam and exact exclusion inventory; its own
 prerequisite supplies the error boundary. This child owns `Kansoku.RequestLog`, telemetry handle
 extensions and the final middleware composition. EP-28 consumes the same executable and asserts
-wire behavior. Use all plan/intention trailers from frontmatter on implementation commits.
+wire behavior and absence of query sentinels from console-exported spans. The sanitizing adapter
+is owned here alongside telemetry, not by the access logger or the acceptance harness. Use all
+plan/intention trailers from frontmatter on implementation commits.

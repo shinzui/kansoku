@@ -11,6 +11,18 @@ provenance:
     model: "gpt-6.1-sol"
     harness: "codex-cli"
     at: 2026-10-15T03:10:58Z
+  reviews:
+    - model: "gpt-6-astra"
+      harness: "codex-cli"
+      at: 2026-10-15T03:29:26Z
+      verdict: "comments"
+      note: "Clarify family-specific outer ordering for numeric retention offsets and funnel indices; coordinate query-pool recovery with EP-24."
+  revisions:
+    - model: "gpt-6-astra"
+      harness: "codex-cli"
+      at: 2026-10-15T03:37:31Z
+      mode: "update"
+      note: "Require EP-24 M2 recovery boundary and preserve explicit numeric/family-specific outer ordering."
 ---
 
 # Bound analytics query inputs and result cardinality
@@ -50,6 +62,10 @@ On 2026-10-15, map limit violations to HTTP 400 non-retryable problems, preservi
 response algebra without misusing HTTP 413 (request-body size) for oversized query results.
 Keep existing 90-day funnel-window semantics within the newly bounded date range.
 
+On 2026-10-15, consume the query-pool recovery contract accepted by EP-24 M2 and preserve
+each SQL family's existing sort semantics explicitly at the outer bounded projection. Numeric
+retention offsets and funnel indices must not become lexicographic composite-key order.
+
 
 ## Outcomes & Retrospective
 
@@ -86,7 +102,10 @@ is no existing local ADR authorizing unbounded metric results or this proposed l
 
 ### M1: Publish and enforce input limits consistently
 
-Wait for all of `docs/plans/23-standardize-problem-details-and-the-generated-api-contract.md`.
+Wait for all of `docs/plans/23-standardize-problem-details-and-the-generated-api-contract.md`
+and accepted M2 of `docs/plans/24-adopt-shared-liveness-and-readiness-probes.md`. That milestone
+supplies `withQueryConnection` with bounded probe cancellation, failed-handle disposal and native
+recovery evidence. It may be consumed before that child's documentation milestone is complete.
 Define shared public constants and documentation in
 `kansoku-api/src/Kansoku/Metrics/Limits.hs`, and validated core query input construction in
 `kansoku-core/src/Kansoku/Metrics/Query/Validate.hs` or a closely scoped adjacent module.
@@ -117,6 +136,17 @@ means the request cannot be answered within the contract. Apply the cap after gr
 ratios, identity resolution and funnel computations, never to raw input events. This bounds
 transferred result rows, not database scan cost or execution duration; do not claim otherwise.
 
+Represent the outer ordering as a closed, service-owned choice attached to the compiled SQL,
+never as caller-provided SQL text. Ordinary aggregates, sessions and exposure series use bucket
+then group_key; daily/weekly rollups retain chronological bucket order and route grouping where
+present. Conversion uses its existing group_key order. Retention uses cohort day then numeric
+offset, plain funnels use numeric step index, and experiment funnels use variant then numeric
+step index. Carry the needed typed sort columns through the aggregate subquery so the outer
+ORDER BY can reference them, while its returned projection remains exactly bucket, group_key,
+value for the native decoder. Do not reuse inner aliases outside their scope or rely on an inner
+ORDER BY to guarantee final result order. Do not sort composite group_key strings as a substitute
+for numeric offsets/indices. Keep the LIMIT on that final ordered aggregate projection.
+
 Inspect `mori://KovalevDima/ClickHaskell` through Mori before changing native selection, block
 handling or query construction. Preserve current per-block field-order repairs and all query
 parameters. A small high-cardinality fixture must prove the outer projection and order work
@@ -125,6 +155,13 @@ unbounded list and then call take. Overflow returns a sanitized HTTP 400 problem
 `metric_result_too_large`, retryable false and guidance to reduce the range/grouping. It returns
 no partial MetricResult. Keep normal storage failures retryable 503 and rethrow asynchronous
 cancellation rather than swallowing it in `try @SomeException` conversions.
+
+Use the accepted `Kansoku.ClickHouse.withQueryConnection` boundary from EP-24 M2 unchanged for
+checkout, disposal and recovery. Translate native exceptions outside that boundary; intentional
+overflow is a typed query result after a successful bounded read, not a native connection fault.
+Reuse `Kansoku.QueryPoolSpec`'s isolated failure fixture to prove the metrics execution path
+releases/discards resources and a subsequent query succeeds. Any necessary pool-interface change
+must be reconciled with its owning plan; do not add another reconnect layer in this module.
 
 ### M3: Prove completeness and publish the exception
 
@@ -173,7 +210,10 @@ values normalize consistently. Exactly 10,000 points returns a complete response
 produces metric_result_too_large with no partial success body. At least one grouped property
 query and one experiment-family query must prove this through the real native driver; all
 SQL families must have coverage proving the shared bound wraps their final aggregate. Repeated
-in-bound fixture queries retain order and exact prior values. Failure and cancellation must
+in-bound fixture queries retain order and exact prior values. Use retention offsets 1, 2 and 10,
+plain funnels with at least 10 steps, and at least two experiment variants each with 10 steps;
+assert complete ordered sequences so string ordering cannot accidentally pass. Verify both
+single-block and multi-block native responses preserve these orders. Failure and cancellation must
 release query-pool resources. Contract conformance must describe actual problem media types and
 result caps. No database availability failure may be reported as an empty success.
 
@@ -183,13 +223,18 @@ result caps. No database availability failure may be reported as an empty succes
 No event or database schema migration is required. Fixtures are disposable and rerunnable only
 inside private databases. Deploy server, client, docs and generated contract together; rollback
 restores the former unbounded policy as an explicit contract rollback. Do not remove historical
-data or apply LIMIT to ingest. Each query failure releases its pooled connection.
+data or apply LIMIT to ingest. Successful native reads release their pooled connection; native
+failures/cancellation dispose it through EP-24's boundary rather than returning a broken handle.
 
 
 ## Interfaces and Dependencies
 
 Hard prerequisite: all of `docs/plans/23-standardize-problem-details-and-the-generated-api-contract.md`.
+Also require accepted M2 of `docs/plans/24-adopt-shared-liveness-and-readiness-probes.md`, whose
+artifact is the native-tested query-pool cancellation/disposal/recovery boundary. This is a
+milestone dependency, not a requirement to finish that child's M3 documentation first.
 This child owns `Kansoku.Metrics.Limits`, validated input construction and the typed bounded-query
-execution result. Keep default public limits fixed so documentation and validation cannot drift
+execution result and family-specific ordering metadata. EP-24 retains query-pool ownership.
+Keep default public limits fixed so documentation and validation cannot drift
 with ambient configuration. The Hurl/CI child consumes the published values and stable codes.
 Use the parent, child and intention trailers from frontmatter for implementation commits.
