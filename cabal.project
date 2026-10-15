@@ -16,12 +16,12 @@ constraints:
   pg-migrate ==1.1.0.0,
   pg-migrate-cli ==1.1.0.0,
   pg-migrate-test-support ==1.1.0.0,
-  pgmq-core ==0.4.0.1,
-  pgmq-hasql ==0.4.0.1,
-  pgmq-effectful ==0.4.0.1,
-  pgmq-migration ==0.4.0.1,
-  shibuya-core ==0.8.0.1,
-  shibuya-pgmq-adapter ==0.12.0.0
+  pgmq-core ==0.6.1.1,
+  pgmq-hasql ==0.6.1.1,
+  pgmq-effectful ==0.6.1.1,
+  pgmq-migration ==0.6.1.1,
+  shibuya-core ==0.10.0.1,
+  shibuya-pgmq-adapter ==0.16.1.0
 
 source-repository-package
   type: git

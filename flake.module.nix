@@ -184,16 +184,16 @@
             pg-migrate-import-hasql-migration = callHackageNoCheck "pg-migrate-import-hasql-migration" "1.1.0.0" "0yih6qv870g1qri1sl1c99vdd86xvacpp40png5zz4mdzwsdxxsq";
             pg-migrate-test-support = callHackageNoCheck "pg-migrate-test-support" "1.1.0.0" "12f9kazn0kq34b7dacrwd1qkgbj3zmxhjr2xbr2q5lz7z80bs9cw";
 
-            pgmq-core = callHackageNoCheck "pgmq-core" "0.4.0.1" "0cj8m5fdjk3sf4zsgj35ck4pjal7qlrmm5d0z7mm9ssc9kgmr6cn";
-            pgmq-hasql = callHackageNoCheck "pgmq-hasql" "0.4.0.1" "0gkj8a56r10xkhqgwn07bpkg8x4gqb0v2px7anh3ghwjycc7kw66";
-            pgmq-effectful = callHackageNoCheck "pgmq-effectful" "0.4.0.1" "1a3vkm5v52j0id1b8xf7fdpi9cv4s6jj7xg53dfccnj3x9rihxzz";
-            pgmq-migration = callHackageNoCheck "pgmq-migration" "0.4.0.1" "01dq48chyx2fpqk740gz5z8f934az1ljfh5cb3319c44azqamr2y";
+            pgmq-core = callHackageNoCheck "pgmq-core" "0.6.1.1" "1i0srqcywrngkg6jsm43vndllzkdyy6xvdmiv60q5f4c5bsz2r0w";
+            pgmq-hasql = callHackageNoCheck "pgmq-hasql" "0.6.1.1" "0ii7w94bmix82qqval5whwgrkzb9n1bvqgxn751plihnpyi1qqm8";
+            pgmq-effectful = callHackageNoCheck "pgmq-effectful" "0.6.1.1" "1sh716qq2v4jyr5492c62359g4d3n4yqmc86b33jv47h8svp6423";
+            pgmq-migration = callHackageNoCheck "pgmq-migration" "0.6.1.1" "0lz165rq01iyq0sjxhfafy31ap6827m18wj107b9lxkrxzi19f3d";
             data-sketches = callHackageNoCheck "data-sketches" "0.4.0.1" "0h6qkfrri6imlx8bdlpdy6927zwdr7ak4rv8lx1glifra7zgy6ab";
             data-sketches-core = callHackageNoCheck "data-sketches-core" "0.3.0.0" "1v9pn62qxphfhg3353jqqg6y8sh0k68m7d761c28pci2m2m398rg";
             prometheus-client = callHackageNoCheck "prometheus-client" "1.1.2" "1q8x24n7qy7s9sdiqvzzldgj52i36hzgq7wm4amzy3hv76p6vgfk";
 
-            shibuya-core = callHackageNoCheck "shibuya-core" "0.8.0.1" "1ks1pc9yz7xg18c3p719ad5608409s1gjd0qqaj0fp2qc2yjbc3s";
-            shibuya-pgmq-adapter = callHackageNoCheck "shibuya-pgmq-adapter" "0.12.0.0" "15zgpvfdx4ab75ap95zmkyhlsqk3jj017vcd8j2p18jjwbpffh9f";
+            shibuya-core = callHackageNoCheck "shibuya-core" "0.10.0.1" "0r9p1wvyhby4hv6bwp7v3ihyxcnhjdaxc2n05pzf29fq1c499qzn";
+            shibuya-pgmq-adapter = callHackageNoCheck "shibuya-pgmq-adapter" "0.16.1.0" "1wmxmjnzbh6041jbqngwyihmd0jcy7d0ddfk87w20zmfz9kys9gk";
           };
       };
 

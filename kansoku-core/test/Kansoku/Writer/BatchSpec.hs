@@ -1,7 +1,8 @@
 module Kansoku.Writer.BatchSpec (spec) where
 
 import ClickHaskell (Connection, command, ping)
-import Control.Exception (SomeException, try)
+import Control.Concurrent.Async (AsyncCancelled (..))
+import Control.Exception (SomeException, fromException, throwIO, try)
 import Data.Aeson (Value)
 import Data.Aeson qualified as Aeson
 import Data.HashMap.Strict qualified as HashMap
@@ -73,6 +74,13 @@ spec metrics = describe "Kansoku.Writer.Batch" $ do
       `shouldReturn` (deadLettersBefore + 1)
     latest <- lastWriterBeat heartbeat
     latest `shouldSatisfy` isJust
+
+  it "propagates asynchronous insert cancellation to Shibuya" $ do
+    heartbeat <- newWriterHeartbeat
+    result <- try @SomeException $ runEff (writerBatchHandler metrics heartbeat (\_ -> throwIO AsyncCancelled) batchInfo (handlerMessage :| []))
+    case result of
+      Left err -> (fromException err :: Maybe AsyncCancelled) `shouldBe` Just AsyncCancelled
+      Right _ -> expectationFailure "writer swallowed asynchronous cancellation"
 
   it "retries every decodable message when the ClickHouse insert fails" $ do
     failuresBefore <- Prometheus.getCounter (metrics ^. #writerInsertFailuresTotal)

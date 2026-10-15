@@ -5,7 +5,7 @@ module Kansoku.Writer.Batch
 where
 
 import Control.Exception
-  ( AsyncException,
+  ( SomeAsyncException,
     SomeException,
     displayException,
     fromException,
@@ -81,7 +81,7 @@ writerBatchHandler metrics heartbeat insertBatch _info messages = do
           pure (ackExcept bad)
         Left (err :: SomeException) ->
           case fromException err of
-            Just asyncException -> liftIO (throwIO (asyncException :: AsyncException))
+            Just asyncException -> liftIO (throwIO (asyncException :: SomeAsyncException))
             Nothing -> do
               liftIO $ Prometheus.incCounter (metrics ^. #writerInsertFailuresTotal)
               pure

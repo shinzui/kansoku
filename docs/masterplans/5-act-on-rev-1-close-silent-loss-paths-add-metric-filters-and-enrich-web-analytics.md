@@ -111,7 +111,7 @@ is `mori://shinzui/kansoku-ts/okf/adrs/concepts/ADR-2`.
 | # | Title | Path | Hard Deps | Soft Deps | Status |
 |---|-------|------|-----------|-----------|--------|
 | 29 | Correct client timestamp skew and count ingest rejections | docs/plans/29-correct-client-timestamp-skew-and-count-ingest-rejections.md | None | None | Complete |
-| 30 | Pipeline backpressure and storage-outage resilience | docs/plans/30-pipeline-backpressure-and-storage-outage-resilience.md | EP-29 | None | Not Started |
+| 30 | Pipeline backpressure and storage-outage resilience | docs/plans/30-pipeline-backpressure-and-storage-outage-resilience.md | EP-29 | None | In Progress |
 | 31 | Metric property filters and dual grouping | docs/plans/31-metric-property-filters-and-dual-grouping.md | EP-26; EP-30; EP-32 | None | Not Started |
 | 32 | Time-aware identity bindings and bounded resolution cost | docs/plans/32-time-aware-identity-bindings-and-bounded-resolution-cost.md | EP-29; EP-30 | None | Not Started |
 | 33 | Acquisition and device enrichment with bot flagging | docs/plans/33-acquisition-and-device-enrichment-with-bot-flagging.md | EP-26; EP-31 | None | Not Started |
@@ -212,9 +212,9 @@ the migration ledger; unsafe append-backfills are replaced with verified rebuild
 ## Progress
 
 
-EP-29 is Complete; eleven children remain Not Started. Its packaged acceptance passed 180 core
+EP-29 is Complete, EP-30 is In Progress, and ten children remain Not Started. Its packaged acceptance passed 180 core
 examples, 16 client examples, four probes, extra native recovery/limit checks and 45 Hurl
-requests with no required skips or pending cases. EP-30 is the next eligible child and owns
+requests with no required skips or pending cases. EP-30 now owns
 the released queue baseline, event uniqueness, outage recovery, admission and capacity proofs.
 
 Final integration gate (owned by EP-38): packaged server acceptance, generated API/catalog,

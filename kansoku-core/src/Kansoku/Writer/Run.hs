@@ -33,6 +33,7 @@ import Shibuya.App
     SupervisionStrategy (..),
     defaultBatchConfig,
     defaultBatchKey,
+    defaultShutdownConfig,
     mkBatchProcessor,
     runApp,
     stopAppGracefully,
@@ -99,7 +100,7 @@ runWriter metrics heartbeat pool tracer clickHouseConfig queueName visibilityTim
                   outcome <- Async.race (liftIO waitForShutdown) (waitApp handle)
                   case outcome of
                     Left () -> do
-                      drained <- stopAppGracefully ShutdownConfig {drainTimeout = 30} handle
+                      drained <- stopAppGracefully defaultShutdownConfig {drainTimeout = 30, totalShutdownTimeout = 35} handle
                       unless drained $
                         liftIO $
                           putStrLn ("kansoku writer stopped before all messages drained" :: String)

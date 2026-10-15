@@ -1,6 +1,7 @@
 # Bundle Update Log
 
 ## 2026-10-15
+* **Update**: Record released queue lifecycle cohort, finite total shutdown, asynchronous cancellation and native lost-commit proof.
 * **Update**: Localize bounded quarantine I/O to a dedicated nonblocking libpq adapter; retain ordinary credential and queue dependency sources.
 * **Update**: Document Hasql cancellation lifetime repair and dedicated quarantine connections after blocked-query acceptance exposed unbounded released cleanup.
 * **Update**: Record EP-29 timestamp normalization and conservative storage range, shared ingest outcomes, bounded quarantine, and lifecycle schema/catalog constraints.

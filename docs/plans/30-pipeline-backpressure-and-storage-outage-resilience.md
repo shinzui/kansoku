@@ -28,6 +28,11 @@ provenance:
       at: 2026-10-15T16:02:57Z
       mode: "update"
       note: "Add released Shibuya/adapter/PGMQ upgrade milestone and fresh-install failure acceptance."
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-10-15T16:58:15Z
+      mode: "implement"
+      note: "Begin released queue baseline, then durable event identity, source outage control and admission/capacity proofs."
 ---
 
 # Pipeline backpressure and storage-outage resilience
@@ -47,7 +52,7 @@ without staged rollout, legacy compatibility or downstream release coordination.
 ## Progress
 
 
-- [ ] M0: Released Shibuya/adapter/PGMQ baseline builds and passes fresh-install and writer lifecycle checks.
+- [x] M0: Released Shibuya/adapter/PGMQ baseline builds and passes fresh-install and writer lifecycle checks.
 - [ ] M1: Durable event identity and replay-safe analytical reads pass failure/rebatching tests.
 - [ ] M2: Writer pauses consumption during outages and resumes with bounded recovery evidence.
 - [ ] M3: Archive/backlog instruments and shared credential rate limits pass HTTP tests.
@@ -55,6 +60,24 @@ without staged rollout, legacy compatibility or downstream release coordination.
 
 ## Surprises & Discoveries
 
+
+M0 release verification (2026-10-15): Hackage preferred metadata and upstream tags select
+`mori://shinzui/shibuya/packages/shibuya-core` 0.10.0.1 (tag commit
+`a083b8fbdc1ba57e7d01b12b445f3fdaa15d90d8`),
+`mori://shinzui/shibuya-pgmq-adapter/packages/shibuya-pgmq-adapter` 0.16.1.0
+(`8a8b60dfe8cfb4e5f6e818bfcce4066bb0fb7347`), and the four
+`mori://shinzui/pgmq-hs` packages 0.6.1.1 (`696b6bd28f29e1ea53d07bf66d2d6d59f1182fa3`).
+Both build paths select these versions. Nix uses compatible effectful/core 2.6.1.0;
+Cabal selects effectful 2.7.1.0/core 2.7.1.2. No newer checkout-only API is consumed.
+
+The native commit-loss fixture exposed that a dropped libpq result can surface as an empty
+server error, which the adapter does not classify as transient. Shibuya's finalizer retry
+still retries the same failed acknowledgement, and the transactional source-row claim avoids
+a second DLQ insert. The regression exercises that real path, rather than repeating a
+successful in-memory acknowledgement handle. Failure snapshots are inspected under
+IgnoreFailures so the supervisor's linked exception cannot interrupt the assertion; the
+production writer retains StopAllOnFailure. A blocked insert shutdown exposed the narrower
+AsyncException catch; it now propagates SomeAsyncException, including AsyncCancelled.
 
 The actual raw sort key is `(account_id,event_name,occurred_at,event_id)`, not event ID alone.
 `ReplacingMergeTree` does not deduplicate additive materialized-view counts. The adapter pinned
@@ -222,6 +245,15 @@ hardware and settings. Publish a finite outage capacity estimate and alert thres
 hardware measurement remains pending if that machine is unavailable; do not invent a number.
 
 ## Validation and Acceptance
+
+M0 accepted 2026-10-15: `nix develop -c just check` and `nix develop -c just acceptance`
+both pass. The packaged run (`.dev/acceptance/run-0h9ar5ed/sanitized`, private ignored
+evidence) executes 185 core examples including all four new owned PostgreSQL lifecycle
+examples, 16 client examples, four production probes, native recovery/limit suites and
+45 Hurl requests with no required skips or pending cases. Fresh migrations strictly verify
+and reapply without work. Nix evaluation and Cabal's build plan agree on all six selected
+queue packages. The production writer handles the new finite total shutdown budget.
+
 
 
 M0 requires agreement between Cabal's resolved build plan and Nix's packaged dependency

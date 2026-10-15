@@ -2,7 +2,7 @@
 type: Architecture Decision Record
 title: Pipeline observability, readiness, and writer recovery
 description: Add OpenTelemetry tracing, Prometheus pipeline metrics, ordered readiness checks, and logical writer-connection recovery for the PGMQ-to-ClickHouse pipeline.
-timestamp: 2026-10-15T16:45:37Z
+timestamp: 2026-10-15T17:09:59Z
 generated:
   by: human:kansoku-maintainers
   at: 2026-07-19T00:00:00Z
@@ -198,3 +198,19 @@ Its intended source handle is `mori://haskellari/postgresql-libpq/packages/postg
 Mori registry coverage is pending. The Hasql source is `mori://hasql/hasql/packages/hasql`.
 Owned blocked-query, cancellation, stalled-handshake, socket-close and recovery tests protect
 this lifetime boundary.
+
+## Released queue lifecycle baseline
+
+Both build paths consume released Shibuya core 0.10.0.1, PGMQ adapter 0.16.1.0 and
+PGMQ client/migration 0.6.1.1. The native PGMQ component installs the SQL schema through
+explicit administrative migrations. Kansoku's graceful writer shutdown allows 30 seconds
+to drain and a finite 35-second total deadline. The handler propagates all
+SomeAsyncException cancellation, including AsyncCancelled.
+
+Owned PostgreSQL tests verify real adapter acknowledgement, retained processor failure
+on exhausted acknowledgement, cancellation and repeated stop, and a lost dead-letter COMMIT
+confirmation. The latter closes a test proxy after PostgreSQL commits but before returning
+CommandComplete. Shibuya retries the failed finalizer; the adapter's transactional source-row
+claim prevents duplicate dead-letter insertion. This establishes queue lifecycle behavior;
+ClickHouse replay safety and source pausing require the subsequent acceptance-ledger and
+storage-breaker work.

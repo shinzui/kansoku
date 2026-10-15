@@ -29,6 +29,7 @@ import Kansoku.QuerySpec qualified
 import Kansoku.ReadinessSpec qualified
 import Kansoku.RequestLogSpec qualified
 import Kansoku.Writer.BatchSpec qualified
+import Kansoku.Writer.LifecycleSpec qualified
 import System.Environment (lookupEnv)
 import Test.Hspec (hspec, runIO)
 
@@ -70,3 +71,4 @@ normalTests = hspec $ do
   Kansoku.RequestLogSpec.spec
   Kansoku.HttpTelemetrySpec.spec
   Kansoku.Writer.BatchSpec.spec metrics
+  Kansoku.Writer.LifecycleSpec.spec metrics

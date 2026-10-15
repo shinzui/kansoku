@@ -149,6 +149,7 @@ test-suite kansoku-core-test
     Kansoku.ReadinessSpec
     Kansoku.RequestLogSpec
     Kansoku.Writer.BatchSpec
+    Kansoku.Writer.LifecycleSpec
 
   build-depends:
     ClickHaskell,
@@ -177,6 +178,7 @@ test-suite kansoku-core-test
     pg-migrate,
     pg-migrate-test-support,
     pgmq-core,
+    pgmq-effectful,
     pgmq-hasql,
     process,
     prometheus-client,
@@ -186,6 +188,8 @@ test-suite kansoku-core-test
     servant-health,
     servant-server,
     shibuya-core,
+    shibuya-pgmq-adapter,
+    streamly-core,
     text,
     time,
     unordered-containers,
