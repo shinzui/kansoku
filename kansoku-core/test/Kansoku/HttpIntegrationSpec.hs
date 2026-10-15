@@ -54,9 +54,10 @@ spec = describe "Kansoku property metrics HTTP integration" $ do
             queryPool <- newQueryPool (clickHouseConfigFromConfig config) 2
             let appConfig =
                   config
-                    { pgConnectionString = connectionString,
-                      internalMetricsEnabled = False
-                    }
+                    & #pgConnectionString
+                    .~ connectionString
+                    & #internalMetricsEnabled
+                    .~ False
                 readyProbe =
                   ReadyProbe
                     { writerAlive = pure True,

@@ -104,7 +104,7 @@ silently imported into Kansoku's aggregate API.
 | 24 | Shared liveness and readiness | [EP-24](../plans/24-adopt-shared-liveness-and-readiness-probes.md) | EP-23 | None | Complete |
 | 25 | HTTP tracing and safe access logs | [EP-25](../plans/25-trace-http-requests-and-emit-safe-correlated-access-logs.md) | EP-24 | EP-23 | Complete |
 | 26 | Bounded analytics queries and results | [EP-26](../plans/26-bound-analytics-query-inputs-and-result-cardinality.md) | EP-23; EP-24 M2 (accepted bounded checks and query-pool recovery) | None | Complete |
-| 27 | Core record and route conventions | [EP-27](../plans/27-enforce-core-record-and-route-construction-conventions.md) | None | EP-23, EP-24, EP-25, EP-26 | Not Started |
+| 27 | Core record and route conventions | [EP-27](../plans/27-enforce-core-record-and-route-construction-conventions.md) | None | EP-23, EP-24, EP-25, EP-26 | Complete |
 | 28 | Isolated Hurl acceptance and CI | [EP-28](../plans/28-gate-service-releases-with-isolated-hurl-acceptance-and-ci.md) | EP-23, EP-24, EP-25, EP-26, EP-27 | None | Not Started |
 
 Status values are Not Started, In Progress, Complete, and Cancelled. A hard dependency naming
@@ -181,7 +181,9 @@ EP-25 is Complete: six HTTP privacy/context cases pass in each semantic mode, fo
 buffered lifecycle subprocesses pass, the full core/probe suites pass, and Cabal/Nix
 server builds and strict ADR validation pass. EP-26 is Complete: native boundary/order/failure checks, existing native query
 fixtures, generated-client tests, published OpenAPI bounds and Cabal/Nix builds pass.
-EP-27 is next; EP-27 and EP-28 remain Not Started. The final required executable
+EP-27 is Complete: every local component builds with fatal omitted fields, the
+manual missing-handler proof fails as intended, and both generated artifacts remain
+byte-for-byte unchanged. EP-28 is the only remaining child, currently Not Started. The final required executable
 and isolated-storage integration gate remains owned by EP-28.
 
 

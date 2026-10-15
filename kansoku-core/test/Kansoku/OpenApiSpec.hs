@@ -9,6 +9,7 @@ import Data.ByteString.Char8 qualified as BS8
 import Data.ByteString.Lazy qualified as BSL
 import Data.Foldable (traverse_)
 import Data.Foldable qualified as Foldable
+import Data.Generics.Labels ()
 import Data.List qualified as List
 import Data.Map.Strict qualified as Map
 import Data.OpenApi (ToSchema, validateToJSON)
@@ -352,10 +353,7 @@ alwaysReadyProbe =
 
 failingPipelineProbe :: ReadyProbe
 failingPipelineProbe =
-  alwaysReadyProbe
-    { pipelineReady =
-        pure [QueueDepthExceeded {observed = 101, limit = 100}]
-    }
+  alwaysReadyProbe & #pipelineReady .~ pure [QueueDepthExceeded {observed = 101, limit = 100}]
 
 assertRouted :: HTTP.Manager -> Warp.Port -> Text -> Expectation
 assertRouted manager port path = do

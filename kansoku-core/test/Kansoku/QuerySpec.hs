@@ -337,8 +337,8 @@ assertNumericDeclaration :: Text -> Text -> Expectation
 assertNumericDeclaration property event =
   case latestSchema (EventName event) defaultRegistry of
     Nothing -> expectationFailure ("missing event schema for " <> Text.unpack event)
-    Just EventSchema {schemaProperties} ->
-      case [propType | PropertySpec {propName, propType} <- schemaProperties, propName == property] of
+    Just EventSchema {properties} ->
+      case [propertyType | PropertySpec {name, propertyType} <- properties, name == property] of
         [PTNumber] -> pure ()
         [PTAny] -> pure ()
         _ -> expectationFailure ("aggregation property is not numeric: " <> Text.unpack event <> "." <> Text.unpack property)

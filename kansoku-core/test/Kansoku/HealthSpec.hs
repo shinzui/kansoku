@@ -4,11 +4,13 @@ import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (cancel, waitCatch, withAsync)
 import Control.Exception (throwIO)
 import Data.Aeson qualified as Aeson
+import Data.Generics.Labels ()
 import Data.IORef
 import Data.Text (Text)
 import Data.Time.Clock
 import Kansoku.Config (loadConfig)
 import Kansoku.Health (probePaths)
+import Kansoku.Prelude ((&), (.~))
 import Kansoku.Server (ReadyProbe (..), kansokuAppWithChecks, newProbeChecks)
 import Network.HTTP.Client qualified as Http
 import Network.HTTP.Types (hContentType, status503)
@@ -20,7 +22,7 @@ spec :: Spec
 spec = describe "Kansoku.Health production checks" $ do
   it "retains failure onset across requests, resets after recovery, and leaves liveness healthy" $ do
     available <- newIORef False
-    let probe = healthy {clickhouseReachable = readIORef available}
+    let probe = healthy & #clickhouseReachable .~ readIORef available
     (live, ready) <- newProbeChecks probe
     first <- ready
     threadDelay 1_000
@@ -33,19 +35,19 @@ spec = describe "Kansoku.Health production checks" $ do
     later `shouldNotBe` first
 
   it "converts synchronous check exceptions without disclosing details" $ do
-    (_, ready) <- newProbeChecks (healthy {pgmqReachable = throwIO (userError "private credential")})
+    (_, ready) <- newProbeChecks (healthy & #pgmqReachable .~ throwIO (userError "private credential"))
     verdict <- ready
     verdict `shouldSatisfy` named "pgmq_reachable"
 
   it "times out native-check slots within 750ms plus at most 250ms scheduling tolerance" $ do
-    (_, ready) <- newProbeChecks (healthy {clickhouseReachable = threadDelay 5_000_000 >> pure True})
+    (_, ready) <- newProbeChecks (healthy & #clickhouseReachable .~ (threadDelay 5_000_000 >> pure True))
     started <- getCurrentTime
     ready >>= (`shouldSatisfy` named "clickhouse_query_reachable")
     elapsed <- realToFrac . (`diffUTCTime` started) <$> getCurrentTime :: IO Double
     elapsed `shouldSatisfy` (< 1.0)
 
   it "propagates asynchronous cancellation" $ do
-    (_, ready) <- newProbeChecks (healthy {clickhouseReachable = threadDelay 5_000_000 >> pure True})
+    (_, ready) <- newProbeChecks (healthy & #clickhouseReachable .~ (threadDelay 5_000_000 >> pure True))
     withAsync ready $ \worker -> do
       threadDelay 20_000
       cancel worker

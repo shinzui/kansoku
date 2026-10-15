@@ -34,6 +34,8 @@ file by hand.
 
 ## Operations and project records
 
+- [Developer guide](guides/development.md) describes compiler, record, route and generated-contract conventions.
+
 - [Architecture atlas](artifcats/kansoku-architecture.html) is a self-contained, light-theme
   visual guide to the current system, from high-level data flow to contracts, storage,
   identity resolution, metric queries, operations, and source modules.

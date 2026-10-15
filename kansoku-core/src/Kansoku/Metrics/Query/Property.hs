@@ -94,13 +94,13 @@ declaredProperty registry property event =
 numericProperty :: EventRegistry -> Text -> EventName -> Either PropertyError ()
 numericProperty registry property event =
   case latestSchema event registry >>= findProperty property of
-    Just PropertySpec {propType = PTNumber} -> Right ()
-    Just PropertySpec {propType = PTAny} -> Right ()
+    Just PropertySpec {propertyType = PTNumber} -> Right ()
+    Just PropertySpec {propertyType = PTAny} -> Right ()
     _ -> Left (PropertyErrorNotNumeric property event)
 
 findProperty :: Text -> EventSchema -> Maybe PropertySpec
-findProperty property EventSchema {schemaProperties} =
-  find ((== property) . propName) schemaProperties
+findProperty property EventSchema {properties} =
+  find (\PropertySpec {name} -> name == property) properties
 
 sqlString :: Text -> Text
 sqlString value =

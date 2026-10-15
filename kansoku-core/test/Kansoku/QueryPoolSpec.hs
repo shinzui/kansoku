@@ -7,11 +7,13 @@ import Control.Concurrent.MVar (newEmptyMVar, putMVar, takeMVar)
 import Control.Exception (SomeException, bracket, finally, try)
 import Control.Monad (forever, replicateM_, when)
 import Data.ByteString qualified as BS
+import Data.Generics.Labels ()
 import Data.IORef
 import Data.Time.Clock (diffUTCTime, getCurrentTime)
 import Kansoku.ClickHouse
 import Kansoku.Config (loadConfig)
 import Kansoku.Exception (trySynchronous)
+import Kansoku.Prelude ((&), (.~))
 import Network.Socket
 import Network.Socket.ByteString (recv, sendAll)
 import System.Environment (lookupEnv)
@@ -34,7 +36,7 @@ spec = describe "Kansoku.QueryPool native lifetime" $ do
     -- Bind without listen: a real refused connect on an owned, unused endpoint.
     bracket newListener close $ \reserved -> do
       port <- socketPort reserved
-      bracket (newQueryPool (cfg {clickHouseTcpPort = show port}) 1) closeQueryPool $ \pool ->
+      bracket (newQueryPool (cfg & #clickHouseTcpPort .~ show port) 1) closeQueryPool $ \pool ->
         boundedFailure (queryReachable pool)
     withProxy cfg $ \proxy ->
       bracket (newQueryPool (through proxy cfg) 1) closeQueryPool $ \pool -> do
@@ -117,7 +119,7 @@ drained proxy = do
   done `shouldBe` Just ()
 
 through :: Proxy -> ClickHouseConfig -> ClickHouseConfig
-through proxy cfg = cfg {clickHouseHost = "127.0.0.1", clickHouseTcpPort = proxyPort proxy}
+through proxy cfg = cfg & #clickHouseHost .~ "127.0.0.1" & #clickHouseTcpPort .~ proxyPort proxy
 
 withNative :: (ClickHouseConfig -> Expectation) -> Expectation
 withNative action = do

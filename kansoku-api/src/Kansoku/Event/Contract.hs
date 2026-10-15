@@ -84,19 +84,19 @@ schemaCatalog (EventRegistry registry) =
     }
 
 toContractSchema :: EventSchema -> VersionedEventSchema
-toContractSchema EventSchema {schemaVersion, schemaNote, schemaProperties} =
+toContractSchema EventSchema {version, note, properties} =
   VersionedEventSchema
-    { version = schemaVersion,
-      note = schemaNote,
-      properties = toContractProperty <$> schemaProperties
+    { version = version,
+      note = note,
+      properties = toContractProperty <$> properties
     }
 
 toContractProperty :: PropertySpec -> ContractProperty
-toContractProperty PropertySpec {propName, propType, propRequired, propPattern, propDescription} =
+toContractProperty PropertySpec {name, propertyType, required, validationPattern, description} =
   ContractProperty
-    { name = propName,
-      propertyType = propertyTypeText propType,
-      required = propRequired,
-      validationPattern = propertyPatternText <$> propPattern,
-      description = propDescription
+    { name = name,
+      propertyType = propertyTypeText propertyType,
+      required = required,
+      validationPattern = propertyPatternText <$> validationPattern,
+      description = description
     }

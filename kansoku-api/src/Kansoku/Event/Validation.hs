@@ -43,10 +43,10 @@ validateEventWith registry event =
     errs -> Left errs
   where
     structuralErrors =
-      [EmptyEventId | unEventId (eventId event) == ""]
-        <> [EmptyEventName | unEventName (eventName event) == ""]
-        <> [ ReceivedBeforeOccurred (occurredAt event) (receivedAt event)
-           | receivedAt event < occurredAt event
+      [EmptyEventId | unEventId ((event ^. #eventId)) == ""]
+        <> [EmptyEventName | unEventName ((event ^. #eventName)) == ""]
+        <> [ ReceivedBeforeOccurred ((event ^. #occurredAt)) ((event ^. #receivedAt))
+           | (event ^. #receivedAt) < (event ^. #occurredAt)
            ]
         <> [ InvalidSchemaVersion version
            | Just version <- [event ^. #schemaVersion],
@@ -54,7 +54,7 @@ validateEventWith registry event =
            ]
 
     identifierErrors =
-      case identifiers event of
+      case (event ^. #identifiers) of
         Nothing -> []
         Just ids -> concatMap identifierError (Map.toList ids)
 
@@ -71,27 +71,27 @@ validateEventWith registry event =
            ]
 
     schemaErrors =
-      case lookupVersions (eventName event) registry of
+      case lookupVersions ((event ^. #eventName)) registry of
         Nothing -> []
         Just _
           | not (maybe True validSchemaVersion (event ^. #schemaVersion)) -> []
           | otherwise ->
               let requested = fromMaybe 1 (event ^. #schemaVersion)
-               in case lookupSchemaVersion (eventName event) requested registry of
-                    Nothing -> [UnknownSchemaVersion (eventName event) requested (knownVersions (eventName event) registry)]
-                    Just schema -> concatMap validateProperty (schemaProperties schema)
+               in case lookupSchemaVersion ((event ^. #eventName)) requested registry of
+                    Nothing -> [UnknownSchemaVersion ((event ^. #eventName)) requested (knownVersions ((event ^. #eventName)) registry)]
+                    Just schema -> concatMap validateProperty ((schema ^. #properties))
 
     validateProperty :: PropertySpec -> [ValidationError]
     validateProperty spec =
-      case KeyMap.lookup (Key.fromText (propName spec)) (properties event) of
+      case KeyMap.lookup (Key.fromText ((spec ^. #name))) ((event ^. #properties)) of
         Nothing
-          | propRequired spec -> [MissingRequiredProperty (eventName event) (propName spec)]
+          | (spec ^. #required) -> [MissingRequiredProperty ((event ^. #eventName)) ((spec ^. #name))]
           | otherwise -> []
         Just value
-          | not (propertyMatches (propType spec) value) ->
-              [WrongPropertyType (eventName event) (propName spec) (propType spec)]
-          | not (propertyPatternMatches (propPattern spec) value) ->
-              [InvalidPropertyValue (eventName event) (propName spec) sqlNamePatternRule]
+          | not (propertyMatches ((spec ^. #propertyType)) value) ->
+              [WrongPropertyType ((event ^. #eventName)) ((spec ^. #name)) ((spec ^. #propertyType))]
+          | not (propertyPatternMatches ((spec ^. #validationPattern)) value) ->
+              [InvalidPropertyValue ((event ^. #eventName)) ((spec ^. #name)) sqlNamePatternRule]
           | otherwise -> []
 
 validateEvent :: AnalyticsEvent -> Either [ValidationError] AnalyticsEvent

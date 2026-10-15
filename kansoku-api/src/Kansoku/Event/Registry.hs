@@ -36,19 +36,19 @@ propertyPatternText = \case
   SqlNamePattern -> "[a-z0-9_.:-]{1,128}"
 
 data PropertySpec = PropertySpec
-  { propName :: !Text,
-    propType :: !PropertyType,
-    propRequired :: !Bool,
-    propPattern :: !(Maybe PropertyPattern),
-    propDescription :: !(Maybe Text)
+  { name :: !Text,
+    propertyType :: !PropertyType,
+    required :: !Bool,
+    validationPattern :: !(Maybe PropertyPattern),
+    description :: !(Maybe Text)
   }
   deriving stock (Generic, Eq, Show)
 
 data EventSchema = EventSchema
-  { schemaEventName :: !EventName,
-    schemaVersion :: !Int,
-    schemaNote :: !Text,
-    schemaProperties :: ![PropertySpec]
+  { eventName :: !EventName,
+    version :: !Int,
+    note :: !Text,
+    properties :: ![PropertySpec]
   }
   deriving stock (Generic, Eq, Show)
 
@@ -62,16 +62,16 @@ emptyRegistry :: EventRegistry
 emptyRegistry = EventRegistry Map.empty
 
 registerSchema :: EventSchema -> EventRegistry -> EventRegistry
-registerSchema schema (EventRegistry registry) =
-  EventRegistry (Map.alter upsert (schemaEventName schema) registry)
+registerSchema schema@EventSchema {eventName, version = newVersion} (EventRegistry registry) =
+  EventRegistry (Map.alter upsert eventName registry)
   where
     upsert Nothing = Just (schema :| [])
     upsert (Just versions) =
       Just
         ( NonEmpty.fromList
             ( sortOn
-                schemaVersion
-                (schema : filter ((/= schemaVersion schema) . schemaVersion) (NonEmpty.toList versions))
+                versionOf
+                (schema : filter ((/= newVersion) . versionOf) (NonEmpty.toList versions))
             )
         )
 
@@ -80,14 +80,17 @@ lookupVersions name (EventRegistry registry) = Map.lookup name registry
 
 lookupSchemaVersion :: EventName -> Int -> EventRegistry -> Maybe EventSchema
 lookupSchemaVersion name version registry =
-  find ((== version) . schemaVersion) . NonEmpty.toList =<< lookupVersions name registry
+  find ((== version) . versionOf) . NonEmpty.toList =<< lookupVersions name registry
 
 latestSchema :: EventName -> EventRegistry -> Maybe EventSchema
 latestSchema name registry = NonEmpty.last <$> lookupVersions name registry
 
 knownVersions :: EventName -> EventRegistry -> [Int]
 knownVersions name registry =
-  maybe [] (fmap schemaVersion . NonEmpty.toList) (lookupVersions name registry)
+  maybe [] (fmap versionOf . NonEmpty.toList) (lookupVersions name registry)
+
+versionOf :: EventSchema -> Int
+versionOf EventSchema {version} = version
 
 defaultRegistry :: EventRegistry
 defaultRegistry =

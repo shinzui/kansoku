@@ -28,12 +28,12 @@ spec = describe "Kansoku event schema contract" $ do
     let EventRegistry registry = defaultRegistry
     forM_ (Map.toList registry) $ \(eventName, versions) -> do
       let schemas = NonEmpty.toList versions
-          actualVersions = [version | EventSchema {schemaVersion = version} <- schemas]
+          actualVersions = [version | EventSchema {version} <- schemas]
       actualVersions `shouldBe` [1 .. length schemas]
-      forM_ schemas $ \EventSchema {schemaEventName, schemaNote, schemaProperties} -> do
-        schemaEventName `shouldBe` eventName
-        schemaNote `shouldSatisfy` (not . Text.null)
-        let propertyNames = [propName | PropertySpec {propName} <- schemaProperties]
+      forM_ schemas $ \EventSchema {eventName, note, properties} -> do
+        eventName `shouldBe` eventName
+        note `shouldSatisfy` (not . Text.null)
+        let propertyNames = [name | PropertySpec {name} <- properties]
         length propertyNames `shouldBe` length (nub propertyNames)
 
   it "publishes the landed experiment property pattern" $ do

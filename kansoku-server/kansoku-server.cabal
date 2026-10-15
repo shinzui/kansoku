@@ -1,19 +1,24 @@
 cabal-version: 3.0
-name:          kansoku-server
-version:       0.1.0.0
-synopsis:      Kansoku HTTP server executable.
+name: kansoku-server
+version: 0.1.0.0
+synopsis: Kansoku HTTP server executable.
 description:
   The servant/warp HTTP server executable for Kansoku analytics.
 
-license:       BSD-3-Clause
-author:        Nadeem Bitar
-maintainer:    nadeem@gmail.com
-category:      Web
-build-type:    Simple
+license: BSD-3-Clause
+author: Nadeem Bitar
+maintainer: nadeem@gmail.com
+category: Web
+build-type: Simple
 
 common common
-  ghc-options:        -Wall -Wcompat -Wredundant-constraints
-  default-language:   GHC2024
+  ghc-options:
+    -Wall
+    -Wcompat
+    -Wredundant-constraints
+    -Werror=missing-fields
+
+  default-language: GHC2024
   default-extensions:
     DeriveAnyClass
     DuplicateRecordFields
@@ -22,31 +27,31 @@ common common
     OverloadedStrings
 
 executable kansoku-server
-  import:         common
-  ghc-options:    -threaded
+  import: common
+  ghc-options: -threaded
   hs-source-dirs: app
-  main-is:        Main.hs
+  main-is: Main.hs
   build-depends:
-    , async
-    , base          >=4.21 && <5
-    , generic-lens
-    , hasql-pool
-    , kansoku-api
-    , kansoku-core
-    , text
-    , unix
+    async,
+    base >=4.21 && <5,
+    generic-lens,
+    hasql-pool,
+    kansoku-api,
+    kansoku-core,
+    text,
+    unix,
 
 executable kansoku-migrate
-  import:         common
+  import: common
   hs-source-dirs: app
-  main-is:        Migrate.hs
+  main-is: Migrate.hs
   build-depends:
-    , aeson
-    , base                  >=4.21 && <5
-    , bytestring
-    , hasql
-    , kansoku-core
-    , optparse-applicative
-    , pg-migrate
-    , pg-migrate-cli
-    , text
+    aeson,
+    base >=4.21 && <5,
+    bytestring,
+    hasql,
+    kansoku-core,
+    optparse-applicative,
+    pg-migrate,
+    pg-migrate-cli,
+    text,

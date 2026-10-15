@@ -17,6 +17,12 @@ provenance:
       at: 2026-10-15T03:29:26Z
       verdict: "approved"
       note: "Focused convention scope, component warning coverage and byte-preserving contract acceptance are implementable."
+  revisions:
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-10-15T04:51:56Z
+      mode: "implement"
+      note: "Enforce omitted-field diagnostics and normalize internal registry records without wire changes."
 ---
 
 # Enforce core record and route construction conventions
@@ -33,13 +39,16 @@ event schemas or JSON. These changes improve maintenance safety while keeping be
 
 ## Progress
 
-- [ ] M1: Every local component inherits fatal missing-record-field diagnostics and all existing components build.
-- [ ] M2: Focused schema-registry record cleanup preserves wire contracts and passes registry/validation tests.
+- [x] (2026-10-15) M1: Every local component inherits fatal missing-record-field diagnostics and all existing components build.
+- [x] (2026-10-15) M2: Focused schema-registry record cleanup preserves wire contracts and passes registry/validation tests.
 
 
 ## Surprises & Discoveries
 
-None during implementation yet.
+The scoped rename compiled without expanding the source cleanup into unrelated
+records. Pure registry/type modules use constructor pattern matching and do not
+import generic-lens orphans. Touched project probe/config test updates use lenses;
+external Request records and newtype unwrappers keep their established APIs.
 
 
 ## Decision Log
@@ -52,7 +61,23 @@ a safe convention repair into a repository-wide source/API redesign.
 
 ## Outcomes & Retrospective
 
-Not implemented.
+All four packages enforce -Werror=missing-fields through every local component's
+common stanza. A temporary removal of the metrics handler from KansokuAPI failed
+with GHC-20125 / Werror=missing-fields, naming the omitted metrics field. The exact
+field was restored and the library rebuilt successfully; no partial handler remains.
+
+Internal PropertySpec/EventSchema fields and all local consumers now follow the
+unprefixed convention. Existing registry, property, validation, route-dispatch and
+contract tests pass in the full suite (core 169 examples, 25 optional storage pending;
+client 15, one optional live case pending; probe kit four passing cases). Both artifact
+generators ran, and SHA-256 comparisons with the immediate EP-26 starting tree proved
+OpenAPI and event catalog byte-for-byte unchanged. Cabal builds every component with
+tests; Nix server/client builds pass.
+
+The developer guide records the warning policy, per-module label imports, pure type
+module exception, external-record/newtype/Servant selector exceptions and immutable
+wire contracts. This source convention change needs no new architecture record;
+ADR-7's released-schema invariants remain unchanged.
 
 
 ## Context and Orientation
@@ -64,7 +89,7 @@ slice records use NamedRoutes, while `kansoku-core/test/Kansoku/Metrics/RoutingS
 runtime sentinel responses to catch same-typed handler swaps. Fatal missing fields complement,
 and do not replace, those tests.
 
-`kansoku-api/src/Kansoku/Event/Registry.hs` uses prefixed PropertySpec fields propName,
+At the starting revision, `kansoku-api/src/Kansoku/Event/Registry.hs` used prefixed PropertySpec fields propName,
 propType, propRequired, propPattern, propDescription and EventSchema fields schemaEventName,
 schemaVersion, schemaNote, schemaProperties. Helpers use selector-function applications.
 Consumers include `kansoku-api/src/Kansoku/Event/Validation.hs`, `Kansoku/Event/Contract.hs`,
