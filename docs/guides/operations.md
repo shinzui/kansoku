@@ -128,10 +128,29 @@ important for historical alerting.
 
 ## Traces
 
-Kansoku exports OpenTelemetry spans only when trace export is configured. The writer traces batch
-processing and uses the configured provider for shutdown flushing. See
-[configuration](configuration.md#trace-export) for opt-in variables. Correlate writer failure
-counters, queue age, and trace errors when investigating storage latency.
+Every non-probe request writes one JSON access line to stdout. Fields are `method`,
+`path` (without query), `path_truncated`, numeric `status`, UTC `time`, monotonic
+`duration_ms`, optional `user_agent`/`user_agent_truncated`, and valid lowercase
+`trace_id`/`span_id` when provided by the serving context. Path and user-agent
+inputs are capped at 2048 and 512 bytes. Canonical and compatibility probes are
+excluded by exact path; authenticated traffic is included. Bodies, credentials,
+cookies, arbitrary headers and query values are never captured. Diagnostics use stderr.
+
+HTTP and writer spans export only when traces are explicitly configured. Incoming
+W3C `traceparent` supplies the parent of one server span. Served routes produce
+bounded names such as `GET metrics/events`; unmatched routes retain a method-only
+name. Instrumentation sees a bounded request copy without query values, while the
+application receives its complete original request and the instrumented context.
+This privacy boundary applies before processors/exporters, including legacy,
+`http`, and `http/dup` semantic modes. A 5xx response records the actual status and
+an error span without copying the problem body.
+
+The process owns tracer and optional meter providers. Exit and exception unwinding
+flush providers before shutdown. HTTP instruments are OTel request duration,
+active-request and request-count instruments, enabled for export by explicit
+`OTEL_METRICS_EXPORTER` configuration; the seven pipeline instruments above remain
+Prometheus-owned. See [configuration](configuration.md#trace-export) for opt-in
+variables. Writer batches do not claim to be children of individual ingest requests.
 
 ## Failure and recovery behavior
 

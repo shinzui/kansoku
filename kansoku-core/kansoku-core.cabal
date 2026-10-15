@@ -58,6 +58,7 @@ library
     Kansoku.Observability
     Kansoku.Postgres
     Kansoku.Readiness
+    Kansoku.RequestLog
     Kansoku.Runtime
     Kansoku.Server
     Kansoku.Telemetry
@@ -80,6 +81,8 @@ library
     hasql-pool,
     hs-opentelemetry-api,
     hs-opentelemetry-exporter-handle,
+    hs-opentelemetry-instrumentation-servant,
+    hs-opentelemetry-instrumentation-wai,
     hs-opentelemetry-sdk,
     http-types,
     kansoku-api,
@@ -121,6 +124,7 @@ test-suite kansoku-core-test
     Kansoku.EventSpec
     Kansoku.HealthSpec
     Kansoku.HttpIntegrationSpec
+    Kansoku.HttpTelemetrySpec
     Kansoku.Ingest.HandlerSpec
     Kansoku.Ingest.QueueSpec
     Kansoku.LimitsSpec
@@ -135,6 +139,7 @@ test-suite kansoku-core-test
     Kansoku.QueryPoolSpec
     Kansoku.QuerySpec
     Kansoku.ReadinessSpec
+    Kansoku.RequestLogSpec
     Kansoku.Writer.BatchSpec
 
   build-depends:
@@ -149,6 +154,11 @@ test-suite kansoku-core-test
     generic-lens,
     hasql,
     hasql-pool,
+    hs-opentelemetry-api,
+    hs-opentelemetry-exporter-in-memory,
+    hs-opentelemetry-instrumentation-wai,
+    hs-opentelemetry-propagator-w3c,
+    hs-opentelemetry-sdk,
     hspec,
     http-client,
     http-types,

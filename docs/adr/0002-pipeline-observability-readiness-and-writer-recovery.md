@@ -2,7 +2,7 @@
 type: Architecture Decision Record
 title: Pipeline observability, readiness, and writer recovery
 description: Add OpenTelemetry tracing, Prometheus pipeline metrics, ordered readiness checks, and logical writer-connection recovery for the PGMQ-to-ClickHouse pipeline.
-timestamp: 2026-10-15T04:35:00Z
+timestamp: 2026-10-15T04:32:43Z
 generated:
   by: human:kansoku-maintainers
   at: 2026-07-19T00:00:00Z
@@ -89,19 +89,41 @@ stalled query, failure without reconnect, cancellation and size-one pool recover
 external watchdog prevents a broken deadline hanging the suite. Keep this repair until a
 released driver supplies equivalent lifetime behavior and passes those native tests.
 
-## Planned extension: HTTP tracing privacy
+## HTTP tracing and access privacy
 
-[EP-25](../plans/25-trace-http-requests-and-emit-safe-correlated-access-logs.md) owns HTTP tracing
-privacy before instrumentation records attributes. Instrumentation receives a sanitized request
-view with no query values; the application receives the original query and the instrumented
-request's trace context. Credentials, bodies and query values must be absent from exported HTTP
-span attributes/events and access records in both legacy and stable semantic-convention modes.
-Query-free access logs alone are insufficient, and export-only redaction would leave sensitive
-values visible to earlier span processors. The production assembly must expose the sanitizing
-adapter as its tracing middleware, preserving request semantics and W3C parent correlation.
+One outer WAI span observes the assembled application, with exact analytics and
+operational Servant proxies annotating its route. No Raw root fallback creates an
+empty route label. An inner access logger observes actual auth, body-limit, framework
+and application statuses; the existing problem boundary retains its CORS placement.
+Incoming W3C context becomes the remote parent, and valid serving IDs correlate with
+one JSON access line. Unmatched requests have method-only span names.
 
-The owning child must update this section with the implemented boundary and native/export
-evidence when accepted. Their execution ordering and temporary fixtures remain in the plans.
+The only production-exposed HTTP middleware sanitizes instrumentation inputs before
+capture: no raw or parsed query, only necessary propagation/host/user-agent headers,
+and bounded path/user-agent input. The inner closure restores the complete original
+request with the instrumented vault. Response callbacks also capture the sanitized
+copy. Exported spans and access records therefore omit query values, credentials and
+payloads in all three HTTP semantic modes. Shared probe paths emit no access records.
+
+Access JSON writes to stdout in one line operation; application diagnostics remain
+on stderr. Its fixed fields are method, query-free path, path truncation flag, numeric
+status, UTC time, monotonic duration_ms, optional user-agent and its truncation flag,
+and valid lowercase trace/span IDs. Input byte limits are 2048 for path and 512 for
+user-agent. No body or arbitrary header capture is provided.
+
+Tracer and optional meter providers are installed before constructing instrumentation.
+Trace export requires explicit endpoint/exporter configuration; HTTP metric export
+requires explicit OTEL_METRICS_EXPORTER. SDK_DISABLED takes precedence. Bracket exit
+flushes both providers before shutdown, including exception unwinding. Prometheus
+pipeline ownership and the lack of per-event queue trace propagation remain deliberate.
+In-memory span tests cover production route annotation, remote parenting, concurrent
+context isolation, bounded failures and secret absence; separate subprocesses cover
+legacy/stable/duplicate semantic modes and buffered normal/exceptional shutdown.
+
+The verified dependency cohort is WAI instrumentation 1.0.0.0 with the existing 1.0
+SDK/API and `mori://shinzui/hs-opentelemetry-instrumentation-servant` at immutable
+revision `5e99a7857032484abc669076704dee4335e7d0ad` for MultiVerb/AuthProtect
+support. Cabal and Nix pins agree.
 
 ## Alternatives considered
 

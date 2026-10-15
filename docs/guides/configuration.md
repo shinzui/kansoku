@@ -83,6 +83,22 @@ export OTEL_TRACES_EXPORTER='otlp'
 Validate exporter names and transport settings in the deployment environment; a trace exporter
 is operational infrastructure and is not part of the public Kansoku API.
 
+`OTEL_SDK_DISABLED=true` takes precedence over configured trace and metric export.
+Set `OTEL_SERVICE_NAME=kansoku` and use `OTEL_RESOURCE_ATTRIBUTES` for deployment
+identity. Sampling follows `OTEL_TRACES_SAMPLER` and `OTEL_TRACES_SAMPLER_ARG`
+(for example `parentbased_traceidratio` with `0.1`). Development with no exporter
+selection or OTLP endpoint performs no network export. `OTEL_TRACES_EXPORTER=console`
+supports collector-free validation and flushes on exit.
+
+The HTTP instrumentation captures providers once during startup. Optional OTel HTTP
+metric export requires `OTEL_METRICS_EXPORTER=otlp`; it is separate from the built-in
+Prometheus pipeline scrape. The base OTLP HTTP endpoint is normally port 4318; the
+exporter appends `/v1/traces` or `/v1/metrics` for each signal. Set the base endpoint,
+not a trace-specific path. `OTEL_SEMCONV_STABILITY_OPT_IN=http` selects stable HTTP
+names, `http/dup` emits both names, and unset retains legacy names. In every mode,
+HTTP query values are removed before attribute capture. Access JSON is independent
+of exporter configuration; see [operations](operations.md#traces) for its fixed fields.
+
 ## A minimal non-development environment
 
 ```bash

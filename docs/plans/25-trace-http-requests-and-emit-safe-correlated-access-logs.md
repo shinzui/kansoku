@@ -23,6 +23,11 @@ provenance:
       at: 2026-10-15T03:37:31Z
       mode: "update"
       note: "Require sanitized instrumentation request views and exported-span privacy tests in all HTTP semantic modes."
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-10-15T04:25:24Z
+      mode: "implement"
+      note: "Implement sanitized HTTP instrumentation, correlated access logging and export privacy coverage."
 ---
 
 # Trace HTTP requests and emit safe correlated access logs
@@ -40,14 +45,14 @@ to work without an OpenTelemetry collector; existing Prometheus pipeline metrics
 
 ## Progress
 
-- [ ] M1: A real HTTP request produces one correctly parented server span named by the served route.
-- [ ] M2: Access records match the serving span and exclude probe noise; both access records and exported spans exclude secrets and query values.
+- [x] (2026-10-15) M1: A real HTTP request produces one correctly parented server span named by the served route.
+- [x] (2026-10-15) M2: Access records match the serving span and exclude probe noise; both access records and exported spans exclude secrets and query values.
 - [ ] M3: Provider shutdown, disabled mode, error responses and concurrent requests pass lifecycle and isolation checks.
 
 
 ## Surprises & Discoveries
 
-None during implementation yet. Dependency research found the catalog's compatibility commit
+Dependency research found the catalog's compatibility commit
 on a feature branch while remote main had moved; verify source at the immutable pin, not the
 working checkout. This is a known input to M1, not evidence of a completed runtime check.
 
@@ -55,6 +60,18 @@ Source review of released WAI instrumentation 1.0.0.0 found raw query capture in
 `http.target` and stable `url.query` attributes. A safe access logger alone does not satisfy
 the privacy contract. The response callback does rename the server span from `http.route`;
 no additional span or independent route-name implementation is required for that behavior.
+
+
+The compatibility pin's library builds on API 1.0, but its bundled example executable
+still calls the old one-argument shutdown API. Cabal consumes only its library; Nix
+would build that unrelated executable too. The project-owned Nix override marks only
+the example unbuildable, preserving the exact library source and pin.
+
+The semantic configuration is memoized by the SDK. `python3 scripts/http-telemetry.py`
+runs separate processes for all three modes, asserting the expected legacy/stable keys,
+query-free exported attributes/events/status and unchanged handler query values. It also
+runs buffered-export subprocesses with a 60-second batch schedule, forcing bracket
+shutdown to provide the flush proof. No external collector is involved.
 
 
 ## Decision Log
@@ -75,7 +92,12 @@ boundary in all supported HTTP semantic-convention modes. Access-output checks a
 
 ## Outcomes & Retrospective
 
-Not implemented.
+Production HTTP middleware, bounded correlated access logging, and provider lifetime
+are implemented. Six HTTP cases pass independently in each of legacy, http and http/dup
+modes; two focused access-log cases pass. Four subprocess checks prove buffered spans
+flush on normal and exceptional exit and remain unexported when disabled/unconfigured.
+Cabal builds every component with tests. The final Nix server acceptance is running after
+excluding the dependency's unused example executable; M3 remains open until it passes.
 
 
 ## Context and Orientation

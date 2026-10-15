@@ -31,6 +31,12 @@
               rev = "4aaff6c0919d1fe8e1c248c3ce4ce05775c59c8c";
               sha256 = "13nsr8jzmvqr3ka5liic1sgm8brszzyfvxd0djm3ccc4smphbh68";
             };
+            servantTelemetrySrc = pkgs.fetchFromGitHub {
+              owner = "shinzui";
+              repo = "hs-opentelemetry-instrumentation-servant";
+              rev = "5e99a7857032484abc669076704dee4335e7d0ad";
+              sha256 = "1djflpkg3xrm0hr9wn6cnsna6igqxf92wmrac8ghrcygkcbv1y3c";
+            };
             hsOpenTelemetrySrc = pkgs.fetchFromGitHub {
               owner = "iand675";
               repo = "hs-opentelemetry";
@@ -136,6 +142,17 @@
                 { }));
             thread-utils-finalizers = threadUtilsPackage "thread-utils-finalizers" "/thread-utils-finalizers";
             thread-utils-context = threadUtilsPackage "thread-utils-context" "/thread-utils-context";
+            hs-opentelemetry-instrumentation-wai = callHackageNoCheck "hs-opentelemetry-instrumentation-wai" "1.0.0.0" "1b81alw81mrr8l0z82jcqrv20bxfp7ld818x38296cpmc69kvxc0";
+            hs-opentelemetry-instrumentation-servant = pkgs.haskell.lib.compose.overrideCabal
+              (old: {
+                # The pinned library supports API 1.0; its unused example still
+                # calls the pre-1.0 shutdown API. Keep that example out of builds.
+                postPatch = (old.postPatch or "") + ''
+                  echo '    buildable: False' >> hs-opentelemetry-instrumentation-servant.cabal
+                '';
+              })
+              (dontCheck (self.callCabal2nix "hs-opentelemetry-instrumentation-servant" servantTelemetrySrc { }));
+            hs-opentelemetry-exporter-in-memory = otelPackage "hs-opentelemetry-exporter-in-memory" "/exporters/in-memory";
             hs-opentelemetry-api-types = otelPackage "hs-opentelemetry-api-types" "/api-types";
             hs-opentelemetry-api = otelPackage "hs-opentelemetry-api" "/api";
             hs-opentelemetry-otlp = otelPackage "hs-opentelemetry-otlp" "/otlp";

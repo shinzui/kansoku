@@ -126,7 +126,7 @@ runServer = do
                                 (wait writerAsync)
                                 ( race_
                                     (wait pollerAsync)
-                                    (runApp cfg (startServer app))
+                                    (runApp cfg (startServer ((telemetry ^. #httpMiddleware) app)))
                                 )
                     )
               )

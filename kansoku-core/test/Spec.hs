@@ -9,6 +9,7 @@ import Kansoku.CorsSpec qualified
 import Kansoku.EventSpec qualified
 import Kansoku.HealthSpec qualified
 import Kansoku.HttpIntegrationSpec qualified
+import Kansoku.HttpTelemetrySpec qualified
 import Kansoku.Ingest.HandlerSpec qualified
 import Kansoku.Ingest.QueueSpec qualified
 import Kansoku.LimitsSpec qualified
@@ -23,11 +24,20 @@ import Kansoku.QueryIntegrationSpec qualified
 import Kansoku.QueryPoolSpec qualified
 import Kansoku.QuerySpec qualified
 import Kansoku.ReadinessSpec qualified
+import Kansoku.RequestLogSpec qualified
 import Kansoku.Writer.BatchSpec qualified
+import System.Environment (lookupEnv)
 import Test.Hspec (hspec, runIO)
 
 main :: IO ()
-main = hspec $ do
+main = do
+  childMode <- lookupEnv "KANSOKU_TELEMETRY_LIFECYCLE_CHILD"
+  case childMode of
+    Just _ -> Kansoku.HttpTelemetrySpec.lifecycleChild
+    Nothing -> normalTests
+
+normalTests :: IO ()
+normalTests = hspec $ do
   metrics <- runIO registerPipelineMetrics
   Kansoku.Auth.HandlerSpec.spec
   Kansoku.Auth.TokenSpec.spec
@@ -51,4 +61,6 @@ main = hspec $ do
   Kansoku.QueryPoolSpec.spec
   Kansoku.QuerySpec.spec
   Kansoku.ReadinessSpec.spec
+  Kansoku.RequestLogSpec.spec
+  Kansoku.HttpTelemetrySpec.spec
   Kansoku.Writer.BatchSpec.spec metrics
