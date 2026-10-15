@@ -10,6 +10,7 @@ module Kansoku.Auth.Handler
     authenticateWith,
     ingestAuthHandler,
     ingestAuthHandlerWith,
+    ingestAuthHandlerWithContext,
     metricsAuthHandler,
     metricsAuthHandlerWith,
   )
@@ -32,6 +33,7 @@ import Kansoku.Auth.Types
     IngestPrincipal (..),
     MetricsPrincipal (..),
   )
+import Kansoku.Ingest.RequestContext (IngestRequestContext, captureRequestContext)
 import Kansoku.Metrics.RequestValidation (validateMetricRequest)
 import Kansoku.Prelude hiding (Context)
 import Network.HTTP.Types.Header (RequestHeaders, hAuthorization, hContentType, hWWWAuthenticate)
@@ -76,8 +78,13 @@ ingestAuthHandler :: Pool.Pool -> AuthHandler Request IngestPrincipal
 ingestAuthHandler pool = ingestAuthHandlerWith (lookupApiKey pool)
 
 ingestAuthHandlerWith :: PrincipalLookup -> AuthHandler Request IngestPrincipal
-ingestAuthHandlerWith lookupPrincipal =
-  mkAuthHandler (fmap IngestPrincipal . authenticateWith lookupPrincipal)
+ingestAuthHandlerWith lookupPrincipal = ingestAuthHandlerWithContext lookupPrincipal (captureRequestContext (const (pure Nothing)))
+
+ingestAuthHandlerWithContext :: PrincipalLookup -> (Request -> IO IngestRequestContext) -> AuthHandler Request IngestPrincipal
+ingestAuthHandlerWithContext lookupPrincipal capture = mkAuthHandler $ \request -> do
+  principal <- authenticateWith lookupPrincipal request
+  metadata <- liftIO (capture request)
+  pure (IngestPrincipal principal metadata)
 
 metricsAuthHandler :: Pool.Pool -> AuthHandler Request MetricsPrincipal
 metricsAuthHandler pool = metricsAuthHandlerWith (lookupApiKey pool)

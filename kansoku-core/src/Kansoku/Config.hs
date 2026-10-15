@@ -13,6 +13,7 @@ where
 
 import Data.Int (Int32, Int64)
 import Data.Text qualified as Text
+import Kansoku.Ingest.GeoIP (parseTrustedRanges)
 import Kansoku.Prelude
 import System.Environment (lookupEnv)
 import Text.Read (readMaybe)
@@ -55,6 +56,8 @@ data Config = Config
     ingestRateBurst :: !Int,
     ingestFutureToleranceSec :: !Int,
     ingestQuarantine :: !Bool,
+    ingestGeoipDb :: !(Maybe FilePath),
+    ingestTrustedProxyCidrs :: ![Text],
     quarantineRetentionDays :: !Int,
     quarantineMaxRows :: !Int,
     quarantineMaxPayloadBytes :: !Int,
@@ -92,6 +95,8 @@ loadConfig = do
   ingestBatchLength <- lookupEnv "KANSOKU_INGEST_MAX_BATCH_LENGTH"
   ingestRate <- lookupEnv "KANSOKU_INGEST_RATE_PER_SEC"
   ingestBurst <- lookupEnv "KANSOKU_INGEST_RATE_BURST"
+  geoipDb <- lookupEnv "KANSOKU_INGEST_GEOIP_DB"
+  trustedProxyCidrs <- lookupEnv "KANSOKU_INGEST_TRUSTED_PROXY_CIDRS"
   quarantineEnabled <- lookupEnv "KANSOKU_INGEST_QUARANTINE"
   quarantineRetention <- lookupEnv "KANSOKU_INGEST_QUARANTINE_RETENTION_DAYS"
   quarantineRows <- lookupEnv "KANSOKU_INGEST_QUARANTINE_MAX_ROWS"
@@ -119,6 +124,12 @@ loadConfig = do
     rate <- parseNonNegativeInt "KANSOKU_INGEST_RATE_PER_SEC" 2000 ingestRate
     burst <- parseNonNegativeInt "KANSOKU_INGEST_RATE_BURST" 10000 ingestBurst
     unless (rate == 0 || burst >= maxBatchLength) (Left (ConfigError "KANSOKU_INGEST_RATE_BURST: enabled burst must cover KANSOKU_INGEST_MAX_BATCH_LENGTH"))
+    let geoipPath = geoipDb >>= \path -> if null path then Nothing else Just path
+        trustedCidrs = maybe [] (map Text.strip . Text.splitOn "," . Text.pack) trustedProxyCidrs
+    case (geoipPath, trustedCidrs) of
+      (Nothing, []) -> pure ()
+      (Just _, _ : _) -> either (Left . ConfigError . ("KANSOKU_INGEST_TRUSTED_PROXY_CIDRS: " <>)) (const (Right ())) (parseTrustedRanges trustedCidrs)
+      _ -> Left (ConfigError "GeoIP requires both KANSOKU_INGEST_GEOIP_DB and nonempty KANSOKU_INGEST_TRUSTED_PROXY_CIDRS")
     enableQuarantine <- parseBool "KANSOKU_INGEST_QUARANTINE" False quarantineEnabled
     retentionDays <- parsePositiveInt "KANSOKU_INGEST_QUARANTINE_RETENTION_DAYS" 14 quarantineRetention
     maxRows <- parsePositiveInt "KANSOKU_INGEST_QUARANTINE_MAX_ROWS" 10000 quarantineRows
@@ -153,6 +164,8 @@ loadConfig = do
           ingestRatePerSec = rate,
           ingestRateBurst = burst,
           ingestQuarantine = enableQuarantine,
+          ingestGeoipDb = geoipPath,
+          ingestTrustedProxyCidrs = trustedCidrs,
           quarantineRetentionDays = retentionDays,
           quarantineMaxRows = maxRows,
           quarantineMaxPayloadBytes = maxPayloadBytes,

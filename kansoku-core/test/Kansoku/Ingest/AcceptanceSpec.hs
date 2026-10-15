@@ -20,6 +20,7 @@ import Kansoku.Ingest.Acceptance
 import Kansoku.Ingest.Api
 import Kansoku.Ingest.Handler (ingestServer)
 import Kansoku.Ingest.Queue (eventsQueueName)
+import Kansoku.Ingest.RequestContext (emptyRequestContext)
 import Kansoku.Ingest.Service (newIngestService)
 import Kansoku.Observability (PipelineMetrics)
 import Kansoku.Postgres (createPool)
@@ -102,7 +103,7 @@ spec metrics = describe "Kansoku.Ingest.Acceptance" $ do
     cfg <- loadConfig >>= either (fail . show) pure
     service <- newIngestService cfg metrics pool queue
     let routes = ingestServer service
-        principal = IngestPrincipal (AuthenticatedPrincipal (ApiKeyId UUID.nil) WriteKey account)
+        principal = IngestPrincipal (AuthenticatedPrincipal (ApiKeyId UUID.nil) WriteKey account) emptyRequestContext
         original = raw sample
         changed = raw (sample & #eventName .~ EventName "changed")
     runHandler (postEvent routes principal original) `shouldReturn` Right (KansokuOk (IngestAck 1 "accepted-event"))

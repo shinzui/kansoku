@@ -21,7 +21,7 @@ import Kansoku.ClickHouse (QueryPool)
 import Kansoku.Event (AccountId, defaultRegistry)
 import Kansoku.Exception (trySynchronous)
 import Kansoku.Logging (logError, runLogStderr)
-import Kansoku.Metrics.Api (MetricResult, MetricsRoutes (..), TimeGrain (..))
+import Kansoku.Metrics.Api (AcquisitionMeasure (..), MetricResult, MetricsRoutes (..), TimeGrain (..))
 import Kansoku.Metrics.Filter (MetricFilter)
 import Kansoku.Metrics.Query qualified as Query
 import Kansoku.Metrics.Query.Validate (QueryLimitError (..), mkSqlName, renderSqlName, validateDateRange)
@@ -34,14 +34,14 @@ metricsServer :: QueryPool -> MetricsRoutes (AsServerT Handler)
 metricsServer pool =
   MetricsRoutes
     { events = metricHandler "events",
-      pageViews = metricHandler "page_views",
+      pageViews = webMetricHandler "page_views",
       sessions = sessionsHandler,
       funnel = funnelHandler,
       retention = retentionHandler,
-      acquisition = notImplemented "acquisition",
+      acquisition = acquisitionHandler,
       featureAdoption = metricHandler "feature_adoption",
       conversion = metricHandler "conversion_rate",
-      users = metricHandler "active_users",
+      users = webMetricHandler "active_users",
       revenue = metricHandler "revenue",
       organizations = notImplemented "organizations",
       custom = notImplemented "custom",
@@ -57,6 +57,16 @@ metricsServer pool =
         Just metric ->
           metricEffToHandler
             (Query.run defaultRegistry pool metric (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain filters))
+
+    webMetricHandler :: Text -> MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> [MetricFilter] -> Maybe Bool -> Handler (KansokuResult MetricResult)
+    webMetricHandler key (MetricsPrincipal principal) fromDay toDay groupBy timeGrain filters bots =
+      case builtinMetric key of
+        Nothing -> pure (KansokuNotFound (notFound "metric_not_found" ("no such metric: " <> key)))
+        Just metric -> metricEffToHandler (Query.run defaultRegistry pool metric (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain filters) {Query.includeBots = fromMaybe False bots})
+
+    acquisitionHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> [MetricFilter] -> Maybe AcquisitionMeasure -> Maybe Bool -> Handler (KansokuResult MetricResult)
+    acquisitionHandler (MetricsPrincipal principal) fromDay toDay groupBy timeGrain filters measure bots =
+      effToHandler (Query.runAcquisition defaultRegistry pool (fromMaybe AcquisitionSessions measure) (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain filters) {Query.includeBots = fromMaybe False bots})
 
     sessionsHandler :: MetricsPrincipal -> Day -> Day -> Maybe TimeGrain -> Handler (KansokuResult MetricResult)
     sessionsHandler (MetricsPrincipal principal) fromDay toDay timeGrain =
@@ -194,7 +204,8 @@ queryRequest accountId fromDay toDay groupBy timeGrain filters =
       to = toDay,
       groupBy = (map Text.strip . Text.splitOn ",") <$> groupBy,
       timeGrain,
-      filters
+      filters,
+      includeBots = False
     }
 
 -- SQL safety audit: groupBy selects from a closed expression whitelist;

@@ -41,13 +41,13 @@ import Servant.Server.Generic (AsServerT)
 ingestServer :: IngestService -> IngestRoutes (AsServerT Handler)
 ingestServer service =
   IngestRoutes
-    { postEvent = \(IngestPrincipal principal) raw -> do
-        result <- Service.submitIngest service Service.Single principal [raw]
+    { postEvent = \(IngestPrincipal principal request) raw -> do
+        result <- Service.submitIngest service Service.Single principal request [raw]
         pure $ case result of
           KansokuOk [Rejected errs] -> validationFailure errs
           _ -> (\_ -> IngestAck {accepted = 1, eventId = unEventId (parsedEvent raw ^. #eventId)}) <$> result,
-      postBatch = \(IngestPrincipal principal) raw -> do
-        result <- Service.submitIngest service Service.Batch principal raw
+      postBatch = \(IngestPrincipal principal request) raw -> do
+        result <- Service.submitIngest service Service.Batch principal request raw
         pure $
           ( \outcomes ->
               BatchAck

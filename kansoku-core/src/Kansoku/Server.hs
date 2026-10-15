@@ -35,7 +35,8 @@ import Kansoku.Api (KansokuAPI (..), kansokuAPI)
 import Kansoku.Api.OpenApi (kansokuOpenApi)
 import Kansoku.Api.Response (ProblemDetails, badRequest, tooLarge)
 import Kansoku.Api.Response qualified as Response
-import Kansoku.Auth.Handler (ingestAuthHandler, metricsAuthHandler)
+import Kansoku.Auth.Handler (ingestAuthHandlerWithContext, metricsAuthHandler)
+import Kansoku.Auth.Store (lookupApiKey)
 import Kansoku.ClickHouse (QueryPool)
 import Kansoku.Config (Config)
 import Kansoku.Event.Contract (schemaCatalog)
@@ -43,7 +44,7 @@ import Kansoku.Event.Registry (defaultRegistry)
 import Kansoku.Exception (catchSynchronous, trySynchronous)
 import Kansoku.Health (probeApplication)
 import Kansoku.Ingest.Handler (ingestServer)
-import Kansoku.Ingest.Service (IngestService, newIngestService)
+import Kansoku.Ingest.Service (IngestService, ingestRequestContext, newIngestService)
 import Kansoku.Logging (Log, logError, logInfo, runLogStderr)
 import Kansoku.Metrics.Handler (metricsServer)
 import Kansoku.Observability (PipelineMetrics)
@@ -122,7 +123,7 @@ kansokuAppWithChecks liveCheck readyCheck _pipelineMetrics config probe pool ser
                     ( serveWithContext
                         kansokuAPI
                         ( envelopeFormatters
-                            :. ingestAuthHandler pool
+                            :. ingestAuthHandlerWithContext (lookupApiKey pool) (ingestRequestContext service)
                             :. metricsAuthHandler pool
                             :. EmptyContext
                         )

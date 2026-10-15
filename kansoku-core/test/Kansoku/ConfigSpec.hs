@@ -37,6 +37,8 @@ configVariables =
     "KANSOKU_INGEST_RATE_BURST",
     "KANSOKU_INGEST_FUTURE_TOLERANCE_SEC",
     "KANSOKU_INGEST_QUARANTINE",
+    "KANSOKU_INGEST_GEOIP_DB",
+    "KANSOKU_INGEST_TRUSTED_PROXY_CIDRS",
     "KANSOKU_INGEST_QUARANTINE_RETENTION_DAYS",
     "KANSOKU_INGEST_QUARANTINE_MAX_ROWS",
     "KANSOKU_INGEST_QUARANTINE_MAX_PAYLOAD_BYTES",
@@ -49,6 +51,21 @@ configVariables =
 
 spec :: Spec
 spec = around_ preserveConfigEnvironment $ describe "Kansoku.Config.loadConfig" $ do
+  it "validates optional GeoIP configuration without requiring it by default" $ do
+    clearEnv
+    defaults <- loadConfig >>= either (fail . show) pure
+    defaults ^. #ingestGeoipDb `shouldBe` Nothing
+    defaults ^. #ingestTrustedProxyCidrs `shouldBe` []
+    setEnv "KANSOKU_INGEST_GEOIP_DB" "country.mmdb"
+    missingTrust <- loadConfig
+    missingTrust `shouldSatisfy` (not . isRight)
+    setEnv "KANSOKU_INGEST_TRUSTED_PROXY_CIDRS" "127.0.0.1/32, ::1/128"
+    configured <- loadConfig >>= either (fail . show) pure
+    configured ^. #ingestTrustedProxyCidrs `shouldBe` ["127.0.0.1/32", "::1/128"]
+    setEnv "KANSOKU_INGEST_TRUSTED_PROXY_CIDRS" "127.0.0.1"
+    invalid <- loadConfig
+    invalid `shouldSatisfy` (not . isRight)
+
   it "uses defaults when nothing is set" $ do
     clearEnv
     result <- loadConfig

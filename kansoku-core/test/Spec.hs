@@ -13,12 +13,16 @@ import Kansoku.HttpTelemetrySpec qualified
 import Kansoku.Identity.CacheSpec qualified
 import Kansoku.Ingest.AcceptanceSpec qualified
 import Kansoku.Ingest.AdmissionSpec qualified
+import Kansoku.Ingest.EnrichmentIntegrationSpec qualified
+import Kansoku.Ingest.EnrichmentSpec qualified
+import Kansoku.Ingest.GeoIPSpec qualified
 import Kansoku.Ingest.HandlerSpec qualified
 import Kansoku.Ingest.QueueSpec qualified
 import Kansoku.Ingest.RateLimitSpec qualified
 import Kansoku.Ingest.ServiceSpec qualified
 import Kansoku.Ingest.TimestampSpec qualified
 import Kansoku.LimitsSpec qualified
+import Kansoku.Metrics.AcquisitionIntegrationSpec qualified
 import Kansoku.Metrics.FilterIntegrationSpec qualified
 import Kansoku.Metrics.FilterSpec qualified
 import Kansoku.Metrics.HandlerSpec qualified
@@ -69,6 +73,9 @@ normalTests = hspec $ do
   Kansoku.Identity.CacheSpec.spec
   Kansoku.Ingest.AcceptanceSpec.spec metrics
   Kansoku.Ingest.HandlerSpec.spec
+  Kansoku.Ingest.GeoIPSpec.spec
+  Kansoku.Ingest.EnrichmentIntegrationSpec.spec metrics
+  Kansoku.Ingest.EnrichmentSpec.spec
   Kansoku.Ingest.QueueSpec.spec
   Kansoku.Ingest.TimestampSpec.spec
   Kansoku.Ingest.ServiceSpec.spec metrics
@@ -78,6 +85,7 @@ normalTests = hspec $ do
   Kansoku.LimitsSpec.spec
   Kansoku.MigrationsSpec.spec
   Kansoku.Metrics.FilterSpec.spec
+  Kansoku.Metrics.AcquisitionIntegrationSpec.spec
   Kansoku.Metrics.FilterIntegrationSpec.spec
   Kansoku.Metrics.HandlerSpec.spec
   Kansoku.Metrics.LimitsSpec.spec

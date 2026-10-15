@@ -14,6 +14,7 @@ where
 import Data.UUID (UUID)
 import Data.UUID qualified as UUID
 import Kansoku.Event (AccountId)
+import Kansoku.Ingest.RequestContext (IngestRequestContext)
 import Kansoku.Prelude
 
 data CredentialKind = WriteKey | ServiceToken
@@ -44,7 +45,7 @@ data AuthenticatedPrincipal = AuthenticatedPrincipal
   }
   deriving stock (Generic, Eq, Show)
 
-newtype IngestPrincipal = IngestPrincipal {principal :: AuthenticatedPrincipal}
+data IngestPrincipal = IngestPrincipal {principal :: !AuthenticatedPrincipal, requestContext :: !IngestRequestContext}
   deriving stock (Generic, Eq, Show)
 
 newtype MetricsPrincipal = MetricsPrincipal {principal :: AuthenticatedPrincipal}

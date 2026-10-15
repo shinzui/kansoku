@@ -154,3 +154,12 @@ dispose failed connections and their temporary identity snapshots. The independe
 result cap still applies. Resident identity Join tables have separate bounded per-connection
 footprints described in [operations](operations.md); per-query memory is not a process-wide
 or deployment-wide memory quota.
+
+## Optional country enrichment
+
+Geography is off unless both `KANSOKU_INGEST_GEOIP_DB` (a readable supported country/city
+MMDB path) and `KANSOKU_INGEST_TRUSTED_PROXY_CIDRS` (comma-separated explicit IPv4/IPv6 CIDRs)
+are configured. Missing/invalid paired configuration or a corrupt/unsupported configured
+file fails startup. The locked Nix environment supplies the reader automatically.
+[Web enrichment](web-enrichment.md) describes the trust chain, missing-country behavior,
+versioned classifications and request-address privacy boundary.

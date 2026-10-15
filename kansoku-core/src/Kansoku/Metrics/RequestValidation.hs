@@ -36,8 +36,10 @@ validateMetricRequest request = case allowedParameters (decodePathSegments (rawP
 
 allowedParameters :: [Text] -> Maybe [Text]
 allowedParameters = \case
+  ["metrics", "acquisition"] -> Just ["from", "to", "groupBy", "timeGrain", "filter", "measure", "includeBots"]
+  ["metrics", endpoint] | endpoint `elem` ["page-views", "users"] -> Just ["from", "to", "groupBy", "timeGrain", "filter", "includeBots"]
   ["metrics", endpoint]
-    | endpoint `elem` ["events", "page-views", "acquisition", "feature-adoption", "conversion", "users", "revenue", "organizations", "custom"] ->
+    | endpoint `elem` ["events", "feature-adoption", "conversion", "revenue", "organizations", "custom"] ->
         Just ["from", "to", "groupBy", "timeGrain", "filter"]
   ["metrics", "sessions"] -> Just ["from", "to", "timeGrain"]
   ["metrics", "funnel"] -> Just ["from", "to", "steps", "window"]

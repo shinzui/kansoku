@@ -2,7 +2,7 @@
 type: Architecture Decision Record
 title: SDK-grade ingest contract boundaries
 description: Accept syntactically valid ingest batches partially, cap request size and count, and scope CORS to /v1/* so SDKs get stable retry semantics.
-timestamp: 2026-10-15T18:26:32Z
+timestamp: 2026-10-15T22:09:28Z
 generated:
   by: human:kansoku-maintainers
   at: 2026-07-19T00:00:00Z
@@ -24,8 +24,8 @@ when one event was invalid, exposed no CORS policy, and placed no limit on body 
 
 The API uses one Servant `KansokuResult` algebra and shared MultiVerb error tail across analytics
 routes. Operational routes remain WAI-level, while `/v1/*` ingest and `/metrics/*` queries share
-the Servant application. A later authentication initiative will add public write keys or service
-tokens to ingest and protected read credentials to metrics.
+the Servant application. The authentication boundary in [ADR-3](0003-api-key-authentication-and-account-scoped-analytics.md)
+requires write keys or service tokens for ingest and service tokens for metrics.
 
 ## Decision
 
@@ -56,6 +56,14 @@ them.
 HTTP 413 is part of the shared MultiVerb error tail, not an ingest-only fork. This keeps
 `KansokuResult` conversion total across every route and keeps the served API, generic Haskell
 client, and generated OpenAPI document derived from one response algebra.
+
+New queue publications carry the validated public event and server enrichment in a private
+version-one envelope. The ingest AuthProtect result supplies bounded request metadata to the
+shared service; callers cannot choose authoritative categorical columns. Acceptance retries
+retain the first enrichment and writer replay preserves it. Older development messages decode
+with explicit unknown/version-zero enrichment. See
+[ADR-12](0012-server-enrichment-and-first-touch-web-acquisition.md) for the enrichment,
+proxy-trust and analytical population decisions under implementation.
 
 ## Alternatives considered
 

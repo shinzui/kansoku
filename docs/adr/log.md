@@ -1,6 +1,7 @@
 # Bundle Update Log
 
 ## 2026-10-15
+* **Update**: Record the private enrichment envelope, trusted country lookup and first-touch acquisition boundary; retain proposed status until packaged consumer acceptance.
 * **Update**: Update ADR-4, ADR-6 and ADR-9 for typed JSON filters, nullable structural groups, exact activity and query work budgets.
 * **Update**: Record conservative session-aware subjects, exact query connection evidence ownership and native driver command/query repairs.
 * **Update**: Include the released batcher ready-output buffer in the conservative retained-delivery bound.

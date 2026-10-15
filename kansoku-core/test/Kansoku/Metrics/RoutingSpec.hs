@@ -4,7 +4,7 @@
 
 -- | Pins every analytics-contract path to a distinct sentinel handler.
 --
--- Ten metric routes have exactly the same handler type. The NamedRoutes record
+-- Six metric routes have exactly the same handler type. The NamedRoutes record
 -- cannot detect a same-typed transposition statically, so these runtime assertions
 -- are the load-bearing dispatch guard. Deliberately swapping the @users@ and
 -- @organizations@ sentinels makes the users assertion observe
@@ -48,6 +48,7 @@ import Kansoku.Event
     schemaCatalog,
   )
 import Kansoku.Ingest.Api qualified as Ingest
+import Kansoku.Ingest.RequestContext (emptyRequestContext)
 import Kansoku.Metrics.Api qualified as Metrics
 import Kansoku.Metrics.Filter (MetricFilter)
 import Kansoku.Server (envelopeFormatters)
@@ -173,7 +174,7 @@ assertMetricRoute manager port (path, expected) = do
       Metrics.metric result `shouldBe` expected
 
 stubPaths :: [String]
-stubPaths = ["acquisition", "organizations", "custom"]
+stubPaths = ["organizations", "custom"]
 
 assertIngestRoutes :: HTTP.Manager -> Warp.Port -> Expectation
 assertIngestRoutes manager port = do
@@ -230,7 +231,7 @@ sentinelApplication =
 sentinelContext :: Context '[ErrorFormatters, AuthHandler Request IngestPrincipal, AuthHandler Request MetricsPrincipal]
 sentinelContext =
   envelopeFormatters
-    :. mkAuthHandler (const (pure (IngestPrincipal sentinelPrincipal)))
+    :. mkAuthHandler (const (pure (IngestPrincipal sentinelPrincipal emptyRequestContext)))
     :. mkAuthHandler (const (pure (MetricsPrincipal sentinelPrincipal)))
     :. EmptyContext
 
@@ -261,14 +262,14 @@ sentinelMetricsServer :: Metrics.MetricsRoutes (AsServerT Handler)
 sentinelMetricsServer =
   Metrics.MetricsRoutes
     { Metrics.events = standardSentinel "events",
-      Metrics.pageViews = standardSentinel "page-views",
+      Metrics.pageViews = webSentinel "page-views",
       Metrics.sessions = \_principal _from _to _grain -> pure (Response.KansokuOk (sentinelResult "sessions")),
       Metrics.funnel = funnelSentinel,
       Metrics.retention = retentionSentinel,
-      Metrics.acquisition = stubSentinel "acquisition",
+      Metrics.acquisition = \principal fromDay toDay groupBy grain filters _measure _bots -> standardSentinel "acquisition" principal fromDay toDay groupBy grain filters,
       Metrics.featureAdoption = standardSentinel "feature-adoption",
       Metrics.conversion = standardSentinel "conversion",
-      Metrics.users = standardSentinel "users",
+      Metrics.users = webSentinel "users",
       Metrics.revenue = standardSentinel "revenue",
       Metrics.organizations = stubSentinel "organizations",
       Metrics.custom = stubSentinel "custom",
@@ -277,6 +278,8 @@ sentinelMetricsServer =
       Metrics.experimentFunnel = experimentFunnelSentinel
     }
   where
+    webSentinel name principal fromDay toDay groupBy grain filters _bots = standardSentinel name principal fromDay toDay groupBy grain filters
+
     standardSentinel :: Text -> MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe Metrics.TimeGrain -> [MetricFilter] -> Handler (Response.KansokuResult Metrics.MetricResult)
     standardSentinel name principal fromDay toDay groupBy grain _filters = metricSentinel name principal fromDay toDay groupBy grain
 

@@ -31,7 +31,7 @@ import Text.Read (readMaybe)
 
 queriesFor :: Day -> Day -> Map.Map Text Text
 queriesFor fromDay toDay =
-  let req = QueryRequest (AccountId "bench-a") fromDay toDay Nothing Nothing []
+  let req = QueryRequest (AccountId "bench-a") fromDay toDay Nothing Nothing [] False
       step value = either (error . show) id (mkSqlName value)
       ratio = either (error . show) id (buildSQL defaultRegistry (Ratioed conversionRate) req)
    in Map.fromList

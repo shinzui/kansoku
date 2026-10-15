@@ -7,6 +7,7 @@ module Kansoku.ClickHouse.EventRow
     EventRow (..),
     ProjectionColumns,
     eventRowFromEvent,
+    eventRowFromQueuedEvent,
   )
 where
 
@@ -20,6 +21,7 @@ import Data.Map.Strict (Map)
 import Data.Text.Encoding qualified as Text
 import Data.Word (Word16, Word64)
 import Kansoku.Event
+import Kansoku.Ingest.QueuedEvent (QueuedEvent, legacyQueuedEvent)
 import Kansoku.Prelude
 
 type EventColumns =
@@ -48,7 +50,14 @@ type EventColumns =
      Column "properties" ChString,
      Column "context" ChString,
      Column "identifiers" ChString,
-     Column "schema_version" UInt16
+     Column "schema_version" UInt16,
+     Column "browser_family" ChString,
+     Column "os_family" ChString,
+     Column "device_class" ChString,
+     Column "is_bot" Bool,
+     Column "channel" ChString,
+     Column "country_code" ChString,
+     Column "enrichment_version" UInt16
    ]
 
 data EventRow = EventRow
@@ -77,7 +86,14 @@ data EventRow = EventRow
     properties :: !ByteString,
     context :: !ByteString,
     identifiers :: !ByteString,
-    schema_version :: !Word16
+    schema_version :: !Word16,
+    browser_family :: !ByteString,
+    os_family :: !ByteString,
+    device_class :: !ByteString,
+    is_bot :: !Bool,
+    channel :: !ByteString,
+    country_code :: !ByteString,
+    enrichment_version :: !Word16
   }
   deriving stock (Generic, Eq, Show)
   deriving anyclass (ClickHaskell EventColumns)
@@ -107,35 +123,47 @@ newtype CountRow = CountRow {count :: Word64}
   deriving anyclass (ClickHaskell CountColumns)
 
 eventRowFromEvent :: AnalyticsEvent -> EventRow
-eventRowFromEvent event =
-  EventRow
-    { event_id = textBytes (unEventId (event ^. #eventId)),
-      event_name = textBytes (unEventName (event ^. #eventName)),
-      source = textBytes (eventSourceToText (event ^. #source)),
-      source_service = maybe "" textBytes (event ^. #sourceService),
-      occurred_at = event ^. #occurredAt,
-      received_at = event ^. #receivedAt,
-      anonymous_id = maybe "" (textBytes . unAnonymousId) (event ^. #anonymousId),
-      user_id = maybe "" (textBytes . unUserId) (event ^. #userId),
-      organization_id = maybe "" (textBytes . unOrganizationId) (event ^. #organizationId),
-      account_id = maybe "" (textBytes . unAccountId) (event ^. #accountId),
-      session_id = maybe "" (textBytes . unSessionId) (event ^. #sessionId),
-      url = maybe "" textBytes (event ^. #url),
-      referrer = maybe "" textBytes (event ^. #referrer),
-      utm_source = maybe "" textBytes (event ^. #utmSource),
-      utm_medium = maybe "" textBytes (event ^. #utmMedium),
-      utm_campaign = maybe "" textBytes (event ^. #utmCampaign),
-      utm_content = maybe "" textBytes (event ^. #utmContent),
-      utm_term = maybe "" textBytes (event ^. #utmTerm),
-      correlation_id = maybe "" (textBytes . unCorrelationId) (event ^. #correlationId),
-      causation_id = maybe "" (textBytes . unCausationId) (event ^. #causationId),
-      source_event_id = maybe "" (textBytes . unSourceEventId) (event ^. #sourceEventId),
-      source_global_position = nonNegativeWord64 =<< event ^. #sourceGlobalPosition,
-      properties = objectBytes (event ^. #properties),
-      context = objectBytes (event ^. #context),
-      identifiers = maybe "{}" identifiersBytes (event ^. #identifiers),
-      schema_version = boundedSchemaVersion (event ^. #schemaVersion)
-    }
+eventRowFromEvent = eventRowFromQueuedEvent . legacyQueuedEvent
+
+eventRowFromQueuedEvent :: QueuedEvent -> EventRow
+eventRowFromQueuedEvent queued =
+  let event = queued ^. #event
+      derived = queued ^. #enrichment
+   in EventRow
+        { event_id = textBytes (unEventId (event ^. #eventId)),
+          event_name = textBytes (unEventName (event ^. #eventName)),
+          source = textBytes (eventSourceToText (event ^. #source)),
+          source_service = maybe "" textBytes (event ^. #sourceService),
+          occurred_at = event ^. #occurredAt,
+          received_at = event ^. #receivedAt,
+          anonymous_id = maybe "" (textBytes . unAnonymousId) (event ^. #anonymousId),
+          user_id = maybe "" (textBytes . unUserId) (event ^. #userId),
+          organization_id = maybe "" (textBytes . unOrganizationId) (event ^. #organizationId),
+          account_id = maybe "" (textBytes . unAccountId) (event ^. #accountId),
+          session_id = maybe "" (textBytes . unSessionId) (event ^. #sessionId),
+          url = maybe "" textBytes (event ^. #url),
+          referrer = maybe "" textBytes (event ^. #referrer),
+          utm_source = maybe "" textBytes (event ^. #utmSource),
+          utm_medium = maybe "" textBytes (event ^. #utmMedium),
+          utm_campaign = maybe "" textBytes (event ^. #utmCampaign),
+          utm_content = maybe "" textBytes (event ^. #utmContent),
+          utm_term = maybe "" textBytes (event ^. #utmTerm),
+          correlation_id = maybe "" (textBytes . unCorrelationId) (event ^. #correlationId),
+          causation_id = maybe "" (textBytes . unCausationId) (event ^. #causationId),
+          source_event_id = maybe "" (textBytes . unSourceEventId) (event ^. #sourceEventId),
+          source_global_position = nonNegativeWord64 =<< event ^. #sourceGlobalPosition,
+          properties = objectBytes (event ^. #properties),
+          context = objectBytes (event ^. #context),
+          identifiers = maybe "{}" identifiersBytes (event ^. #identifiers),
+          schema_version = boundedSchemaVersion (event ^. #schemaVersion),
+          browser_family = textBytes (derived ^. #browserFamily),
+          os_family = textBytes (derived ^. #osFamily),
+          device_class = textBytes (derived ^. #deviceClass),
+          is_bot = derived ^. #isBot,
+          channel = textBytes (derived ^. #channel),
+          country_code = maybe "" textBytes (derived ^. #countryCode),
+          enrichment_version = fromIntegral (derived ^. #ruleVersion)
+        }
 
 boundedSchemaVersion :: Maybe Int -> Word16
 boundedSchemaVersion =

@@ -14,6 +14,12 @@ author: Nadeem Bitar
 maintainer: nadeem@gmail.com
 category: Web
 build-type: Simple
+extra-source-files:
+  test/fixtures/geoip/GeoIP2-Country-Test.mmdb
+  test/fixtures/geoip/GeoIP2-ISP-Test.mmdb
+  test/fixtures/geoip/LICENSE-MIT
+  test/fixtures/geoip/README.md
+  test/fixtures/user-agents.json
 
 common common
   ghc-options:
@@ -47,13 +53,19 @@ library
     Kansoku.Health
     Kansoku.Identity.Cache
     Kansoku.Ingest.Acceptance
+    Kansoku.Ingest.Channel
+    Kansoku.Ingest.Enrichment
+    Kansoku.Ingest.GeoIP
     Kansoku.Ingest.Handler
     Kansoku.Ingest.Producer
     Kansoku.Ingest.Quarantine
     Kansoku.Ingest.Queue
+    Kansoku.Ingest.QueuedEvent
     Kansoku.Ingest.RateLimit
+    Kansoku.Ingest.RequestContext
     Kansoku.Ingest.Service
     Kansoku.Ingest.Timestamp
+    Kansoku.Ingest.UserAgent
     Kansoku.Logging
     Kansoku.Metrics.Definition
     Kansoku.Metrics.Handler
@@ -61,6 +73,7 @@ library
     Kansoku.Metrics.Query.Dimension
     Kansoku.Metrics.Query.Filter
     Kansoku.Metrics.Query.Property
+    Kansoku.Metrics.Query.Session
     Kansoku.Metrics.Query.Validate
     Kansoku.Metrics.Registry
     Kansoku.Metrics.RequestValidation
@@ -76,6 +89,8 @@ library
     Kansoku.Writer.Recovery
     Kansoku.Writer.Run
 
+  c-sources: cbits/geoip.c
+  pkgconfig-depends: libmaxminddb >=1.14.1 && <2
   build-depends:
     ClickHaskell,
     aeson >=2.2.1,
@@ -97,7 +112,10 @@ library
     hs-opentelemetry-instrumentation-wai,
     hs-opentelemetry-sdk,
     http-types,
+    iproute >=1.7.15 && <1.8,
     kansoku-api,
+    network,
+    network-uri >=2.6.4.2 && <2.7,
     pg-migrate,
     pgmq-core,
     pgmq-effectful,
@@ -143,12 +161,16 @@ test-suite kansoku-core-test
     Kansoku.Identity.CacheSpec
     Kansoku.Ingest.AcceptanceSpec
     Kansoku.Ingest.AdmissionSpec
+    Kansoku.Ingest.EnrichmentIntegrationSpec
+    Kansoku.Ingest.EnrichmentSpec
+    Kansoku.Ingest.GeoIPSpec
     Kansoku.Ingest.HandlerSpec
     Kansoku.Ingest.QueueSpec
     Kansoku.Ingest.RateLimitSpec
     Kansoku.Ingest.ServiceSpec
     Kansoku.Ingest.TimestampSpec
     Kansoku.LimitsSpec
+    Kansoku.Metrics.AcquisitionIntegrationSpec
     Kansoku.Metrics.FilterIntegrationSpec
     Kansoku.Metrics.FilterSpec
     Kansoku.Metrics.HandlerSpec
@@ -192,6 +214,7 @@ test-suite kansoku-core-test
     http-api-data,
     http-client,
     http-types,
+    iproute,
     kansoku-api,
     kansoku-core,
     network,

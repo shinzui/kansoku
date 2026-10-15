@@ -7,6 +7,7 @@ module Kansoku.ClickHouse
     clickHouseConfigFromConfig,
     countEvents,
     insertEvents,
+    insertQueuedEvents,
     insertWriterEvents,
     newWriterConnection,
     openClickHouse,
@@ -57,6 +58,7 @@ import Kansoku.ClickHouse.EventRow
 import Kansoku.Config qualified as Config
 import Kansoku.Event (AnalyticsEvent)
 import Kansoku.Identity.Cache (IdentityCacheState, prepareIdentityCache)
+import Kansoku.Ingest.QueuedEvent (QueuedEvent)
 import Kansoku.Prelude
 
 data ClickHouseConfig = ClickHouseConfig
@@ -88,13 +90,13 @@ data WriterConnection = WriterConnection !ClickHouseConfig !(MVar (Maybe Connect
 newWriterConnection :: ClickHouseConfig -> IO WriterConnection
 newWriterConnection config = WriterConnection config <$> newMVar Nothing
 
-insertWriterEvents :: WriterConnection -> [AnalyticsEvent] -> IO ()
+insertWriterEvents :: WriterConnection -> [QueuedEvent] -> IO ()
 insertWriterEvents (WriterConnection config connectionCell) events = do
   result <-
     modifyMVar connectionCell $ \cachedConnection -> do
       attempted <- try @SomeException $ do
         connection <- maybe (openClickHouse config) pure cachedConnection
-        insertEvents connection events
+        insertQueuedEvents connection events
         pure connection
       pure $ case attempted of
         Left exception -> (Nothing, Left exception)
@@ -194,6 +196,10 @@ connectionArgs ClickHouseConfig {clickHouseHost = host, clickHouseTcpPort = port
 insertEvents :: Connection -> [AnalyticsEvent] -> IO ()
 insertEvents conn events =
   insert (intoTable @"events_raw" @EventColumns @EventRow) conn (eventRowFromEvent <$> events)
+
+insertQueuedEvents :: Connection -> [QueuedEvent] -> IO ()
+insertQueuedEvents conn events =
+  insert (intoTable @"events_raw" @EventColumns @EventRow) conn (eventRowFromQueuedEvent <$> events)
 
 selectEventProjections :: Connection -> IO [EventProjection]
 selectEventProjections conn =

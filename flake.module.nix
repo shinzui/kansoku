@@ -13,6 +13,15 @@
 {
   perSystem = { system, pkgs, config, ... }:
     let
+      # Released mori://maxmind/libmaxminddb 1.14.1; upstream tag/release verified.
+      geoipReader = pkgs.libmaxminddb.overrideAttrs (old: {
+        nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ pkgs.pkg-config ];
+        version = "1.14.1";
+        src = pkgs.fetchurl {
+          url = "https://github.com/maxmind/libmaxminddb/releases/download/1.14.1/libmaxminddb-1.14.1.tar.gz";
+          sha256 = "0b95rhp3p0pzgdfvh6945mgrjg3b6nlyhlxvm96vry1r2ga8fp6a";
+        };
+      });
       haskellPackages = pkgs.haskell.packages."ghc9124".override {
         overrides = self: super:
           let
@@ -202,6 +211,7 @@
       kansokuApi = haskellPackages.callCabal2nix "kansoku-api" (builtins.path { path = inputs.self + "/kansoku-api"; name = "kansoku-api-source"; filter = path: _type: builtins.baseNameOf path != "hurl"; }) { };
       kansokuCore = pkgs.haskell.lib.dontCheck (haskellPackages.callCabal2nix "kansoku-core" (builtins.path { path = inputs.self + "/kansoku-core"; name = "kansoku-core-source"; }) {
         kansoku-api = kansokuApi;
+        libmaxminddb = geoipReader;
       });
       kansokuClient = haskellPackages.callCabal2nix "kansoku-client" (builtins.path { path = inputs.self + "/kansoku-client"; name = "kansoku-client-source"; }) {
         kansoku-api = kansokuApi;
@@ -213,6 +223,7 @@
     in
     {
       haskellProject.extraDevPackages = [
+        geoipReader
         pkgs.hurl
         pkgs.vacuum-go
         pkgs.python3
@@ -228,6 +239,7 @@
         kansoku-client = kansokuClient;
         kansoku-core = kansokuCore;
         kansoku-server = kansokuServer;
+        libmaxminddb = geoipReader;
       };
     };
 }

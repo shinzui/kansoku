@@ -23,6 +23,11 @@ provenance:
       at: 2026-10-15T15:43:15Z
       mode: "update"
       note: "Reconcile first-release APIs, domain semantics, dependencies and acceptance with the source-validated MP-5 review."
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-10-15T21:31:48Z
+      mode: "implement"
+      note: "Begin versioned queued enrichment, deterministic web classification and attribution, and trusted optional country lookup after EP-31 acceptance."
 ---
 
 # Acquisition and device enrichment with bot flagging
@@ -35,21 +40,77 @@ Make acquisition and device analysis useful without storing request IP addresses
 is a deterministic, documented approximation; session attribution and bot exclusion must not
 change depending on query fast paths.
 
+## Developer Workflow Acceptance
+
+Starting state: a developer has the previously supported server/SDK, an account write key
+and service token, and ordinary web page capture with nonempty session IDs. The outcome is
+session-first channel/device/country analysis without changing event JSON, naming internal
+queue versions, generating contracts manually or adding classification flags to producers.
+After the normal database migration/start workflow, the ordinary reporting command is:
+
+```bash
+curl --get "$KANSOKU_URL/metrics/acquisition" \
+  --header "Authorization: Bearer $KANSOKU_SERVICE_TOKEN" \
+  --data-urlencode "from=2026-07-01" --data-urlencode "to=2026-07-03"
+```
+
+This defaults to sessions grouped by channel with bots excluded. Adding
+`--data-urlencode "groupBy=channel,browser_family"` is the only change needed for a device
+breakdown. Repeating the query and retrying the producer preserve the same answer. Existing
+queued development messages remain readable. No enrichment-specific SDK update or manual
+row backfill is required. GeoIP is optional and silent when off; opting in requires obtaining
+a licensed country/city MMDB and setting the two documented database/trusted-CIDR values.
+The trust boundary cannot safely be inferred. Invalid configured databases fail startup
+with a clear next action, never an unexplained missing native dependency.
+
+The existing fresh-clone quickstart currently requires three terminals, entering the Nix
+shell, starting stores, applying two migration commands, issuing two keys and starting the
+server. Count those steps rather than hiding them in test fixtures. The MasterPlan's final
+EP-38 consumption guide records and proves the supported setup/reuse/recovery workflow;
+this child's acceptance must prove an actual pre-change producer reaches the new reporting
+outcome through public commands and HTTP, with normal defaults and no direct analytics inserts.
+Source-built Nix artifacts are not a published release or proof of the user's installed version.
+
 ## Progress
 
 
-- [ ] M1: Internal ingest enrichment survives the queue and writer unchanged.
-- [ ] M2: Device, bot and channel fixtures pass with documented classification precedence.
+- [x] M1: Internal ingest enrichment survives the queue and writer unchanged.
+- [x] M2: Device, bot and channel fixtures pass with documented classification precedence.
 - [ ] M3: Acquisition and web metric dimensions use consistent session attribution and filters.
-- [ ] M4: Optional country lookup trusts only an explicitly configured proxy boundary.
+- [x] M4: Optional country lookup trusts only an explicitly configured proxy boundary.
 
 ## Surprises & Discoveries
 
 
-The current Servant ingest handler does not receive a WAI Request. Derived fields do not exist
-in AnalyticsEvent or its queue encoding. A configured header name alone does not establish
+At implementation start, ordinary Servant ingest handlers did not receive a WAI Request and
+queue records had no derived fields. AnalyticsEvent remains public; the private QueuedEvent now
+carries enrichment independently. A configured header name alone does not establish
 trust. The original channel rule classified Facebook paid traffic as paid search before reaching
 its paid-social branch.
+
+Implementation evidence (2026-10-15): GHC 9.12.4 and the Nix package build accept released
+`mori://maxmind/libmaxminddb` 1.14.1 (tag `4a3d17a621c0ebcb81498fd34d313f67fd940ab5`).
+The pinned Nix package was 1.13.3; the release override adds its newly required pkg-config
+build tool. Seven native reader/proxy tests pass against owned synthetic MIT-licensed
+`mori://maxmind/MaxMind-DB` country data. Missing/corrupt DBs, strict CIDRs, IPv4/IPv6,
+spoofed, malformed, duplicate and all-trusted forwarding chains are covered. Full ingest
+and observability country acceptance remains open.
+
+M1's actual HTTP→PGMQ→writer→ClickHouse replay fixture passes on the packaged 26.8.2.7
+engine: producer-derived-field spoofing is ignored, first Edge/Windows/GB/paid-social values
+survive changed retry headers, no request addresses or credential enter the queue, canonical
+replay stays unique, and the rich resolver returns those same fields. Migration 0019 applies
+and retains the public seven-column projection. The old queue form decodes with explicit
+unknown/version-zero enrichment; new acceptance stores the version-one private envelope.
+The 142 distinct synthetic user-agent fixtures plus channel/queue/bot tests now pass all
+146 examples. They caught an Opera Mini mobile/tablet precedence error; explicit mobile
+signatures now precede Android's tablet heuristic. This records synthetic label agreement,
+not empirical classification accuracy. Four actual compiler/native acquisition cases pass:
+cross-midnight first touch, source-service/account isolation, first resolved-user and anonymous
+namespaces, row versus session bot populations, nullable dual grouping and 10000/10001
+complete-or-error bounds. See `docs/guides/web-enrichment.md` for the versioned rule table.
+Full packaged acceptance and legacy-message regressions are still required before this
+whole child is Complete.
 
 ## Decision Log
 
@@ -57,11 +118,43 @@ its paid-social branch.
 On 2026-10-15 separate the public AnalyticsEvent from a versioned internal queued envelope.
 Country enrichment requires trusted peer verification and a maintained MMDB reader; do not
 write a new binary database parser as a fallback. Acquisition is session-first attribution.
+Reuse the existing request-aware Servant AuthProtect boundary: its ingest result carries only
+bounded header user-agent text and a country code into the shared ingest service. The ordinary
+handler never receives or fabricates a WAI Request, and public route/client types need no new
+request-metadata argument. Producer context remains raw input, while authoritative browser,
+OS/device, bot, channel and country columns come from the private envelope. Header user-agent
+wins over producer categorical claims; unknown or oversized (>2048 byte) agents are unknown.
+An explicit Boolean context.bot=true is ORed with the versioned bot signatures; false cannot
+clear a match. Non-web traffic retains unknown browser/OS/device categories.
+
+Dependency lookup found no Mori entries for these native/network readers. The authoritative
+Hackage registry and upstream tags agree on `mori://kazu-yamamoto/iproute` 1.7.15 and
+nondeprecated `mori://haskell/network-uri`
+2.6.4.2 (2.7.0.0 is deprecated). Their sources were read directly before use. Native reader
+APIs come from `mori://maxmind/libmaxminddb`, project-relative `doc/libmaxminddb.md`
+(artifact-level URI pending), and the binding implements no MMDB decoder.
 
 ## Outcomes & Retrospective
 
 
-Planning reviewed; parser selection and native country lookup remain implementation proofs.
+M1, M2 and M4 pass native and packaged acceptance. The corrected full native run passes
+384 examples, with zero failures or pending required cases; `just check` passes 343 deterministic
+core examples, 17 client examples, four probes, generated contracts, OpenAPI lint, strict
+validation of all twelve ADRs and every telemetry/lifecycle mode. Private packaged evidence:
+`.dev/acceptance/run-20n0yu1x/sanitized` (384 core, 18 live-client examples, four probes,
+51 Hurl requests and native recovery/limits/replay/identity proofs).
+
+The packaged public workflow sends ordinary event JSON through the real asynchronous writer,
+retries with changed headers, then queries first-touch device/country/session/user results.
+It passes in legacy/http/http-dup telemetry modes with neither test request address in complete
+logs/spans. Configured missing, corrupt and unsupported databases fail startup clearly; a
+separate packaged run verifies geography off and missing country despite spoofed body/header
+claims. M3 remains open for the pinned SDK contract checks and final packaging verification.
+
+A source-archive check caught Cabal's rejection of an extensionless fixture glob. Explicit
+fixture paths fix it, and `cabal sdist kansoku-core` now includes the binding, both MMDBs,
+their license/attribution and the synthetic user-agent corpus. The functional packaged run
+above preceded this metadata-only fix; rebuild the final package before whole-child acceptance.
 
 ## Context and Orientation
 

@@ -5,6 +5,7 @@ module Kansoku.Ingest.Service
     newIngestService,
     newIngestServiceWithClock,
     submitIngest,
+    ingestRequestContext,
     batchLengthError,
     stampAuthenticatedEvent,
   )
@@ -22,12 +23,16 @@ import Kansoku.Config (Config)
 import Kansoku.Event
 import Kansoku.Ingest.Acceptance
 import Kansoku.Ingest.Api (IngestEvent (..))
+import Kansoku.Ingest.GeoIP (newCountryLookup)
 import Kansoku.Ingest.Quarantine (captureRejections)
+import Kansoku.Ingest.QueuedEvent (enrichedQueuedEvent)
 import Kansoku.Ingest.RateLimit
+import Kansoku.Ingest.RequestContext (IngestRequestContext, captureRequestContext)
 import Kansoku.Ingest.Timestamp
 import Kansoku.Logging (logError, runLogStderr)
 import Kansoku.Observability (PipelineMetrics)
 import Kansoku.Prelude
+import Network.Wai (Request)
 import Pgmq.Types (QueueName)
 import Prometheus qualified as P
 import Servant (Handler)
@@ -35,19 +40,24 @@ import Servant (Handler)
 data IngestTransport = Single | Batch | Beacon
   deriving stock (Eq, Show)
 
-data IngestService = IngestService Config PipelineMetrics Pool.Pool QueueName RateLimiter
+data IngestService = IngestService Config PipelineMetrics Pool.Pool QueueName RateLimiter (Request -> IO IngestRequestContext)
 
 newIngestService :: Config -> PipelineMetrics -> Pool.Pool -> QueueName -> IO IngestService
 newIngestService cfg metrics pool queue = do
   validateAdmissionConfig cfg
   limiter <- newRateLimiter (RatePolicy (cfg ^. #ingestRatePerSec) (cfg ^. #ingestRateBurst) 10000)
-  pure (IngestService cfg metrics pool queue limiter)
+  lookupCountry <- newCountryLookup (cfg ^. #ingestGeoipDb) (cfg ^. #ingestTrustedProxyCidrs)
+  pure (IngestService cfg metrics pool queue limiter (captureRequestContext lookupCountry))
 
 newIngestServiceWithClock :: IO Double -> Config -> PipelineMetrics -> Pool.Pool -> QueueName -> IO IngestService
 newIngestServiceWithClock clock cfg metrics pool queue = do
   validateAdmissionConfig cfg
   limiter <- newRateLimiterWithClock (RatePolicy (cfg ^. #ingestRatePerSec) (cfg ^. #ingestRateBurst) 10000) clock
-  pure (IngestService cfg metrics pool queue limiter)
+  lookupCountry <- newCountryLookup (cfg ^. #ingestGeoipDb) (cfg ^. #ingestTrustedProxyCidrs)
+  pure (IngestService cfg metrics pool queue limiter (captureRequestContext lookupCountry))
+
+ingestRequestContext :: IngestService -> Request -> IO IngestRequestContext
+ingestRequestContext (IngestService _ _ _ _ _ capture) = capture
 
 validateAdmissionConfig :: Config -> IO ()
 validateAdmissionConfig cfg =
@@ -57,8 +67,8 @@ validateAdmissionConfig cfg =
 -- | Auth and bounded decoding precede this call. Semantic batch bounds precede
 -- admission; every event within those bounds, including invalid schema entries
 -- and identical retries, charges this process's shared credential bucket.
-submitIngest :: IngestService -> IngestTransport -> AuthenticatedPrincipal -> [IngestEvent] -> Handler (KansokuResult [Acceptance])
-submitIngest (IngestService cfg metrics pool queueName limiter) channel principal raw =
+submitIngest :: IngestService -> IngestTransport -> AuthenticatedPrincipal -> IngestRequestContext -> [IngestEvent] -> Handler (KansokuResult [Acceptance])
+submitIngest (IngestService cfg metrics pool queueName limiter _) channel principal request raw =
   case batchLengthError (cfg ^. #ingestMaxBatchLength) (length raw) of
     Just err -> pure (KansokuTooLarge err)
     Nothing -> do
@@ -74,8 +84,8 @@ submitIngest (IngestService cfg metrics pool queueName limiter) channel principa
       now <- liftIO getCurrentTime
       let validate input =
             let (adjusted, adjustment) = normalizeOccurredAt (fromIntegral (cfg ^. #ingestFutureToleranceSec)) now (stampAuthenticatedEvent now principal (parsedEvent input))
-             in (\event -> (event, adjustment)) <$> validateEvent adjusted
-      result <- liftIO $ acceptBatch pool queueName (principal ^. #accountId) validate raw
+             in (\event -> (enrichedQueuedEvent request event, adjustment)) <$> validateEvent adjusted
+      result <- liftIO $ acceptQueuedBatch pool queueName (principal ^. #accountId) validate raw
       case result of
         Left _ -> do
           liftIO . runEff . runLogStderr $ logError "ingest enqueue failed"

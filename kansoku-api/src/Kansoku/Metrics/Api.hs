@@ -2,6 +2,7 @@
 module Kansoku.Metrics.Api
   ( MetricPoint (..),
     MetricQuery,
+    AcquisitionMeasure (..),
     MetricResult (..),
     MetricsRoutes (..),
     TimeGrain (..),
@@ -79,21 +80,41 @@ data MetricResult = MetricResult
   deriving stock (Generic, Eq, Show)
   deriving anyclass (FromJSON, ToJSON)
 
-type MetricQuery =
-  Description "Every metric requires a positive half-open from/to range of at most 366 days and returns at most 10000 complete points. groupBy accepts one or two distinct dimensions: event_name, source, source_service, host, route or prop:<declared scalar property>. Repeated filter parameters are AND-combined JSON objects with dimension/op/value (omit value for set/unset): at most 8 filters, 100 in values, 1024 UTF-8 bytes per string and 16384 decoded bytes combined. Missing/null values are unset; comparisons including neq do not match unset values. Group keys keep full dimension names and null differs from an empty string. Unsupported parameters are errors. See the documented route matrix."
+data AcquisitionMeasure = AcquisitionSessions | AcquisitionUsers
+  deriving stock (Generic, Eq, Show)
+
+instance FromHttpApiData AcquisitionMeasure where
+  parseUrlPiece "sessions" = Right AcquisitionSessions
+  parseUrlPiece "users" = Right AcquisitionUsers
+  parseUrlPiece _ = Left "measure must be sessions or users"
+
+instance ToHttpApiData AcquisitionMeasure where
+  toUrlPiece AcquisitionSessions = "sessions"
+  toUrlPiece AcquisitionUsers = "users"
+
+type MetricParameters result =
+  Description "Every metric requires a positive half-open from/to range of at most 366 days and returns at most 10000 complete points. groupBy accepts one or two distinct dimensions: event_name, source, source_service, host, route, enrichment/acquisition fields or prop:<declared scalar property>. Repeated filter parameters are AND-combined JSON objects with dimension/op/value (omit value for set/unset): at most 8 filters, 100 in values, 1024 UTF-8 bytes per string and 16384 decoded bytes combined. Missing/null values are unset; comparisons including neq do not match unset values. Group keys keep full dimension names and null differs from an empty string. Unsupported parameters are errors. See the documented route matrix."
     :> QueryParam' '[Required] "from" Day
     :> QueryParam' '[Required] "to" Day
     :> QueryParam "groupBy" Text
     :> QueryParam "timeGrain" TimeGrain
     :> QueryParams "filter" MetricFilter
-    :> MultiVerb 'Servant.GET '[JSON, ProblemJSON] (OkResponses "Metric result" MetricResult) (KansokuResult MetricResult)
+    :> result
 
--- | Metric routes keyed by field name. Nine fields deliberately share
+type MetricResponse = MultiVerb 'Servant.GET '[JSON, ProblemJSON] (OkResponses "Metric result" MetricResult) (KansokuResult MetricResult)
+
+type MetricQuery = MetricParameters MetricResponse
+
+type WebMetricQuery = MetricParameters (QueryParam "includeBots" Bool :> MetricResponse)
+
+type AcquisitionQuery = MetricParameters (QueryParam "measure" AcquisitionMeasure :> QueryParam "includeBots" Bool :> MetricResponse)
+
+-- | Metric routes keyed by field name. Six fields deliberately share
 -- 'MetricQuery'; their runtime path-to-handler guard lives in RoutingSpec.
 -- Record field order is not load-bearing for servant routing.
 data MetricsRoutes mode = MetricsRoutes
   { events :: mode :- MetricsAuth :> "metrics" :> "events" :> MetricQuery,
-    pageViews :: mode :- MetricsAuth :> "metrics" :> "page-views" :> MetricQuery,
+    pageViews :: mode :- MetricsAuth :> "metrics" :> "page-views" :> WebMetricQuery,
     sessions ::
       mode
         :- MetricsAuth
@@ -125,10 +146,10 @@ data MetricsRoutes mode = MetricsRoutes
           :> QueryParam' '[Required] "to" Day
           :> QueryParam "days" Text
           :> MultiVerb 'Servant.GET '[JSON, ProblemJSON] (OkResponses "Metric result" MetricResult) (KansokuResult MetricResult),
-    acquisition :: mode :- MetricsAuth :> "metrics" :> "acquisition" :> MetricQuery,
+    acquisition :: mode :- MetricsAuth :> "metrics" :> "acquisition" :> AcquisitionQuery,
     featureAdoption :: mode :- MetricsAuth :> "metrics" :> "feature-adoption" :> MetricQuery,
     conversion :: mode :- MetricsAuth :> "metrics" :> "conversion" :> MetricQuery,
-    users :: mode :- MetricsAuth :> "metrics" :> "users" :> MetricQuery,
+    users :: mode :- MetricsAuth :> "metrics" :> "users" :> WebMetricQuery,
     revenue :: mode :- MetricsAuth :> "metrics" :> "revenue" :> MetricQuery,
     organizations :: mode :- MetricsAuth :> "metrics" :> "organizations" :> MetricQuery,
     custom :: mode :- MetricsAuth :> "metrics" :> "custom" :> MetricQuery,

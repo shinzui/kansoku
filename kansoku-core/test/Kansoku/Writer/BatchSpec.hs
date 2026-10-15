@@ -11,7 +11,7 @@ import Effectful (IOE, runEff)
 import Kansoku.ClickHouse
   ( clickHouseConfigFromConfig,
     countEvents,
-    insertEvents,
+    insertQueuedEvents,
     openClickHouse,
   )
 import Kansoku.Config (loadConfig)
@@ -50,7 +50,7 @@ spec metrics = describe "Kansoku.Writer.Batch" $ do
       batchesBefore <- Prometheus.getCounter (metrics ^. #writerBatchesTotal)
       eventsBefore <- Prometheus.getCounter (metrics ^. #writerEventsWrittenTotal)
       heartbeat <- newWriterHeartbeat
-      _ <- runEff (writerBatchHandler metrics heartbeat (insertEvents conn) batchInfo (handlerMessage :| []))
+      _ <- runEff (writerBatchHandler metrics heartbeat (insertQueuedEvents conn) batchInfo (handlerMessage :| []))
       countAfter <- countEvents conn
       countAfter `shouldBe` countBefore + 1
       Prometheus.getCounter (metrics ^. #writerBatchesTotal)
@@ -88,11 +88,11 @@ spec metrics = describe "Kansoku.Writer.Batch" $ do
     withClickHouse $ \conn -> do
       command conn "TRUNCATE TABLE analytics.events_raw"
       heartbeat <- newWriterHeartbeat
-      let lostResult events = insertEvents conn events >> ioError (userError "injected lost insert confirmation")
+      let lostResult events = insertQueuedEvents conn events >> ioError (userError "injected lost insert confirmation")
       retried <- runEff (writerBatchHandler metrics heartbeat lostResult batchInfo (handlerMessage :| []))
       retried ^. #fallback `shouldBe` AckRetry (RetryDelay 5)
       countEvents conn `shouldReturn` 1
-      _ <- runEff (writerBatchHandler metrics heartbeat (insertEvents conn) batchInfo (handlerMessage :| []))
+      _ <- runEff (writerBatchHandler metrics heartbeat (insertQueuedEvents conn) batchInfo (handlerMessage :| []))
       countEvents conn `shouldReturn` 1
 
   it "retries every decodable message when the ClickHouse insert fails" $ do
@@ -123,7 +123,7 @@ spec metrics = describe "Kansoku.Writer.Batch" $ do
       recovery <- newWriterRecovery (defaultRecoveryPolicy {probeIntervalMicros = 1000}) metrics (ping conn)
       let insert events = do
             number <- atomicModifyIORef' attempts (\n -> (n + 1, n))
-            insertEvents conn events
+            insertQueuedEvents conn events
             when (number == 0) $ ioError (userError "injected lost committed insert confirmation")
       ack <- runEff (writerBatchHandler metrics heartbeat (recoverInsert recovery (pure ()) insert) batchInfo (handlerMessage :| []))
       ack ^. #fallback `shouldBe` AckOk

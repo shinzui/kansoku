@@ -15,6 +15,7 @@ import Kansoku.Auth.Store (AuthStoreError (..))
 import Kansoku.Auth.Token (Token (..), hashToken)
 import Kansoku.Auth.Types
 import Kansoku.Event (AccountId (..))
+import Kansoku.Ingest.RequestContext (emptyRequestContext)
 import Network.HTTP.Types.Header (RequestHeaders, hAuthorization, hWWWAuthenticate)
 import Network.Wai (Request (pathInfo, queryString, rawPathInfo, requestHeaders), defaultRequest)
 import Servant (ServerError (..), runHandler)
@@ -39,15 +40,15 @@ spec = describe "Kansoku.Auth.Handler" $ do
   it "accepts write keys through X-Api-Key and case-insensitive Bearer transport" $ do
     xApiKey <- runAuth (ingestAuthHandlerWith fixtureLookup) [("X-Api-Key", writeToken)]
     bearer <- runAuth (ingestAuthHandlerWith fixtureLookup) [(hAuthorization, "bEaReR " <> writeToken)]
-    xApiKey `shouldBe` Right (IngestPrincipal writePrincipal)
-    bearer `shouldBe` Right (IngestPrincipal writePrincipal)
+    xApiKey `shouldBe` Right (IngestPrincipal writePrincipal emptyRequestContext)
+    bearer `shouldBe` Right (IngestPrincipal writePrincipal emptyRequestContext)
 
   it "uses Authorization precedence when both credential headers are present" $ do
     result <-
       runAuth
         (ingestAuthHandlerWith fixtureLookup)
         [(hAuthorization, "Bearer " <> writeToken), ("X-Api-Key", "ksk_w_unknown")]
-    result `shouldBe` Right (IngestPrincipal writePrincipal)
+    result `shouldBe` Right (IngestPrincipal writePrincipal emptyRequestContext)
 
   it "does not fall through to X-Api-Key when Authorization is malformed" $ do
     result <-

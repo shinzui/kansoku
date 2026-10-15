@@ -33,6 +33,7 @@ operations, and internal project records.
 - [Run Kansoku locally](docs/guides/getting-started.md)
 - [Send events](docs/guides/send-events.md)
 - [Query metrics](docs/guides/query-metrics.md)
+- [Web enrichment and acquisition](docs/guides/web-enrichment.md)
 - [Use the Haskell SDK](docs/guides/haskell-sdk.md)
 - [Configure Kansoku](docs/guides/configuration.md)
 - [Operate Kansoku](docs/guides/operations.md)
@@ -97,6 +98,7 @@ Implemented metric routes are:
 GET /metrics/events
 GET /metrics/page-views
 GET /metrics/sessions
+GET /metrics/acquisition
 GET /metrics/funnel
 GET /metrics/retention
 GET /metrics/feature-adoption
@@ -108,7 +110,7 @@ GET /metrics/experiments/conversion
 GET /metrics/experiments/funnel
 ```
 
-`GET /metrics/acquisition`, `GET /metrics/organizations`, and `GET /metrics/custom` remain
+`GET /metrics/organizations` and `GET /metrics/custom` remain
 contract placeholders and return HTTP 404 with `not_implemented`. See
 [Query metrics](docs/guides/query-metrics.md) for semantics and accuracy boundaries.
 

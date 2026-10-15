@@ -23,6 +23,18 @@ data GroupDimension
   | GroupBySourceService
   | GroupByHost
   | GroupByRoute
+  | GroupByChannel
+  | GroupByBrowserFamily
+  | GroupByOsFamily
+  | GroupByDeviceClass
+  | GroupByCountryCode
+  | GroupByUtmSource
+  | GroupByUtmMedium
+  | GroupByUtmCampaign
+  | GroupByUtmContent
+  | GroupByUtmTerm
+  | GroupByReferrerHost
+  | GroupByBot
   | GroupByProperty !PropertyName
   deriving stock (Generic, Eq, Show)
 
@@ -36,6 +48,18 @@ resolveDimension registry events name = case name of
   "source_service" -> Right GroupBySourceService
   "host" -> Right GroupByHost
   "route" -> Right GroupByRoute
+  "channel" -> Right GroupByChannel
+  "browser_family" -> Right GroupByBrowserFamily
+  "os_family" -> Right GroupByOsFamily
+  "device_class" -> Right GroupByDeviceClass
+  "country_code" -> Right GroupByCountryCode
+  "utm_source" -> Right GroupByUtmSource
+  "utm_medium" -> Right GroupByUtmMedium
+  "utm_campaign" -> Right GroupByUtmCampaign
+  "utm_content" -> Right GroupByUtmContent
+  "utm_term" -> Right GroupByUtmTerm
+  "referrer_host" -> Right GroupByReferrerHost
+  "is_bot" -> Right GroupByBot
   _ -> case Text.stripPrefix "prop:" name of
     Nothing -> Left (UnknownDimension name)
     Just property -> GroupByProperty <$> first InvalidDimensionProperty (resolveProperty registry events property)
@@ -47,9 +71,22 @@ dimensionLabel = \case
   GroupBySourceService -> "source_service"
   GroupByHost -> "host"
   GroupByRoute -> "route"
+  GroupByChannel -> "channel"
+  GroupByBrowserFamily -> "browser_family"
+  GroupByOsFamily -> "os_family"
+  GroupByDeviceClass -> "device_class"
+  GroupByCountryCode -> "country_code"
+  GroupByUtmSource -> "utm_source"
+  GroupByUtmMedium -> "utm_medium"
+  GroupByUtmCampaign -> "utm_campaign"
+  GroupByUtmContent -> "utm_content"
+  GroupByUtmTerm -> "utm_term"
+  GroupByReferrerHost -> "referrer_host"
+  GroupByBot -> "is_bot"
   GroupByProperty property -> "prop:" <> propertyNameText property
 
 dimensionType :: GroupDimension -> ScalarType
+dimensionType GroupByBot = ScalarBool
 dimensionType (GroupByProperty property) = propertyScalarType property
 dimensionType _ = ScalarString
 
@@ -58,9 +95,24 @@ dimensionExpr = \case
   GroupByEventName -> "nullIf(toString(event_name), '')"
   GroupBySource -> "nullIf(toString(source), '')"
   GroupBySourceService -> "nullIf(source_service, '')"
-  GroupByHost -> "nullIf(lowerUTF8(domain(coalesce(url, ''))), '')"
+  GroupByHost -> canonicalDomain "url"
   GroupByRoute -> "nullIf(path(coalesce(url, '')), '')"
+  GroupByChannel -> "nullIf(toString(channel), '')"
+  GroupByBrowserFamily -> "nullIf(toString(browser_family), '')"
+  GroupByOsFamily -> "nullIf(toString(os_family), '')"
+  GroupByDeviceClass -> "nullIf(toString(device_class), '')"
+  GroupByCountryCode -> "nullIf(toString(country_code), '')"
+  GroupByUtmSource -> "nullIf(toString(utm_source), '')"
+  GroupByUtmMedium -> "nullIf(toString(utm_medium), '')"
+  GroupByUtmCampaign -> "nullIf(toString(utm_campaign), '')"
+  GroupByUtmContent -> "nullIf(toString(utm_content), '')"
+  GroupByUtmTerm -> "nullIf(toString(utm_term), '')"
+  GroupByReferrerHost -> "if(" <> canonicalDomain "referrer" <> " = " <> canonicalDomain "url" <> ", CAST(NULL, 'Nullable(String)'), " <> canonicalDomain "referrer" <> ")"
+  GroupByBot -> "is_bot"
   GroupByProperty property -> propertyTypedExpr property
+
+canonicalDomain :: Text -> Text
+canonicalDomain column = "nullIf(replaceRegexpOne(lowerUTF8(domain(coalesce(" <> column <> ", ''))), '[.]+$', ''), '')"
 
 -- The sort columns keep their scalar types; JSON is only the native transport.
 groupProjection :: [GroupDimension] -> Text

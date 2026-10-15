@@ -1,0 +1,1138 @@
+[
+  {
+    "label": "chrome desktop Windows NT 10.0; Win64; x64",
+    "agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+    "browserFamily": "chrome",
+    "osFamily": "windows",
+    "deviceClass": "desktop",
+    "isBot": false
+  },
+  {
+    "label": "edge desktop Windows NT 10.0; Win64; x64",
+    "agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0",
+    "browserFamily": "edge",
+    "osFamily": "windows",
+    "deviceClass": "desktop",
+    "isBot": false
+  },
+  {
+    "label": "opera desktop Windows NT 10.0; Win64; x64",
+    "agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 OPR/115.0",
+    "browserFamily": "opera",
+    "osFamily": "windows",
+    "deviceClass": "desktop",
+    "isBot": false
+  },
+  {
+    "label": "firefox desktop Windows NT 10.0; Win64; x64",
+    "agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Gecko/20100101 Firefox/132.0",
+    "browserFamily": "firefox",
+    "osFamily": "windows",
+    "deviceClass": "desktop",
+    "isBot": false
+  },
+  {
+    "label": "safari desktop Windows NT 10.0; Win64; x64",
+    "agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Version/18.0 Safari/605.1.15",
+    "browserFamily": "safari",
+    "osFamily": "windows",
+    "deviceClass": "desktop",
+    "isBot": false
+  },
+  {
+    "label": "chrome desktop Windows NT 6.1; WOW64",
+    "agent": "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+    "browserFamily": "chrome",
+    "osFamily": "windows",
+    "deviceClass": "desktop",
+    "isBot": false
+  },
+  {
+    "label": "edge desktop Windows NT 6.1; WOW64",
+    "agent": "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0",
+    "browserFamily": "edge",
+    "osFamily": "windows",
+    "deviceClass": "desktop",
+    "isBot": false
+  },
+  {
+    "label": "opera desktop Windows NT 6.1; WOW64",
+    "agent": "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 OPR/115.0",
+    "browserFamily": "opera",
+    "osFamily": "windows",
+    "deviceClass": "desktop",
+    "isBot": false
+  },
+  {
+    "label": "firefox desktop Windows NT 6.1; WOW64",
+    "agent": "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Gecko/20100101 Firefox/132.0",
+    "browserFamily": "firefox",
+    "osFamily": "windows",
+    "deviceClass": "desktop",
+    "isBot": false
+  },
+  {
+    "label": "safari desktop Windows NT 6.1; WOW64",
+    "agent": "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Version/18.0 Safari/605.1.15",
+    "browserFamily": "safari",
+    "osFamily": "windows",
+    "deviceClass": "desktop",
+    "isBot": false
+  },
+  {
+    "label": "chrome desktop Macintosh; Intel Mac OS X 14_0",
+    "agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+    "browserFamily": "chrome",
+    "osFamily": "macos",
+    "deviceClass": "desktop",
+    "isBot": false
+  },
+  {
+    "label": "edge desktop Macintosh; Intel Mac OS X 14_0",
+    "agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0",
+    "browserFamily": "edge",
+    "osFamily": "macos",
+    "deviceClass": "desktop",
+    "isBot": false
+  },
+  {
+    "label": "opera desktop Macintosh; Intel Mac OS X 14_0",
+    "agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 OPR/115.0",
+    "browserFamily": "opera",
+    "osFamily": "macos",
+    "deviceClass": "desktop",
+    "isBot": false
+  },
+  {
+    "label": "firefox desktop Macintosh; Intel Mac OS X 14_0",
+    "agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/537.36 (KHTML, like Gecko) Gecko/20100101 Firefox/132.0",
+    "browserFamily": "firefox",
+    "osFamily": "macos",
+    "deviceClass": "desktop",
+    "isBot": false
+  },
+  {
+    "label": "safari desktop Macintosh; Intel Mac OS X 14_0",
+    "agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/537.36 (KHTML, like Gecko) Version/18.0 Safari/605.1.15",
+    "browserFamily": "safari",
+    "osFamily": "macos",
+    "deviceClass": "desktop",
+    "isBot": false
+  },
+  {
+    "label": "chrome desktop Macintosh; ARM Mac OS X 15_0",
+    "agent": "Mozilla/5.0 (Macintosh; ARM Mac OS X 15_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+    "browserFamily": "chrome",
+    "osFamily": "macos",
+    "deviceClass": "desktop",
+    "isBot": false
+  },
+  {
+    "label": "edge desktop Macintosh; ARM Mac OS X 15_0",
+    "agent": "Mozilla/5.0 (Macintosh; ARM Mac OS X 15_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0",
+    "browserFamily": "edge",
+    "osFamily": "macos",
+    "deviceClass": "desktop",
+    "isBot": false
+  },
+  {
+    "label": "opera desktop Macintosh; ARM Mac OS X 15_0",
+    "agent": "Mozilla/5.0 (Macintosh; ARM Mac OS X 15_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 OPR/115.0",
+    "browserFamily": "opera",
+    "osFamily": "macos",
+    "deviceClass": "desktop",
+    "isBot": false
+  },
+  {
+    "label": "firefox desktop Macintosh; ARM Mac OS X 15_0",
+    "agent": "Mozilla/5.0 (Macintosh; ARM Mac OS X 15_0) AppleWebKit/537.36 (KHTML, like Gecko) Gecko/20100101 Firefox/132.0",
+    "browserFamily": "firefox",
+    "osFamily": "macos",
+    "deviceClass": "desktop",
+    "isBot": false
+  },
+  {
+    "label": "safari desktop Macintosh; ARM Mac OS X 15_0",
+    "agent": "Mozilla/5.0 (Macintosh; ARM Mac OS X 15_0) AppleWebKit/537.36 (KHTML, like Gecko) Version/18.0 Safari/605.1.15",
+    "browserFamily": "safari",
+    "osFamily": "macos",
+    "deviceClass": "desktop",
+    "isBot": false
+  },
+  {
+    "label": "chrome desktop X11; Linux x86_64",
+    "agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+    "browserFamily": "chrome",
+    "osFamily": "linux",
+    "deviceClass": "desktop",
+    "isBot": false
+  },
+  {
+    "label": "edge desktop X11; Linux x86_64",
+    "agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0",
+    "browserFamily": "edge",
+    "osFamily": "linux",
+    "deviceClass": "desktop",
+    "isBot": false
+  },
+  {
+    "label": "opera desktop X11; Linux x86_64",
+    "agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 OPR/115.0",
+    "browserFamily": "opera",
+    "osFamily": "linux",
+    "deviceClass": "desktop",
+    "isBot": false
+  },
+  {
+    "label": "firefox desktop X11; Linux x86_64",
+    "agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Gecko/20100101 Firefox/132.0",
+    "browserFamily": "firefox",
+    "osFamily": "linux",
+    "deviceClass": "desktop",
+    "isBot": false
+  },
+  {
+    "label": "safari desktop X11; Linux x86_64",
+    "agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Version/18.0 Safari/605.1.15",
+    "browserFamily": "safari",
+    "osFamily": "linux",
+    "deviceClass": "desktop",
+    "isBot": false
+  },
+  {
+    "label": "chrome desktop X11; Ubuntu; Linux aarch64",
+    "agent": "Mozilla/5.0 (X11; Ubuntu; Linux aarch64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+    "browserFamily": "chrome",
+    "osFamily": "linux",
+    "deviceClass": "desktop",
+    "isBot": false
+  },
+  {
+    "label": "edge desktop X11; Ubuntu; Linux aarch64",
+    "agent": "Mozilla/5.0 (X11; Ubuntu; Linux aarch64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0",
+    "browserFamily": "edge",
+    "osFamily": "linux",
+    "deviceClass": "desktop",
+    "isBot": false
+  },
+  {
+    "label": "opera desktop X11; Ubuntu; Linux aarch64",
+    "agent": "Mozilla/5.0 (X11; Ubuntu; Linux aarch64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 OPR/115.0",
+    "browserFamily": "opera",
+    "osFamily": "linux",
+    "deviceClass": "desktop",
+    "isBot": false
+  },
+  {
+    "label": "firefox desktop X11; Ubuntu; Linux aarch64",
+    "agent": "Mozilla/5.0 (X11; Ubuntu; Linux aarch64) AppleWebKit/537.36 (KHTML, like Gecko) Gecko/20100101 Firefox/132.0",
+    "browserFamily": "firefox",
+    "osFamily": "linux",
+    "deviceClass": "desktop",
+    "isBot": false
+  },
+  {
+    "label": "safari desktop X11; Ubuntu; Linux aarch64",
+    "agent": "Mozilla/5.0 (X11; Ubuntu; Linux aarch64) AppleWebKit/537.36 (KHTML, like Gecko) Version/18.0 Safari/605.1.15",
+    "browserFamily": "safari",
+    "osFamily": "linux",
+    "deviceClass": "desktop",
+    "isBot": false
+  },
+  {
+    "label": "chrome desktop X11; CrOS x86_64 16000.0",
+    "agent": "Mozilla/5.0 (X11; CrOS x86_64 16000.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+    "browserFamily": "chrome",
+    "osFamily": "chrome_os",
+    "deviceClass": "desktop",
+    "isBot": false
+  },
+  {
+    "label": "edge desktop X11; CrOS x86_64 16000.0",
+    "agent": "Mozilla/5.0 (X11; CrOS x86_64 16000.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0",
+    "browserFamily": "edge",
+    "osFamily": "chrome_os",
+    "deviceClass": "desktop",
+    "isBot": false
+  },
+  {
+    "label": "opera desktop X11; CrOS x86_64 16000.0",
+    "agent": "Mozilla/5.0 (X11; CrOS x86_64 16000.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 OPR/115.0",
+    "browserFamily": "opera",
+    "osFamily": "chrome_os",
+    "deviceClass": "desktop",
+    "isBot": false
+  },
+  {
+    "label": "firefox desktop X11; CrOS x86_64 16000.0",
+    "agent": "Mozilla/5.0 (X11; CrOS x86_64 16000.0) AppleWebKit/537.36 (KHTML, like Gecko) Gecko/20100101 Firefox/132.0",
+    "browserFamily": "firefox",
+    "osFamily": "chrome_os",
+    "deviceClass": "desktop",
+    "isBot": false
+  },
+  {
+    "label": "safari desktop X11; CrOS x86_64 16000.0",
+    "agent": "Mozilla/5.0 (X11; CrOS x86_64 16000.0) AppleWebKit/537.36 (KHTML, like Gecko) Version/18.0 Safari/605.1.15",
+    "browserFamily": "safari",
+    "osFamily": "chrome_os",
+    "deviceClass": "desktop",
+    "isBot": false
+  },
+  {
+    "label": "chrome desktop X11; FreeBSD amd64",
+    "agent": "Mozilla/5.0 (X11; FreeBSD amd64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+    "browserFamily": "chrome",
+    "osFamily": "unknown",
+    "deviceClass": "desktop",
+    "isBot": false
+  },
+  {
+    "label": "edge desktop X11; FreeBSD amd64",
+    "agent": "Mozilla/5.0 (X11; FreeBSD amd64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0",
+    "browserFamily": "edge",
+    "osFamily": "unknown",
+    "deviceClass": "desktop",
+    "isBot": false
+  },
+  {
+    "label": "opera desktop X11; FreeBSD amd64",
+    "agent": "Mozilla/5.0 (X11; FreeBSD amd64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 OPR/115.0",
+    "browserFamily": "opera",
+    "osFamily": "unknown",
+    "deviceClass": "desktop",
+    "isBot": false
+  },
+  {
+    "label": "firefox desktop X11; FreeBSD amd64",
+    "agent": "Mozilla/5.0 (X11; FreeBSD amd64) AppleWebKit/537.36 (KHTML, like Gecko) Gecko/20100101 Firefox/132.0",
+    "browserFamily": "firefox",
+    "osFamily": "unknown",
+    "deviceClass": "desktop",
+    "isBot": false
+  },
+  {
+    "label": "safari desktop X11; FreeBSD amd64",
+    "agent": "Mozilla/5.0 (X11; FreeBSD amd64) AppleWebKit/537.36 (KHTML, like Gecko) Version/18.0 Safari/605.1.15",
+    "browserFamily": "safari",
+    "osFamily": "unknown",
+    "deviceClass": "desktop",
+    "isBot": false
+  },
+  {
+    "label": "safari iPhone iOS 15_0",
+    "agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1",
+    "browserFamily": "safari",
+    "osFamily": "ios",
+    "deviceClass": "mobile",
+    "isBot": false
+  },
+  {
+    "label": "safari iPad iOS 15_0",
+    "agent": "Mozilla/5.0 (iPad; CPU OS 15_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1",
+    "browserFamily": "safari",
+    "osFamily": "ios",
+    "deviceClass": "tablet",
+    "isBot": false
+  },
+  {
+    "label": "chrome iPhone iOS 15_0",
+    "agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 CriOS/130.0 Mobile/15E148 Safari/604.1",
+    "browserFamily": "chrome",
+    "osFamily": "ios",
+    "deviceClass": "mobile",
+    "isBot": false
+  },
+  {
+    "label": "chrome iPad iOS 15_0",
+    "agent": "Mozilla/5.0 (iPad; CPU OS 15_0 like Mac OS X) AppleWebKit/605.1.15 CriOS/130.0 Mobile/15E148 Safari/604.1",
+    "browserFamily": "chrome",
+    "osFamily": "ios",
+    "deviceClass": "tablet",
+    "isBot": false
+  },
+  {
+    "label": "firefox iPhone iOS 15_0",
+    "agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 FxiOS/132.0 Mobile/15E148 Safari/605.1.15",
+    "browserFamily": "firefox",
+    "osFamily": "ios",
+    "deviceClass": "mobile",
+    "isBot": false
+  },
+  {
+    "label": "firefox iPad iOS 15_0",
+    "agent": "Mozilla/5.0 (iPad; CPU OS 15_0 like Mac OS X) AppleWebKit/605.1.15 FxiOS/132.0 Mobile/15E148 Safari/605.1.15",
+    "browserFamily": "firefox",
+    "osFamily": "ios",
+    "deviceClass": "tablet",
+    "isBot": false
+  },
+  {
+    "label": "edge iPhone iOS 15_0",
+    "agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 EdgiOS/130.0 Mobile/15E148 Safari/605.1.15",
+    "browserFamily": "edge",
+    "osFamily": "ios",
+    "deviceClass": "mobile",
+    "isBot": false
+  },
+  {
+    "label": "edge iPad iOS 15_0",
+    "agent": "Mozilla/5.0 (iPad; CPU OS 15_0 like Mac OS X) AppleWebKit/605.1.15 EdgiOS/130.0 Mobile/15E148 Safari/605.1.15",
+    "browserFamily": "edge",
+    "osFamily": "ios",
+    "deviceClass": "tablet",
+    "isBot": false
+  },
+  {
+    "label": "opera iPhone iOS 15_0",
+    "agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 OPiOS/3.0 Mobile/15E148 Safari/605.1.15",
+    "browserFamily": "opera",
+    "osFamily": "ios",
+    "deviceClass": "mobile",
+    "isBot": false
+  },
+  {
+    "label": "opera iPad iOS 15_0",
+    "agent": "Mozilla/5.0 (iPad; CPU OS 15_0 like Mac OS X) AppleWebKit/605.1.15 OPiOS/3.0 Mobile/15E148 Safari/605.1.15",
+    "browserFamily": "opera",
+    "osFamily": "ios",
+    "deviceClass": "tablet",
+    "isBot": false
+  },
+  {
+    "label": "safari iPhone iOS 17_6",
+    "agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_6 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1",
+    "browserFamily": "safari",
+    "osFamily": "ios",
+    "deviceClass": "mobile",
+    "isBot": false
+  },
+  {
+    "label": "safari iPad iOS 17_6",
+    "agent": "Mozilla/5.0 (iPad; CPU OS 17_6 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1",
+    "browserFamily": "safari",
+    "osFamily": "ios",
+    "deviceClass": "tablet",
+    "isBot": false
+  },
+  {
+    "label": "chrome iPhone iOS 17_6",
+    "agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_6 like Mac OS X) AppleWebKit/605.1.15 CriOS/130.0 Mobile/15E148 Safari/604.1",
+    "browserFamily": "chrome",
+    "osFamily": "ios",
+    "deviceClass": "mobile",
+    "isBot": false
+  },
+  {
+    "label": "chrome iPad iOS 17_6",
+    "agent": "Mozilla/5.0 (iPad; CPU OS 17_6 like Mac OS X) AppleWebKit/605.1.15 CriOS/130.0 Mobile/15E148 Safari/604.1",
+    "browserFamily": "chrome",
+    "osFamily": "ios",
+    "deviceClass": "tablet",
+    "isBot": false
+  },
+  {
+    "label": "firefox iPhone iOS 17_6",
+    "agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_6 like Mac OS X) AppleWebKit/605.1.15 FxiOS/132.0 Mobile/15E148 Safari/605.1.15",
+    "browserFamily": "firefox",
+    "osFamily": "ios",
+    "deviceClass": "mobile",
+    "isBot": false
+  },
+  {
+    "label": "firefox iPad iOS 17_6",
+    "agent": "Mozilla/5.0 (iPad; CPU OS 17_6 like Mac OS X) AppleWebKit/605.1.15 FxiOS/132.0 Mobile/15E148 Safari/605.1.15",
+    "browserFamily": "firefox",
+    "osFamily": "ios",
+    "deviceClass": "tablet",
+    "isBot": false
+  },
+  {
+    "label": "edge iPhone iOS 17_6",
+    "agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_6 like Mac OS X) AppleWebKit/605.1.15 EdgiOS/130.0 Mobile/15E148 Safari/605.1.15",
+    "browserFamily": "edge",
+    "osFamily": "ios",
+    "deviceClass": "mobile",
+    "isBot": false
+  },
+  {
+    "label": "edge iPad iOS 17_6",
+    "agent": "Mozilla/5.0 (iPad; CPU OS 17_6 like Mac OS X) AppleWebKit/605.1.15 EdgiOS/130.0 Mobile/15E148 Safari/605.1.15",
+    "browserFamily": "edge",
+    "osFamily": "ios",
+    "deviceClass": "tablet",
+    "isBot": false
+  },
+  {
+    "label": "opera iPhone iOS 17_6",
+    "agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_6 like Mac OS X) AppleWebKit/605.1.15 OPiOS/3.0 Mobile/15E148 Safari/605.1.15",
+    "browserFamily": "opera",
+    "osFamily": "ios",
+    "deviceClass": "mobile",
+    "isBot": false
+  },
+  {
+    "label": "opera iPad iOS 17_6",
+    "agent": "Mozilla/5.0 (iPad; CPU OS 17_6 like Mac OS X) AppleWebKit/605.1.15 OPiOS/3.0 Mobile/15E148 Safari/605.1.15",
+    "browserFamily": "opera",
+    "osFamily": "ios",
+    "deviceClass": "tablet",
+    "isBot": false
+  },
+  {
+    "label": "safari iPhone iOS 18_1",
+    "agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1",
+    "browserFamily": "safari",
+    "osFamily": "ios",
+    "deviceClass": "mobile",
+    "isBot": false
+  },
+  {
+    "label": "safari iPad iOS 18_1",
+    "agent": "Mozilla/5.0 (iPad; CPU OS 18_1 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1",
+    "browserFamily": "safari",
+    "osFamily": "ios",
+    "deviceClass": "tablet",
+    "isBot": false
+  },
+  {
+    "label": "chrome iPhone iOS 18_1",
+    "agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 CriOS/130.0 Mobile/15E148 Safari/604.1",
+    "browserFamily": "chrome",
+    "osFamily": "ios",
+    "deviceClass": "mobile",
+    "isBot": false
+  },
+  {
+    "label": "chrome iPad iOS 18_1",
+    "agent": "Mozilla/5.0 (iPad; CPU OS 18_1 like Mac OS X) AppleWebKit/605.1.15 CriOS/130.0 Mobile/15E148 Safari/604.1",
+    "browserFamily": "chrome",
+    "osFamily": "ios",
+    "deviceClass": "tablet",
+    "isBot": false
+  },
+  {
+    "label": "firefox iPhone iOS 18_1",
+    "agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 FxiOS/132.0 Mobile/15E148 Safari/605.1.15",
+    "browserFamily": "firefox",
+    "osFamily": "ios",
+    "deviceClass": "mobile",
+    "isBot": false
+  },
+  {
+    "label": "firefox iPad iOS 18_1",
+    "agent": "Mozilla/5.0 (iPad; CPU OS 18_1 like Mac OS X) AppleWebKit/605.1.15 FxiOS/132.0 Mobile/15E148 Safari/605.1.15",
+    "browserFamily": "firefox",
+    "osFamily": "ios",
+    "deviceClass": "tablet",
+    "isBot": false
+  },
+  {
+    "label": "edge iPhone iOS 18_1",
+    "agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 EdgiOS/130.0 Mobile/15E148 Safari/605.1.15",
+    "browserFamily": "edge",
+    "osFamily": "ios",
+    "deviceClass": "mobile",
+    "isBot": false
+  },
+  {
+    "label": "edge iPad iOS 18_1",
+    "agent": "Mozilla/5.0 (iPad; CPU OS 18_1 like Mac OS X) AppleWebKit/605.1.15 EdgiOS/130.0 Mobile/15E148 Safari/605.1.15",
+    "browserFamily": "edge",
+    "osFamily": "ios",
+    "deviceClass": "tablet",
+    "isBot": false
+  },
+  {
+    "label": "opera iPhone iOS 18_1",
+    "agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 OPiOS/3.0 Mobile/15E148 Safari/605.1.15",
+    "browserFamily": "opera",
+    "osFamily": "ios",
+    "deviceClass": "mobile",
+    "isBot": false
+  },
+  {
+    "label": "opera iPad iOS 18_1",
+    "agent": "Mozilla/5.0 (iPad; CPU OS 18_1 like Mac OS X) AppleWebKit/605.1.15 OPiOS/3.0 Mobile/15E148 Safari/605.1.15",
+    "browserFamily": "opera",
+    "osFamily": "ios",
+    "deviceClass": "tablet",
+    "isBot": false
+  },
+  {
+    "label": "chrome Android phone 10",
+    "agent": "Mozilla/5.0 (Linux; Android 10; Pixel 9 Mobile) AppleWebKit/537.36 Chrome/130.0 Mobile Safari/537.36",
+    "browserFamily": "chrome",
+    "osFamily": "android",
+    "deviceClass": "mobile",
+    "isBot": false
+  },
+  {
+    "label": "edge Android phone 10",
+    "agent": "Mozilla/5.0 (Linux; Android 10; Pixel 9 Mobile) AppleWebKit/537.36 Chrome/130.0 Mobile Safari/537.36 EdgA/130.0",
+    "browserFamily": "edge",
+    "osFamily": "android",
+    "deviceClass": "mobile",
+    "isBot": false
+  },
+  {
+    "label": "firefox Android phone 10",
+    "agent": "Mozilla/5.0 (Linux; Android 10; Pixel 9 Mobile) AppleWebKit/537.36 Gecko/132.0 Firefox/132.0",
+    "browserFamily": "firefox",
+    "osFamily": "android",
+    "deviceClass": "mobile",
+    "isBot": false
+  },
+  {
+    "label": "samsung_internet Android phone 10",
+    "agent": "Mozilla/5.0 (Linux; Android 10; Pixel 9 Mobile) AppleWebKit/537.36 SamsungBrowser/27.0 Chrome/125.0 Mobile Safari/537.36",
+    "browserFamily": "samsung_internet",
+    "osFamily": "android",
+    "deviceClass": "mobile",
+    "isBot": false
+  },
+  {
+    "label": "opera Android phone 10",
+    "agent": "Mozilla/5.0 (Linux; Android 10; Pixel 9 Mobile) AppleWebKit/537.36 Chrome/130.0 Mobile Safari/537.36 OPR/80.0",
+    "browserFamily": "opera",
+    "osFamily": "android",
+    "deviceClass": "mobile",
+    "isBot": false
+  },
+  {
+    "label": "Chrome Android tablet 10",
+    "agent": "Mozilla/5.0 (Linux; Android 10; SM-T830) AppleWebKit/537.36 Chrome/130.0 Safari/537.36",
+    "browserFamily": "chrome",
+    "osFamily": "android",
+    "deviceClass": "tablet",
+    "isBot": false
+  },
+  {
+    "label": "Android WebView 10",
+    "agent": "Mozilla/5.0 (Linux; Android 10; Pixel 9 Build/ABC; wv) AppleWebKit/537.36 Version/4.0 Chrome/130.0 Mobile Safari/537.36",
+    "browserFamily": "android_webview",
+    "osFamily": "android",
+    "deviceClass": "mobile",
+    "isBot": false
+  },
+  {
+    "label": "chrome Android phone 13",
+    "agent": "Mozilla/5.0 (Linux; Android 13; Pixel 9 Mobile) AppleWebKit/537.36 Chrome/130.0 Mobile Safari/537.36",
+    "browserFamily": "chrome",
+    "osFamily": "android",
+    "deviceClass": "mobile",
+    "isBot": false
+  },
+  {
+    "label": "edge Android phone 13",
+    "agent": "Mozilla/5.0 (Linux; Android 13; Pixel 9 Mobile) AppleWebKit/537.36 Chrome/130.0 Mobile Safari/537.36 EdgA/130.0",
+    "browserFamily": "edge",
+    "osFamily": "android",
+    "deviceClass": "mobile",
+    "isBot": false
+  },
+  {
+    "label": "firefox Android phone 13",
+    "agent": "Mozilla/5.0 (Linux; Android 13; Pixel 9 Mobile) AppleWebKit/537.36 Gecko/132.0 Firefox/132.0",
+    "browserFamily": "firefox",
+    "osFamily": "android",
+    "deviceClass": "mobile",
+    "isBot": false
+  },
+  {
+    "label": "samsung_internet Android phone 13",
+    "agent": "Mozilla/5.0 (Linux; Android 13; Pixel 9 Mobile) AppleWebKit/537.36 SamsungBrowser/27.0 Chrome/125.0 Mobile Safari/537.36",
+    "browserFamily": "samsung_internet",
+    "osFamily": "android",
+    "deviceClass": "mobile",
+    "isBot": false
+  },
+  {
+    "label": "opera Android phone 13",
+    "agent": "Mozilla/5.0 (Linux; Android 13; Pixel 9 Mobile) AppleWebKit/537.36 Chrome/130.0 Mobile Safari/537.36 OPR/80.0",
+    "browserFamily": "opera",
+    "osFamily": "android",
+    "deviceClass": "mobile",
+    "isBot": false
+  },
+  {
+    "label": "Chrome Android tablet 13",
+    "agent": "Mozilla/5.0 (Linux; Android 13; SM-T830) AppleWebKit/537.36 Chrome/130.0 Safari/537.36",
+    "browserFamily": "chrome",
+    "osFamily": "android",
+    "deviceClass": "tablet",
+    "isBot": false
+  },
+  {
+    "label": "Android WebView 13",
+    "agent": "Mozilla/5.0 (Linux; Android 13; Pixel 9 Build/ABC; wv) AppleWebKit/537.36 Version/4.0 Chrome/130.0 Mobile Safari/537.36",
+    "browserFamily": "android_webview",
+    "osFamily": "android",
+    "deviceClass": "mobile",
+    "isBot": false
+  },
+  {
+    "label": "chrome Android phone 15",
+    "agent": "Mozilla/5.0 (Linux; Android 15; Pixel 9 Mobile) AppleWebKit/537.36 Chrome/130.0 Mobile Safari/537.36",
+    "browserFamily": "chrome",
+    "osFamily": "android",
+    "deviceClass": "mobile",
+    "isBot": false
+  },
+  {
+    "label": "edge Android phone 15",
+    "agent": "Mozilla/5.0 (Linux; Android 15; Pixel 9 Mobile) AppleWebKit/537.36 Chrome/130.0 Mobile Safari/537.36 EdgA/130.0",
+    "browserFamily": "edge",
+    "osFamily": "android",
+    "deviceClass": "mobile",
+    "isBot": false
+  },
+  {
+    "label": "firefox Android phone 15",
+    "agent": "Mozilla/5.0 (Linux; Android 15; Pixel 9 Mobile) AppleWebKit/537.36 Gecko/132.0 Firefox/132.0",
+    "browserFamily": "firefox",
+    "osFamily": "android",
+    "deviceClass": "mobile",
+    "isBot": false
+  },
+  {
+    "label": "samsung_internet Android phone 15",
+    "agent": "Mozilla/5.0 (Linux; Android 15; Pixel 9 Mobile) AppleWebKit/537.36 SamsungBrowser/27.0 Chrome/125.0 Mobile Safari/537.36",
+    "browserFamily": "samsung_internet",
+    "osFamily": "android",
+    "deviceClass": "mobile",
+    "isBot": false
+  },
+  {
+    "label": "opera Android phone 15",
+    "agent": "Mozilla/5.0 (Linux; Android 15; Pixel 9 Mobile) AppleWebKit/537.36 Chrome/130.0 Mobile Safari/537.36 OPR/80.0",
+    "browserFamily": "opera",
+    "osFamily": "android",
+    "deviceClass": "mobile",
+    "isBot": false
+  },
+  {
+    "label": "Chrome Android tablet 15",
+    "agent": "Mozilla/5.0 (Linux; Android 15; SM-T830) AppleWebKit/537.36 Chrome/130.0 Safari/537.36",
+    "browserFamily": "chrome",
+    "osFamily": "android",
+    "deviceClass": "tablet",
+    "isBot": false
+  },
+  {
+    "label": "Android WebView 15",
+    "agent": "Mozilla/5.0 (Linux; Android 15; Pixel 9 Build/ABC; wv) AppleWebKit/537.36 Version/4.0 Chrome/130.0 Mobile Safari/537.36",
+    "browserFamily": "android_webview",
+    "osFamily": "android",
+    "deviceClass": "mobile",
+    "isBot": false
+  },
+  {
+    "label": "Amazon tablet",
+    "agent": "Mozilla/5.0 (Linux; Android 9; KFMUWI) AppleWebKit/537.36 Silk/124.0 Chrome/124.0 Safari/537.36",
+    "browserFamily": "chrome",
+    "osFamily": "android",
+    "deviceClass": "tablet",
+    "isBot": false
+  },
+  {
+    "label": "IE11 Windows",
+    "agent": "Mozilla/5.0 (Windows NT 6.3; Trident/7.0; rv:11.0) like Gecko",
+    "browserFamily": "internet_explorer",
+    "osFamily": "windows",
+    "deviceClass": "desktop",
+    "isBot": false
+  },
+  {
+    "label": "IE10 Windows",
+    "agent": "Mozilla/5.0 (compatible; MSIE 10.0; Windows NT 6.1; Trident/6.0)",
+    "browserFamily": "internet_explorer",
+    "osFamily": "windows",
+    "deviceClass": "desktop",
+    "isBot": false
+  },
+  {
+    "label": "Windows Phone overlapping Android",
+    "agent": "Mozilla/5.0 (Windows Phone 10.0; Android 4.2.1; Microsoft; Lumia 950) Chrome/42.0 Mobile Safari/537.36 Edge/12.0",
+    "browserFamily": "edge",
+    "osFamily": "windows",
+    "deviceClass": "mobile",
+    "isBot": false
+  },
+  {
+    "label": "legacy Opera Mini",
+    "agent": "Opera/9.80 (Android; Opera Mini/36.2) Presto/2.12.423 Version/12.16",
+    "browserFamily": "opera",
+    "osFamily": "android",
+    "deviceClass": "mobile",
+    "isBot": false
+  },
+  {
+    "label": "unknown Android application",
+    "agent": "Dalvik/2.1.0 (Linux; U; Android 15; Pixel 9)",
+    "browserFamily": "unknown",
+    "osFamily": "android",
+    "deviceClass": "unknown",
+    "isBot": false
+  },
+  {
+    "label": "crawler Googlebot/2.1",
+    "agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +https://crawler.example/info)",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": true
+  },
+  {
+    "label": "crawler bingbot/2.0",
+    "agent": "Mozilla/5.0 (compatible; bingbot/2.0; +https://crawler.example/info)",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": true
+  },
+  {
+    "label": "crawler BingPreview/1.0",
+    "agent": "Mozilla/5.0 (compatible; BingPreview/1.0; +https://crawler.example/info)",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": true
+  },
+  {
+    "label": "crawler DuckDuckBot/1.1",
+    "agent": "Mozilla/5.0 (compatible; DuckDuckBot/1.1; +https://crawler.example/info)",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": true
+  },
+  {
+    "label": "crawler Baiduspider/2.0",
+    "agent": "Mozilla/5.0 (compatible; Baiduspider/2.0; +https://crawler.example/info)",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": true
+  },
+  {
+    "label": "crawler YandexBot/3.0",
+    "agent": "Mozilla/5.0 (compatible; YandexBot/3.0; +https://crawler.example/info)",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": true
+  },
+  {
+    "label": "crawler YandexImages/3.0",
+    "agent": "Mozilla/5.0 (compatible; YandexImages/3.0; +https://crawler.example/info)",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": true
+  },
+  {
+    "label": "crawler Slurp/3.0",
+    "agent": "Mozilla/5.0 (compatible; Slurp/3.0; +https://crawler.example/info)",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": true
+  },
+  {
+    "label": "crawler Sogou web spider/4.0",
+    "agent": "Mozilla/5.0 (compatible; Sogou web spider/4.0; +https://crawler.example/info)",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": true
+  },
+  {
+    "label": "crawler Exabot/3.0",
+    "agent": "Mozilla/5.0 (compatible; Exabot/3.0; +https://crawler.example/info)",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": true
+  },
+  {
+    "label": "crawler facebookexternalhit/1.1",
+    "agent": "Mozilla/5.0 (compatible; facebookexternalhit/1.1; +https://crawler.example/info)",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": true
+  },
+  {
+    "label": "crawler Facebot/1.0",
+    "agent": "Mozilla/5.0 (compatible; Facebot/1.0; +https://crawler.example/info)",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": true
+  },
+  {
+    "label": "crawler Twitterbot/1.0",
+    "agent": "Mozilla/5.0 (compatible; Twitterbot/1.0; +https://crawler.example/info)",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": true
+  },
+  {
+    "label": "crawler LinkedInBot/1.0",
+    "agent": "Mozilla/5.0 (compatible; LinkedInBot/1.0; +https://crawler.example/info)",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": true
+  },
+  {
+    "label": "crawler Slackbot/1.0",
+    "agent": "Mozilla/5.0 (compatible; Slackbot/1.0; +https://crawler.example/info)",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": true
+  },
+  {
+    "label": "crawler Discordbot/2.0",
+    "agent": "Mozilla/5.0 (compatible; Discordbot/2.0; +https://crawler.example/info)",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": true
+  },
+  {
+    "label": "crawler Applebot/0.1",
+    "agent": "Mozilla/5.0 (compatible; Applebot/0.1; +https://crawler.example/info)",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": true
+  },
+  {
+    "label": "crawler PetalBot/1.0",
+    "agent": "Mozilla/5.0 (compatible; PetalBot/1.0; +https://crawler.example/info)",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": true
+  },
+  {
+    "label": "crawler SemrushBot/7.0",
+    "agent": "Mozilla/5.0 (compatible; SemrushBot/7.0; +https://crawler.example/info)",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": true
+  },
+  {
+    "label": "crawler AhrefsBot/7.0",
+    "agent": "Mozilla/5.0 (compatible; AhrefsBot/7.0; +https://crawler.example/info)",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": true
+  },
+  {
+    "label": "crawler MJ12bot/1.4",
+    "agent": "Mozilla/5.0 (compatible; MJ12bot/1.4; +https://crawler.example/info)",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": true
+  },
+  {
+    "label": "crawler DotBot/1.2",
+    "agent": "Mozilla/5.0 (compatible; DotBot/1.2; +https://crawler.example/info)",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": true
+  },
+  {
+    "label": "crawler PhantomJS/2.1",
+    "agent": "Mozilla/5.0 (compatible; PhantomJS/2.1; +https://crawler.example/info)",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": true
+  },
+  {
+    "label": "crawler Chrome-Lighthouse/12.0",
+    "agent": "Mozilla/5.0 (compatible; Chrome-Lighthouse/12.0; +https://crawler.example/info)",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": true
+  },
+  {
+    "label": "crawler GPTBot/1.2",
+    "agent": "Mozilla/5.0 (compatible; GPTBot/1.2; +https://crawler.example/info)",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": true
+  },
+  {
+    "label": "crawler ChatGPT-User/1.0",
+    "agent": "Mozilla/5.0 (compatible; ChatGPT-User/1.0; +https://crawler.example/info)",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": true
+  },
+  {
+    "label": "crawler OAI-SearchBot/1.0",
+    "agent": "Mozilla/5.0 (compatible; OAI-SearchBot/1.0; +https://crawler.example/info)",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": true
+  },
+  {
+    "label": "crawler ClaudeBot/1.0",
+    "agent": "Mozilla/5.0 (compatible; ClaudeBot/1.0; +https://crawler.example/info)",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": true
+  },
+  {
+    "label": "crawler Claude-User/1.0",
+    "agent": "Mozilla/5.0 (compatible; Claude-User/1.0; +https://crawler.example/info)",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": true
+  },
+  {
+    "label": "crawler PerplexityBot/1.0",
+    "agent": "Mozilla/5.0 (compatible; PerplexityBot/1.0; +https://crawler.example/info)",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": true
+  },
+  {
+    "label": "crawler Bytespider/1.0",
+    "agent": "Mozilla/5.0 (compatible; Bytespider/1.0; +https://crawler.example/info)",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": true
+  },
+  {
+    "label": "crawler CCBot/2.0",
+    "agent": "Mozilla/5.0 (compatible; CCBot/2.0; +https://crawler.example/info)",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": true
+  },
+  {
+    "label": "crawler Amazonbot/0.1",
+    "agent": "Mozilla/5.0 (compatible; Amazonbot/0.1; +https://crawler.example/info)",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": true
+  },
+  {
+    "label": "crawler meta-externalagent/1.0",
+    "agent": "Mozilla/5.0 (compatible; meta-externalagent/1.0; +https://crawler.example/info)",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": true
+  },
+  {
+    "label": "crawler UptimeRobot/2.0",
+    "agent": "Mozilla/5.0 (compatible; UptimeRobot/2.0; +https://crawler.example/info)",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": true
+  },
+  {
+    "label": "crawler Pingdom.com_bot/1.4",
+    "agent": "Mozilla/5.0 (compatible; Pingdom.com_bot/1.4; +https://crawler.example/info)",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": true
+  },
+  {
+    "label": "Headless Chrome overlap",
+    "agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 HeadlessChrome/130.0 Safari/537.36",
+    "browserFamily": "chrome",
+    "osFamily": "linux",
+    "deviceClass": "desktop",
+    "isBot": true
+  },
+  {
+    "label": "unknown or negative ''",
+    "agent": "",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": false
+  },
+  {
+    "label": "unknown or negative 'UnknownClient/1.0'",
+    "agent": "UnknownClient/1.0",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": false
+  },
+  {
+    "label": "unknown or negative 'Robotics research browser/1.0'",
+    "agent": "Robotics research browser/1.0",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": false
+  },
+  {
+    "label": "unknown or negative 'BotanicalBrowser/1.0'",
+    "agent": "BotanicalBrowser/1.0",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": false
+  },
+  {
+    "label": "unknown or negative 'Search laboratory/2.0'",
+    "agent": "Search laboratory/2.0",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": false
+  },
+  {
+    "label": "unknown or negative 'Safari/605.1.15'",
+    "agent": "Safari/605.1.15",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": false
+  },
+  {
+    "label": "unknown or negative 'Mozilla/5.0 (Étranger)'",
+    "agent": "Mozilla/5.0 (Étranger)",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": false
+  },
+  {
+    "label": "unknown or negative 'curl/8.7.1'",
+    "agent": "curl/8.7.1",
+    "browserFamily": "unknown",
+    "osFamily": "unknown",
+    "deviceClass": "unknown",
+    "isBot": false
+  }
+]

@@ -40,7 +40,7 @@ spec = describe "Kansoku.Query integration" $ do
               propertyEvent "replay-identify" "identify" "replay-user" [] & #anonymousId ?~ AnonymousId "replay-anon"
             ]
               <&> (\event -> (if event ^. #eventName == EventName "page_view" then event & #userId .~ Nothing & #anonymousId ?~ AnonymousId "replay-anon" else event) & #accountId ?~ AccountId "acct_replay" & #sessionId ?~ SessionId "replay-session" & #url ?~ "https://example.com/replay")
-          req = Query.QueryRequest (AccountId "acct_replay") (fromGregorian 2026 7 1) (fromGregorian 2026 7 2) Nothing (Just Day) []
+          req = Query.QueryRequest (AccountId "acct_replay") (fromGregorian 2026 7 1) (fromGregorian 2026 7 2) Nothing (Just Day) [] False
       metrics <- traverse requireBuiltinMetric ["events", "revenue", "page_views", "sessions", "active_users", "conversion_rate"]
       revenue <- requireBuiltinMetric "revenue"
       average <- case revenue of Simple definition -> pure (Simple (definition & #name .~ "payment_average" & #aggregation .~ Average)); _ -> fail "expected revenue definition"
@@ -89,7 +89,8 @@ spec = describe "Kansoku.Query integration" $ do
                 to = fromGregorian 2026 7 2,
                 groupBy = Just ["event_name"],
                 timeGrain = Just Day,
-                filters = []
+                filters = [],
+                includeBots = False
               }
       result <- expectCompiled compiled
       let keys =
@@ -117,7 +118,8 @@ spec = describe "Kansoku.Query integration" $ do
                 to = fromGregorian 2026 7 2,
                 groupBy = Nothing,
                 timeGrain = Just Day,
-                filters = []
+                filters = [],
+                includeBots = False
               }
       result <- expectCompiled compiled
       sum (fmap (^. #value) (result ^. #points)) `shouldBe` 1
@@ -142,7 +144,8 @@ spec = describe "Kansoku.Query integration" $ do
                 to = fromGregorian 2026 7 2,
                 groupBy = Nothing,
                 timeGrain = Just Day,
-                filters = []
+                filters = [],
+                includeBots = False
               }
       result <- expectCompiled compiled
       sum (fmap (^. #value) (result ^. #points)) `shouldBe` 1
@@ -170,7 +173,8 @@ spec = describe "Kansoku.Query integration" $ do
                 to = fromGregorian 2026 7 2,
                 groupBy = Just ["prop:plan"],
                 timeGrain = Just Day,
-                filters = []
+                filters = [],
+                includeBots = False
               }
       result <- expectCompiled compiled
       Map.fromList
@@ -203,7 +207,8 @@ spec = describe "Kansoku.Query integration" $ do
                 to = fromGregorian 2026 7 2,
                 groupBy = Nothing,
                 timeGrain = Just Day,
-                filters = []
+                filters = [],
+                includeBots = False
               }
       result <- expectCompiled compiled
       Map.fromList
@@ -237,7 +242,8 @@ spec = describe "Kansoku.Query integration" $ do
                     to = fromGregorian 2026 6 8,
                     groupBy = Nothing,
                     timeGrain = Nothing,
-                    filters = []
+                    filters = [],
+                    includeBots = False
                   }
                 604800
                 steps
@@ -275,7 +281,8 @@ spec = describe "Kansoku.Query integration" $ do
                 to = fromGregorian 2026 8 3,
                 groupBy = Nothing,
                 timeGrain = Nothing,
-                filters = []
+                filters = [],
+                includeBots = False
               }
       exposures <- expectCompiled =<< runEff (Query.runExperimentExposures queryPool request (Just experiment))
       Map.fromList

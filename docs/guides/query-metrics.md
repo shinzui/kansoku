@@ -64,7 +64,8 @@ still follow `mori://shinzui/haskell-jitsurei/docs/api-relay-pagination`.
 Standard event/user/revenue routes accept `timeGrain` (`hour`, `day`, `week`, `month`),
 `groupBy` and repeatable `filter`. The default grain is day; conversion without a grain is one
 ratio over the whole interval. `groupBy` contains one or two distinct comma-separated names:
-`event_name`, `source`, `source_service`, `host`, `route`, or `prop:<name>`.
+`event_name`, `source`, `source_service`, `host`, `route`, enrichment/acquisition dimensions
+from [web enrichment](web-enrichment.md), or `prop:<name>`.
 
 Property dimensions require a compatible scalar declaration across the selected registered
 events and their schema versions. Missing declarations in older versions are missing values;
@@ -97,7 +98,9 @@ Invalid JSON/filter grammar or incompatible filter types return `invalid_filter`
 
 | Route | Parameters in addition to required `from`, `to` |
 | --- | --- |
-| events, page-views, users, feature-adoption, revenue, conversion | `groupBy`, `timeGrain`, repeatable `filter` |
+| events, feature-adoption, revenue, conversion | `groupBy`, `timeGrain`, repeatable `filter` |
+| page-views, users | `groupBy`, `timeGrain`, repeatable `filter`, `includeBots` (default false) |
+| acquisition | `groupBy` (default channel), `timeGrain`, repeatable session-attribute `filter`, `measure` (sessions/users), `includeBots` (default false) |
 | sessions | `timeGrain` |
 | funnel | required `steps`; optional `window` |
 | retention | `days` |
@@ -136,19 +139,20 @@ conversion returns a single zero when its denominator is zero.
 | Endpoint | Current meaning |
 | --- | --- |
 | `/metrics/events` | Distinct event IDs across all event names. |
-| `/metrics/page-views` | Distinct canonical `page_view` event IDs with the same filters at every grain. |
+| `/metrics/page-views` | Distinct canonical `page_view` event IDs with the same filters and default row-level bot exclusion at every grain. |
+| `/metrics/acquisition` | Complete retained web sessions, first-touch attribution and exact primary-subject users; defaults to sessions grouped by channel, excluding any-bot sessions. |
 | `/metrics/sessions` | Distinct non-empty producer-supplied `sessionId` values. |
 | `/metrics/funnel` | Exact identity-resolved users completing ordered event steps. |
 | `/metrics/retention` | Exact identity-resolved activity by new-in-window cohort and day offset. |
 | `/metrics/feature-adoption` | Exact identity-resolved users emitting `feature_used`, grouped by its `feature` property by default. |
 | `/metrics/conversion` | Users with `signup_completed` divided by users with `signup_started`; returns 0 when the denominator is 0. |
-| `/metrics/users` | Exact canonical resolved active users at every grain, excluding identify, identify_once, alias and group events. |
+| `/metrics/users` | Exact canonical resolved active users at every grain, excluding identify, identify_once, alias, group and bot rows (unless includeBots=true). |
 | `/metrics/revenue` | Sum of numeric `amount` on `payment_completed` events. |
 | `/metrics/experiments` | Approximate raw identities exposed per experiment and variant. |
 | `/metrics/experiments/conversion` | Exact identity-resolved exposed and post-exposure converted users per variant, plus rate. |
 | `/metrics/experiments/funnel` | Exact identity-resolved ordered post-exposure funnel counts per variant. |
 
-`/metrics/acquisition`, `/metrics/organizations`, and `/metrics/custom` are reserved in the
+`/metrics/organizations` and `/metrics/custom` are reserved in the
 contract but not implemented. They currently return HTTP 404 with code `not_implemented`; do not
 build an integration that expects data from them.
 

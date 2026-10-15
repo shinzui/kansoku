@@ -15,6 +15,7 @@ import urllib.parse
 import uuid
 
 from ingest_acceptance import verify_ingest
+from enrichment_acceptance import ADDRESSES, verify_enrichment, verify_country_disabled
 from isolated_clickhouse import isolated_clickhouse, apply_migrations, free_port
 from test_support import binary, execute, hspec, probes
 
@@ -222,7 +223,7 @@ def main():
                     for name, kind, account in [('service_token', 'service', 'mp4_metrics'), ('write_token', 'write', 'mp4_metrics'),
                                                  ('highcard_token', 'service', 'mp4_highcard'), ('write_ingest_token', 'write', 'mp4_ingest'),
                                                  ('service_ingest_token', 'service', 'mp4_ingest'), ('other_token', 'service', 'mp4_other'),
-                                                 ('client_token', 'write', 'mp4_client')]:
+                                                 ('client_token', 'write', 'mp4_client'), ('enrichment_write', 'write', 'mp4_enrichment'), ('enrichment_service', 'service', 'mp4_enrichment')]:
                         result = subprocess.run([server, 'issue-key', '--kind', kind, '--account', account,
                                                  '--description', 'disposable acceptance'], env=env, capture_output=True, text=True, check=True, timeout=15)
                         token = result.stdout.splitlines()[-2]
@@ -233,6 +234,15 @@ def main():
                     (ROOT / 'oversized.json').write_text(' ' * 10000)
                     run(['hurlfmt', '--check'] + [str(SUITE / file) for file in
                         ['health.hurl', 'openapi.hurl', 'schemas.hurl', 'metrics.hurl', 'ingest.hurl', 'perimeter/perimeter.hurl', 'perimeter/metrics-disabled.hurl']], env, 'hurl-format')
+                    geo = dict(env,
+                        KANSOKU_INGEST_GEOIP_DB=str(REPO / 'kansoku-core/test/fixtures/geoip/GeoIP2-Country-Test.mmdb'),
+                        KANSOKU_INGEST_TRUSTED_PROXY_CIDRS='127.0.0.1/32')
+                    for label, database in [('missing', str(ROOT / 'absent.mmdb')),
+                                            ('corrupt', str(REPO / 'kansoku-core/test/fixtures/geoip/LICENSE-MIT')),
+                                            ('unsupported', str(REPO / 'kansoku-core/test/fixtures/geoip/GeoIP2-ISP-Test.mmdb'))]:
+                        invalid = subprocess.run([server], env=dict(geo, KANSOKU_INGEST_GEOIP_DB=database), capture_output=True, text=True, timeout=15)
+                        (ROOT / ('geo-startup-' + label + '.log')).write_text(invalid.stdout + invalid.stderr)
+                        assert invalid.returncode != 0 and 'GeoIP database could not be opened' in invalid.stderr, 'configured invalid GeoIP did not fail clearly'
                     bad = subprocess.run([server], env=dict(env, KANSOKU_SERVER_PORT='not-a-number'), capture_output=True, text=True, timeout=10)
                     (ROOT / 'invalid-startup.log').write_text(bad.stdout + bad.stderr)
                     assert bad.returncode != 0 and 'configuration error' in bad.stderr, 'invalid startup accepted'
@@ -240,7 +250,7 @@ def main():
                         name = 'server-' + (mode.replace('/', '-') or 'legacy')
                         port = free_port()
                         base = f'http://127.0.0.1:{port}'
-                        settings = dict(env, KANSOKU_SERVER_PORT=str(port), OTEL_SEMCONV_STABILITY_OPT_IN=mode)
+                        settings = dict(geo, KANSOKU_SERVER_PORT=str(port), OTEL_SEMCONV_STABILITY_OPT_IN=mode)
                         sentinel = 'private_query_' + uuid.uuid4().hex
                         with child([server], settings, name) as process:
                             wait_for(process, lambda: request(base, '/health/ready')['status'] == 'ok', name)
@@ -251,6 +261,7 @@ def main():
                                 verify_ingest(base, credentials['client_token'], env)
                                 live = dict(settings, KANSOKU_SERVER_URL=base, KANSOKU_API_KEY=credentials['client_token'])
                                 hspec([binary('kansoku-client:test:kansoku-client-test')], env=live, log=ROOT / 'client-tests.log')
+                            verify_enrichment(base, credentials['enrichment_write'], credentials['enrichment_service'])
                             for path in ('/health', '/ready', '/health/live', '/health/ready'):
                                 urllib.request.urlopen(base + path, timeout=3).close()
                             population_filter = urllib.parse.urlencode({'filter': json.dumps(dict(dimension='event_name', op='neq', value=sentinel))})
@@ -259,12 +270,15 @@ def main():
                             assert sum(point['value'] for point in answer['points']) == 7, 'production query parameters lost'
                             assert answer['points'][0]['group'] == {'prop:plan': 'pro'}, 'production grouping parameter lost'
                         privacy(name, credentials['service_token'], sentinel)
+                        output = (ROOT / (name + '.log')).read_text(errors='replace')
+                        assert all(address not in output for address in ADDRESSES), 'request country address leaked into logs/spans'
                     port = free_port()
                     disabled = dict(env, KANSOKU_SERVER_PORT=str(port), KANSOKU_INTERNAL_METRICS_ENABLED='false')
                     with child([server], disabled, 'server-metrics-disabled') as process:
                         base = f'http://127.0.0.1:{port}'
                         wait_for(process, lambda: request(base, '/health/ready')['status'] == 'ok', 'metrics-disabled')
                         hurl(['perimeter/metrics-disabled.hurl'], env, 'hurl-metrics-disabled', [f'base_url={base}'])
+                        verify_country_disabled(base, credentials['enrichment_write'], credentials['enrichment_service'])
             finally:
                 os.environ.clear()
                 os.environ.update(saved)

@@ -18,8 +18,8 @@ import Data.Generics.Labels ()
 import Data.Text qualified as Text
 import Effectful (IOE, type (:>))
 import GHC.Clock (getMonotonicTime)
-import Kansoku.Event (AnalyticsEvent)
-import Kansoku.Ingest.Queue (decodeEvent)
+import Kansoku.Ingest.Queue (decodeQueuedEvent)
+import Kansoku.Ingest.QueuedEvent (QueuedEvent)
 import Kansoku.Observability
   ( PipelineMetrics,
     WriterHeartbeat,
@@ -44,7 +44,7 @@ writerBatchHandler ::
   (IOE :> es) =>
   PipelineMetrics ->
   WriterHeartbeat ->
-  ([AnalyticsEvent] -> IO ()) ->
+  ([QueuedEvent] -> IO ()) ->
   BatchHandler es Value
 writerBatchHandler metrics heartbeat insertBatch _info messages = do
   let decoded = decodeMessage <$> toList messages
@@ -90,14 +90,14 @@ writerBatchHandler metrics heartbeat insertBatch _info messages = do
                     (annotateInsertFailure err bad)
                 )
 
-decodeMessage :: Message es Value -> Either (MessageId, DeadLetterReason) AnalyticsEvent
+decodeMessage :: Message es Value -> Either (MessageId, DeadLetterReason) QueuedEvent
 decodeMessage Message {envelope = Envelope {messageId, payload}} =
-  case decodeEvent payload of
+  case decodeQueuedEvent payload of
     Just event -> Right event
     Nothing ->
       Left
         ( messageId,
-          InvalidPayload "could not decode AnalyticsEvent from pgmq message body"
+          InvalidPayload "could not decode supported event envelope from pgmq message body"
         )
 
 annotateInsertFailure ::

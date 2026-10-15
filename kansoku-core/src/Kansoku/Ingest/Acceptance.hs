@@ -2,6 +2,7 @@
 module Kansoku.Ingest.Acceptance
   ( Acceptance (..),
     acceptBatch,
+    acceptQueuedBatch,
     producerPayloadHash,
   )
 where
@@ -22,7 +23,9 @@ import Hasql.Transaction qualified as T
 import Hasql.Transaction.Sessions qualified as T
 import Kansoku.Event (AccountId (..), AnalyticsEvent, EventId (..), ValidationError (..))
 import Kansoku.Ingest.Api (IngestEvent (..))
-import Kansoku.Ingest.Queue (encodeEvent)
+import Kansoku.Ingest.Queue (encodeQueuedEvent)
+import Kansoku.Ingest.QueuedEvent (QueuedEvent, enrichedQueuedEvent)
+import Kansoku.Ingest.RequestContext (emptyRequestContext)
 import Kansoku.Ingest.Timestamp (TimestampAdjustment)
 import Kansoku.Prelude
 import Pgmq.Hasql.Statements.Message qualified as Pgmq
@@ -54,8 +57,18 @@ acceptBatch ::
   (IngestEvent -> Either [ValidationError] (AnalyticsEvent, Maybe TimestampAdjustment)) ->
   [IngestEvent] ->
   IO (Either Pool.UsageError [Acceptance])
-acceptBatch _ _ _ _ [] = pure (Right [])
-acceptBatch pool queue account validate inputs =
+acceptBatch pool queue account validate =
+  acceptQueuedBatch pool queue account (fmap (\(event, adjustment) -> (enrichedQueuedEvent emptyRequestContext event, adjustment)) . validate)
+
+acceptQueuedBatch ::
+  Pool.Pool ->
+  QueueName ->
+  AccountId ->
+  (IngestEvent -> Either [ValidationError] (QueuedEvent, Maybe TimestampAdjustment)) ->
+  [IngestEvent] ->
+  IO (Either Pool.UsageError [Acceptance])
+acceptQueuedBatch _ _ _ _ [] = pure (Right [])
+acceptQueuedBatch pool queue account validate inputs =
   fmap (fmap (fmap snd . sortOn fst)) $
     Pool.use pool $
       T.transaction T.ReadCommitted T.Write $
@@ -72,11 +85,12 @@ acceptBatch pool queue account validate inputs =
         Nothing -> case validate input of
           Left errors -> pure (Rejected errors)
           Right (candidate, adjustment) -> do
-            let event = candidate & #accountId ?~ account & #eventId .~ (parsedEvent input ^. #eventId)
+            let event = candidate ^. #event & #accountId ?~ account & #eventId .~ (parsedEvent input ^. #eventId)
+                queued = candidate & #event .~ event
             claimed <- T.statement (fst key, snd key, digest) claimIdentity
             case claimed of
               Just _ -> do
-                void $ T.statement (SendMessage queue (encodeEvent event) Nothing) Pgmq.sendMessage
+                void $ T.statement (SendMessage queue (encodeQueuedEvent queued) Nothing) Pgmq.sendMessage
                 pure (NewEvent event adjustment)
               Nothing -> do
                 -- ON CONFLICT waits for a concurrent creator. ReadCommitted's

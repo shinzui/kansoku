@@ -22,6 +22,7 @@ import Kansoku.Config (loadConfig)
 import Kansoku.Event
 import Kansoku.Ingest.Api (ingestEvent)
 import Kansoku.Ingest.Queue (eventsQueueName)
+import Kansoku.Ingest.RequestContext (emptyRequestContext)
 import Kansoku.Ingest.Service
 import Kansoku.Observability (PipelineMetrics)
 import Kansoku.PostgresTestSupport (withMigratedStore)
@@ -81,7 +82,7 @@ spec metrics = describe "Kansoku.Ingest.Admission" $
         vectorCounter (metrics ^. #ingestTimestampAdjustmentsTotal) ("clamped", "single") `shouldReturn` adjustments
         -- EP-39 adapts its body credential into this exact service call. Its
         -- public endpoint/origin tests land with that route, after EP-30.
-        beacon <- runHandler (submitIngest service Beacon principal [ingestEvent future])
+        beacon <- runHandler (submitIngest service Beacon principal emptyRequestContext [ingestEvent future])
         case beacon of
           Right (KansokuRateLimited _ delay) -> delay `shouldBe` 1
           other -> expectationFailure (show other)

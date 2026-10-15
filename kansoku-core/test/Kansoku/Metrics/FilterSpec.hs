@@ -114,7 +114,7 @@ spec = describe "Kansoku.Metrics filters" $ do
         req "funnel" [("groupBy", Just "source")]
       ]
   where
-    request = Query.QueryRequest (AccountId "filters-unit") (fromGregorian 2026 7 1) (fromGregorian 2026 7 2) Nothing Nothing []
+    request = Query.QueryRequest (AccountId "filters-unit") (fromGregorian 2026 7 1) (fromGregorian 2026 7 2) Nothing Nothing [] False
 
 validFilter :: Text -> IO Filter.MetricFilter
 validFilter = either (fail . Text.unpack) pure . Filter.parseMetricFilter

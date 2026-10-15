@@ -12,6 +12,7 @@ module Kansoku.Metrics.Query
     buildFunnelSQL,
     buildRetentionSQL,
     buildSQL,
+    buildAcquisitionSQL,
     activityPredicate,
     buildSessionsSQL,
     experimentConversionPoint,
@@ -27,6 +28,7 @@ module Kansoku.Metrics.Query
     runFunnel,
     runRetention,
     runSessions,
+    runAcquisition,
   )
 where
 
@@ -53,7 +55,7 @@ import Data.List qualified as List
 import Data.Map.Strict qualified as Map
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
-import Data.Time (Day)
+import Data.Time (Day, fromGregorian)
 import Data.Time.Format (defaultTimeLocale, formatTime)
 import Effectful (Eff, IOE, type (:>))
 import Kansoku.ClickHouse (QueryPool, queryDeadlineMicros, withIdentityQueryConnection, withMetricsQueryConnection)
@@ -63,7 +65,7 @@ import Kansoku.Event
     EventRegistry,
   )
 import Kansoku.Exception (trySynchronous)
-import Kansoku.Metrics.Api (MetricPoint (..), MetricResult (..), TimeGrain (..))
+import Kansoku.Metrics.Api (AcquisitionMeasure (..), MetricPoint (..), MetricResult (..), TimeGrain (..))
 import Kansoku.Metrics.Definition (Aggregation (..), MetricDefinition (..), RatioMetric (..))
 import Kansoku.Metrics.Filter (MetricFilter)
 import Kansoku.Metrics.Filter qualified as WireFilter
@@ -76,6 +78,7 @@ import Kansoku.Metrics.Query.Property
     propertyFloatExpr,
     resolveNumericProperty,
   )
+import Kansoku.Metrics.Query.Session (sessionProjection)
 import Kansoku.Metrics.Query.Validate (QueryLimitError (..), SqlName, mkSqlName, renderSqlName, validateDateRange, validateOffsets, validateSteps)
 import Kansoku.Metrics.Registry (BuiltinMetric (..))
 import Kansoku.Prelude
@@ -87,7 +90,8 @@ data QueryRequest = QueryRequest
     to :: !Day,
     groupBy :: !(Maybe [Text]),
     timeGrain :: !(Maybe TimeGrain),
-    filters :: ![MetricFilter]
+    filters :: ![MetricFilter],
+    includeBots :: !Bool
   }
   deriving stock (Generic, Eq, Show)
 
@@ -153,6 +157,46 @@ run registry pool metric req =
           (compiled ^. #groupLabels)
           (accountParameter req <> metricParameters metric req <> compiled ^. #filterParameters)
           (boundedSQL (compiled ^. #ordering) (compiled ^. #sql))
+
+-- Session date predicates apply to the retained session's start, never its input rows.
+-- Only the users measure needs the exact identity snapshot over those retained rows.
+runAcquisition :: (IOE :> es) => EventRegistry -> QueryPool -> AcquisitionMeasure -> QueryRequest -> Eff es (Either QueryExecutionError MetricResult)
+runAcquisition registry pool measure req =
+  case first QueryLimitFailure (validateDateRange (req ^. #from) (req ^. #to))
+    >> first QueryCompileFailure (compileAcquisition registry measure req) of
+    Left failure -> pure (Left failure)
+    Right compiled ->
+      liftIO $
+        runSQL
+          pool
+          "acquisition"
+          (compiled ^. #groupLabels)
+          (accountParameter (retainedScope req) <> compiled ^. #filterParameters)
+          (boundedSQL BucketDimensions (compiled ^. #sql))
+
+buildAcquisitionSQL :: EventRegistry -> AcquisitionMeasure -> QueryRequest -> Either QueryCompileError Text
+buildAcquisitionSQL registry measure req = boundedSQL BucketDimensions . view #sql <$> compileAcquisition registry measure req
+
+retainedScope :: QueryRequest -> QueryRequest
+retainedScope req = req {from = fromGregorian 1970 1 1, to = fromGregorian 2100 1 1}
+
+compileAcquisition :: EventRegistry -> AcquisitionMeasure -> QueryRequest -> Either QueryCompileError CompiledMetric
+compileAcquisition registry measure req = do
+  let scope = Filters.filteredEventScope [] (req ^. #filters)
+  grouping <- requestedGrouping registry scope (req ^. #groupBy) ["channel"]
+  filters <- first QueryCompileFilterError (Filters.compileMetricFilters registry scope (req ^. #filters))
+  let resolved = measure == AcquisitionUsers
+      source = if resolved then resolvedSource (retainedScope req) else "analytics.events_canonical"
+      aggregate = if resolved then "uniqExactIf(primary_subject,primary_subject!='')" else "count()"
+      predicates = [timestampPredicate req] <> ["NOT is_bot" | not (req ^. #includeBots)] <> Filters.predicates filters
+      sql =
+        Text.unlines
+          [ "SELECT " <> bucketExpr (req ^. #timeGrain) <> " AS bucket," <> groupProjection grouping <> ",toFloat64(" <> aggregate <> ") AS value",
+            "FROM (" <> sessionProjection source resolved <> ")",
+            "WHERE " <> accountPredicate <> " AND " <> Text.intercalate " AND " predicates,
+            "GROUP BY bucket,sort_group_1,sort_group_2"
+          ]
+  pure CompiledMetric {sql, groupLabels = map dimensionLabel grouping, filterParameters = Filters.parameters filters, ordering = BucketDimensions}
 
 runSessions :: (IOE :> es) => QueryPool -> QueryRequest -> Eff es (Either QueryExecutionError MetricResult)
 runSessions pool req =
@@ -426,7 +470,7 @@ buildRatioSQL RatioMetric {numerator, denominator} grouping predicates numerator
 
 countEventsSQL :: [GroupDimension] -> [Text] -> MetricDefinition -> QueryRequest -> Text
 countEventsSQL grouping predicates def req =
-  simpleAggregateSQL "toFloat64(count(DISTINCT event_id))" "analytics.events_canonical" grouping predicates def req
+  simpleAggregateSQL "toFloat64(count(DISTINCT event_id))" "analytics.events_canonical" grouping (predicates <> ["NOT is_bot" | def ^. #name == "page_views" && not (req ^. #includeBots)]) def req
 
 uniqueUsersSQL :: [GroupDimension] -> [Text] -> MetricDefinition -> QueryRequest -> Text
 uniqueUsersSQL grouping predicates def req =
@@ -434,7 +478,7 @@ uniqueUsersSQL grouping predicates def req =
     "toFloat64(uniqExact(canonical_user))"
     (resolvedSource req)
     grouping
-    (["canonical_user != ''"] <> [activityPredicate | def ^. #name `elem` ["active_users", "returning_users"]] <> predicates)
+    (["canonical_user != ''"] <> ["NOT is_bot" | def ^. #name `elem` ["active_users", "returning_users"], not (req ^. #includeBots)] <> [activityPredicate | def ^. #name `elem` ["active_users", "returning_users"]] <> predicates)
     def
     req
 

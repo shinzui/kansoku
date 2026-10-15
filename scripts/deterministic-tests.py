@@ -12,6 +12,8 @@ skips = [
     'Kansoku.Identity.Cache native',
     'Kansoku.Metrics.Limits/native',
     'Kansoku.Metrics filters native',
+    'Kansoku.Enrichment native',
+    'Kansoku.Acquisition native',
     'Kansoku.Writer.Batch/decodes a pgmq payload',
     'Kansoku.Writer.Batch/keeps a committed insert',
     'Kansoku.Writer.Batch/retains a committed batch',

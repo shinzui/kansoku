@@ -267,7 +267,8 @@ dayRequest =
       to = fromGregorian 2026 6 8,
       groupBy = Nothing,
       timeGrain = Just Day,
-      filters = []
+      filters = [],
+      includeBots = False
     }
 
 weekRequest :: QueryRequest

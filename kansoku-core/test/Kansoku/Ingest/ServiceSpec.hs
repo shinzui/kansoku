@@ -25,7 +25,8 @@ import Kansoku.Event
 import Kansoku.Ingest.Api
 import Kansoku.Ingest.Handler (ingestServer)
 import Kansoku.Ingest.Quarantine
-import Kansoku.Ingest.Queue (eventsQueueName)
+import Kansoku.Ingest.Queue (decodeEvent, eventsQueueName)
+import Kansoku.Ingest.RequestContext (emptyRequestContext)
 import Kansoku.Ingest.Service (newIngestService)
 import Kansoku.Observability
 import Kansoku.PostgresTestSupport
@@ -55,9 +56,9 @@ spec metrics = describe "Kansoku.Ingest.Service" $ do
     let future = event "future" "custom" now & #occurredAt .~ addUTCTime 90 now & #sentAt ?~ addUTCTime 100 now
     runHandler (single future) `shouldReturn` Right (KansokuOk (IngestAck 1 "future"))
     stored <- Pool.use pool (Session.statement () queued) >>= either (fail . show) pure
-    case Aeson.fromJSON stored of
-      Aeson.Error err -> expectationFailure err
-      Aeson.Success value -> do
+    case decodeEvent stored of
+      Nothing -> expectationFailure "invalid queued envelope"
+      Just value -> do
         let elapsed = value ^. #receivedAt
         (value :: AnalyticsEvent) ^. #occurredAt `shouldBe` addUTCTime (-10) elapsed
         value ^. #sentAt `shouldBe` Nothing
@@ -139,7 +140,7 @@ spec metrics = describe "Kansoku.Ingest.Service" $ do
         let drain = do chunk <- Socket.recv peer 8192; unless (BS.null chunk) drain
         timeout 500_000 drain `shouldReturn` Just ()
   where
-    principal = IngestPrincipal (AuthenticatedPrincipal (ApiKeyId UUID.nil) WriteKey (AccountId "ingest-service-account"))
+    principal = IngestPrincipal (AuthenticatedPrincipal (ApiKeyId UUID.nil) WriteKey (AccountId "ingest-service-account")) emptyRequestContext
     event eid name now = baseEvent (EventId eid) (EventName name) Web now now
     queued = Statement.preparable "SELECT message FROM pgmq.q_ingest_service_spec ORDER BY msg_id LIMIT 1" E.noParams (D.singleRow (D.column (D.nonNullable D.jsonb)))
     preserved = Statement.preparable "SELECT EXISTS (SELECT 1 FROM kansoku.ingest_rejections WHERE payload->>'futureField' = 'retained')" E.noParams (D.singleRow (D.column (D.nonNullable D.bool)))
