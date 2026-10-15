@@ -45,7 +45,7 @@ can infer an unrecorded logout or identify who held a shared device.
 
 - [x] M1: Identity semantics pass shared-device, late-arrival and namespace-collision fixtures.
 - [x] M2: A bounded raw-event resolution source passes a ten-million-row benchmark.
-- [ ] M3: Keyed email identifiers and SDK validation/catalog changes agree.
+- [x] M3: Keyed email identifiers and SDK validation/catalog changes agree.
 
 ## Surprises & Discoveries
 
@@ -96,8 +96,32 @@ query connection, with a separate direct public SQL resolver.
 ## Outcomes & Retrospective
 
 
-The required-size performance gate passes. Native semantic and connection-lifetime acceptance pass. Packaged acceptance and the
-committed SDK contract refresh are being finalized before this child is Complete.
+Complete on 2026-10-15. Conservative subjects, namespaced sketches, rich bounded candidates,
+expiry-aware exact snapshots and catalog v3/keyed-email validation are accepted. The twenty-
+subject native proof passes before/after merges and repeated rebuilds; pool tests cover
+mutation/replacement/missing-index recovery, account/window invalidation, physical isolation
+and both clock refresh and the SELECT expiry guard. The native command lifetime and regrouped
+replay metric tests also pass.
+
+`just check` passes 179 deterministic core examples, 16 client examples, four probes, generated
+contracts, strict ADR validation and all three HTTP telemetry modes. Packaged `just acceptance`
+passes 211 core examples, 17 client examples, four probes, 45 normal Hurl requests plus the
+metrics-disabled request, independent recovery/limits/replay/identity checks and three packaged
+telemetry modes, with no required pending cases. Sanitized evidence is under
+`.dev/acceptance/run-b71njtml/sanitized`.
+
+The actual browser SDK at `mori://shinzui/kansoku-ts/packages/kansoku-js`, revision
+`8bc1bc0`, pins server `9e81117eb194210aeef614ca5a940461aa4ce417`. Its identifier vocabulary and
+public union are generated from catalog v3, HMAC values and unknown-kind rejection are tested,
+and the wire alias consumes generated ProblemDetails. Type checks, lint/format, SSR,
+package/size checks, generated-contract checks and strict ADR validation pass. Tests pass
+59 DOM/unit cases and two native SSR cases; the seven unconfigured SDK live cases remain the
+explicit EP-38 joint release gate, not acceptance evidence for this child.
+
+All twelve required-size warm benchmark cases pass at 1.17–1.58x. Cold preparation grows with
+retained evidence and may recur after writes/merges; the tables below qualify that cost rather
+than claiming generic production latency. EP-31 owns work budgets across preparation and the
+final SELECT. EP-37 owns fenced lifecycle of every derived index and the raw identity key.
 
 ## Context and Orientation
 
