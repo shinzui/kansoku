@@ -25,12 +25,6 @@
                   inherit pkg ver sha256;
                 }
                 { }));
-            clickHaskellSrc = pkgs.fetchFromGitHub {
-              owner = "KovalevDima";
-              repo = "ClickHaskell";
-              rev = "4524fbdd08cd0cf4a3468180323cbf6c4cf5667b";
-              hash = "sha256-MKQybR1W/wGAz15J2rtgPAuaHM1CUEtkDVDSShRUjCg=";
-            };
             hasqlMigrationSrc = pkgs.fetchFromGitHub {
               owner = "shinzui";
               repo = "hasql-migration";
@@ -57,7 +51,7 @@
               dontCheck (doJailbreak (self.callCabal2nix name (threadUtilsSrc + subdir) { }));
           in
           {
-            ClickHaskell = dontCheck (doJailbreak (self.callCabal2nix "ClickHaskell" (clickHaskellSrc + "/library") { }));
+            ClickHaskell = dontCheck (doJailbreak (self.callCabal2nix "ClickHaskell" "${inputs.self}/vendor/ClickHaskell" { }));
             unicode-data = dontCheck super.unicode-data;
             warp = disableCabalFlag "x509" super.warp;
             hasql = dontCheck (doJailbreak (self.callHackageDirect
@@ -164,6 +158,7 @@
               );
 
             openapi-hs = callHackageNoCheck "openapi-hs" "5.0.0" "194lng0czgk0ma9463yydj9hnr2hpq99kxfx0p06xvwg36b11cin";
+            servant-health = callHackageNoCheck "servant-health" "0.1.0.0" "1g24jnnijpap99vkmmqmkinlw18pg0hd23arrijgss430y63iv4x";
             servant-openapi-hs = callHackageNoCheck "servant-openapi-hs" "5.1.0" "19mvvlzfk7ffh5gbmqhpy587rjjd0xcgydbkcy1b48wxx061h8im";
 
             pg-migrate = callHackageNoCheck "pg-migrate" "1.1.0.0" "103y2bddn50pvrjnlhnfcqznlfihp68bpm72xg8s9xv2x8kv3s2b";
@@ -198,6 +193,7 @@
       };
     in
     {
+      treefmt.settings.global.excludes = [ "vendor/**" ];
       packages = {
         default = kansokuServer;
         kansoku-api = kansokuApi;

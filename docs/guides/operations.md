@@ -78,16 +78,32 @@ zero-downtime rotation.
 
 | Route | Success | Meaning |
 | --- | --- | --- |
+| `GET /health/live` | HTTP 200 JSON | Process responsiveness, independent of dependencies. |
+| `GET /health/ready` | HTTP 200 JSON | First failing dependency determines 503. |
 | `GET /health` | HTTP 200, `OK` | The HTTP process can answer. It does not check dependencies. |
-| `GET /ready` | HTTP 200 JSON | Writer, PGMQ, queue depth, and flush freshness satisfy readiness thresholds. |
+| `GET /ready` | HTTP 200 JSON | Compatibility diagnostics: writer, PGMQ, ClickHouse, queue depth, and flush freshness satisfy readiness thresholds. |
 | `GET /internal/metrics` | HTTP 200 Prometheus text | Pipeline telemetry, when enabled. |
 | `GET /openapi.json` | HTTP 200 JSON | Current generated public HTTP contract. |
 | `GET /v1/schemas` | HTTP 200 JSON | Current public event schema catalog. |
 
-`/ready` always reports four checks in this order: `writer_alive`, `pgmq_reachable`,
-`queue_depth`, and `writer_flush_stale`. A failure returns HTTP 503 with `status: unavailable`, a
-`failing` list, and details on the failed checks. Configure orchestration readiness from `/ready`
-and liveness from `/health`.
+Use `/health/live` for orchestration liveness and `/health/ready` for readiness.
+Canonical bodies contain exactly `status`, `check`, and `failingSince`: healthy is
+`{"status":"ok","check":"all","failingSince":null}`; failure is HTTP 503 with
+`status: failed`, the first failing check, and the original consecutive failure onset.
+Recovery resets the onset. Dependency failure does not fail liveness.
+
+Readiness checks run in order: `writer_alive`, `pgmq_reachable`,
+`clickhouse_query_reachable`, `queue_depth`, `writer_flush_stale`. External checks
+include pool acquisition and physical cleanup in a 750 ms deadline; the complete
+probe has a 2 second deadline. Query reachability uses native ping without scanning
+analytics tables. Backlog thresholds still use the poller's cached sample.
+
+`/health` retains its `OK` text response. `/ready` retains detailed diagnostics,
+including all five ordered checks and observations for failed thresholds. It returns
+503 with `status: unavailable` and a `failing` list on failure. These four exact probe
+paths are operational contracts, exempt from RFC 9457 problem bodies and excluded
+from access logging. They are absent from customer OpenAPI and outside ingestion
+CORS, authentication and body limits.
 
 The reference and operational routes are unauthenticated. Restrict `/ready`,
 `/internal/metrics`, and deployment-specific diagnostics with network policy or a reverse proxy.
@@ -127,7 +143,9 @@ Accepted events already in the queue remain durable.
 
 ### ClickHouse unavailable
 
-Metric queries return retryable HTTP 503. Writer inserts fail, increment
+Canonical readiness fails `clickhouse_query_reachable`. Interrupted and failed query
+connections close before errors propagate; the next pool checkout opens a fresh connection.
+Pool shutdown closes idle physical connections. Metric queries return retryable HTTP 503. Writer inserts fail, increment
 `kansoku_writer_insert_failures_total`, and are retried within the adapter policy. The writer
 discards a failed physical connection and opens a new one on the next delivery so a repaired
 ClickHouse can recover without restarting Kansoku.

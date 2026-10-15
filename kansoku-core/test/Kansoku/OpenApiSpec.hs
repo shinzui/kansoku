@@ -179,7 +179,7 @@ spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
       readyBody <- decodeBody @Aeson.Value (HTTP.responseBody ready)
       lookupText ["status"] readyBody `shouldBe` Just "ready"
       checkNames readyBody
-        `shouldBe` ["writer_alive", "pgmq_reachable", "queue_depth", "writer_flush_stale"]
+        `shouldBe` ["writer_alive", "pgmq_reachable", "clickhouse_query_reachable", "queue_depth", "writer_flush_stale"]
 
       openapi <- get manager port "/openapi.json"
       HTTP.responseStatus openapi `shouldBe` status200
@@ -226,7 +226,7 @@ expectedServedPaths =
     ]
 
 operationalPaths :: [Text]
-operationalPaths = ["/health", "/ready", "/internal/metrics", "/openapi.json"]
+operationalPaths = ["/health/live", "/health/ready", "/health", "/ready", "/internal/metrics", "/openapi.json"]
 
 expectedOperationIds :: [(Text, Text, Text)]
 expectedOperationIds =
@@ -346,6 +346,7 @@ alwaysReadyProbe =
   ReadyProbe
     { writerAlive = pure True,
       pgmqReachable = pure (Right ()),
+      clickhouseReachable = pure True,
       pipelineReady = pure []
     }
 

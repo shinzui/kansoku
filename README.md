@@ -18,7 +18,7 @@ query time, and serves reusable metrics through a typed HTTP API.
   with conflict visibility and query-time resolution.
 - Product, session, ordered-funnel, retention, property, revenue, and exposure-based experiment
   metrics.
-- OpenAPI at `GET /openapi.json`, readiness at `GET /ready`, Prometheus metrics at
+- OpenAPI at `GET /openapi.json`, liveness at `GET /health/live`, readiness at `GET /health/ready`, Prometheus metrics at
   `GET /internal/metrics`, and opt-in OpenTelemetry trace export.
 - A buffered Haskell producer SDK and typed Haskell metrics clients.
 

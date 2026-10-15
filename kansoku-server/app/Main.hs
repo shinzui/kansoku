@@ -15,7 +15,9 @@ import Kansoku.Auth.Types
   )
 import Kansoku.ClickHouse
   ( clickHouseConfigFromConfig,
+    closeQueryPool,
     newQueryPool,
+    queryReachable,
   )
 import Kansoku.Config (loadConfig)
 import Kansoku.Event (AccountId (..))
@@ -66,66 +68,68 @@ runServer = do
       let queueName = eventsQueueName (cfg ^. #eventsQueueName)
       bracket (createPool (cfg ^. #pgConnectionString)) Pool.release $ \pool -> do
         provisionQueue pool queueName
-        queryPool <- newQueryPool (clickHouseConfigFromConfig cfg) (cfg ^. #clickHouseQueryPoolSize)
-        bracket makeTelemetry shutdownTelemetry $ \telemetry -> do
-          startedAt <- getCurrentTime
-          let tracer = telemetry ^. #tracer
-          metrics <- registerPipelineMetrics
-          heartbeat <- newWriterHeartbeat
-          queueDepth <- newQueueDepthCell
-          withAsync
-            ( runWriter
-                metrics
-                heartbeat
-                pool
-                tracer
-                (clickHouseConfigFromConfig cfg)
-                queueName
-                (cfg ^. #writerVisibilityTimeoutSec)
-                (cfg ^. #writerAdapterBatchSize)
-                (cfg ^. #writerMaxBatchSize)
-                (cfg ^. #writerMaxLatencyMs)
-                (readMVar shutdownVar)
-            )
-            ( \writerAsync ->
-                withAsync
-                  ( runQueueDepthPoller
-                      pool
-                      queueName
-                      metrics
-                      queueDepth
-                      (cfg ^. #queuePollIntervalSec)
-                  )
-                  ( \pollerAsync ->
-                      let probe =
-                            ReadyProbe
-                              { writerAlive = isNothing <$> poll writerAsync,
-                                pgmqReachable = pgmqReady pool queueName,
-                                pipelineReady = do
-                                  queueSample <- readQueueDepth queueDepth
-                                  lastFlush <- lastWriterBeat heartbeat
-                                  now <- getCurrentTime
-                                  pure $
-                                    evaluatePipelineReadiness
-                                      ReadyThresholds
-                                        { maxQueueDepth = cfg ^. #readyMaxQueueDepth,
-                                          maxFlushAgeSec = cfg ^. #readyMaxFlushAgeSec,
-                                          sampleMaxAgeSec = 3 * (cfg ^. #queuePollIntervalSec)
-                                        }
-                                      startedAt
-                                      queueSample
-                                      lastFlush
-                                      now
-                              }
-                          app = kansokuApp cfg probe pool queueName queryPool
-                       in race_
-                            (wait writerAsync)
-                            ( race_
-                                (wait pollerAsync)
-                                (runApp cfg (startServer app))
-                            )
-                  )
-            )
+        bracket (newQueryPool (clickHouseConfigFromConfig cfg) (cfg ^. #clickHouseQueryPoolSize)) closeQueryPool $ \queryPool ->
+          bracket makeTelemetry shutdownTelemetry $ \telemetry -> do
+            startedAt <- getCurrentTime
+            let tracer = telemetry ^. #tracer
+            metrics <- registerPipelineMetrics
+            heartbeat <- newWriterHeartbeat
+            queueDepth <- newQueueDepthCell
+            withAsync
+              ( runWriter
+                  metrics
+                  heartbeat
+                  pool
+                  tracer
+                  (clickHouseConfigFromConfig cfg)
+                  queueName
+                  (cfg ^. #writerVisibilityTimeoutSec)
+                  (cfg ^. #writerAdapterBatchSize)
+                  (cfg ^. #writerMaxBatchSize)
+                  (cfg ^. #writerMaxLatencyMs)
+                  (readMVar shutdownVar)
+              )
+              ( \writerAsync ->
+                  withAsync
+                    ( runQueueDepthPoller
+                        pool
+                        queueName
+                        metrics
+                        queueDepth
+                        (cfg ^. #queuePollIntervalSec)
+                    )
+                    ( \pollerAsync ->
+                        let probe =
+                              ReadyProbe
+                                { writerAlive = isNothing <$> poll writerAsync,
+                                  pgmqReachable = pgmqReady pool queueName,
+                                  clickhouseReachable = queryReachable queryPool,
+                                  pipelineReady = do
+                                    queueSample <- readQueueDepth queueDepth
+                                    lastFlush <- lastWriterBeat heartbeat
+                                    now <- getCurrentTime
+                                    pure $
+                                      evaluatePipelineReadiness
+                                        ReadyThresholds
+                                          { maxQueueDepth = cfg ^. #readyMaxQueueDepth,
+                                            maxFlushAgeSec = cfg ^. #readyMaxFlushAgeSec,
+                                            sampleMaxAgeSec = 3 * (cfg ^. #queuePollIntervalSec)
+                                          }
+                                        startedAt
+                                        queueSample
+                                        lastFlush
+                                        now
+                                }
+                         in do
+                              app <- kansokuApp cfg probe pool queueName queryPool
+                              race_
+                                (wait writerAsync)
+                                ( race_
+                                    (wait pollerAsync)
+                                    (runApp cfg (startServer app))
+                                )
+                    )
+              )
 
 data IssueOptions = IssueOptions
   { kind :: !CredentialKind,

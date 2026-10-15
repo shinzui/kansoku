@@ -10,6 +10,8 @@ module Kansoku.Server
     ingestCors,
     internalMetrics,
     kansokuApp,
+    kansokuAppWithChecks,
+    newProbeChecks,
     kansokuServer,
     pgmqReady,
     startServer,
@@ -38,7 +40,8 @@ import Kansoku.ClickHouse (QueryPool)
 import Kansoku.Config (Config)
 import Kansoku.Event.Contract (schemaCatalog)
 import Kansoku.Event.Registry (defaultRegistry)
-import Kansoku.Exception (catchSynchronous)
+import Kansoku.Exception (catchSynchronous, trySynchronous)
+import Kansoku.Health (probeApplication)
 import Kansoku.Ingest.Handler (ingestServer)
 import Kansoku.Logging (Log, logError, logInfo, runLogStderr)
 import Kansoku.Metrics.Handler (metricsServer)
@@ -62,13 +65,17 @@ import Servant
     err404,
     serveWithContext,
   )
+import Servant.Health (ProbeCheck, ProbeVerdict (..))
+import Servant.Health.Check (boolCheck, newFailureTracker, safeCheck, sequenceChecks, withProbeTimeout)
 import Servant.Server (ErrorFormatter, ErrorFormatters (..), defaultErrorFormatters)
 import Servant.Server.Generic (AsServerT)
+import System.Timeout (timeout)
 
 -- | Runtime checks used to answer GET /ready.
 data ReadyProbe = ReadyProbe
   { writerAlive :: !(IO Bool),
     pgmqReachable :: !(IO (Either Text ())),
+    clickhouseReachable :: !(IO Bool),
     pipelineReady :: !(IO [ReadyCheckFailure])
   }
   deriving stock (Generic)
@@ -90,29 +97,70 @@ kansokuServer maxBatchLength pool queueName queryPool =
       schemas = pure (schemaCatalog defaultRegistry)
     }
 
-kansokuApp :: Config -> ReadyProbe -> Pool.Pool -> QueueName -> QueryPool -> Application
-kansokuApp config probe pool queueName queryPool =
-  waiWrapper
-    probe
-    ( internalMetrics
-        (config ^. #internalMetricsEnabled)
-        ( ingestCors
-            (config ^. #corsAllowedOrigins)
-            ( problemBoundary $
-                bodySizeLimit
-                  (config ^. #ingestMaxBodyBytes)
-                  ( serveWithContext
-                      kansokuAPI
-                      ( envelopeFormatters
-                          :. ingestAuthHandler pool
-                          :. metricsAuthHandler pool
-                          :. EmptyContext
-                      )
-                      (kansokuServer (config ^. #ingestMaxBatchLength) pool queueName queryPool)
-                  )
-            )
-        )
+kansokuApp :: Config -> ReadyProbe -> Pool.Pool -> QueueName -> QueryPool -> IO Application
+kansokuApp config probe pool queueName queryPool = do
+  (liveCheck, readyCheck) <- newProbeChecks probe
+  pure (kansokuAppWithChecks liveCheck readyCheck config probe pool queueName queryPool)
+
+-- | Production assembly with independently injectable checks. The conformance kit
+-- uses this same builder; analytics dependencies stay unevaluated for probes.
+kansokuAppWithChecks :: ProbeCheck -> ProbeCheck -> Config -> ReadyProbe -> Pool.Pool -> QueueName -> QueryPool -> Application
+kansokuAppWithChecks liveCheck readyCheck config probe pool queueName queryPool =
+  operational liveCheck readyCheck $
+    waiWrapper
+      probe
+      ( internalMetrics
+          (config ^. #internalMetricsEnabled)
+          ( ingestCors
+              (config ^. #corsAllowedOrigins)
+              ( problemBoundary $
+                  bodySizeLimit
+                    (config ^. #ingestMaxBodyBytes)
+                    ( serveWithContext
+                        kansokuAPI
+                        ( envelopeFormatters
+                            :. ingestAuthHandler pool
+                            :. metricsAuthHandler pool
+                            :. EmptyContext
+                        )
+                        (kansokuServer (config ^. #ingestMaxBatchLength) pool queueName queryPool)
+                    )
+              )
+          )
+      )
+
+-- | Allocate independent failure-onset state once, at application startup.
+newProbeChecks :: ReadyProbe -> IO (ProbeCheck, ProbeCheck)
+newProbeChecks probe = do
+  trackLive <- newFailureTracker
+  trackReady <- newFailureTracker
+  pure
+    ( trackLive (withProbeTimeout 2_000_000 "liveness" (safeCheck "liveness" (getCurrentTime >> pure Healthy))),
+      trackReady (withProbeTimeout 2_000_000 "readiness" (sequenceChecks (namedReadyChecks probe)))
     )
+
+namedReadyChecks :: ReadyProbe -> [ProbeCheck]
+namedReadyChecks probe =
+  [ boundedCheck "writer_alive" (probe ^. #writerAlive),
+    boundedCheck "pgmq_reachable" (isRight <$> (probe ^. #pgmqReachable)),
+    boundedCheck "clickhouse_query_reachable" (probe ^. #clickhouseReachable),
+    boundedCheck "queue_depth" (pipelineOk "queue_depth"),
+    boundedCheck "writer_flush_stale" (pipelineOk "writer_flush_stale")
+  ]
+  where
+    pipelineOk name = all ((/= name) . checkName) <$> (probe ^. #pipelineReady)
+
+boundedCheck :: Text -> IO Bool -> ProbeCheck
+boundedCheck name = withProbeTimeout 750_000 name . safeCheck name . boolCheck name
+
+operational :: ProbeCheck -> ProbeCheck -> Middleware
+operational liveCheck readyCheck inner req respond =
+  case pathInfo req of
+    ["health", "live"] -> probes req respond
+    ["health", "ready"] -> probes req respond
+    _ -> inner req respond
+  where
+    probes = probeApplication liveCheck readyCheck
 
 -- | Serve the operational Prometheus scrape without adding it to the public
 -- Servant API or OpenAPI document. This middleware sits outside the EP-14
@@ -193,17 +241,38 @@ waiWrapper probe inner req respond =
 
 readyApp :: ReadyProbe -> Application
 readyApp probe _req respond = do
-  isWriterAlive <- probe ^. #writerAlive
-  postgresResult <- probe ^. #pgmqReachable
+  result <- timeout 2_000_000 (trySynchronous (readyResponse probe))
+  respond $ case result of
+    Just (Right response) -> response
+    _ ->
+      responseLBS status503 [(hContentType, "application/json")] $
+        Aeson.encode
+          ( Aeson.object
+              [ "status" Aeson..= ("unavailable" :: Text),
+                "failing" Aeson..= (["readiness"] :: [Text]),
+                "checks"
+                  Aeson..= fmap
+                    (`simpleCheck` False)
+                    ["writer_alive", "pgmq_reachable", "clickhouse_query_reachable", "queue_depth", "writer_flush_stale"]
+              ]
+          )
+
+readyResponse :: ReadyProbe -> IO Response
+readyResponse probe = do
+  isWriterAlive <- passed <$> boundedCheck "writer_alive" (probe ^. #writerAlive)
+  postgresOk <- passed <$> boundedCheck "pgmq_reachable" (isRight <$> (probe ^. #pgmqReachable))
+  clickhouseOk <- passed <$> boundedCheck "clickhouse_query_reachable" (probe ^. #clickhouseReachable)
   pipelineFailures <- probe ^. #pipelineReady
   let failingDependencies :: [Text]
       failingDependencies =
         ["writer" | not isWriterAlive]
-          <> either (const ["postgres"]) (const []) postgresResult
+          <> ["postgres" | not postgresOk]
+          <> ["clickhouse" | not clickhouseOk]
           <> (checkName <$> pipelineFailures)
       checks =
         [ simpleCheck "writer_alive" isWriterAlive,
-          simpleCheck "pgmq_reachable" (isRight postgresResult),
+          simpleCheck "pgmq_reachable" postgresOk,
+          simpleCheck "clickhouse_query_reachable" clickhouseOk,
           pipelineCheck "queue_depth" pipelineFailures,
           pipelineCheck "writer_flush_stale" pipelineFailures
         ]
@@ -222,7 +291,11 @@ readyApp probe _req respond = do
       status
         | null failingDependencies = status200
         | otherwise = status503
-  respond (responseLBS status [(hContentType, "application/json")] (Aeson.encode body))
+  pure (responseLBS status [(hContentType, "application/json")] (Aeson.encode body))
+
+passed :: ProbeVerdict -> Bool
+passed Healthy = True
+passed Unhealthy {} = False
 
 simpleCheck :: Text -> Bool -> Aeson.Value
 simpleCheck name ok = Aeson.object ["check" Aeson..= name, "ok" Aeson..= ok]

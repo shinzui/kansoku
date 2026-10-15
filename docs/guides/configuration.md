@@ -61,7 +61,7 @@ an access-control substitute; ingestion authentication remains mandatory.
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `KANSOKU_INTERNAL_METRICS_ENABLED` | `true` | Serve Prometheus text at `/internal/metrics`; accepts `true`, `false`, `1`, or `0`. |
-| `KANSOKU_READY_MAX_QUEUE_DEPTH` | `100000` | Non-negative queue depth above which `/ready` fails. |
+| `KANSOKU_READY_MAX_QUEUE_DEPTH` | `100000` | Non-negative queue depth above which readiness fails. |
 | `KANSOKU_READY_MAX_FLUSH_AGE_SEC` | `120` | Positive maximum age of the last successful flush while backlog exists. |
 
 Queue samples older than three poll intervals do not drive the depth or flush-age failures;
@@ -105,3 +105,9 @@ terminate TLS itself.
 recovery.
 
 [Documentation index](../README.md)
+
+Canonical probes are `/health/live` and `/health/ready`; `/health` and `/ready`
+remain compatibility routes. Probe timeouts are fixed operational limits: 2 seconds
+for each complete probe and 750 ms for each external readiness check, including pool
+wait and disposal. They do not impose an analytics-query duration policy. ClickHouse
+query reachability is checked independently of the writer and queue thresholds.

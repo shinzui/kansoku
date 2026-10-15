@@ -82,12 +82,14 @@ The default address is `http://localhost:8080`. Confirm that the process and its
 are ready from terminal 3:
 
 ```bash
-curl --fail --silent http://localhost:8080/health
-curl --fail --silent http://localhost:8080/ready | jq .
+curl --fail --silent http://localhost:8080/health/live | jq .
+curl --fail --silent http://localhost:8080/health/ready | jq .
 ```
 
-The health response is `OK`. A ready response has `"status": "ready"` and four successful
-checks: `writer_alive`, `pgmq_reachable`, `queue_depth`, and `writer_flush_stale`.
+Both canonical responses are `{"status":"ok","check":"all","failingSince":null}`
+when healthy. Readiness evaluates five checks: `writer_alive`, `pgmq_reachable`, `clickhouse_query_reachable`, `queue_depth`, and `writer_flush_stale`.
+Canonical readiness reports the first failure with a stable `failingSince`; `/ready`
+retains the detailed check array, and `/health` retains the compatibility `OK` body.
 
 ## 5. Send an event
 

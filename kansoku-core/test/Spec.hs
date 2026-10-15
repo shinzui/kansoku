@@ -7,6 +7,7 @@ import Kansoku.ConfigSpec qualified
 import Kansoku.ContractSpec qualified
 import Kansoku.CorsSpec qualified
 import Kansoku.EventSpec qualified
+import Kansoku.HealthSpec qualified
 import Kansoku.HttpIntegrationSpec qualified
 import Kansoku.Ingest.HandlerSpec qualified
 import Kansoku.Ingest.QueueSpec qualified
@@ -19,6 +20,7 @@ import Kansoku.ObservabilitySpec qualified
 import Kansoku.OpenApiSpec qualified
 import Kansoku.ProblemSpec qualified
 import Kansoku.QueryIntegrationSpec qualified
+import Kansoku.QueryPoolSpec qualified
 import Kansoku.QuerySpec qualified
 import Kansoku.ReadinessSpec qualified
 import Kansoku.Writer.BatchSpec qualified
@@ -34,6 +36,7 @@ main = hspec $ do
   Kansoku.CorsSpec.spec
   Kansoku.ClickHouseSpec.spec
   Kansoku.EventSpec.spec
+  Kansoku.HealthSpec.spec
   Kansoku.Ingest.HandlerSpec.spec
   Kansoku.Ingest.QueueSpec.spec
   Kansoku.HttpIntegrationSpec.spec
@@ -45,6 +48,7 @@ main = hspec $ do
   Kansoku.ProblemSpec.spec
   Kansoku.ObservabilitySpec.spec metrics
   Kansoku.QueryIntegrationSpec.spec
+  Kansoku.QueryPoolSpec.spec
   Kansoku.QuerySpec.spec
   Kansoku.ReadinessSpec.spec
   Kansoku.Writer.BatchSpec.spec metrics

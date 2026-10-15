@@ -27,6 +27,11 @@ provenance:
       at: 2026-10-15T03:37:31Z
       mode: "update"
       note: "Apply review: assign EP-24 M2 pool recovery prerequisite, span privacy ownership and acceptance handoffs."
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-10-15T04:15:16Z
+      mode: "implement"
+      note: "Continue with EP-24 shared probes and native query-pool recovery."
 ---
 
 # Align Kansoku with relevant Haskell Jitsurei practices
@@ -96,7 +101,7 @@ silently imported into Kansoku's aggregate API.
 | # | Title | Path | Hard Deps | Soft Deps | Status |
 |---|-------|------|-----------|-----------|--------|
 | 23 | Problem details and generated contract | [EP-23](../plans/23-standardize-problem-details-and-the-generated-api-contract.md) | None | None | Complete |
-| 24 | Shared liveness and readiness | [EP-24](../plans/24-adopt-shared-liveness-and-readiness-probes.md) | EP-23 | None | Not Started |
+| 24 | Shared liveness and readiness | [EP-24](../plans/24-adopt-shared-liveness-and-readiness-probes.md) | EP-23 | None | Complete |
 | 25 | HTTP tracing and safe access logs | [EP-25](../plans/25-trace-http-requests-and-emit-safe-correlated-access-logs.md) | EP-24 | EP-23 | Not Started |
 | 26 | Bounded analytics queries and results | [EP-26](../plans/26-bound-analytics-query-inputs-and-result-cardinality.md) | EP-23; EP-24 M2 (accepted bounded checks and query-pool recovery) | None | Not Started |
 | 27 | Core record and route conventions | [EP-27](../plans/27-enforce-core-record-and-route-construction-conventions.md) | None | EP-23, EP-24, EP-25, EP-26 | Not Started |
@@ -168,14 +173,12 @@ ownership if not already covered. Allocate new handles using the profiled OKF wo
 
 ## Progress
 
-EP-23 is Complete, accepted on 2026-10-15. Its Cabal and Nix server/client builds pass,
-core/client tests pass with optional live checks reported as pending, and generated artifacts
-and strict ADR validation pass. The other five children remain Not Started. The current
-implementation scope was EP-23 only. Required executable/storage acceptance remains owned
-by EP-28; no passing live database gate is claimed here.
-
-The review fixes are incorporated into the child instructions. EP-24 M2's native recovery proof
-is now an explicit prerequisite for EP-26; no runtime evidence is claimed by this plan update.
+EP-23 and EP-24 are Complete, accepted on 2026-10-15. EP-24 passes the production
+probe kit, core suite, strict ADR validation, unchanged public OpenAPI and Nix server
+build. Its required isolated native regression passes four examples with no pending
+cases; stalled operations, cancellation and size-one pool recovery are accepted.
+EP-25 is next in the default execution order. The other four children remain
+Not Started; required full executable/storage acceptance remains owned by EP-28.
 
 
 ## Surprises & Discoveries
@@ -186,6 +189,14 @@ client-failure bodies. Later children must use `ProblemDetails`/`ProblemJSON` an
 CORS and synchronous-exception boundary; `Kansoku.Exception` exposes cancellation-preserving
 helpers. [ADR-8](../adr/0008-rfc9457-problem-details-and-generated-client-media.md) records the
 accepted error/media contract. Query-pool disposal and recovery remain owned by EP-24.
+
+EP-24 supplies `kansokuAppWithChecks` for independently injectable live/ready checks,
+`newProbeChecks` for startup-allocated trackers and the exact four-path inventory in
+`Kansoku.Health`. `kansokuApp` now returns `IO Application`. The query callback signature
+is unchanged; native failures escape only after physical disposal. Both Cabal and Nix
+consume the minimal v1.1.0 driver repair in `vendor/ClickHaskell`, documented in ADR-2.
+`nix develop -c python3 scripts/native-query-pool.py` is the required isolated fixture
+for the later query and acceptance children.
 
 The catalog's prose is not sufficient dependency evidence. Hackage and upstream tags were
 checked: the selected OpenAPI releases are 5.0.0 and 5.1.0; servant-health 0.1.0.0 is released

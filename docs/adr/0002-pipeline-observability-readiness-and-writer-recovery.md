@@ -2,7 +2,7 @@
 type: Architecture Decision Record
 title: Pipeline observability, readiness, and writer recovery
 description: Add OpenTelemetry tracing, Prometheus pipeline metrics, ordered readiness checks, and logical writer-connection recovery for the PGMQ-to-ClickHouse pipeline.
-timestamp: 2026-10-15T03:31:27Z
+timestamp: 2026-10-15T04:35:00Z
 generated:
   by: human:kansoku-maintainers
   at: 2026-07-19T00:00:00Z
@@ -47,7 +47,7 @@ with `KANSOKU_INTERNAL_METRICS_ENABLED`.
 
 A supervised poller samples PGMQ metrics once per configured interval and publishes one shared
 sample to both Prometheus and readiness. Readiness never scans the queue directly. `/ready`
-always reports four ordered checks: `writer_alive`, `pgmq_reachable`, `queue_depth`, and
+always reports five ordered checks: `writer_alive`, `pgmq_reachable`, `clickhouse_query_reachable`, `queue_depth`, and
 `writer_flush_stale`. The pipeline checks use configurable depth and successful-flush-age
 thresholds. Flush age matters only while a fresh sample shows backlog; startup is the baseline
 until the first successful flush, an empty queue is healthy, and samples older than three poll
@@ -60,22 +60,36 @@ remain in EP-11's separate bounded pool. The batch handler converts synchronous 
 to `AckRetry` and rethrows asynchronous cancellation so supervision and graceful shutdown remain
 effective.
 
-## Planned extension: query recovery and HTTP tracing privacy
+## Shared probes and query connection lifetime
 
-The review of [MasterPlan 4](../masterplans/4-align-kansoku-with-relevant-haskell-jitsurei-practices.md)
-on 2026-10-15 established the following implementation constraints. This extension is planned;
-the existing accepted behavior above remains the runtime baseline until the named child plans
-record acceptance evidence.
+The operational Servant surface uses released servant-health 0.1.0.0, independently
+of the public analytics API. `/health/live` and `/health/ready` use its fixed
+200/503 JSON contract. Each check has a startup-allocated failure tracker; consecutive
+failures retain their onset until recovery. Liveness reads in-process state only.
+Readiness short-circuits in the five-check order above. Native ClickHouse ping is a
+query-path dependency check; it does not scan tables. External checks have a 750 ms
+budget including pool wait and disposal, and the complete probe has a 2 second budget.
+Compatibility `/health` and diagnostic `/ready` remain. All four exact paths stay
+outside customer OpenAPI, auth and ingest middleware, and form the shared access-log
+exclusion inventory.
 
-[EP-24](../plans/24-adopt-shared-liveness-and-readiness-probes.md) owns the query-pool lifetime
-used by both readiness and analytics. Failed or interrupted native operations must dispose
-their physical connection before propagating failure, and a later checkout creates a fresh
-connection. Cancellation cleanup must not synchronously reconnect. Probe budgets include pool
-wait and cleanup; neither abandoned background operations nor forgotten sockets satisfy a
-bounded probe contract. A native stalled-I/O and recovery proof is required before adoption.
-[EP-26](../plans/26-bound-analytics-query-inputs-and-result-cardinality.md) consumes that accepted
-boundary and classifies storage errors after resource cleanup. The writer retains its separate
-connection ownership and retry policy.
+Query operations let exceptions escape the resource-pool callback, so failed handles
+are physically disposed before errors propagate. A later checkout creates a fresh
+connection. Idle resources close after 60 seconds and application shutdown closes the
+pool. The writer keeps its independent connection/retry ownership.
+
+The released driver at `mori://KovalevDima/ClickHaskell/packages/ClickHaskell`,
+v1.1.0 revision `4524fbdd08cd0cf4a3468180323cbf6c4cf5667b`, reconnects during
+exception cleanup and has no public close operation. A minimal checked-in compatibility
+repair in `vendor/ClickHaskell` adds idempotent close, invalidates failed handles without
+reconnection, and closes sockets on failed or interrupted initial authentication. Cabal
+and Nix consume the same source. Native regression tests use a controlled TCP proxy and
+an isolated real ClickHouse instance to exercise failed connect, stalled handshake,
+stalled query, failure without reconnect, cancellation and size-one pool recovery. The
+external watchdog prevents a broken deadline hanging the suite. Keep this repair until a
+released driver supplies equivalent lifetime behavior and passes those native tests.
+
+## Planned extension: HTTP tracing privacy
 
 [EP-25](../plans/25-trace-http-requests-and-emit-safe-correlated-access-logs.md) owns HTTP tracing
 privacy before instrumentation records attributes. Instrumentation receives a sanitized request
@@ -86,7 +100,7 @@ Query-free access logs alone are insufficient, and export-only redaction would l
 values visible to earlier span processors. The production assembly must expose the sanitizing
 adapter as its tracing middleware, preserving request semantics and W3C parent correlation.
 
-The owning children must update this section with the implemented boundary and native/export
+The owning child must update this section with the implemented boundary and native/export
 evidence when accepted. Their execution ordering and temporary fixtures remain in the plans.
 
 ## Alternatives considered

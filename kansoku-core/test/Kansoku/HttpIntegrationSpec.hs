@@ -61,9 +61,10 @@ spec = describe "Kansoku property metrics HTTP integration" $ do
                   ReadyProbe
                     { writerAlive = pure True,
                       pgmqReachable = pure (Right ()),
+                      clickhouseReachable = pure True,
                       pipelineReady = pure []
                     }
-                app = kansokuApp appConfig readyProbe pool (Queue.eventsQueueName "ep17_http_unused") queryPool
+            app <- kansokuApp appConfig readyProbe pool (Queue.eventsQueueName "ep17_http_unused") queryPool
             Warp.testWithApplication (pure app) $ \port -> do
               manager <- Http.newManager Http.defaultManagerSettings
 

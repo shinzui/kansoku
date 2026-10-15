@@ -11,8 +11,10 @@ module Kansoku.ClickHouse
     newWriterConnection,
     openClickHouse,
     newQueryPool,
+    closeQueryPool,
     selectEventProjections,
     withQueryConnection,
+    queryReachable,
   )
 where
 
@@ -21,10 +23,12 @@ import ClickHaskell
     ConnectionArgs,
     Select,
     UInt64,
+    closeConnection,
     defaultConnectionArgs,
     insert,
     intoTable,
     openConnection,
+    ping,
     select,
     setDatabase,
     setHost,
@@ -64,10 +68,8 @@ clickHouseConfigFromConfig cfg =
 openClickHouse :: ClickHouseConfig -> IO Connection
 openClickHouse = openConnection . connectionArgs
 
--- | A dedicated writer connection cache. ClickHaskell reconnects internally,
--- but a reconnect that fails can leave its opaque connection lock empty. We
--- therefore discard every handle whose operation throws and open a fresh one
--- on the next queue retry.
+-- | A dedicated writer cache. Failed operations close the physical connection;
+-- the next queue retry opens a fresh handle.
 data WriterConnection = WriterConnection !ClickHouseConfig !(MVar (Maybe Connection))
 
 newWriterConnection :: ClickHouseConfig -> IO WriterConnection
@@ -95,18 +97,22 @@ newQueryPool cfg size =
   QueryPool
     <$> Pool.newPool
       ( Pool.setNumStripes (Just 1) $
-          Pool.defaultPoolConfig (openClickHouse cfg) (const (pure ())) queryConnectionIdleSeconds size
+          Pool.defaultPoolConfig (openClickHouse cfg) closeConnection queryConnectionIdleSeconds size
       )
 
--- | Effectively never reap idle connections: ClickHaskell exposes no close,
--- so reaping could only leak sockets.
+-- | Idle physical connections are closed, as are all resources at shutdown.
 queryConnectionIdleSeconds :: Double
-queryConnectionIdleSeconds = 1e9
+queryConnectionIdleSeconds = 60
 
+closeQueryPool :: QueryPool -> IO ()
+closeQueryPool (QueryPool pool) = Pool.destroyAllResources pool
+
+-- | Failures escape the callback: disposal completes before classification.
 withQueryConnection :: QueryPool -> (Connection -> IO a) -> IO a
-withQueryConnection (QueryPool pool) action = do
-  result <- Pool.withResource pool (try @SomeException . action)
-  either throwIO pure result
+withQueryConnection (QueryPool pool) = Pool.withResource pool
+
+queryReachable :: QueryPool -> IO Bool
+queryReachable pool = withQueryConnection pool (\conn -> ping conn >> pure True)
 
 connectionArgs :: ClickHouseConfig -> ConnectionArgs
 connectionArgs ClickHouseConfig {clickHouseHost = host, clickHouseTcpPort = port, clickHouseDatabase = database, clickHouseUser = user, clickHousePassword = password} =

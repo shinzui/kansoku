@@ -43,6 +43,7 @@ library
     Kansoku.ClickHouse.EventRow
     Kansoku.Config
     Kansoku.Exception
+    Kansoku.Health
     Kansoku.Ingest.Handler
     Kansoku.Ingest.Producer
     Kansoku.Ingest.Queue
@@ -90,6 +91,7 @@ library
     prometheus-client,
     resource-pool,
     servant,
+    servant-health >=0.1.0.0 && <0.2,
     servant-server,
     shibuya-core,
     shibuya-pgmq-adapter,
@@ -117,6 +119,7 @@ test-suite kansoku-core-test
     Kansoku.ContractSpec
     Kansoku.CorsSpec
     Kansoku.EventSpec
+    Kansoku.HealthSpec
     Kansoku.HttpIntegrationSpec
     Kansoku.Ingest.HandlerSpec
     Kansoku.Ingest.QueueSpec
@@ -129,6 +132,7 @@ test-suite kansoku-core-test
     Kansoku.ProblemSpec
     Kansoku.Query.ValidateSpec
     Kansoku.QueryIntegrationSpec
+    Kansoku.QueryPoolSpec
     Kansoku.QuerySpec
     Kansoku.ReadinessSpec
     Kansoku.Writer.BatchSpec
@@ -150,6 +154,7 @@ test-suite kansoku-core-test
     http-types,
     kansoku-api,
     kansoku-core,
+    network,
     openapi-hs,
     pg-migrate,
     pg-migrate-test-support,
@@ -159,6 +164,7 @@ test-suite kansoku-core-test
     servant,
     servant-client,
     servant-client-core,
+    servant-health,
     servant-server,
     shibuya-core,
     text,
@@ -167,3 +173,16 @@ test-suite kansoku-core-test
     uuid,
     wai,
     warp,
+
+test-suite kansoku-probe-test
+  import: common
+  type: exitcode-stdio-1.0
+  ghc-options: -threaded
+  hs-source-dirs: probe-test
+  main-is: Main.hs
+  build-depends:
+    base,
+    kansoku-core,
+    servant-health,
+    servant-health:testkit,
+    tasty,

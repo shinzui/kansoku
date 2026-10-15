@@ -23,6 +23,11 @@ provenance:
       at: 2026-10-15T03:37:31Z
       mode: "update"
       note: "Specify native timeout/recovery proof, failed-connection disposal, driver repair ownership and EP-26 handoff."
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-10-15T04:15:16Z
+      mode: "implement"
+      note: "Implement production probe assembly and bounded native connection lifetime."
 ---
 
 # Adopt shared liveness and readiness probes
@@ -40,17 +45,23 @@ onset, demonstrated against actual application assembly with the library's test 
 
 ## Progress
 
-- [ ] M1: Shared typed probes and production assembly pass the independent live/ready failure matrix.
-- [ ] M2: Native timeout/cancellation and query-pool recovery pass the early failure proof; real checks retain bounded behavior and diagnostic compatibility routes.
-- [ ] M3: Operations documentation, probe exclusions and separate contract tests agree with the final routes.
+- [x] (2026-10-15) M1: Shared typed probes and production assembly pass the independent live/ready failure matrix. Four test-kit cases plus the both-failing production HTTP check pass.
+- [x] (2026-10-15) M2: Native timeout/cancellation and query-pool recovery pass the early failure proof; real checks retain bounded behavior and diagnostic compatibility routes. The isolated required-native command passes four examples in 7.72 seconds; repeated stalls and cancellation leave zero active proxy connections before recovery.
+- [x] (2026-10-15) M3: Operations documentation, probe exclusions and separate contract tests agree with the final routes. Public OpenAPI regenerates without a diff; strict ADR validation and the Nix server build pass.
 
 
 ## Surprises & Discoveries
 
 Source review found that `withQueryConnection` catches exceptions inside its pool callback,
 so a failed opaque handle is returned for reuse before the exception is rethrown. The pinned
-driver also reconnects during exception cleanup, including timeout interruption. These are
-implementation inputs, not a passing timeout or recovery baseline.
+driver also reconnects during exception cleanup, including timeout interruption. The native proof confirmed these defects and now passes with the minimal vendored
+compatibility repair. Both build systems consume `vendor/ClickHaskell`, copied from
+`mori://KovalevDima/ClickHaskell/packages/ClickHaskell` v1.1.0 revision
+`4524fbdd08cd0cf4a3468180323cbf6c4cf5667b`. Hackage preferred versions and upstream
+tags still identify 1.1.0 as current. The repair adds close and closes failed initial
+handshakes, invalidates failed handles and removes synchronous reconnect on unwind.
+`vendor/ClickHaskell/KANSOKU.md` describes its exact scope. The callback signature is
+unchanged; errors now escape after physical disposal.
 
 
 ## Decision Log
@@ -71,7 +82,11 @@ returns promptly only by abandoning an unbounded background operation or leaking
 
 ## Outcomes & Retrospective
 
-Not implemented.
+The typed production probes, stable failure onset, bounded service checks and physical
+query-pool disposal are implemented. The core suite passes 152 examples (21 optional
+storage cases pending when databases are absent); the separate four-case probe kit
+passes. Required native evidence uses its own isolated database and has zero pending
+cases. Documentation, strict ADR validation and the Nix server build pass. All three milestones are accepted; EP-26 can consume the unchanged query callback interface with physical disposal before error classification.
 
 
 ## Context and Orientation
@@ -181,6 +196,21 @@ inventory. Exempt canonical and legacy probes by exact path from problem-documen
 Publish path constants/one inventory for the observability child to exclude from access logs.
 Update ADR-2 and its bundle log/index through the established profiled workflow.
 
+
+The accepted M2 regression command starts a temporary ClickHouse instance on private
+ports, creates an empty isolated events table, requires all native cases, imposes a
+120-second process watchdog, and removes the instance on exit:
+
+```bash
+nix develop -c python3 scripts/native-query-pool.py
+```
+
+It covers refused connect, four stalled handshakes, four stalled queries, failure
+without reconnect, six cancellations, pool exhaustion, and recovery through both
+ping and native analytics SELECT on the same size-one pool. External deadlines are
+750 ms with an asserted elapsed limit below 1 second (250 ms scheduling tolerance).
+Cancellation cleanup is below 250 ms; proxy connection counts drain to zero before
+recovery. The fixture is in `Kansoku.QueryPoolSpec`; EP-26 and EP-28 reuse it.
 
 ## Concrete Steps
 
