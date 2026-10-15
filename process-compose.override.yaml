@@ -1,0 +1,16 @@
+---
+# process-compose.override.yaml — UNMANAGED, project-owned.
+#
+# process-compose merges this file over the generated process-compose.yaml
+# automatically (base first, then this; maps merge by key, scalars replace).
+# seihou never overwrites it, so project-specific tweaks survive template
+# upgrades. Docs: https://f1bonacc1.github.io/process-compose/merge/
+#
+# Relocated from the previously-edited process-compose.yaml: the managed
+# ClickHouse command starts the server from CWD and passes a `--` separator so
+# the local, rootless server resolves its paths/ports correctly.
+
+version: "0.5"
+processes:
+  clickhouse:
+    command: cd $CLICKHOUSE_HOME && clickhouse-server -- --path=$CLICKHOUSE_HOME/ --tcp_port=$CLICKHOUSE_TCP_PORT --http_port=$CLICKHOUSE_HTTP_PORT --listen_host=127.0.0.1 --logger.log=$CLICKHOUSE_HOME/clickhouse-server.log --logger.errorlog=$CLICKHOUSE_HOME/clickhouse-server.err.log

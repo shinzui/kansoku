@@ -1,6 +1,11 @@
-{ `git.repoName` = "kansoku"
+{ `ghc.version` = "ghc9124"
+, `git.repoName` = "kansoku"
+, `nix.builtin-package` = "false"
+, `nix.clickhouse` = "true"
 , `nix.postgresql` = "true"
+, `nix.pre-commit` = "true"
 , `nix.process-compose` = "true"
+, `nix.treefmt` = "true"
 , `project.description` = "kansoku"
 , `project.name` = "kansoku"
 }

@@ -33,7 +33,7 @@ processes:
       restart: on_failure
 
   clickhouse:
-    command: cd $CLICKHOUSE_HOME && clickhouse-server -- --path=$CLICKHOUSE_HOME/ --tcp_port=$CLICKHOUSE_TCP_PORT --http_port=$CLICKHOUSE_HTTP_PORT --listen_host=127.0.0.1 --logger.log=$CLICKHOUSE_HOME/clickhouse-server.log --logger.errorlog=$CLICKHOUSE_HOME/clickhouse-server.err.log
+    command: clickhouse-server --path=$CLICKHOUSE_HOME/ --tcp_port=$CLICKHOUSE_TCP_PORT --http_port=$CLICKHOUSE_HTTP_PORT --listen_host=127.0.0.1 --logger.log=$CLICKHOUSE_HOME/clickhouse-server.log --logger.errorlog=$CLICKHOUSE_HOME/clickhouse-server.err.log
     readiness_probe:
       exec:
         command: "clickhouse-client --port $CLICKHOUSE_TCP_PORT --query 'SELECT 1'"
