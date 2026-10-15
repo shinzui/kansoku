@@ -90,12 +90,12 @@ spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
     lookupText ["description"] retentionOperation
       `shouldSatisfy` maybe False (Text.isInfixOf "Offset 0")
 
-  it "documents declared-property grouping and the one-dimension limit" $ do
+  it "documents declared-property grouping and the two-dimension limit" $ do
     let revenueOperation = fromMaybe Aeson.Null (valueAt ["paths", "/metrics/revenue", "get"] documentValue)
     lookupText ["description"] revenueOperation
-      `shouldSatisfy` maybe False (Text.isInfixOf "prop:<name>")
+      `shouldSatisfy` maybe False (Text.isInfixOf "prop:")
     lookupText ["description"] revenueOperation
-      `shouldSatisfy` maybe False (Text.isInfixOf "exactly one dimension")
+      `shouldSatisfy` maybe False (Text.isInfixOf "one or two distinct dimensions")
 
   it "documents exposure accuracy and post-exposure conversion semantics" $ do
     let exposuresOperation = fromMaybe Aeson.Null (valueAt ["paths", "/metrics/experiments", "get"] documentValue)
@@ -326,7 +326,7 @@ sampleMetricPoint :: Metrics.MetricPoint
 sampleMetricPoint =
   Metrics.MetricPoint
     { Metrics.bucket = Just "2026-06-01T00:00:00Z",
-      Metrics.group = Map.singleton "plan" "pro",
+      Metrics.group = Map.fromList [("prop:plan", Just "pro"), ("host", Nothing)],
       Metrics.value = 1
     }
 

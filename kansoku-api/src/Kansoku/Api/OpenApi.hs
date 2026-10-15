@@ -34,6 +34,7 @@ import Kansoku.Event
   )
 import Kansoku.Ingest.Api (BatchAck, IngestAck, IngestEvent, RejectedEvent)
 import Kansoku.Metrics.Api (MetricPoint, MetricResult, TimeGrain)
+import Kansoku.Metrics.Filter (MetricFilter)
 import Kansoku.Metrics.Limits (maxMetricPoints)
 import Kansoku.Prelude
 import Servant.API (type (:>))
@@ -103,7 +104,35 @@ instance O.ToSchema IngestAck
 
 instance O.ToSchema RejectedEvent
 
-instance O.ToSchema MetricPoint
+instance O.ToParamSchema MetricFilter where
+  toParamSchema _ =
+    O.toParamSchema (Proxy @Text)
+      & O.description
+      ?~ "A URL-decoded JSON object with dimension, op and value; set/unset omit value. Repeat filter for AND. Operators: eq, neq, in, contains, gt, lt, set, unset."
+
+instance O.ToSchema MetricPoint where
+  declareNamedSchema proxy = do
+    named <- O.genericDeclareNamedSchema O.defaultSchemaOptions proxy
+    let nullableText = mempty & O.type_ ?~ O.OpenApiTypeArray [O.OpenApiString, O.OpenApiNull]
+        groupSchema =
+          mempty
+            & O.type_
+            ?~ O.OpenApiTypeSingle O.OpenApiObject
+            & O.additionalProperties
+            ?~ O.AdditionalPropertiesSchema (O.Inline nullableText)
+            & O.description
+            ?~ "Full dimension names map to scalar text or null. Empty string and null are distinct."
+    pure
+      ( named
+          & O.schema
+          . O.properties
+          . at "group"
+          ?~ O.Inline groupSchema
+          & O.schema
+          . O.properties
+          . at "bucket"
+          ?~ O.Inline nullableText
+      )
 
 instance O.ToSchema MetricResult where
   declareNamedSchema proxy = do

@@ -16,7 +16,8 @@ import Kansoku.Auth.Types
 import Kansoku.ClickHouse
   ( clickHouseConfigFromConfig,
     closeQueryPool,
-    newQueryPool,
+    metricsQueryLimitsFromConfig,
+    newQueryPoolWithLimits,
     queryReachable,
   )
 import Kansoku.Config (loadConfig)
@@ -69,7 +70,7 @@ runServer = do
       let queueName = eventsQueueName (cfg ^. #eventsQueueName)
       bracket (createPool (cfg ^. #pgConnectionString)) Pool.release $ \pool -> do
         provisionQueue pool queueName
-        bracket (newQueryPool (clickHouseConfigFromConfig cfg) (cfg ^. #clickHouseQueryPoolSize)) closeQueryPool $ \queryPool ->
+        bracket (newQueryPoolWithLimits (clickHouseConfigFromConfig cfg) (cfg ^. #clickHouseQueryPoolSize) (metricsQueryLimitsFromConfig cfg)) closeQueryPool $ \queryPool ->
           bracket makeTelemetry shutdownTelemetry $ \telemetry -> do
             startedAt <- getCurrentTime
             let tracer = telemetry ^. #tracer

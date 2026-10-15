@@ -11,6 +11,7 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
+import urllib.parse
 import uuid
 
 from ingest_acceptance import verify_ingest
@@ -252,10 +253,11 @@ def main():
                                 hspec([binary('kansoku-client:test:kansoku-client-test')], env=live, log=ROOT / 'client-tests.log')
                             for path in ('/health', '/ready', '/health/live', '/health/ready'):
                                 urllib.request.urlopen(base + path, timeout=3).close()
-                            answer = request(base, '/metrics/revenue?from=2026-07-01&to=2026-07-12&groupBy=prop:plan&ignored=' + sentinel,
+                            population_filter = urllib.parse.urlencode({'filter': json.dumps(dict(dimension='event_name', op='neq', value=sentinel))})
+                            answer = request(base, '/metrics/revenue?from=2026-07-01&to=2026-07-12&groupBy=prop:plan&' + population_filter,
                                              credentials['service_token'], {'traceparent': '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01', 'X-Private': sentinel})
                             assert sum(point['value'] for point in answer['points']) == 7, 'production query parameters lost'
-                            assert answer['points'][0]['group'] == {'plan': 'pro'}, 'production grouping parameter lost'
+                            assert answer['points'][0]['group'] == {'prop:plan': 'pro'}, 'production grouping parameter lost'
                         privacy(name, credentials['service_token'], sentinel)
                     port = free_port()
                     disabled = dict(env, KANSOKU_SERVER_PORT=str(port), KANSOKU_INTERNAL_METRICS_ENABLED='false')

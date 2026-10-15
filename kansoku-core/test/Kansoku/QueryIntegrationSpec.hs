@@ -40,7 +40,7 @@ spec = describe "Kansoku.Query integration" $ do
               propertyEvent "replay-identify" "identify" "replay-user" [] & #anonymousId ?~ AnonymousId "replay-anon"
             ]
               <&> (\event -> (if event ^. #eventName == EventName "page_view" then event & #userId .~ Nothing & #anonymousId ?~ AnonymousId "replay-anon" else event) & #accountId ?~ AccountId "acct_replay" & #sessionId ?~ SessionId "replay-session" & #url ?~ "https://example.com/replay")
-          req = Query.QueryRequest (AccountId "acct_replay") (fromGregorian 2026 7 1) (fromGregorian 2026 7 2) Nothing (Just Day)
+          req = Query.QueryRequest (AccountId "acct_replay") (fromGregorian 2026 7 1) (fromGregorian 2026 7 2) Nothing (Just Day) []
       metrics <- traverse requireBuiltinMetric ["events", "revenue", "page_views", "sessions", "active_users", "conversion_rate"]
       revenue <- requireBuiltinMetric "revenue"
       average <- case revenue of Simple definition -> pure (Simple (definition & #name .~ "payment_average" & #aggregation .~ Average)); _ -> fail "expected revenue definition"
@@ -49,7 +49,7 @@ spec = describe "Kansoku.Query integration" $ do
         bracket_ (command conn "SYSTEM STOP MERGES analytics.events_raw") (command conn "SYSTEM START MERGES analytics.events_raw") $ do
           insertEvents conn rows
           initial <- snapshot pool
-          initial `shouldBe` [7, 10, 2, 1, 2, 1, 5]
+          initial `shouldBe` [7, 10, 2, 1, 1, 1, 5]
           -- Simulate restart/rebatching and old archive replays: every copy is
           -- byte-identical to its first queued payload, in different blocks.
           insertEvents conn (reverse rows)
@@ -57,7 +57,7 @@ spec = describe "Kansoku.Query integration" $ do
           insertEvents conn (drop 2 rows <> take 2 rows)
           snapshot pool `shouldReturn` initial
         command conn "OPTIMIZE TABLE analytics.events_raw FINAL"
-        snapshot pool `shouldReturn` [7, 10, 2, 1, 2, 1, 5]
+        snapshot pool `shouldReturn` [7, 10, 2, 1, 1, 1, 5]
 
   it "runs concurrent queries in parallel across the pool" $
     withClickHouse $ \_conn -> do
@@ -88,13 +88,14 @@ spec = describe "Kansoku.Query integration" $ do
                 from = fromGregorian 2026 7 1,
                 to = fromGregorian 2026 7 2,
                 groupBy = Just ["event_name"],
-                timeGrain = Just Day
+                timeGrain = Just Day,
+                filters = []
               }
       result <- expectCompiled compiled
       let keys =
             [ groupValue
             | point <- result ^. #points,
-              Just groupValue <- [Map.lookup "event_name" (point ^. #group)]
+              Just groupValue <- [lookupGroup "event_name" (point ^. #group)]
             ]
       keys `shouldContain` ["signup\tstep"]
 
@@ -115,7 +116,8 @@ spec = describe "Kansoku.Query integration" $ do
                 from = fromGregorian 2026 7 1,
                 to = fromGregorian 2026 7 2,
                 groupBy = Nothing,
-                timeGrain = Just Day
+                timeGrain = Just Day,
+                filters = []
               }
       result <- expectCompiled compiled
       sum (fmap (^. #value) (result ^. #points)) `shouldBe` 1
@@ -139,7 +141,8 @@ spec = describe "Kansoku.Query integration" $ do
                 from = fromGregorian 2026 7 1,
                 to = fromGregorian 2026 7 2,
                 groupBy = Nothing,
-                timeGrain = Just Day
+                timeGrain = Just Day,
+                filters = []
               }
       result <- expectCompiled compiled
       sum (fmap (^. #value) (result ^. #points)) `shouldBe` 1
@@ -166,13 +169,14 @@ spec = describe "Kansoku.Query integration" $ do
                 from = fromGregorian 2026 7 1,
                 to = fromGregorian 2026 7 2,
                 groupBy = Just ["prop:plan"],
-                timeGrain = Just Day
+                timeGrain = Just Day,
+                filters = []
               }
       result <- expectCompiled compiled
       Map.fromList
         [ (groupValue, point ^. #value)
         | point <- result ^. #points,
-          Just groupValue <- [Map.lookup "plan" (point ^. #group)]
+          Just groupValue <- [lookupGroup "prop:plan" (point ^. #group)]
         ]
         `shouldBe` Map.fromList [("free", 9), ("pro", 98)]
 
@@ -198,13 +202,14 @@ spec = describe "Kansoku.Query integration" $ do
                 from = fromGregorian 2026 7 1,
                 to = fromGregorian 2026 7 2,
                 groupBy = Nothing,
-                timeGrain = Just Day
+                timeGrain = Just Day,
+                filters = []
               }
       result <- expectCompiled compiled
       Map.fromList
         [ (groupValue, point ^. #value)
         | point <- result ^. #points,
-          Just groupValue <- [Map.lookup "feature" (point ^. #group)]
+          Just groupValue <- [lookupGroup "prop:feature" (point ^. #group)]
         ]
         `shouldBe` Map.fromList [("export", 1), ("search", 2)]
 
@@ -231,12 +236,13 @@ spec = describe "Kansoku.Query integration" $ do
                     from = fromGregorian 2026 6 1,
                     to = fromGregorian 2026 6 8,
                     groupBy = Nothing,
-                    timeGrain = Nothing
+                    timeGrain = Nothing,
+                    filters = []
                   }
                 604800
                 steps
             )
-      [ (Map.lookup "index" (point ^. #group), point ^. #value)
+      [ (lookupGroup "index" (point ^. #group), point ^. #value)
         | point <- result ^. #points
         ]
         `shouldBe` [(Just "1", 3), (Just "2", 1)]
@@ -268,17 +274,18 @@ spec = describe "Kansoku.Query integration" $ do
                 from = fromGregorian 2026 8 1,
                 to = fromGregorian 2026 8 3,
                 groupBy = Nothing,
-                timeGrain = Nothing
+                timeGrain = Nothing,
+                filters = []
               }
       exposures <- expectCompiled =<< runEff (Query.runExperimentExposures queryPool request (Just experiment))
       Map.fromList
-        [ (Map.lookup "variant" (point ^. #group), point ^. #value)
+        [ (lookupGroup "variant" (point ^. #group), point ^. #value)
         | point <- exposures ^. #points
         ]
         `shouldBe` Map.fromList [(Just "control", 2), (Just "treatment", 2)]
       conversion <- expectCompiled =<< runEff (Query.runExperimentConversion queryPool request experiment conversionEvent)
       Map.fromList
-        [ ( (Map.lookup "measure" (point ^. #group), Map.lookup "variant" (point ^. #group)),
+        [ ( (lookupGroup "measure" (point ^. #group), lookupGroup "variant" (point ^. #group)),
             point ^. #value
           )
         | point <- conversion ^. #points
@@ -294,7 +301,7 @@ spec = describe "Kansoku.Query integration" $ do
       steps <- traverse validSqlName ["checkout_started", "purchase_completed"]
       funnel <- expectCompiled =<< runEff (Query.runExperimentFunnel queryPool request experiment 604800 steps)
       Map.fromList
-        [ ( (Map.lookup "index" (point ^. #group), Map.lookup "variant" (point ^. #group)),
+        [ ( (lookupGroup "index" (point ^. #group), lookupGroup "variant" (point ^. #group)),
             point ^. #value
           )
         | point <- funnel ^. #points
@@ -385,3 +392,6 @@ expectCompiled :: Either Query.QueryExecutionError a -> IO a
 expectCompiled = \case
   Right value -> pure value
   Left err -> expectationFailure ("unexpected query compile error: " <> show err) >> fail "query compile failed"
+
+lookupGroup :: Text -> Map.Map Text (Maybe Text) -> Maybe Text
+lookupGroup key groups = Map.lookup key groups >>= id

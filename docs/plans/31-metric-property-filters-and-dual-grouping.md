@@ -22,6 +22,11 @@ provenance:
       at: 2026-10-15T15:43:15Z
       mode: "update"
       note: "Reconcile first-release APIs, domain semantics, dependencies and acceptance with the source-validated MP-5 review."
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-10-15T20:15:28Z
+      mode: "implement"
+      note: "Begin bounded typed metric filters, lossless dual grouping, exact activity populations and query work budgets."
   reviews:
     - model: "gpt-6-astra"
       harness: "codex-cli"
@@ -43,8 +48,8 @@ This is the initial deployment: fix ambiguous encodings now rather than support 
 ## Progress
 
 
-- [ ] M1: Typed bounded filters work on standard metrics with explicit missing/type semantics.
-- [ ] M2: Dual grouping preserves arbitrary values and namespaced dimension keys.
+- [x] M1: Typed bounded filters work on standard metrics with explicit missing/type semantics.
+- [x] M2: Dual grouping preserves arbitrary values and namespaced dimension keys.
 - [ ] M3: Route support, exactness and generated clients match native fixtures and OpenAPI.
 
 ## Surprises & Discoveries
@@ -52,8 +57,19 @@ This is the initial deployment: fix ambiguous encodings now rather than support 
 
 `events_resolved` has only seven columns: it lacks source, source_service, session and device
 fields. The existing property helper is `Metrics/Query/Property.hs`, not `Query/Validate.hs`.
-Its numeric cast accepts PTAny and can fail on historical mixed data. Delimiter splitting is
+Its original numeric cast accepts PTAny and can fail on historical mixed data. Delimiter splitting is
 unsafe for arbitrary property values, and raw-rollup user counts disagree with resolved counts.
+
+The implementation now compiles with typed filter DTOs, post-authentication raw query validation,
+nullable JSON group transport and shared query limits. Initial native fixtures pass all seven
+pure grammar/safety cases and both final-query/preparation memory limits. The native Unicode
+contains case exposed the driver's `String` conversion using Char8 packing; production metric
+and identity-scope parameters now use explicit UTF-8 bytes. The full owned native run passes 224 examples with zero failures or pending required cases,
+including UTF-8 account scopes, every operator, nullable/string/number/Boolean grouping, ratio
+population filters, exact resolved activity, cancellation, native memory exhaustion during
+preparation and final aggregation, and healthy reuse after disposal. Evidence is private at
+`.dev/acceptance/identity-validation/ep31-native-core.log`. Packaged acceptance and the SDK
+contract refresh remain open.
 
 ## Decision Log
 
@@ -62,10 +78,26 @@ On 2026-10-15 use repeatable JSON filter objects and JSON-encoded group projecti
 exact identity-resolved HTTP user counts for both filtered and unfiltered paths; approximate raw
 sketches remain explicitly named internal/SQL options, not a silent route optimization.
 
+Implementation choices (2026-10-15): validate unsupported/duplicate/missing query parameters
+after authentication and before Servant can ignore them. Keep property declarations compatible
+across retained schema versions and guard native Dynamic extraction; PTAny does not establish
+a scalar type. Group JSON carries nullable text, while separate typed columns determine order.
+HTTP users always use current resolved activity; standard counts/page views use canonical facts.
+
+QueryPool owns positive work limits, native settings and exact snapshot construction limits.
+The outer request timeout includes pool wait/preparation/SELECT. Native codes 159/160/241 map
+to permanent query_resource_limit only after disposal; external asynchronous cancellation still
+propagates. The private Join table footprints remain separate from each query's memory quota.
+
 ## Outcomes & Retrospective
 
 
-Planning reviewed; contract generation and runtime checks remain outstanding.
+M1 and M2 are accepted by the 224-example native run. The generated OpenAPI now declares
+nullable bucket/group values and repeatable JSON filters. `just check` also passes 188 deterministic core examples, 17 client examples, four probes,
+generated contracts, OpenAPI lint, strict ADR validation, all three HTTP semantic modes and
+four lifecycle cases. M3 remains open until packaged acceptance, the updated identity cost
+gate and the pinned SDK contract checks pass. The implementation candidate is committed
+before refreshing the SDK so its contract pin names a concrete source revision.
 
 ## Context and Orientation
 

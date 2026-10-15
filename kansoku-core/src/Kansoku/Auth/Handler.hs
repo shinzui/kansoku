@@ -23,7 +23,7 @@ import Data.Generics.Labels ()
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text.Encoding
 import Hasql.Pool qualified as Pool
-import Kansoku.Api.Response (ProblemDetails, forbidden, unauthorized, unavailable)
+import Kansoku.Api.Response (ProblemDetails, badRequest, forbidden, unauthorized, unavailable)
 import Kansoku.Auth.Store (AuthStoreError, lookupApiKey)
 import Kansoku.Auth.Token (Token (..), hashToken, tokenKind)
 import Kansoku.Auth.Types
@@ -32,6 +32,7 @@ import Kansoku.Auth.Types
     IngestPrincipal (..),
     MetricsPrincipal (..),
   )
+import Kansoku.Metrics.RequestValidation (validateMetricRequest)
 import Kansoku.Prelude hiding (Context)
 import Network.HTTP.Types.Header (RequestHeaders, hAuthorization, hContentType, hWWWAuthenticate)
 import Network.Wai (Request, requestHeaders)
@@ -39,6 +40,7 @@ import Servant
   ( Context (..),
     Handler,
     ServerError (..),
+    err400,
     err401,
     err403,
     err503,
@@ -89,7 +91,9 @@ metricsAuthHandlerWith lookupPrincipal =
         throwEnvelope
           err403
           (forbidden "forbidden" "write keys cannot read metrics")
-      ServiceToken -> pure (MetricsPrincipal principal)
+      ServiceToken -> do
+        either (\(code, message) -> throwEnvelope err400 (badRequest code message)) pure (validateMetricRequest request)
+        pure (MetricsPrincipal principal)
 
 authContext :: Pool.Pool -> Context '[AuthHandler Request IngestPrincipal, AuthHandler Request MetricsPrincipal]
 authContext pool = authContextWith (lookupApiKey pool)

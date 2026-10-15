@@ -11,6 +11,13 @@ module Kansoku.ClickHouse
     newWriterConnection,
     openClickHouse,
     newQueryPool,
+    newQueryPoolWithLimits,
+    MetricsQueryLimits (..),
+    defaultMetricsQueryLimits,
+    metricsQueryLimitsFromConfig,
+    queryLimits,
+    queryDeadlineMicros,
+    withMetricsQueryConnection,
     closeQueryPool,
     selectEventProjections,
     withQueryConnection,
@@ -25,6 +32,7 @@ import ClickHaskell
     Select,
     UInt64,
     closeConnection,
+    command,
     defaultConnectionArgs,
     insert,
     intoTable,
@@ -42,7 +50,9 @@ import Control.Concurrent.MVar (MVar, modifyMVar, newMVar)
 import Control.Exception (SomeException, throwIO, try)
 import Data.Generics.Labels ()
 import Data.IORef (IORef, newIORef)
+import Data.Int (Int64)
 import Data.Pool qualified as Pool
+import Data.String (fromString)
 import Kansoku.ClickHouse.EventRow
 import Kansoku.Config qualified as Config
 import Kansoku.Event (AnalyticsEvent)
@@ -95,11 +105,33 @@ insertWriterEvents (WriterConnection config connectionCell) events = do
 -- The writer never uses this; it owns its own dedicated connection.
 data QueryConnection = QueryConnection !Connection !(IORef IdentityCacheState)
 
-newtype QueryPool = QueryPool (Pool.Pool QueryConnection)
+data MetricsQueryLimits = MetricsQueryLimits
+  { queryExecutionSeconds :: !Int,
+    queryMemoryBytes :: !Int64
+  }
+  deriving stock (Generic, Eq, Show)
+
+defaultMetricsQueryLimits :: MetricsQueryLimits
+defaultMetricsQueryLimits = MetricsQueryLimits 30 536870912
+
+metricsQueryLimitsFromConfig :: Config.Config -> MetricsQueryLimits
+metricsQueryLimitsFromConfig cfg = MetricsQueryLimits (cfg ^. #metricsMaxExecutionSec) (cfg ^. #metricsMaxMemoryBytes)
+
+data QueryPool = QueryPool !MetricsQueryLimits !(Pool.Pool QueryConnection)
+
+queryLimits :: QueryPool -> MetricsQueryLimits
+queryLimits (QueryPool limits _) = limits
+
+queryDeadlineMicros :: QueryPool -> Int
+queryDeadlineMicros pool = fromInteger (min (toInteger (maxBound :: Int)) (toInteger (queryExecutionSeconds (queryLimits pool)) * 1000000))
 
 newQueryPool :: ClickHouseConfig -> Int -> IO QueryPool
-newQueryPool cfg size =
-  QueryPool
+newQueryPool cfg size = newQueryPoolWithLimits cfg size defaultMetricsQueryLimits
+
+newQueryPoolWithLimits :: ClickHouseConfig -> Int -> MetricsQueryLimits -> IO QueryPool
+newQueryPoolWithLimits cfg size limits = do
+  unless (queryExecutionSeconds limits > 0 && queryMemoryBytes limits > 0) (fail "metric query limits must be positive")
+  QueryPool limits
     <$> Pool.newPool
       ( Pool.setNumStripes (Just 1) $
           Pool.defaultPoolConfig (QueryConnection <$> openClickHouse cfg <*> newIORef Nothing) closeQueryConnection queryConnectionIdleSeconds size
@@ -110,11 +142,11 @@ queryConnectionIdleSeconds :: Double
 queryConnectionIdleSeconds = 60
 
 closeQueryPool :: QueryPool -> IO ()
-closeQueryPool (QueryPool pool) = Pool.destroyAllResources pool
+closeQueryPool (QueryPool _ pool) = Pool.destroyAllResources pool
 
 -- | Failures escape the callback: disposal completes before classification.
 withQueryConnection :: QueryPool -> (Connection -> IO a) -> IO a
-withQueryConnection (QueryPool pool) action = Pool.withResource pool $ \(QueryConnection connection _) -> action connection
+withQueryConnection (QueryPool _ pool) action = Pool.withResource pool $ \(QueryConnection connection _) -> action connection
 
 closeQueryConnection :: QueryConnection -> IO ()
 closeQueryConnection (QueryConnection connection _) = closeConnection connection
@@ -122,9 +154,30 @@ closeQueryConnection (QueryConnection connection _) = closeConnection connection
 -- | Refresh exact evidence on this physical connection before any resolved
 -- query. Failures escape the pool callback and dispose both socket and caches.
 withIdentityQueryConnection :: QueryPool -> Text -> Text -> Text -> (Connection -> IO a) -> IO a
-withIdentityQueryConnection (QueryPool pool) account fromDay toDay action = Pool.withResource pool $ \(QueryConnection connection revision) -> do
-  prepareIdentityCache account fromDay toDay connection revision
+withIdentityQueryConnection (QueryPool limits pool) account fromDay toDay action = Pool.withResource pool $ \(QueryConnection connection revision) -> do
+  applyQueryLimits limits connection
+  prepareIdentityCache (queryMemoryBytes limits) account fromDay toDay connection revision
   action connection
+
+-- Both SET and preparation execute inside the resource callback. A timeout or
+-- native failure disposes the same physical connection before classification.
+withMetricsQueryConnection :: QueryPool -> (Connection -> IO a) -> IO a
+withMetricsQueryConnection pool action = withQueryConnection pool $ \connection -> do
+  applyQueryLimits (queryLimits pool) connection
+  action connection
+
+applyQueryLimits :: MetricsQueryLimits -> Connection -> IO ()
+applyQueryLimits limits connection =
+  command
+    connection
+    ( fromString
+        ( "SET max_execution_time="
+            <> show (queryExecutionSeconds limits)
+            <> ",max_memory_usage="
+            <> show (queryMemoryBytes limits)
+            <> ",timeout_overflow_mode='throw',read_overflow_mode='throw',group_by_overflow_mode='throw',join_overflow_mode='throw',result_overflow_mode='throw'"
+        )
+    )
 
 queryReachable :: QueryPool -> IO Bool
 queryReachable pool = withQueryConnection pool (\conn -> ping conn >> pure True)

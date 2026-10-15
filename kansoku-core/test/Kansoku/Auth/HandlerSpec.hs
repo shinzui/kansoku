@@ -16,7 +16,7 @@ import Kansoku.Auth.Token (Token (..), hashToken)
 import Kansoku.Auth.Types
 import Kansoku.Event (AccountId (..))
 import Network.HTTP.Types.Header (RequestHeaders, hAuthorization, hWWWAuthenticate)
-import Network.Wai (Request (requestHeaders), defaultRequest)
+import Network.Wai (Request (pathInfo, queryString, requestHeaders), defaultRequest)
 import Servant (ServerError (..), runHandler)
 import Servant.Server.Experimental.Auth (AuthHandler, unAuthHandler)
 import Test.Hspec
@@ -63,6 +63,22 @@ spec = describe "Kansoku.Auth.Handler" $ do
 
     accepted <- runAuth (metricsAuthHandlerWith fixtureLookup) [(hAuthorization, "Bearer " <> serviceToken)]
     accepted `shouldBe` Right (MetricsPrincipal servicePrincipal)
+
+  it "validates metric parameters after authentication and returns invalid_filter before routing" $ do
+    let handler = metricsAuthHandlerWith fixtureLookup
+        request headers query = defaultRequest {requestHeaders = headers, pathInfo = ["metrics", "events"], queryString = query}
+        run headers query = runHandler (unAuthHandler handler (request headers query))
+        malformed = [("filter", Just "not-json")]
+    absent <- run [] malformed
+    void (expectServerError 401 absent)
+    write <- run [("X-Api-Key", writeToken)] malformed
+    void (expectServerError 403 write)
+    malformedResult <- run [("X-Api-Key", serviceToken)] malformed
+    malformedError <- expectServerError 400 malformedResult
+    code <$> decodeEnvelope malformedError `shouldReturn` "invalid_filter"
+    unknown <- run [("X-Api-Key", serviceToken)] [("typo", Just "value")]
+    unknownError <- expectServerError 400 unknown
+    code <$> decodeEnvelope unknownError `shouldReturn` "unsupported_query_parameter"
 
   it "maps credential-store failure to retryable 503" $ do
     let failingLookup _ = pure (Left (AuthStoreUsageError Pool.AcquisitionTimeoutUsageError))

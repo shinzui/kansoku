@@ -49,6 +49,7 @@ import Kansoku.Event
   )
 import Kansoku.Ingest.Api qualified as Ingest
 import Kansoku.Metrics.Api qualified as Metrics
+import Kansoku.Metrics.Filter (MetricFilter)
 import Kansoku.Server (envelopeFormatters)
 import Network.HTTP.Client qualified as HTTP
 import Network.HTTP.Types
@@ -259,16 +260,16 @@ sentinelIngestServer =
 sentinelMetricsServer :: Metrics.MetricsRoutes (AsServerT Handler)
 sentinelMetricsServer =
   Metrics.MetricsRoutes
-    { Metrics.events = metricSentinel "events",
-      Metrics.pageViews = metricSentinel "page-views",
-      Metrics.sessions = metricSentinel "sessions",
+    { Metrics.events = standardSentinel "events",
+      Metrics.pageViews = standardSentinel "page-views",
+      Metrics.sessions = \_principal _from _to _grain -> pure (Response.KansokuOk (sentinelResult "sessions")),
       Metrics.funnel = funnelSentinel,
       Metrics.retention = retentionSentinel,
       Metrics.acquisition = stubSentinel "acquisition",
-      Metrics.featureAdoption = metricSentinel "feature-adoption",
-      Metrics.conversion = metricSentinel "conversion",
-      Metrics.users = metricSentinel "users",
-      Metrics.revenue = metricSentinel "revenue",
+      Metrics.featureAdoption = standardSentinel "feature-adoption",
+      Metrics.conversion = standardSentinel "conversion",
+      Metrics.users = standardSentinel "users",
+      Metrics.revenue = standardSentinel "revenue",
       Metrics.organizations = stubSentinel "organizations",
       Metrics.custom = stubSentinel "custom",
       Metrics.experiments = metricSentinel "experiments",
@@ -276,11 +277,14 @@ sentinelMetricsServer =
       Metrics.experimentFunnel = experimentFunnelSentinel
     }
   where
+    standardSentinel :: Text -> MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe Metrics.TimeGrain -> [MetricFilter] -> Handler (Response.KansokuResult Metrics.MetricResult)
+    standardSentinel name principal fromDay toDay groupBy grain _filters = metricSentinel name principal fromDay toDay groupBy grain
+
     metricSentinel :: Text -> MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe Metrics.TimeGrain -> Handler (Response.KansokuResult Metrics.MetricResult)
     metricSentinel name _principal _fromDay _toDay _groupBy _timeGrain = pure (Response.KansokuOk (sentinelResult name))
 
-    stubSentinel :: Text -> MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe Metrics.TimeGrain -> Handler (Response.KansokuResult Metrics.MetricResult)
-    stubSentinel name _principal _fromDay _toDay _groupBy _timeGrain =
+    stubSentinel :: Text -> MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe Metrics.TimeGrain -> [MetricFilter] -> Handler (Response.KansokuResult Metrics.MetricResult)
+    stubSentinel name _principal _fromDay _toDay _groupBy _timeGrain _filters =
       pure (Response.KansokuNotFound (Response.notFound "not_implemented" ("metric endpoint is stubbed in the MVP: " <> name)))
 
     funnelSentinel :: MetricsPrincipal -> Day -> Day -> Text -> Maybe Int -> Handler (Response.KansokuResult Metrics.MetricResult)

@@ -15,12 +15,14 @@ import Data.Text qualified as Text
 import Data.Time (Day)
 import Kansoku.Api.Response (KansokuResult, OkResponses, ProblemJSON)
 import Kansoku.Auth.Api (MetricsAuth)
+import Kansoku.Metrics.Filter (MetricFilter)
 import Kansoku.Prelude
 import Servant.API
   ( Description,
     JSON,
     QueryParam,
     QueryParam',
+    QueryParams,
     Required,
     type (:>),
   )
@@ -64,7 +66,7 @@ instance ToHttpApiData TimeGrain where
 
 data MetricPoint = MetricPoint
   { bucket :: !(Maybe Text),
-    group :: !(Map Text Text),
+    group :: !(Map Text (Maybe Text)),
     value :: !Double
   }
   deriving stock (Generic, Eq, Show)
@@ -78,20 +80,30 @@ data MetricResult = MetricResult
   deriving anyclass (FromJSON, ToJSON)
 
 type MetricQuery =
-  Description "Every implemented metric requires a positive half-open from/to range of at most 366 days and returns a complete answer of at most 10000 points, or a permanent HTTP 400 problem asking the caller to narrow the query. The optional groupBy parameter accepts exactly one dimension: event_name, source, route, or prop:<name>. Property names must be declared in the event registry for every event queried by the metric. Unknown, undeclared, or multiple dimensions return HTTP 400 naming the invalid value."
+  Description "Every metric requires a positive half-open from/to range of at most 366 days and returns at most 10000 complete points. groupBy accepts one or two distinct dimensions: event_name, source, source_service, host, route or prop:<declared scalar property>. Repeated filter parameters are AND-combined JSON objects with dimension/op/value (omit value for set/unset): at most 8 filters, 100 in values, 1024 UTF-8 bytes per string and 16384 decoded bytes combined. Missing/null values are unset; comparisons including neq do not match unset values. Group keys keep full dimension names and null differs from an empty string. Unsupported parameters are errors. See the documented route matrix."
     :> QueryParam' '[Required] "from" Day
     :> QueryParam' '[Required] "to" Day
     :> QueryParam "groupBy" Text
     :> QueryParam "timeGrain" TimeGrain
+    :> QueryParams "filter" MetricFilter
     :> MultiVerb 'Servant.GET '[JSON, ProblemJSON] (OkResponses "Metric result" MetricResult) (KansokuResult MetricResult)
 
--- | Metric routes keyed by field name. Ten fields deliberately share
+-- | Metric routes keyed by field name. Nine fields deliberately share
 -- 'MetricQuery'; their runtime path-to-handler guard lives in RoutingSpec.
 -- Record field order is not load-bearing for servant routing.
 data MetricsRoutes mode = MetricsRoutes
   { events :: mode :- MetricsAuth :> "metrics" :> "events" :> MetricQuery,
     pageViews :: mode :- MetricsAuth :> "metrics" :> "page-views" :> MetricQuery,
-    sessions :: mode :- MetricsAuth :> "metrics" :> "sessions" :> MetricQuery,
+    sessions ::
+      mode
+        :- MetricsAuth
+          :> "metrics"
+          :> "sessions"
+          :> Description "Distinct nonempty session IDs over a positive half-open range of at most 366 days; at most 10000 complete points. Only from, to and optional timeGrain are supported here; other parameters return HTTP 400."
+          :> QueryParam' '[Required] "from" Day
+          :> QueryParam' '[Required] "to" Day
+          :> QueryParam "timeGrain" TimeGrain
+          :> MultiVerb 'Servant.GET '[JSON, ProblemJSON] (OkResponses "Metric result" MetricResult) (KansokuResult MetricResult),
     funnel ::
       mode
         :- MetricsAuth

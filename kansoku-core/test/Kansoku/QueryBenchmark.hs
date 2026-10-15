@@ -31,7 +31,7 @@ import Text.Read (readMaybe)
 
 queriesFor :: Day -> Day -> Map.Map Text Text
 queriesFor fromDay toDay =
-  let req = QueryRequest (AccountId "bench-a") fromDay toDay Nothing Nothing
+  let req = QueryRequest (AccountId "bench-a") fromDay toDay Nothing Nothing []
       step value = either (error . show) id (mkSqlName value)
       ratio = either (error . show) id (buildSQL defaultRegistry (Ratioed conversionRate) req)
    in Map.fromList
@@ -87,7 +87,7 @@ runSession = do
       unless (Text.all (\c -> isAlphaNum c || c == '_') tag) (fail "invalid benchmark tag")
       let sql = maybe (error "unknown benchmark query") id (Map.lookup queryName (queriesFor fromDay toDay))
           chosen = if evidenceOnly then "SELECT CAST('evidence','String') AS bucket,CAST('','String') AS group_key,toFloat64(0) AS value" else if baseline then Text.replace "analytics.events_resolved_http" "analytics.events_unresolved_http" sql else sql
-          checkout = if baseline then withQueryConnection pool else withIdentityQueryConnection pool "bench-a" (Text.pack (show fromDay)) (Text.pack (show toDay))
+          checkout = if baseline then withMetricsQueryConnection pool else withIdentityQueryConnection pool "bench-a" (Text.pack (show fromDay)) (Text.pack (show toDay))
       if cold then closeQueryPool pool else pure ()
       -- Instrumentation setup stays outside measured application time.
       withQueryConnection pool $ \conn -> command conn (fromString ("SET log_queries=1,log_comment='" <> Text.unpack tag <> "'"))
@@ -106,7 +106,7 @@ statement sql =
   where
     parameters =
       foldr
-        (\(key, value) rest -> addParameter key (toChType (value :: String) :: ChString) . rest)
+        (\(key, value) rest -> addParameter key (toChType (Text.encodeUtf8 (Text.pack (value :: String))) :: ChString) . rest)
         id
         [ ("account_id", "bench-a"),
           ("funnel_step_1", "signup_started"),

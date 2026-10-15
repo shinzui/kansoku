@@ -5,7 +5,7 @@ description: Bound metric inputs and final aggregate cardinality, returning a co
 docId: ADR-9
 status: Accepted
 date: 2026-10-15
-timestamp: 2026-10-15T04:51:11Z
+timestamp: 2026-10-15T20:56:24Z
 generated:
   by: process:codex
   at: 2026-10-15T04:44:00Z
@@ -44,8 +44,9 @@ with no partial MetricResult. The limit sits after all grouping, ratios, identit
 resolution, retention and funnel computation. It bounds result transfer/collection,
 not database scan cost or execution duration.
 
-Ordering is a closed service-owned choice. Ordinary series use bucket then group,
-conversion uses group key, retention uses cohort then numeric offset, plain funnels
+Ordering is a closed service-owned choice. Ordinary series use bucket then typed dimensions; exposure series use bucket, experiment and
+variant; experiment conversion uses typed measure then variant; retention uses cohort then
+numeric offset, plain funnels
 use numeric step, and experiment funnels use variant then numeric step. Hidden typed
 sort columns pass through the aggregate subquery but stay out of the wire projection.
 The driver returns its block list in reverse arrival order; execution restores block
@@ -56,8 +57,19 @@ The execution result distinguishes compile/input errors, result overflow and sto
 failure. Input failures never check out a connection. Overflow follows a successful
 bounded read and does not invalidate its connection. Native errors are translated only
 after the shared pool has disposed the failed handle; asynchronous cancellation
-propagates. Storage failures remain retryable 503. Body-size 413 is not reused for
+propagates. Native execution/memory-limit errors and the complete-request deadline produce
+permanent 400 query_resource_limit; other storage failures remain retryable 503. Body-size 413 is not reused for
 query/result bounds.
+
+Positive KANSOKU_METRICS_MAX_EXECUTION_SEC (default 30) and
+KANSOKU_METRICS_MAX_MEMORY_BYTES (default 536870912) are owned by QueryPool. Native settings
+apply to each statement/subquery, including evidence metadata and cold snapshot construction.
+Construction cannot raise a lower configured memory budget to its existing 256-MiB cap. An
+outer request timeout also bounds pool acquisition, preparation and final SELECT together.
+Failure unwinds the resource callback and disposes its socket/temporary tables before being
+classified. External asynchronous cancellation is not converted into a resource-limit answer.
+No break/partial overflow mode is enabled. The point cap remains independent of work budgets.
+Resident snapshot footprint limits are separately documented, not a per-process memory quota.
 
 This is an explicit deviation from the growing-collection cursor policy at
 `mori://shinzui/haskell-jitsurei/docs/api-relay-pagination`, not Relay compliance or

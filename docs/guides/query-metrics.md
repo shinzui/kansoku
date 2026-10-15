@@ -18,6 +18,10 @@ The public limits are fixed:
 | Ordered funnel | 1..20 non-empty steps; repeated names retain their meaning |
 | Retention offsets | At most 32 distinct values in 1..365, normalized to ascending unique order |
 | Complete metric answer | At most 10,000 points |
+| AND-combined filters | At most 8 JSON objects |
+| `in` operands | 1..100 values of one scalar type |
+| Filter strings | At most 1024 UTF-8 bytes each |
+| Decoded filter JSON combined | At most 16 KiB, including whitespace |
 
 Retention always includes the implicit offset-zero cohort point; do not send zero as
 an offset. Default offsets remain 1, 7, 14 and 30. A funnel's existing maximum window
@@ -42,8 +46,14 @@ Stable codes are `invalid_date_range`, `query_range_too_large`,
 Narrow the interval or grouping after a permanent limit error. The service caps the
 final aggregate projection, after grouping, ratios, identity resolution and funnel
 computation. It never limits the raw event input to fabricate an in-bound answer.
-These limits bound transferred result rows and Haskell collection; they do not bound
-ClickHouse scan cost or query duration. Storage failures remain retryable 503.
+The row cap bounds result transfer and Haskell collection. Separate positive configuration
+limits bound execution (30 seconds by default) and native query memory (512 MiB by default).
+The request deadline includes pool wait, native settings, identity preparation and SELECT.
+Each native statement/subquery also receives the execution/memory settings; cold identity
+construction uses the smaller of its existing 256 MiB cap and the configured query memory.
+Timeout or native memory-limit failures return permanent 400 `query_resource_limit`, without
+partial data, after the failed physical handle is disposed. External cancellation propagates.
+Other storage failures remain retryable 503.
 
 Metric aggregates return complete-or-error answers rather than cursor pages: pages
 recomputed over an evolving event set can disagree. This is a deliberate service
@@ -51,16 +61,54 @@ exception to the collection pagination standard, documented in
 [ADR-9](../adr/0009-bounded-complete-aggregate-responses.md). Future resource-list APIs
 still follow `mori://shinzui/haskell-jitsurei/docs/api-relay-pagination`.
 
-Standard metric routes also accept:
+Standard event/user/revenue routes accept `timeGrain` (`hour`, `day`, `week`, `month`),
+`groupBy` and repeatable `filter`. The default grain is day; conversion without a grain is one
+ratio over the whole interval. `groupBy` contains one or two distinct comma-separated names:
+`event_name`, `source`, `source_service`, `host`, `route`, or `prop:<name>`.
 
-- `timeGrain`: `hour`, `day`, `week`, or `month`; the metric's default is `day`.
-- `groupBy`: exactly one of `event_name`, `source`, `route`, or `prop:<name>`.
+Property dimensions require a compatible scalar declaration across the selected registered
+events and their schema versions. Missing declarations in older versions are missing values;
+incompatible declarations, PTAny, arrays and objects do not establish a scalar dimension.
+For `/metrics/events`, an `event_name` `eq`/`in` filter establishes the finite scope required
+for property validation. An unrestricted all-event request cannot filter/group by a property.
+Ratio requests reject event-property grouping; their population filters apply to both sides.
 
-Property grouping is available only when the metric has a fixed set of registered event names
-and every such event declares that property. It is therefore useful for routes such as
-`page-views`, `feature-adoption`, and `revenue`, but not an unrestricted all-event metric.
-Ratio metrics do not support property grouping. An invalid, multiple, or undeclared dimension
-returns HTTP 400.
+Each `filter` is a URL-encoded JSON object with exactly `dimension`, `op` and `value`.
+`set`/`unset` omit `value`. Unknown keys, null operands and mixed/empty `in` arrays are invalid.
+
+| Operator | Operand and behavior |
+| --- | --- |
+| `eq`, `neq` | A scalar of the dimension's declared string, number or Boolean type. |
+| `in` | A nonempty array of one compatible scalar type. |
+| `contains` | Case-sensitive string substring, including an empty substring. |
+| `gt`, `lt` | A finite number and a declared numeric dimension. |
+| `set`, `unset` | Presence or absence; no operand. |
+
+Missing and JSON-null properties are unset. Historical values of an incompatible type also
+become unset through guarded extraction. Every comparison, including `neq`, is false for
+unset values. An empty property string is present; absent built-in strings normalize to null.
+All operand values are native parameters. Strings retain their text, Booleans render as
+`true`/`false`, and numbers use native Float64 text. Numeric groups sort numerically; missing
+groups sort first. Full group keys such as `source` and `prop:source` remain distinct.
+
+Unknown/unsupported parameters return 400 `unsupported_query_parameter`. Only `filter` may
+repeat; duplicate scalar parameters or missing values return `invalid_query_parameter`.
+Invalid JSON/filter grammar or incompatible filter types return `invalid_filter`.
+
+| Route | Parameters in addition to required `from`, `to` |
+| --- | --- |
+| events, page-views, users, feature-adoption, revenue, conversion | `groupBy`, `timeGrain`, repeatable `filter` |
+| sessions | `timeGrain` |
+| funnel | required `steps`; optional `window` |
+| retention | `days` |
+| experiments | `experiment`, `timeGrain` (day/week/month) |
+| experiments/conversion | required `experiment`, `event` |
+| experiments/funnel | required `experiment`, `steps`; optional `window` |
+
+Session/cohort/funnel-specific filter populations are extended by their dedicated feature
+contracts; unsupported event-filter parameters currently fail explicitly on those routes.
+`source_service` and URL `host` separate applications/properties within one account. They do
+not establish cross-origin browser identity: that also needs the SDK cookie/handoff contract.
 
 All successful routes return:
 
@@ -77,22 +125,24 @@ All successful routes return:
 }
 ```
 
-`bucket` is omitted when an endpoint returns an unbucketed result. `group` is always an object
+`bucket` is null for an unbucketed result. Group values are nullable strings: null, empty
+string and literal `other` are distinct. `group` is always an object
 and carries dimensions, funnel steps, retention cohorts, or experiment variants. A valid query
-with no matching data returns HTTP 200 with an empty `points` array.
+with no matching data normally returns HTTP 200 with an empty `points` array. Ungrouped
+conversion returns a single zero when its denominator is zero.
 
 ## Implemented endpoints
 
 | Endpoint | Current meaning |
 | --- | --- |
 | `/metrics/events` | Distinct event IDs across all event names. |
-| `/metrics/page-views` | `page_view` rows; the default daily path uses the page-view rollup. |
+| `/metrics/page-views` | Distinct canonical `page_view` event IDs with the same filters at every grain. |
 | `/metrics/sessions` | Distinct non-empty producer-supplied `sessionId` values. |
 | `/metrics/funnel` | Exact identity-resolved users completing ordered event steps. |
 | `/metrics/retention` | Exact identity-resolved activity by new-in-window cohort and day offset. |
 | `/metrics/feature-adoption` | Exact identity-resolved users emitting `feature_used`, grouped by its `feature` property by default. |
 | `/metrics/conversion` | Users with `signup_completed` divided by users with `signup_started`; returns 0 when the denominator is 0. |
-| `/metrics/users` | Active users. Day/week use approximate raw-identity rollups; other grains use exact query-time identity resolution. |
+| `/metrics/users` | Exact canonical resolved active users at every grain, excluding identify, identify_once, alias and group events. |
 | `/metrics/revenue` | Sum of numeric `amount` on `payment_completed` events. |
 | `/metrics/experiments` | Approximate raw identities exposed per experiment and variant. |
 | `/metrics/experiments/conversion` | Exact identity-resolved exposed and post-exposure converted users per variant, plus rate. |
@@ -124,6 +174,18 @@ curl --fail-with-body --get http://localhost:8080/metrics/revenue \
   --data-urlencode 'to=2026-08-01' \
   --data-urlencode 'groupBy=prop:plan' \
   --data-urlencode 'timeGrain=month' | jq .
+```
+
+Filter revenue and group by both a deployment dimension and the declared plan:
+
+```bash
+curl --fail-with-body --get http://localhost:8080/metrics/revenue \
+  --header "Authorization: Bearer $KANSOKU_SERVICE_TOKEN" \
+  --data-urlencode 'from=2026-07-01' \
+  --data-urlencode 'to=2026-08-01' \
+  --data-urlencode 'groupBy=source_service,prop:plan' \
+  --data-urlencode 'filter={"dimension":"prop:amount","op":"gt","value":0}' \
+  --data-urlencode 'filter={"dimension":"prop:plan","op":"in","value":["pro","enterprise"]}' | jq .
 ```
 
 ## Ordered funnels
@@ -215,7 +277,8 @@ Ingestion is asynchronous. A successful HTTP 202 means the durable PostgreSQL qu
 event, not that ClickHouse queries already include it. Allow at least one writer flush interval
 or observe the queue and writer metrics before reading fresh data.
 
-Exact user metrics resolve identity at query time. Day/week active-user and experiment-exposure
+HTTP user counts use exact current identity resolution, with the same activity population
+for filtered and unfiltered requests. Raw internal DAU/WAU and experiment-exposure
 rollups use `uniqCombined` (about 0.8% relative error at scale and exact for small sets). Exposure
 rollups use raw identity, while experiment conversion and funnels use exact stitched identity;
 do not treat their denominators as interchangeable without acknowledging that difference.

@@ -58,9 +58,12 @@ library
     Kansoku.Metrics.Definition
     Kansoku.Metrics.Handler
     Kansoku.Metrics.Query
+    Kansoku.Metrics.Query.Dimension
+    Kansoku.Metrics.Query.Filter
     Kansoku.Metrics.Query.Property
     Kansoku.Metrics.Query.Validate
     Kansoku.Metrics.Registry
+    Kansoku.Metrics.RequestValidation
     Kansoku.Migrations
     Kansoku.Observability
     Kansoku.Postgres
@@ -146,6 +149,8 @@ test-suite kansoku-core-test
     Kansoku.Ingest.ServiceSpec
     Kansoku.Ingest.TimestampSpec
     Kansoku.LimitsSpec
+    Kansoku.Metrics.FilterIntegrationSpec
+    Kansoku.Metrics.FilterSpec
     Kansoku.Metrics.HandlerSpec
     Kansoku.Metrics.LimitsSpec
     Kansoku.Metrics.RoutingSpec
@@ -184,6 +189,7 @@ test-suite kansoku-core-test
     hs-opentelemetry-propagator-w3c,
     hs-opentelemetry-sdk,
     hspec,
+    http-api-data,
     http-client,
     http-types,
     kansoku-api,

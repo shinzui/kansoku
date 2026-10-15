@@ -1,6 +1,7 @@
 # Bundle Update Log
 
 ## 2026-10-15
+* **Update**: Update ADR-4, ADR-6 and ADR-9 for typed JSON filters, nullable structural groups, exact activity and query work budgets.
 * **Update**: Record conservative session-aware subjects, exact query connection evidence ownership and native driver command/query repairs.
 * **Update**: Include the released batcher ready-output buffer in the conservative retained-delivery bound.
 * **Update**: Record shared credential admission, typed rate-limit retry and retained source-pausing writer recovery.

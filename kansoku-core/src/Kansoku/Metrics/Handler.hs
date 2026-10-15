@@ -22,6 +22,7 @@ import Kansoku.Event (AccountId, defaultRegistry)
 import Kansoku.Exception (trySynchronous)
 import Kansoku.Logging (logError, runLogStderr)
 import Kansoku.Metrics.Api (MetricResult, MetricsRoutes (..), TimeGrain (..))
+import Kansoku.Metrics.Filter (MetricFilter)
 import Kansoku.Metrics.Query qualified as Query
 import Kansoku.Metrics.Query.Validate (QueryLimitError (..), mkSqlName, renderSqlName, validateDateRange)
 import Kansoku.Metrics.Registry (builtinMetric)
@@ -49,17 +50,17 @@ metricsServer pool =
       experimentFunnel = experimentFunnelHandler
     }
   where
-    metricHandler :: Text -> MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> Handler (KansokuResult MetricResult)
-    metricHandler key (MetricsPrincipal principal) fromDay toDay groupBy timeGrain =
+    metricHandler :: Text -> MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> [MetricFilter] -> Handler (KansokuResult MetricResult)
+    metricHandler key (MetricsPrincipal principal) fromDay toDay groupBy timeGrain filters =
       case builtinMetric key of
         Nothing -> pure (KansokuNotFound (notFound "metric_not_found" ("no such metric: " <> key)))
         Just metric ->
           metricEffToHandler
-            (Query.run defaultRegistry pool metric (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain))
+            (Query.run defaultRegistry pool metric (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain filters))
 
-    sessionsHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> Handler (KansokuResult MetricResult)
-    sessionsHandler (MetricsPrincipal principal) fromDay toDay groupBy timeGrain =
-      effToHandler (Query.runSessions pool (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain))
+    sessionsHandler :: MetricsPrincipal -> Day -> Day -> Maybe TimeGrain -> Handler (KansokuResult MetricResult)
+    sessionsHandler (MetricsPrincipal principal) fromDay toDay timeGrain =
+      effToHandler (Query.runSessions pool (queryRequest (principal ^. #accountId) fromDay toDay Nothing timeGrain []))
 
     funnelHandler :: MetricsPrincipal -> Day -> Day -> Text -> Maybe Int -> Handler (KansokuResult MetricResult)
     funnelHandler (MetricsPrincipal principal) fromDay toDay stepsParam requestedWindow =
@@ -81,13 +82,13 @@ metricsServer pool =
                           (badRequest "invalid_funnel_window" ("invalid funnel window: " <> invalid <> "; expected 1..7776000 seconds"))
                       )
                   Right window ->
-                    effToHandler (Query.runFunnel pool (queryRequest (principal ^. #accountId) fromDay toDay Nothing Nothing) window steps)
+                    effToHandler (Query.runFunnel pool (queryRequest (principal ^. #accountId) fromDay toDay Nothing Nothing []) window steps)
 
     retentionHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Handler (KansokuResult MetricResult)
     retentionHandler (MetricsPrincipal principal) fromDay toDay daysParam =
       case parseOffsets daysParam of
         Left message -> pure (KansokuBadRequest (badRequest "invalid_retention_days" message))
-        Right offsets -> effToHandler (Query.runRetention pool (queryRequest (principal ^. #accountId) fromDay toDay Nothing Nothing) offsets)
+        Right offsets -> effToHandler (Query.runRetention pool (queryRequest (principal ^. #accountId) fromDay toDay Nothing Nothing []) offsets)
 
     experimentsHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> Handler (KansokuResult MetricResult)
     experimentsHandler (MetricsPrincipal principal) fromDay toDay experimentParam timeGrain =
@@ -108,7 +109,7 @@ metricsServer pool =
               effToHandler
                 ( Query.runExperimentExposures
                     pool
-                    (queryRequest (principal ^. #accountId) fromDay toDay Nothing timeGrain)
+                    (queryRequest (principal ^. #accountId) fromDay toDay Nothing timeGrain [])
                     experiment
                 )
 
@@ -137,7 +138,7 @@ metricsServer pool =
                   effToHandler
                     ( Query.runExperimentConversion
                         pool
-                        (queryRequest (principal ^. #accountId) fromDay toDay Nothing Nothing)
+                        (queryRequest (principal ^. #accountId) fromDay toDay Nothing Nothing [])
                         experiment
                         conversionEvent
                     )
@@ -172,27 +173,28 @@ metricsServer pool =
                         effToHandler
                           ( Query.runExperimentFunnel
                               pool
-                              (queryRequest (principal ^. #accountId) fromDay toDay Nothing Nothing)
+                              (queryRequest (principal ^. #accountId) fromDay toDay Nothing Nothing [])
                               experiment
                               window
                               steps
                           )
 
-    notImplemented :: Text -> MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> Handler (KansokuResult MetricResult)
-    notImplemented name _principal _ _ _ _ =
+    notImplemented :: Text -> MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> [MetricFilter] -> Handler (KansokuResult MetricResult)
+    notImplemented name _principal _ _ _ _ _ =
       pure
         ( KansokuNotFound
             (notFound "not_implemented" ("metric endpoint is stubbed in the MVP: " <> name))
         )
 
-queryRequest :: AccountId -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> Query.QueryRequest
-queryRequest accountId fromDay toDay groupBy timeGrain =
+queryRequest :: AccountId -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> [MetricFilter] -> Query.QueryRequest
+queryRequest accountId fromDay toDay groupBy timeGrain filters =
   Query.QueryRequest
     { accountId,
       from = fromDay,
       to = toDay,
-      groupBy = nonEmptyCsv <$> groupBy,
-      timeGrain
+      groupBy = (map Text.strip . Text.splitOn ",") <$> groupBy,
+      timeGrain,
+      filters
     }
 
 -- SQL safety audit: groupBy selects from a closed expression whitelist;
@@ -241,6 +243,7 @@ effToHandler action = do
           KansokuBadRequest (badRequest (Query.queryCompileErrorCode compileError) (Query.queryCompileErrorMessage compileError))
       Query.QueryLimitFailure (QueryLimitError code message) -> pure (KansokuBadRequest (badRequest code message))
       Query.MetricResultTooLarge -> pure (KansokuBadRequest (badRequest "metric_result_too_large" "narrow the query range or grouping to at most 10000 metric points"))
+      Query.QueryResourceLimit -> pure (KansokuBadRequest (badRequest "query_resource_limit" "narrow the query to fit the configured execution and memory limits"))
       Query.QueryStorageFailure message -> storageFailure message
   where
     storageFailure message = do

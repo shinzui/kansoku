@@ -19,6 +19,8 @@ import Kansoku.Ingest.RateLimitSpec qualified
 import Kansoku.Ingest.ServiceSpec qualified
 import Kansoku.Ingest.TimestampSpec qualified
 import Kansoku.LimitsSpec qualified
+import Kansoku.Metrics.FilterIntegrationSpec qualified
+import Kansoku.Metrics.FilterSpec qualified
 import Kansoku.Metrics.HandlerSpec qualified
 import Kansoku.Metrics.LimitsSpec qualified
 import Kansoku.Metrics.RoutingSpec qualified
@@ -75,6 +77,8 @@ normalTests = hspec $ do
   Kansoku.HttpIntegrationSpec.spec
   Kansoku.LimitsSpec.spec
   Kansoku.MigrationsSpec.spec
+  Kansoku.Metrics.FilterSpec.spec
+  Kansoku.Metrics.FilterIntegrationSpec.spec
   Kansoku.Metrics.HandlerSpec.spec
   Kansoku.Metrics.LimitsSpec.spec
   Kansoku.Metrics.RoutingSpec.spec

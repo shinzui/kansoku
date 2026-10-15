@@ -71,11 +71,11 @@ spec = describe "Kansoku property metrics HTTP integration" $ do
 
               revenue <- getMetric manager port token "/metrics/revenue?from=2026-07-10&to=2026-07-11&groupBy=prop:plan"
               revenue ^. #metric `shouldBe` "revenue"
-              metricGroups "plan" revenue `shouldBe` Map.fromList [("free", 9), ("pro", 98)]
+              metricGroups "prop:plan" revenue `shouldBe` Map.fromList [("free", 9), ("pro", 98)]
 
               adoption <- getMetric manager port token "/metrics/feature-adoption?from=2026-07-10&to=2026-07-11&groupBy=prop:feature"
               adoption ^. #metric `shouldBe` "feature_adoption"
-              metricGroups "feature" adoption `shouldBe` Map.fromList [("export", 1), ("search", 2)]
+              metricGroups "prop:feature" adoption `shouldBe` Map.fromList [("export", 1), ("search", 2)]
 
               rejected <- authorizedGet manager port token "/metrics/revenue?from=2026-07-10&to=2026-07-11&groupBy=prop:nope"
               Http.responseStatus rejected `shouldBe` status400
@@ -115,7 +115,7 @@ metricGroups property result =
   Map.fromList
     [ (groupValue, point ^. #value)
     | point <- result ^. #points,
-      Just groupValue <- [Map.lookup property (point ^. #group)]
+      Just (Just groupValue) <- [Map.lookup property (point ^. #group)]
     ]
 
 requireServiceToken :: Pool.Pool -> IO Token

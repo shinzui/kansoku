@@ -140,3 +140,17 @@ remain compatibility routes. Probe timeouts are fixed operational limits: 2 seco
 for each complete probe and 750 ms for each external readiness check, including pool
 wait and disposal. They do not impose an analytics-query duration policy. ClickHouse
 query reachability is checked independently of the writer and queue thresholds.
+
+
+## Metric execution budgets
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `KANSOKU_METRICS_MAX_EXECUTION_SEC` | `30` | Positive whole seconds for the complete metrics request, including pool wait and identity preparation; also set on native queries. |
+| `KANSOKU_METRICS_MAX_MEMORY_BYTES` | `536870912` | Positive native-query memory cap, including subqueries. Cold identity preparation uses at most the smaller of this value and 256 MiB per construction query. |
+
+Budget failures return non-retryable 400 `query_resource_limit` and no partial result. They
+dispose failed connections and their temporary identity snapshots. The independent 10000-point
+result cap still applies. Resident identity Join tables have separate bounded per-connection
+footprints described in [operations](operations.md); per-query memory is not a process-wide
+or deployment-wide memory quota.

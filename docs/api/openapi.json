@@ -223,12 +223,19 @@
       "MetricPoint": {
         "properties": {
           "bucket": {
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "group": {
             "additionalProperties": {
-              "type": "string"
+              "type": [
+                "string",
+                "null"
+              ]
             },
+            "description": "Full dimension names map to scalar text or null. Empty string and null are distinct.",
             "type": "object"
           },
           "value": {
@@ -419,7 +426,7 @@
   "paths": {
     "/metrics/acquisition": {
       "get": {
-        "description": "Every implemented metric requires a positive half-open from/to range of at most 366 days and returns a complete answer of at most 10000 points, or a permanent HTTP 400 problem asking the caller to narrow the query. The optional groupBy parameter accepts exactly one dimension: event_name, source, route, or prop:<name>. Property names must be declared in the event registry for every event queried by the metric. Unknown, undeclared, or multiple dimensions return HTTP 400 naming the invalid value.",
+        "description": "Every metric requires a positive half-open from/to range of at most 366 days and returns at most 10000 complete points. groupBy accepts one or two distinct dimensions: event_name, source, source_service, host, route or prop:<declared scalar property>. Repeated filter parameters are AND-combined JSON objects with dimension/op/value (omit value for set/unset): at most 8 filters, 100 in values, 1024 UTF-8 bytes per string and 16384 decoded bytes combined. Missing/null values are unset; comparisons including neq do not match unset values. Group keys keep full dimension names and null differs from an empty string. Unsupported parameters are errors. See the documented route matrix.",
         "operationId": "getMetricsAcquisition",
         "parameters": [
           {
@@ -461,6 +468,17 @@
               ],
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "filter",
+            "schema": {
+              "items": {
+                "description": "A URL-decoded JSON object with dimension, op and value; set/unset omit value. Repeat filter for AND. Operators: eq, neq, in, contains, gt, lt, set, unset.",
+                "type": "string"
+              },
+              "type": "array"
+            }
           }
         ],
         "responses": {
@@ -487,7 +505,7 @@
                 }
               }
             },
-            "description": "Malformed request or `timeGrain` or `groupBy` or `to` or `from`"
+            "description": "Malformed request or `filter` or `timeGrain` or `groupBy` or `to` or `from`"
           },
           "401": {
             "content": {
@@ -614,7 +632,7 @@
     },
     "/metrics/conversion": {
       "get": {
-        "description": "Every implemented metric requires a positive half-open from/to range of at most 366 days and returns a complete answer of at most 10000 points, or a permanent HTTP 400 problem asking the caller to narrow the query. The optional groupBy parameter accepts exactly one dimension: event_name, source, route, or prop:<name>. Property names must be declared in the event registry for every event queried by the metric. Unknown, undeclared, or multiple dimensions return HTTP 400 naming the invalid value.",
+        "description": "Every metric requires a positive half-open from/to range of at most 366 days and returns at most 10000 complete points. groupBy accepts one or two distinct dimensions: event_name, source, source_service, host, route or prop:<declared scalar property>. Repeated filter parameters are AND-combined JSON objects with dimension/op/value (omit value for set/unset): at most 8 filters, 100 in values, 1024 UTF-8 bytes per string and 16384 decoded bytes combined. Missing/null values are unset; comparisons including neq do not match unset values. Group keys keep full dimension names and null differs from an empty string. Unsupported parameters are errors. See the documented route matrix.",
         "operationId": "getMetricsConversion",
         "parameters": [
           {
@@ -656,6 +674,17 @@
               ],
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "filter",
+            "schema": {
+              "items": {
+                "description": "A URL-decoded JSON object with dimension, op and value; set/unset omit value. Repeat filter for AND. Operators: eq, neq, in, contains, gt, lt, set, unset.",
+                "type": "string"
+              },
+              "type": "array"
+            }
           }
         ],
         "responses": {
@@ -682,7 +711,7 @@
                 }
               }
             },
-            "description": "Malformed request or `timeGrain` or `groupBy` or `to` or `from`"
+            "description": "Malformed request or `filter` or `timeGrain` or `groupBy` or `to` or `from`"
           },
           "401": {
             "content": {
@@ -809,7 +838,7 @@
     },
     "/metrics/custom": {
       "get": {
-        "description": "Every implemented metric requires a positive half-open from/to range of at most 366 days and returns a complete answer of at most 10000 points, or a permanent HTTP 400 problem asking the caller to narrow the query. The optional groupBy parameter accepts exactly one dimension: event_name, source, route, or prop:<name>. Property names must be declared in the event registry for every event queried by the metric. Unknown, undeclared, or multiple dimensions return HTTP 400 naming the invalid value.",
+        "description": "Every metric requires a positive half-open from/to range of at most 366 days and returns at most 10000 complete points. groupBy accepts one or two distinct dimensions: event_name, source, source_service, host, route or prop:<declared scalar property>. Repeated filter parameters are AND-combined JSON objects with dimension/op/value (omit value for set/unset): at most 8 filters, 100 in values, 1024 UTF-8 bytes per string and 16384 decoded bytes combined. Missing/null values are unset; comparisons including neq do not match unset values. Group keys keep full dimension names and null differs from an empty string. Unsupported parameters are errors. See the documented route matrix.",
         "operationId": "getMetricsCustom",
         "parameters": [
           {
@@ -851,6 +880,17 @@
               ],
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "filter",
+            "schema": {
+              "items": {
+                "description": "A URL-decoded JSON object with dimension, op and value; set/unset omit value. Repeat filter for AND. Operators: eq, neq, in, contains, gt, lt, set, unset.",
+                "type": "string"
+              },
+              "type": "array"
+            }
           }
         ],
         "responses": {
@@ -877,7 +917,7 @@
                 }
               }
             },
-            "description": "Malformed request or `timeGrain` or `groupBy` or `to` or `from`"
+            "description": "Malformed request or `filter` or `timeGrain` or `groupBy` or `to` or `from`"
           },
           "401": {
             "content": {
@@ -1004,7 +1044,7 @@
     },
     "/metrics/events": {
       "get": {
-        "description": "Every implemented metric requires a positive half-open from/to range of at most 366 days and returns a complete answer of at most 10000 points, or a permanent HTTP 400 problem asking the caller to narrow the query. The optional groupBy parameter accepts exactly one dimension: event_name, source, route, or prop:<name>. Property names must be declared in the event registry for every event queried by the metric. Unknown, undeclared, or multiple dimensions return HTTP 400 naming the invalid value.",
+        "description": "Every metric requires a positive half-open from/to range of at most 366 days and returns at most 10000 complete points. groupBy accepts one or two distinct dimensions: event_name, source, source_service, host, route or prop:<declared scalar property>. Repeated filter parameters are AND-combined JSON objects with dimension/op/value (omit value for set/unset): at most 8 filters, 100 in values, 1024 UTF-8 bytes per string and 16384 decoded bytes combined. Missing/null values are unset; comparisons including neq do not match unset values. Group keys keep full dimension names and null differs from an empty string. Unsupported parameters are errors. See the documented route matrix.",
         "operationId": "getMetricsEvents",
         "parameters": [
           {
@@ -1046,6 +1086,17 @@
               ],
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "filter",
+            "schema": {
+              "items": {
+                "description": "A URL-decoded JSON object with dimension, op and value; set/unset omit value. Repeat filter for AND. Operators: eq, neq, in, contains, gt, lt, set, unset.",
+                "type": "string"
+              },
+              "type": "array"
+            }
           }
         ],
         "responses": {
@@ -1072,7 +1123,7 @@
                 }
               }
             },
-            "description": "Malformed request or `timeGrain` or `groupBy` or `to` or `from`"
+            "description": "Malformed request or `filter` or `timeGrain` or `groupBy` or `to` or `from`"
           },
           "401": {
             "content": {
@@ -1782,7 +1833,7 @@
     },
     "/metrics/feature-adoption": {
       "get": {
-        "description": "Every implemented metric requires a positive half-open from/to range of at most 366 days and returns a complete answer of at most 10000 points, or a permanent HTTP 400 problem asking the caller to narrow the query. The optional groupBy parameter accepts exactly one dimension: event_name, source, route, or prop:<name>. Property names must be declared in the event registry for every event queried by the metric. Unknown, undeclared, or multiple dimensions return HTTP 400 naming the invalid value.",
+        "description": "Every metric requires a positive half-open from/to range of at most 366 days and returns at most 10000 complete points. groupBy accepts one or two distinct dimensions: event_name, source, source_service, host, route or prop:<declared scalar property>. Repeated filter parameters are AND-combined JSON objects with dimension/op/value (omit value for set/unset): at most 8 filters, 100 in values, 1024 UTF-8 bytes per string and 16384 decoded bytes combined. Missing/null values are unset; comparisons including neq do not match unset values. Group keys keep full dimension names and null differs from an empty string. Unsupported parameters are errors. See the documented route matrix.",
         "operationId": "getMetricsFeatureAdoption",
         "parameters": [
           {
@@ -1824,6 +1875,17 @@
               ],
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "filter",
+            "schema": {
+              "items": {
+                "description": "A URL-decoded JSON object with dimension, op and value; set/unset omit value. Repeat filter for AND. Operators: eq, neq, in, contains, gt, lt, set, unset.",
+                "type": "string"
+              },
+              "type": "array"
+            }
           }
         ],
         "responses": {
@@ -1850,7 +1912,7 @@
                 }
               }
             },
-            "description": "Malformed request or `timeGrain` or `groupBy` or `to` or `from`"
+            "description": "Malformed request or `filter` or `timeGrain` or `groupBy` or `to` or `from`"
           },
           "401": {
             "content": {
@@ -2168,7 +2230,7 @@
     },
     "/metrics/organizations": {
       "get": {
-        "description": "Every implemented metric requires a positive half-open from/to range of at most 366 days and returns a complete answer of at most 10000 points, or a permanent HTTP 400 problem asking the caller to narrow the query. The optional groupBy parameter accepts exactly one dimension: event_name, source, route, or prop:<name>. Property names must be declared in the event registry for every event queried by the metric. Unknown, undeclared, or multiple dimensions return HTTP 400 naming the invalid value.",
+        "description": "Every metric requires a positive half-open from/to range of at most 366 days and returns at most 10000 complete points. groupBy accepts one or two distinct dimensions: event_name, source, source_service, host, route or prop:<declared scalar property>. Repeated filter parameters are AND-combined JSON objects with dimension/op/value (omit value for set/unset): at most 8 filters, 100 in values, 1024 UTF-8 bytes per string and 16384 decoded bytes combined. Missing/null values are unset; comparisons including neq do not match unset values. Group keys keep full dimension names and null differs from an empty string. Unsupported parameters are errors. See the documented route matrix.",
         "operationId": "getMetricsOrganizations",
         "parameters": [
           {
@@ -2210,6 +2272,17 @@
               ],
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "filter",
+            "schema": {
+              "items": {
+                "description": "A URL-decoded JSON object with dimension, op and value; set/unset omit value. Repeat filter for AND. Operators: eq, neq, in, contains, gt, lt, set, unset.",
+                "type": "string"
+              },
+              "type": "array"
+            }
           }
         ],
         "responses": {
@@ -2236,7 +2309,7 @@
                 }
               }
             },
-            "description": "Malformed request or `timeGrain` or `groupBy` or `to` or `from`"
+            "description": "Malformed request or `filter` or `timeGrain` or `groupBy` or `to` or `from`"
           },
           "401": {
             "content": {
@@ -2363,7 +2436,7 @@
     },
     "/metrics/page-views": {
       "get": {
-        "description": "Every implemented metric requires a positive half-open from/to range of at most 366 days and returns a complete answer of at most 10000 points, or a permanent HTTP 400 problem asking the caller to narrow the query. The optional groupBy parameter accepts exactly one dimension: event_name, source, route, or prop:<name>. Property names must be declared in the event registry for every event queried by the metric. Unknown, undeclared, or multiple dimensions return HTTP 400 naming the invalid value.",
+        "description": "Every metric requires a positive half-open from/to range of at most 366 days and returns at most 10000 complete points. groupBy accepts one or two distinct dimensions: event_name, source, source_service, host, route or prop:<declared scalar property>. Repeated filter parameters are AND-combined JSON objects with dimension/op/value (omit value for set/unset): at most 8 filters, 100 in values, 1024 UTF-8 bytes per string and 16384 decoded bytes combined. Missing/null values are unset; comparisons including neq do not match unset values. Group keys keep full dimension names and null differs from an empty string. Unsupported parameters are errors. See the documented route matrix.",
         "operationId": "getMetricsPageViews",
         "parameters": [
           {
@@ -2405,6 +2478,17 @@
               ],
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "filter",
+            "schema": {
+              "items": {
+                "description": "A URL-decoded JSON object with dimension, op and value; set/unset omit value. Repeat filter for AND. Operators: eq, neq, in, contains, gt, lt, set, unset.",
+                "type": "string"
+              },
+              "type": "array"
+            }
           }
         ],
         "responses": {
@@ -2431,7 +2515,7 @@
                 }
               }
             },
-            "description": "Malformed request or `timeGrain` or `groupBy` or `to` or `from`"
+            "description": "Malformed request or `filter` or `timeGrain` or `groupBy` or `to` or `from`"
           },
           "401": {
             "content": {
@@ -2739,7 +2823,7 @@
     },
     "/metrics/revenue": {
       "get": {
-        "description": "Every implemented metric requires a positive half-open from/to range of at most 366 days and returns a complete answer of at most 10000 points, or a permanent HTTP 400 problem asking the caller to narrow the query. The optional groupBy parameter accepts exactly one dimension: event_name, source, route, or prop:<name>. Property names must be declared in the event registry for every event queried by the metric. Unknown, undeclared, or multiple dimensions return HTTP 400 naming the invalid value.",
+        "description": "Every metric requires a positive half-open from/to range of at most 366 days and returns at most 10000 complete points. groupBy accepts one or two distinct dimensions: event_name, source, source_service, host, route or prop:<declared scalar property>. Repeated filter parameters are AND-combined JSON objects with dimension/op/value (omit value for set/unset): at most 8 filters, 100 in values, 1024 UTF-8 bytes per string and 16384 decoded bytes combined. Missing/null values are unset; comparisons including neq do not match unset values. Group keys keep full dimension names and null differs from an empty string. Unsupported parameters are errors. See the documented route matrix.",
         "operationId": "getMetricsRevenue",
         "parameters": [
           {
@@ -2781,6 +2865,17 @@
               ],
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "filter",
+            "schema": {
+              "items": {
+                "description": "A URL-decoded JSON object with dimension, op and value; set/unset omit value. Repeat filter for AND. Operators: eq, neq, in, contains, gt, lt, set, unset.",
+                "type": "string"
+              },
+              "type": "array"
+            }
           }
         ],
         "responses": {
@@ -2807,7 +2902,7 @@
                 }
               }
             },
-            "description": "Malformed request or `timeGrain` or `groupBy` or `to` or `from`"
+            "description": "Malformed request or `filter` or `timeGrain` or `groupBy` or `to` or `from`"
           },
           "401": {
             "content": {
@@ -2934,7 +3029,7 @@
     },
     "/metrics/sessions": {
       "get": {
-        "description": "Every implemented metric requires a positive half-open from/to range of at most 366 days and returns a complete answer of at most 10000 points, or a permanent HTTP 400 problem asking the caller to narrow the query. The optional groupBy parameter accepts exactly one dimension: event_name, source, route, or prop:<name>. Property names must be declared in the event registry for every event queried by the metric. Unknown, undeclared, or multiple dimensions return HTTP 400 naming the invalid value.",
+        "description": "Distinct nonempty session IDs over a positive half-open range of at most 366 days; at most 10000 complete points. Only from, to and optional timeGrain are supported here; other parameters return HTTP 400.",
         "operationId": "getMetricsSessions",
         "parameters": [
           {
@@ -2952,14 +3047,6 @@
             "required": true,
             "schema": {
               "format": "date",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "groupBy",
-            "required": false,
-            "schema": {
               "type": "string"
             }
           },
@@ -3002,7 +3089,7 @@
                 }
               }
             },
-            "description": "Malformed request or `timeGrain` or `groupBy` or `to` or `from`"
+            "description": "Malformed request or `timeGrain` or `to` or `from`"
           },
           "401": {
             "content": {
@@ -3129,7 +3216,7 @@
     },
     "/metrics/users": {
       "get": {
-        "description": "Every implemented metric requires a positive half-open from/to range of at most 366 days and returns a complete answer of at most 10000 points, or a permanent HTTP 400 problem asking the caller to narrow the query. The optional groupBy parameter accepts exactly one dimension: event_name, source, route, or prop:<name>. Property names must be declared in the event registry for every event queried by the metric. Unknown, undeclared, or multiple dimensions return HTTP 400 naming the invalid value.",
+        "description": "Every metric requires a positive half-open from/to range of at most 366 days and returns at most 10000 complete points. groupBy accepts one or two distinct dimensions: event_name, source, source_service, host, route or prop:<declared scalar property>. Repeated filter parameters are AND-combined JSON objects with dimension/op/value (omit value for set/unset): at most 8 filters, 100 in values, 1024 UTF-8 bytes per string and 16384 decoded bytes combined. Missing/null values are unset; comparisons including neq do not match unset values. Group keys keep full dimension names and null differs from an empty string. Unsupported parameters are errors. See the documented route matrix.",
         "operationId": "getMetricsUsers",
         "parameters": [
           {
@@ -3171,6 +3258,17 @@
               ],
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "filter",
+            "schema": {
+              "items": {
+                "description": "A URL-decoded JSON object with dimension, op and value; set/unset omit value. Repeat filter for AND. Operators: eq, neq, in, contains, gt, lt, set, unset.",
+                "type": "string"
+              },
+              "type": "array"
+            }
           }
         ],
         "responses": {
@@ -3197,7 +3295,7 @@
                 }
               }
             },
-            "description": "Malformed request or `timeGrain` or `groupBy` or `to` or `from`"
+            "description": "Malformed request or `filter` or `timeGrain` or `groupBy` or `to` or `from`"
           },
           "401": {
             "content": {

@@ -1,20 +1,20 @@
--- | Registry-validated event properties that are safe to render in metric SQL.
+-- | Registry-validated scalar properties and safe native-JSON extraction.
 module Kansoku.Metrics.Query.Property
   ( PropertyError (..),
     PropertyName,
-    propertyEqualsPredicate,
+    ScalarType (..),
     propertyFloatExpr,
     propertyGroupExpr,
+    propertyTypedExpr,
     propertyNameText,
+    propertyScalarType,
     resolveNumericProperty,
     resolveProperty,
   )
 where
 
-import Data.Aeson qualified as Aeson
-import Data.Char (isAsciiLower, isAsciiUpper, isDigit)
-import Data.Foldable (traverse_)
-import Data.List (find)
+import Data.Foldable (toList)
+import Data.List (find, nub)
 import Data.Text qualified as Text
 import Kansoku.Event
   ( EventName,
@@ -22,11 +22,14 @@ import Kansoku.Event
     EventSchema (..),
     PropertySpec (..),
     PropertyType (..),
-    latestSchema,
+    lookupVersions,
   )
 import Kansoku.Prelude
 
-newtype PropertyName = PropertyName Text
+data ScalarType = ScalarString | ScalarNumber | ScalarBool
+  deriving stock (Generic, Eq, Ord, Show)
+
+data PropertyName = PropertyName !Text !ScalarType
   deriving stock (Generic, Eq, Ord, Show)
 
 data PropertyError
@@ -34,79 +37,70 @@ data PropertyError
   | PropertyErrorUnscopedMetric !Text
   | PropertyErrorUndeclared !Text !EventName
   | PropertyErrorNotNumeric !Text !EventName
-  | PropertyErrorUnsupportedFilterValue !Text !Aeson.Value
+  | PropertyErrorNotScalar !Text !EventName
+  | PropertyErrorIncompatibleTypes !Text
   deriving stock (Generic, Eq, Show)
 
 propertyNameText :: PropertyName -> Text
-propertyNameText (PropertyName value) = value
+propertyNameText (PropertyName name _) = name
+
+propertyScalarType :: PropertyName -> ScalarType
+propertyScalarType (PropertyName _ kind) = kind
 
 resolveProperty :: EventRegistry -> [EventName] -> Text -> Either PropertyError PropertyName
-resolveProperty registry events value
-  | not (validPropertyName value) = Left (PropertyErrorBadName value)
-  | null events = Left (PropertyErrorUnscopedMetric value)
+resolveProperty registry events name
+  | not (validPropertyName name) = Left (PropertyErrorBadName name)
+  | null events = Left (PropertyErrorUnscopedMetric name)
   | otherwise = do
-      traverse_ (declaredProperty registry value) events
-      pure (PropertyName value)
+      types <- concat <$> traverse declaredTypes events
+      case nub types of
+        [kind] -> Right (PropertyName name kind)
+        _ -> Left (PropertyErrorIncompatibleTypes name)
+  where
+    declaredTypes event = do
+      let declarations = [spec | schema <- maybe [] toList (lookupVersions event registry), Just spec <- [findProperty name schema]]
+      unless (not (null declarations)) (Left (PropertyErrorUndeclared name event))
+      traverse (scalar event . propertyType) declarations
+    scalar _ PTString = Right ScalarString
+    scalar _ PTNumber = Right ScalarNumber
+    scalar _ PTBool = Right ScalarBool
+    scalar event _ = Left (PropertyErrorNotScalar name event)
 
 resolveNumericProperty :: EventRegistry -> [EventName] -> Text -> Either PropertyError PropertyName
-resolveNumericProperty registry events value = do
-  property <- resolveProperty registry events value
-  traverse_ (numericProperty registry value) events
-  pure property
+resolveNumericProperty registry events name = do
+  property <- resolveProperty registry events name
+  case (propertyScalarType property, events) of
+    (ScalarNumber, _) -> Right property
+    (_, event : _) -> Left (PropertyErrorNotNumeric name event)
+    _ -> Left (PropertyErrorUnscopedMetric name)
+
+-- Missing, null and historical incompatible values all produce SQL NULL.
+-- Safe conversion never parses an unguarded historical string as a number.
+propertyTypedExpr :: PropertyName -> Text
+propertyTypedExpr property =
+  let expression = propertySubcolumnExpr property
+      numeric = "toFloat64OrNull(toString(" <> expression <> "))"
+   in case propertyScalarType property of
+        ScalarString -> "dynamicElement(" <> expression <> ", 'String')"
+        ScalarBool -> "dynamicElement(" <> expression <> ", 'Bool')"
+        ScalarNumber ->
+          "if(dynamicType(" <> expression <> ") IN ('Int64','UInt64','Float64') AND isFinite(" <> numeric <> "), " <> numeric <> ", CAST(NULL, 'Nullable(Float64)'))"
 
 propertyGroupExpr :: PropertyName -> Text
-propertyGroupExpr property = "toString(" <> propertySubcolumnExpr property <> ")"
+propertyGroupExpr property = "toString(" <> propertyTypedExpr property <> ")"
 
 propertyFloatExpr :: PropertyName -> Text
-propertyFloatExpr property = "CAST(" <> propertySubcolumnExpr property <> ", 'Float64')"
-
-propertyEqualsPredicate :: PropertyName -> Aeson.Value -> Either PropertyError Text
-propertyEqualsPredicate property = \case
-  Aeson.String value -> Right (propertyGroupExpr property <> " = " <> sqlString value)
-  Aeson.Number value -> Right (propertyFloatExpr property <> " = " <> Text.pack (show value))
-  Aeson.Bool value ->
-    Right
-      ( "CAST("
-          <> propertySubcolumnExpr property
-          <> ", 'Bool') = "
-          <> if value then "true" else "false"
-      )
-  unsupported -> Left (PropertyErrorUnsupportedFilterValue (propertyNameText property) unsupported)
+propertyFloatExpr = propertyTypedExpr
 
 validPropertyName :: Text -> Bool
-validPropertyName value =
-  Text.length value >= 1
-    && Text.length value <= 64
-    && Text.all allowed value
+validPropertyName name =
+  Text.length name >= 1 && Text.length name <= 64 && Text.all allowed name
   where
-    allowed char =
-      isAsciiLower char
-        || isAsciiUpper char
-        || isDigit char
-        || char == '_'
-
-declaredProperty :: EventRegistry -> Text -> EventName -> Either PropertyError ()
-declaredProperty registry property event =
-  case latestSchema event registry >>= findProperty property of
-    Just _ -> Right ()
-    Nothing -> Left (PropertyErrorUndeclared property event)
-
-numericProperty :: EventRegistry -> Text -> EventName -> Either PropertyError ()
-numericProperty registry property event =
-  case latestSchema event registry >>= findProperty property of
-    Just PropertySpec {propertyType = PTNumber} -> Right ()
-    Just PropertySpec {propertyType = PTAny} -> Right ()
-    _ -> Left (PropertyErrorNotNumeric property event)
+    allowed char = (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || (char >= '0' && char <= '9') || char == '_'
 
 findProperty :: Text -> EventSchema -> Maybe PropertySpec
-findProperty property EventSchema {properties} =
-  find (\PropertySpec {name} -> name == property) properties
-
-sqlString :: Text -> Text
-sqlString value =
-  "'" <> Text.replace "\\" "\\\\" (Text.replace "'" "\\'" value) <> "'"
+findProperty name EventSchema {properties} = find (\PropertySpec {name = candidate} -> name == candidate) properties
 
 propertySubcolumnExpr :: PropertyName -> Text
 propertySubcolumnExpr property =
-  -- Unlike dot syntax, getSubcolumn also works when the JSON value crosses a view expression.
-  "getSubcolumn(properties_json, " <> sqlString (propertyNameText property) <> ")"
+  "getSubcolumn(properties_json, '" <> propertyNameText property <> "')"

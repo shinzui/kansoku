@@ -21,6 +21,8 @@ configVariables =
     "KANSOKU_CLICKHOUSE_USER",
     "KANSOKU_CLICKHOUSE_PASSWORD",
     "KANSOKU_CH_QUERY_POOL_SIZE",
+    "KANSOKU_METRICS_MAX_EXECUTION_SEC",
+    "KANSOKU_METRICS_MAX_MEMORY_BYTES",
     "CLICKHOUSE_TCP_PORT",
     "CLICKHOUSE_HTTP_PORT",
     "KANSOKU_QUEUE_NAME",
@@ -60,6 +62,8 @@ spec = around_ preserveConfigEnvironment $ describe "Kansoku.Config.loadConfig" 
         (cfg ^. #clickHouseUser) `shouldBe` "default"
         (cfg ^. #clickHousePassword) `shouldBe` ""
         (cfg ^. #clickHouseQueryPoolSize) `shouldBe` 4
+        (cfg ^. #metricsMaxExecutionSec) `shouldBe` 30
+        (cfg ^. #metricsMaxMemoryBytes) `shouldBe` 536870912
         (cfg ^. #eventsQueueName) `shouldBe` "kansoku_events"
         (cfg ^. #writerMaxBatchSize) `shouldBe` 5000
         (cfg ^. #writerMaxLatencyMs) `shouldBe` 5000
@@ -75,6 +79,25 @@ spec = around_ preserveConfigEnvironment $ describe "Kansoku.Config.loadConfig" 
         (cfg ^. #readyMaxQueueDepth) `shouldBe` 100000
         (cfg ^. #readyMaxFlushAgeSec) `shouldBe` 120
         (cfg ^. #serverPort) `shouldBe` 8080
+
+  it "requires positive bounded execution and memory budgets" $ do
+    forM_ ["KANSOKU_METRICS_MAX_EXECUTION_SEC", "KANSOKU_METRICS_MAX_MEMORY_BYTES"] $ \name ->
+      forM_ ["0", "-1", "1.5", "18446744073709551617"] $ \value -> do
+        clearEnv
+        setEnv name value
+        result <- loadConfig
+        case result of
+          Left _ -> pure ()
+          Right _ -> fail ("accepted invalid query budget: " <> name)
+    clearEnv
+    setEnv "KANSOKU_METRICS_MAX_EXECUTION_SEC" "2"
+    setEnv "KANSOKU_METRICS_MAX_MEMORY_BYTES" "8388608"
+    result <- loadConfig
+    case result of
+      Left failure -> fail (show failure)
+      Right config -> do
+        config ^. #metricsMaxExecutionSec `shouldBe` 2
+        config ^. #metricsMaxMemoryBytes `shouldBe` 8388608
 
   it "parses values from the environment" $ do
     clearEnv

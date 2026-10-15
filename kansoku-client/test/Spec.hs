@@ -20,6 +20,8 @@ import Kansoku.Client
 import Kansoku.Client.Metrics
 import Kansoku.Event
 import Kansoku.Metrics.Api (MetricResult (..), TimeGrain (Day))
+import Kansoku.Metrics.Api qualified as Metrics
+import Kansoku.Metrics.Filter qualified as Filter
 import Kansoku.Prelude
 import Network.HTTP.Client qualified as HTTP
 import Network.HTTP.Types (Status, status200, status202, status400, status401, status404, status413, status429, status503, statusCode)
@@ -204,6 +206,34 @@ spec = describe "Kansoku.Client" $ do
       case funnelResult of
         Right (KansokuOk result) -> metric result `shouldBe` "experiment_funnel"
         other -> expectationFailure ("unexpected funnel client result: " <> show other)
+
+  it "sends typed repeatable JSON filters and decodes nullable namespaced groups" $ do
+    captured <- newTVarIO []
+    let app request respond = do
+          atomically (modifyTVar' captured (const (queryString request)))
+          respond
+            ( responseLBS
+                status200
+                [("content-type", "application/json")]
+                "{\"metric\":\"events\",\"points\":[{\"bucket\":null,\"group\":{\"source\":\"web\",\"prop:plan\":null},\"value\":1}]}"
+            )
+    input <- either (fail . Text.unpack) pure (Filter.mkMetricFilter "source_service" Filter.FilterEq (Just (Aeson.String "é:|,\"\\")))
+    Warp.testWithApplication (pure app) $ \port -> do
+      manager <- HTTP.newManager HTTP.defaultManagerSettings
+      base <- parseBaseUrl ("http://127.0.0.1:" <> show port)
+      result <-
+        runClientM
+          (Metrics.events metricsClient (kansokuMetricsCredential "test-service-token") (read "2026-07-01") (read "2026-07-02") (Just "source,prop:plan") Nothing [input])
+          (mkClientEnv manager base)
+      case result of
+        Right (KansokuOk payload) -> case points payload of
+          [point] -> Map.lookup "prop:plan" (point ^. #group) `shouldBe` Just Nothing
+          other -> expectationFailure (show other)
+        other -> expectationFailure (show other)
+      parameters <- readTVarIO captured
+      case lookup "filter" parameters of
+        Just (Just bytes) -> Aeson.eitherDecodeStrict' bytes `shouldBe` Right input
+        _ -> expectationFailure "typed client omitted the canonical filter parameter"
 
   it "decodes permanent metric limit problems through the generated client" $ do
     attempts <- newTVarIO (0 :: Int)

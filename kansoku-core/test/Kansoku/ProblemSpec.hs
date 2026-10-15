@@ -150,7 +150,7 @@ spec = describe "RFC 9457 problems" $ do
         ( \(token, status, code) -> do
             result <-
               runClientM
-                (Metrics.events (Api.metrics client) (credential token) day day Nothing Nothing)
+                (Metrics.events (Api.metrics client) (credential token) day day Nothing Nothing [])
                 (mkClientEnv manager url)
             case result of
               Left (FailureResponse _ response) -> do

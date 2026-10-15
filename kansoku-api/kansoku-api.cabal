@@ -42,12 +42,14 @@ library
     Kansoku.Event.Validation
     Kansoku.Ingest.Api
     Kansoku.Metrics.Api
+    Kansoku.Metrics.Filter
     Kansoku.Metrics.Limits
     Kansoku.Prelude
 
   build-depends:
     aeson,
     base >=4.21 && <5,
+    bytestring,
     containers,
     generic-lens >=2.2 && <2.4,
     http-api-data,

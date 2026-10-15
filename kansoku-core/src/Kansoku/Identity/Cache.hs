@@ -24,15 +24,15 @@ newtype RevisionRow = RevisionRow {revision :: ByteString}
 
 type IdentityCacheState = Maybe (Text.Text, Text.Text, Text.Text, Text.Text, Int64)
 
-prepareIdentityCache :: Text.Text -> Text.Text -> Text.Text -> Connection -> IORef IdentityCacheState -> IO ()
-prepareIdentityCache account fromDay toDay connection state = do
+prepareIdentityCache :: Int64 -> Text.Text -> Text.Text -> Text.Text -> Connection -> IORef IdentityCacheState -> IO ()
+prepareIdentityCache memoryBytes account fromDay toDay connection state = do
   rows <- concat <$> select revisionSelect connection pure
   (current, now) <- case rows of
     [RevisionRow value] -> either fail pure (eitherDecodeStrict' value :: Either String (Text.Text, Int64))
     _ -> fail "identity evidence metadata unavailable"
   previous <- readIORef state
   unless (case previous of Just (cachedAccount, cachedFrom, cachedTo, revision, deadline) -> cachedAccount == account && cachedFrom == fromDay && cachedTo == toDay && revision == current && now < deadline; Nothing -> False) $ do
-    mapM_ (command connection . passParameters (addParameter "cache_account" (toChType (Text.unpack account) :: ChString) . addParameter "cache_from" (toChType (Text.unpack fromDay) :: ChString) . addParameter "cache_to" (toChType (Text.unpack toDay) :: ChString)) . fromString . Text.unpack) identityCacheSql
+    mapM_ (command connection . passParameters (addParameter "cache_account" (toChType (Text.encodeUtf8 account) :: ChString) . addParameter "cache_from" (toChType (Text.encodeUtf8 fromDay) :: ChString) . addParameter "cache_to" (toChType (Text.encodeUtf8 toDay) :: ChString)) . fromString . Text.unpack) (identityCacheSqlForMemory memoryBytes)
     deadlines <- concat <$> select deadlineSelect connection pure
     (deadline, finished) <- case deadlines of
       [RevisionRow value] -> either fail pure (eitherDecodeStrict' value :: Either String (Int64, Int64))
@@ -70,6 +70,9 @@ identityCacheRevisionSQL =
 -- caches. Connection disposal destroys them. All keys include the account;
 -- observation timestamps establish the next expiry deadline, checked per query.
 -- Throw on bounded cache construction rather than accepting a partial lookup.
+identityCacheSqlForMemory :: Int64 -> [Text.Text]
+identityCacheSqlForMemory limit = map (Text.replace "max_memory_usage=268435456" ("max_memory_usage=" <> Text.pack (show (min limit 268435456)))) identityCacheSql
+
 identityCacheSql :: [Text.Text]
 identityCacheSql =
   [ "DROP TEMPORARY TABLE IF EXISTS kansoku_signal_cache",

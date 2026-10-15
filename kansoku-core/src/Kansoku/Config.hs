@@ -41,6 +41,8 @@ data Config = Config
     clickHouseUser :: !String,
     clickHousePassword :: !String,
     clickHouseQueryPoolSize :: !Int,
+    metricsMaxExecutionSec :: !Int,
+    metricsMaxMemoryBytes :: !Int64,
     eventsQueueName :: !Text,
     writerMaxBatchSize :: !Int,
     writerMaxLatencyMs :: !Int,
@@ -99,6 +101,8 @@ loadConfig = do
   metricsEnabled <- lookupEnv "KANSOKU_INTERNAL_METRICS_ENABLED"
   maxQueueDepth <- lookupEnv "KANSOKU_READY_MAX_QUEUE_DEPTH"
   maxFlushAge <- lookupEnv "KANSOKU_READY_MAX_FLUSH_AGE_SEC"
+  queryExecution <- lookupEnv "KANSOKU_METRICS_MAX_EXECUTION_SEC"
+  queryMemory <- lookupEnv "KANSOKU_METRICS_MAX_MEMORY_BYTES"
   srv <- lookupEnv "KANSOKU_SERVER_PORT"
   pure $ do
     tcp <- parsePort "CLICKHOUSE_TCP_PORT" 9000 chTcp
@@ -108,6 +112,8 @@ loadConfig = do
     visibility <- parsePositiveInt32 "KANSOKU_WRITER_VT_SEC" 60 writerVt
     adapterBatch <- parsePositiveInt32 "KANSOKU_WRITER_ADAPTER_BATCH" 1000 writerAdapterBatch
     queryPoolSize <- parsePositiveInt "KANSOKU_CH_QUERY_POOL_SIZE" 4 chQueryPoolSize
+    executionSeconds <- parsePositiveBounded "KANSOKU_METRICS_MAX_EXECUTION_SEC" 30 queryExecution
+    memoryBytes <- parsePositiveBounded "KANSOKU_METRICS_MAX_MEMORY_BYTES" 536870912 queryMemory
     maxBodyBytes <- parsePositiveInt "KANSOKU_INGEST_MAX_BODY_BYTES" defaultIngestMaxBodyBytes ingestBodyBytes
     maxBatchLength <- parsePositiveInt "KANSOKU_INGEST_MAX_BATCH_LENGTH" defaultIngestMaxBatchLength ingestBatchLength
     rate <- parseNonNegativeInt "KANSOKU_INGEST_RATE_PER_SEC" 2000 ingestRate
@@ -134,6 +140,8 @@ loadConfig = do
           clickHouseUser = chUser,
           clickHousePassword = chPassword,
           clickHouseQueryPoolSize = queryPoolSize,
+          metricsMaxExecutionSec = executionSeconds,
+          metricsMaxMemoryBytes = memoryBytes,
           eventsQueueName = queue,
           writerMaxBatchSize = maxBatch,
           writerMaxLatencyMs = maxLatency,
@@ -228,3 +236,10 @@ parseNonNegativeInt name def raw = do
   if value >= 0
     then Right value
     else Left (ConfigError (name <> ": must be at least 0"))
+
+-- Query limits must not wrap when parsed into machine-sized integral types.
+parsePositiveBounded :: forall a. (Integral a, Bounded a) => Text -> a -> Maybe String -> Either ConfigError a
+parsePositiveBounded _ fallback Nothing = Right fallback
+parsePositiveBounded name _ (Just raw) = case readMaybe raw :: Maybe Integer of
+  Just number | number >= 1 && number <= toInteger (maxBound :: a) -> Right (fromInteger number)
+  _ -> Left (ConfigError (name <> ": expected a positive integer within the supported range"))

@@ -1,6 +1,7 @@
 module Kansoku.QuerySpec (spec) where
 
 import Data.Aeson qualified as Aeson
+import Data.Either (isRight)
 import Data.Foldable (traverse_)
 import Data.Map.Strict qualified as Map
 import Data.Text qualified as Text
@@ -26,41 +27,28 @@ import Test.Hspec
 
 spec :: Spec
 spec = describe "Kansoku.Query.buildSQL" $ do
-  it "reads active users at day grain from analytics.dau with uniqCombinedMerge" $
-    buildSQL (Simple activeUsers) dayRequest
-      `shouldContainText` Text.unlines
-        [ "SELECT toString(day) AS bucket, '' AS group_key,",
-          "       toFloat64(uniqCombinedMerge(users)) AS value",
-          "FROM analytics.dau",
-          "WHERE account_id = {account_id:String}",
-          "  AND day >= '2026-06-01' AND day < '2026-06-08'",
-          "GROUP BY day",
-          "ORDER BY day"
-        ]
+  it "keeps day/week users exact, resolved and restricted to activity" $
+    traverse_
+      ( \request -> do
+          let sql = buildSQL (Simple activeUsers) request
+          sql `shouldContainText` "analytics.events_resolved_http("
+          sql `shouldContainText` "uniqExact(canonical_user)"
+          sql `shouldContainText` "event_name NOT IN ('identify','identify_once','alias','group')"
+          sql `shouldNotContainText` "uniqCombinedMerge"
+      )
+      [dayRequest, weekRequest]
 
-  it "reads page views at day grain from the exact distinct-ID rollup" $
-    buildSQL (Simple pageViews) dayRequest
-      `shouldContainText` Text.unlines
-        [ "SELECT toString(day) AS bucket, '' AS group_key,",
-          "       toFloat64(uniqExactMerge(views)) AS value",
-          "FROM analytics.page_views_by_route",
-          "WHERE account_id = {account_id:String}",
-          "  AND day >= '2026-06-01' AND day < '2026-06-08'",
-          "GROUP BY day",
-          "ORDER BY day"
-        ]
+  it "reads page views from canonical facts with native event-name binding" $ do
+    let sql = buildSQL (Simple pageViews) dayRequest
+    sql `shouldContainText` "FROM analytics.events_canonical"
+    sql `shouldContainText` "count(DISTINCT event_id)"
+    sql `shouldContainText` "{event_name_1:String}"
 
-  it "counts events at day grain with distinct event ids" $
-    buildSQL (Simple events) dayRequest
-      `shouldContainText` Text.unlines
-        [ "SELECT toString(toDate(occurred_at)) AS bucket, '' AS group_key,",
-          "       toFloat64(count(DISTINCT event_id)) AS value",
-          "FROM analytics.events_canonical",
-          "WHERE account_id = {account_id:String}",
-          "  AND occurred_at >= '2026-06-01 00:00:00' AND occurred_at < '2026-06-08 00:00:00'",
-          "GROUP BY bucket, group_key",
-          "ORDER BY bucket, group_key"
-        ]
+  it "counts distinct event IDs and sorts typed dimensions separately from JSON transport" $ do
+    let sql = buildSQL (Simple events) dayRequest
+    sql `shouldContainText` "count(DISTINCT event_id)"
+    sql `shouldContainText` "toJSONString([]) AS group_key"
+    sql `shouldContainText` "ORDER BY bucket, sort_group_1 NULLS FIRST, sort_group_2 NULLS FIRST"
 
   it "builds conversion ratio SQL from identity-resolved users" $
     buildSQL (Ratioed conversionRate) dayRequest
@@ -76,7 +64,7 @@ spec = describe "Kansoku.Query.buildSQL" $ do
   it "counts sessions by distinct non-empty session ids" $
     buildSessionsSQL dayRequest
       `shouldContainText` """
-                          SELECT toString(toDate(occurred_at)) AS bucket, '' AS group_key,
+                          SELECT toString(toDate(occurred_at)) AS bucket, '[]' AS group_key,
                                  toFloat64(uniqExact(session_id)) AS value
                           FROM analytics.events_canonical
                           WHERE account_id = {account_id:String}
@@ -155,24 +143,27 @@ spec = describe "Kansoku.Query.buildSQL" $ do
       `shouldContainText` "ARRAY JOIN [(1, {experiment_funnel_step_1:String}), (2, {experiment_funnel_step_2:String}), (3, {experiment_funnel_step_3:String})] AS step"
 
   it "decodes experiment group keys into the public metric-point vocabulary" $ do
-    experimentExposuresPoint (Just "2026-08-01") "checkout_v2|control" 5
-      `shouldBe` MetricPoint
-        { bucket = Just "2026-08-01",
-          group = Map.fromList [("experiment", "checkout_v2"), ("variant", "control")],
-          value = 5
-        }
-    experimentConversionPoint (sqlName "checkout_v2") "conversion_rate|treatment" 0.6
-      `shouldBe` MetricPoint
-        { bucket = Nothing,
-          group = Map.fromList [("experiment", "checkout_v2"), ("variant", "treatment"), ("measure", "conversion_rate")],
-          value = 0.6
-        }
-    experimentFunnelPoint (sqlName "checkout_v2") "2|purchase_completed|treatment" 3
-      `shouldBe` MetricPoint
-        { bucket = Nothing,
-          group = Map.fromList [("experiment", "checkout_v2"), ("variant", "treatment"), ("index", "2"), ("step", "purchase_completed")],
-          value = 3
-        }
+    experimentExposuresPoint (Just "2026-08-01") "[\"checkout_v2\",\"control\"]" 5
+      `shouldBe` Right
+        MetricPoint
+          { bucket = Just "2026-08-01",
+            group = fmap Just $ Map.fromList [("experiment", "checkout_v2"), ("variant", "control")],
+            value = 5
+          }
+    experimentConversionPoint (sqlName "checkout_v2") "[\"conversion_rate\",\"treatment\"]" 0.6
+      `shouldBe` Right
+        MetricPoint
+          { bucket = Nothing,
+            group = fmap Just $ Map.fromList [("experiment", "checkout_v2"), ("variant", "treatment"), ("measure", "conversion_rate")],
+            value = 0.6
+          }
+    experimentFunnelPoint (sqlName "checkout_v2") "[\"2\",\"purchase_completed\",\"treatment\"]" 3
+      `shouldBe` Right
+        MetricPoint
+          { bucket = Nothing,
+            group = fmap Just $ Map.fromList [("experiment", "checkout_v2"), ("variant", "treatment"), ("index", "2"), ("step", "purchase_completed")],
+            value = 3
+          }
 
   it "uses the native JSON projection for every experiment query" $
     traverse_
@@ -226,22 +217,16 @@ spec = describe "Kansoku.Query.buildSQL" $ do
   it "requires every Sum or Average builtin to declare a numeric aggregation property" $
     traverse_ assertAggregationProperty (Map.elems builtinMetrics)
 
-  it "groups revenue by a declared property through native JSON storage" $
-    buildSQL (Simple revenueDefinition) planRequest
-      `shouldContainText` Text.unlines
-        [ "SELECT toString(toDate(occurred_at)) AS bucket, toString(getSubcolumn(properties_json, 'plan')) AS group_key,",
-          "       toFloat64(sum(CAST(getSubcolumn(properties_json, 'amount'), 'Float64'))) AS value",
-          "FROM analytics.events_canonical",
-          "WHERE account_id = {account_id:String}",
-          "  AND occurred_at >= '2026-06-01 00:00:00' AND occurred_at < '2026-06-08 00:00:00'",
-          "  AND event_name IN ({event_name_1:String})",
-          "GROUP BY bucket, group_key",
-          "ORDER BY bucket, group_key"
-        ]
+  it "uses guarded native JSON extraction for scalar grouping and numeric aggregation" $ do
+    let sql = buildSQL (Simple revenueDefinition) planRequest
+    sql `shouldContainText` "dynamicElement(getSubcolumn(properties_json, 'plan'), 'String')"
+    sql `shouldContainText` "toFloat64OrNull"
+    sql `shouldContainText` "isNotNull("
+    sql `shouldNotContainText` "JSONExtract"
 
   it "honors feature_adoption's declared property grouping by default" $
     buildSQL (requiredMetric "feature_adoption") dayRequest
-      `shouldContainText` "toString(getSubcolumn(properties_json, 'feature')) AS group_key"
+      `shouldContainText` "dynamicElement(getSubcolumn(properties_json, 'feature'), 'String') AS sort_group_1"
 
   it "compiles declared metric filters through typed property expressions" $ do
     let filteredMetric =
@@ -249,9 +234,9 @@ spec = describe "Kansoku.Query.buildSQL" $ do
             & #filters
             .~ Map.fromList [("plan", Aeson.String "pro")]
     buildSQL (Simple filteredMetric) dayRequest
-      `shouldContainText` "AND toString(getSubcolumn(properties_json, 'plan')) = 'pro'"
+      `shouldContainText` "{metric_filter_1_1:String}"
 
-  it "rejects undeclared, cross-event, hostile, and multi-dimension property groups" $ do
+  it "rejects undeclared, cross-event, hostile, duplicate and over-arity groups" $ do
     Query.buildSQL defaultRegistry (Simple revenueDefinition) (dayRequest {groupBy = Just ["prop:nope"]})
       `shouldBe` Left (QueryCompilePropertyError (PropertyErrorUndeclared "nope" (EventName "payment_completed")))
     let crossEvent = revenueDefinition & #eventNames .~ ["payment_completed", "feature_used"]
@@ -264,7 +249,11 @@ spec = describe "Kansoku.Query.buildSQL" $ do
       )
       ["pl'an", "a b", Text.replicate 65 "a"]
     Query.buildSQL defaultRegistry (Simple revenueDefinition) (dayRequest {groupBy = Just ["prop:plan", "event_name"]})
-      `shouldBe` Left (QueryCompileMultipleGroupBy ["prop:plan", "event_name"])
+      `shouldSatisfy` isRight
+    Query.buildSQL defaultRegistry (Simple revenueDefinition) (dayRequest {groupBy = Just ["prop:plan", "source", "route"]})
+      `shouldBe` Left (QueryCompileMultipleGroupBy ["prop:plan", "source", "route"])
+    Query.buildSQL defaultRegistry (Simple revenueDefinition) (dayRequest {groupBy = Just ["source", "source"]})
+      `shouldBe` Left (QueryCompileMultipleGroupBy ["source", "source"])
 
   it "rejects Sum metrics without an aggregation property" $
     Query.buildSQL defaultRegistry (Simple (revenueDefinition & #aggregationProperty .~ Nothing)) dayRequest
@@ -277,7 +266,8 @@ dayRequest =
       from = fromGregorian 2026 6 1,
       to = fromGregorian 2026 6 8,
       groupBy = Nothing,
-      timeGrain = Just Day
+      timeGrain = Just Day,
+      filters = []
     }
 
 weekRequest :: QueryRequest

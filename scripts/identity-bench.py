@@ -109,7 +109,7 @@ def main():
                     raise RuntimeError(measured['error'][:700])
                 assert measured['result_rows'] > 0
                 ch('SYSTEM FLUSH LOGS')
-                stats = json.loads(ch("SELECT sum(query_duration_ms) AS total_ms,sum(read_rows) AS total_rows,sum(read_bytes) AS total_bytes,max(memory_usage) AS peak_bytes,count() AS native_statements,min(is_initial_query) AS all_initial,groupArray(tuple(query_kind,left(query,90),query_duration_ms,read_rows,memory_usage)) AS statements FROM system.query_log WHERE type='QueryFinish' AND client_name='ClickHaskell' AND query_kind!='Set' AND log_comment='" + tag + "' FORMAT JSONEachRow"))
+                stats = json.loads(ch("SELECT sum(query_duration_ms) AS total_ms,sum(read_rows) AS total_rows,sum(read_bytes) AS total_bytes,max(memory_usage) AS peak_bytes,count() AS native_statements,min(is_initial_query) AS all_initial,groupArray(tuple(query_kind,left(query,90),query_duration_ms,read_rows,memory_usage)) AS statements FROM system.query_log WHERE type='QueryFinish' AND client_name='ClickHaskell' AND (query_kind!='Set' OR startsWith(query,'SET max_execution_time=')) AND log_comment='" + tag + "' FORMAT JSONEachRow"))
                 for output,source in [('query_duration_ms','total_ms'),('read_rows','total_rows'),('read_bytes','total_bytes'),('memory_usage','peak_bytes')]:
                     stats[output]=stats.pop(source)
                 assert stats['native_statements'] > 0, 'missing native statement instrumentation'

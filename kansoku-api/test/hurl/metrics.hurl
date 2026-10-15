@@ -170,3 +170,52 @@ header "Content-Type" contains "application/problem+json"
 jsonpath "$.code" == "metric_result_too_large"
 jsonpath "$.retryable" == false
 jsonpath "$.points" not exists
+
+# A finite event-name filter makes an event property dimension valid.
+GET {{base_url}}/metrics/events?from={{from}}&to={{to}}&groupBy=source,prop:plan
+Authorization: Bearer {{service_token}}
+[QueryStringParams]
+filter: {"dimension":"event_name","op":"eq","value":"payment_completed"}
+filter: {"dimension":"prop:amount","op":"gt","value":0}
+HTTP 200
+[Asserts]
+jsonpath "$.points[0].group.source" == "web"
+jsonpath "$.points[0].group['prop:plan']" == "pro"
+jsonpath "$.points[0].value" == 1
+
+GET {{base_url}}/metrics/users?from={{from}}&to={{to}}
+Authorization: Bearer {{service_token}}
+[QueryStringParams]
+filter: {"dimension":"source","op":"in","value":["web","app","service","worker","email","agent"]}
+HTTP 200
+[Asserts]
+jsonpath "$.points[0].value" == 2
+
+GET {{base_url}}/metrics/revenue?from={{from}}&to={{to}}
+Authorization: Bearer {{service_token}}
+[QueryStringParams]
+filter: {"dimension":"prop:plan","op":"neq","value":"pro"}
+HTTP 200
+[Asserts]
+jsonpath "$.points" count == 0
+
+GET {{base_url}}/metrics/events?from={{from}}&to={{to}}
+Authorization: Bearer {{service_token}}
+[QueryStringParams]
+filter: {"dimension":"source","op":"eq","value":null}
+HTTP 400
+[Asserts]
+jsonpath "$.code" == "invalid_filter"
+jsonpath "$.retryable" == false
+
+GET {{base_url}}/metrics/events?from={{from}}&to={{to}}&unknown=value
+Authorization: Bearer {{service_token}}
+HTTP 400
+[Asserts]
+jsonpath "$.code" == "unsupported_query_parameter"
+
+GET {{base_url}}/metrics/sessions?from={{from}}&to={{to}}&groupBy=source
+Authorization: Bearer {{service_token}}
+HTTP 400
+[Asserts]
+jsonpath "$.code" == "unsupported_query_parameter"

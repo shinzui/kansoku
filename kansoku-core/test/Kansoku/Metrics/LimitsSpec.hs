@@ -94,7 +94,7 @@ spec = describe "Kansoku.Metrics.Limits" $ do
         result <- success =<< runEff (Query.run defaultRegistry pool metric grouped)
         length (result ^. #points) `shouldBe` 10000
         sum (fmap (^. #value) (result ^. #points)) `shouldBe` 10000
-        let groups = [value | point <- result ^. #points, Just value <- [Map.lookup "plan" (point ^. #group)]]
+        let groups = [value | point <- result ^. #points, Just value <- [lookupGroup "prop:plan" (point ^. #group)]]
         groups `shouldSatisfy` (\values -> values == sort values)
         fixtureSQL (paymentInsert 10000 1)
         runEff (Query.run defaultRegistry pool metric grouped) `shouldReturn` Left Query.MetricResultTooLarge
@@ -128,13 +128,13 @@ spec = describe "Kansoku.Metrics.Limits" $ do
         let range = request & #accountId .~ AccountId "acct_order" & #to .~ addDays 15 start
             steps = fmap (sqlName . ("step_" <>) . tshow) [1 .. 10 :: Int]
         retention <- success =<< runEff (Query.runRetention pool range [10, 2, 1])
-        [(Map.lookup "cohort" (point ^. #group), Map.lookup "offset" (point ^. #group), point ^. #value) | point <- retention ^. #points]
+        [(lookupGroup "cohort" (point ^. #group), lookupGroup "offset" (point ^. #group), point ^. #value) | point <- retention ^. #points]
           `shouldBe` [(Just cohort, Just offset, count) | (cohort, count) <- [("2026-07-01", 2), ("2026-07-04", 1)], offset <- ["0", "1", "2", "10"]]
         funnel <- success =<< runEff (Query.runFunnel pool range 3600 steps)
-        [(Map.lookup "index" (point ^. #group), point ^. #value) | point <- funnel ^. #points]
+        [(lookupGroup "index" (point ^. #group), point ^. #value) | point <- funnel ^. #points]
           `shouldBe` [(Just (tshow index), 2) | index <- [1 .. 10 :: Int]]
         experiment <- success =<< runEff (Query.runExperimentFunnel pool range (sqlName "bound_exp") 3600 steps)
-        [(Map.lookup "variant" (point ^. #group), Map.lookup "index" (point ^. #group), point ^. #value) | point <- experiment ^. #points]
+        [(lookupGroup "variant" (point ^. #group), lookupGroup "index" (point ^. #group), point ^. #value) | point <- experiment ^. #points]
           `shouldBe` [(Just variant, Just (tshow index), 1) | variant <- ["a", "b"], index <- [1 .. 10 :: Int]]
         -- Repeated executions must preserve both values and SQL order.
         runEff (Query.runFunnel pool range 3600 steps) `shouldReturn` Right funnel
@@ -171,7 +171,7 @@ start :: Data.Time.Calendar.Day
 start = fromGregorian 2026 7 1
 
 request :: Query.QueryRequest
-request = Query.QueryRequest (AccountId "acct_sentinel") start (addDays 1 start) Nothing (Just Day)
+request = Query.QueryRequest (AccountId "acct_sentinel") start (addDays 1 start) Nothing (Just Day) []
 
 leftValue :: Either a b -> Maybe a
 leftValue (Left value) = Just value
@@ -250,3 +250,6 @@ orderActivity = orderPrefix <> "SELECT concat('active_',toString(number),'_',toS
 
 orderLateCohort :: Text
 orderLateCohort = orderPrefix <> "SELECT concat('late_',toString(offset)), 'active', 'web', toDateTime64('2026-07-01 00:00:00',3,'UTC') + toIntervalDay(offset), toDateTime64('2026-07-15 00:00:00',3,'UTC'), 'order_late', 'acct_order', '{}', '{}' FROM numbers(1) ARRAY JOIN [3,4,5,13] AS offset"
+
+lookupGroup :: Text -> Map.Map Text (Maybe Text) -> Maybe Text
+lookupGroup key groups = Map.lookup key groups >>= id

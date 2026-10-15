@@ -2,7 +2,7 @@
 type: Architecture Decision Record
 title: Queryable event properties and identity-resolved projection
 description: Store event properties as native ClickHouse JSON and expose them for metric grouping only after registry declaration.
-timestamp: 2026-10-15T19:38:22Z
+timestamp: 2026-10-15T20:56:24Z
 generated:
   by: human:kansoku-maintainers
   at: 2026-07-19T00:00:00Z
@@ -38,18 +38,32 @@ and a `Map(String, String)` shadow: its grouped aggregate median was 0.043 secon
 column. Per-property columns were faster but would require a migration for each registry
 change; the map failed the benchmark thresholds.
 
-The metric query boundary accepts properties only after every event schema queried by the
-metric declares the name in `defaultRegistry`. HTTP grouping uses `prop:<name>` so property
-names cannot collide with built-in dimensions. Metric definitions name default property
-groups without the prefix and declare Sum/Average inputs through
-`aggregationProperty`. SQL reads group strings with
-`toString(getSubcolumn(properties_json, '<name>'))` and numeric values with
-`CAST(getSubcolumn(properties_json, '<name>'), 'Float64')`; it never applies
-`JSONExtract*` to the raw column. `getSubcolumn` is used instead of direct dot syntax so
-the same compiled expression works when `properties_json` crosses the
-`analytics.events_resolved` view boundary. The existing `revenue` builtin is exposed
-through the additive `GET /metrics/revenue` route so this contract is available through
-the public metrics API.
+The query boundary accepts event properties only after establishing a finite registered event
+scope and compatible scalar declarations across its retained schema versions. A positive
+event_name eq/in filter can scope the all-event metric. PTAny, objects/arrays and conflicting
+scalar declarations do not establish a scalar dimension. Missing declarations in older
+versions produce missing values. Native JSON extraction uses dynamicElement for String/Bool
+and guarded finite Float64 conversion for numeric variants; historical incompatible values
+become NULL instead of raising conversion errors. No query parses the raw properties string.
+
+HTTP uses repeatable bounded JSON filters with native operand parameters, including explicit
+UTF-8 ByteString conversion rather than the driver's Char8 String instance. Operators are eq,
+neq, in, contains, gt, lt, set and unset. Missing/null/type-incompatible values are unset; every
+comparison including neq is false for unset. An empty property string remains present.
+
+One or two distinct dimensions retain their complete names, including prop:<name>. group values
+are nullable strings; null, empty string and literal other remain distinct. Native group_key is
+a JSON array of nullable strings, decoded structurally with arity validation. Separate scalar
+sort columns preserve numeric/Boolean/string ordering independently of JSON serialization.
+Funnel, retention and experiment metadata use the same structural transport. Property default
+groups in internal definitions omit the prop: prefix; the wire always includes it. Sum/Average
+inputs use aggregationProperty and exclude missing/incompatible values before aggregation.
+
+Unsupported, duplicate or missing query parameters are validated after authentication, before
+Servant could ignore them. The route matrix is explicit in the query guide and generated API.
+The HTTP users route always counts exact resolved activity, excluding identify, identify_once,
+alias and group events, with the same population under filtering. Page views/counts read
+canonical facts consistently; raw identity sketches remain an explicit SQL/experiment policy.
 
 `analytics.events_resolved` extends its stable projection with a seventh,
 server-only `properties_json` column. This lets unique-user property metrics keep canonical

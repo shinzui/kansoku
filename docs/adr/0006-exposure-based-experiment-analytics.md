@@ -2,7 +2,7 @@
 type: Architecture Decision Record
 title: Exposure-based experiment analytics
 description: Define exposure-based experiment analytics using an approximate daily rollup for exposure counts and exact query-time resolution for conversion and funnels.
-timestamp: 2026-07-19T00:00:00Z
+timestamp: 2026-10-15T20:56:24Z
 generated:
   by: human:kansoku-maintainers
   at: 2026-07-19T00:00:00Z
@@ -80,6 +80,10 @@ Consumers must not compare the rollup's raw-identity exposure number directly wi
 exact stitched denominator without acknowledging that distinction.
 
 Producers must emit `experiment_viewed` at render time with contract-conforming names.
-Experiment, variant, and step names cannot contain the composite-key separator. Future
+Experiment, variant and step names retain their bounded name grammar. Native metadata groups
+are JSON arrays decoded to nullable text maps, never delimiter-split strings; typed experiment,
+variant, measure and numeric-step columns determine ordering. Full prop: dimension names remain distinct from reserved metadata keys; user: is reserved
+for the later trait-dimension contract. Unsupported filter/group parameters are explicit
+400 errors until their route contract supports the corresponding population. Future
 significance reporting must build on these counts and explicitly document its statistical
 policy rather than changing the meaning of the existing endpoints.

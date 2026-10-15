@@ -112,7 +112,7 @@ is `mori://shinzui/kansoku-ts/okf/adrs/concepts/ADR-2`.
 |---|-------|------|-----------|-----------|--------|
 | 29 | Correct client timestamp skew and count ingest rejections | docs/plans/29-correct-client-timestamp-skew-and-count-ingest-rejections.md | None | None | Complete |
 | 30 | Pipeline backpressure and storage-outage resilience | docs/plans/30-pipeline-backpressure-and-storage-outage-resilience.md | EP-29 | None | Complete |
-| 31 | Metric property filters and dual grouping | docs/plans/31-metric-property-filters-and-dual-grouping.md | EP-26; EP-30; EP-32 | None | Not Started |
+| 31 | Metric property filters and dual grouping | docs/plans/31-metric-property-filters-and-dual-grouping.md | EP-26; EP-30; EP-32 | None | In Progress |
 | 32 | Time-aware identity bindings and bounded resolution cost | docs/plans/32-time-aware-identity-bindings-and-bounded-resolution-cost.md | EP-29; EP-30 | None | Complete |
 | 33 | Acquisition and device enrichment with bot flagging | docs/plans/33-acquisition-and-device-enrichment-with-bot-flagging.md | EP-26; EP-31 | None | Not Started |
 | 34 | Session analytics: duration, bounce, entry and exit pages | docs/plans/34-session-analytics-duration-bounce-entry-and-exit-pages.md | EP-26; EP-30; EP-33 | None | Not Started |
@@ -218,7 +218,7 @@ the migration ledger; unsafe append-backfills are replaced with verified rebuild
 ## Progress
 
 
-EP-29, EP-30 and EP-32 are Complete; nine children remain Not Started. Its packaged acceptance passed 180 core
+EP-29, EP-30 and EP-32 are Complete; EP-31 is In Progress and eight children remain Not Started. Its packaged acceptance passed 180 core
 examples, 16 client examples, four probes, extra native recovery/limit checks and 45 Hurl
 requests with no required skips or pending cases. EP-30 now owns
 the released queue baseline, event uniqueness, outage recovery, admission and capacity proofs.
