@@ -211,6 +211,7 @@ def main():
                     run(['python3', 'scripts/native-query-pool.py'], env, 'native-recovery', timeout=120)
                     run(['python3', 'scripts/query-limits.py'], env, 'native-limits', timeout=300)
                     run(['python3', 'scripts/replay-safety.py'], env, 'native-replay', timeout=240)
+                    run(['python3', 'scripts/identity_acceptance.py'], env, 'native-identity', timeout=240)
                     seed(env)
                     env.update(KANSOKU_QUEUE_NAME='acceptance_events', KANSOKU_WRITER_MAX_LATENCY_MS='100',
                                KANSOKU_QUEUE_POLL_INTERVAL_SEC='1', KANSOKU_INGEST_MAX_BODY_BYTES='4096',

@@ -2,7 +2,7 @@
 type: Architecture Decision Record
 title: Queryable event properties and identity-resolved projection
 description: Store event properties as native ClickHouse JSON and expose them for metric grouping only after registry declaration.
-timestamp: 2026-10-15T17:23:33Z
+timestamp: 2026-10-15T19:38:22Z
 generated:
   by: human:kansoku-maintainers
   at: 2026-07-19T00:00:00Z
@@ -65,8 +65,9 @@ identity stitching instead of falling back to raw `user_id` or `anonymous_id` va
   latency and storage thresholds.
 - Reading unique-user property metrics from `events_raw` was rejected because it would
   bypass canonical identity resolution and change metric meaning.
-- A second identity-resolved view was rejected because it would duplicate the stitching
-  query and allow the two projections to drift.
+- Independent public identity policies are rejected because their populations could drift.
+  The rich private source and stable seven-column projection share the conservative policy
+  and native conformance fixtures described in ADR-5.
 
 ## Consequences
 
@@ -97,3 +98,9 @@ boundary in [ADR-1](0001-sdk-grade-ingest-contract-boundaries.md). Administrativ
 the writer stopped and replace states from canonical data; interrupted rebuilds can restart.
 The earlier JSON representation benchmark does not establish the cost of FINAL; the deployment
 capacity measurement must include this canonical source.
+
+HTTP identity queries use the parameterized `resolvedSource` helper, with candidate account/date
+bounds and server-owned temporary evidence snapshots. The public seven columns remain stable;
+new filter/session/enrichment fields belong to the rich private relation. Cached and direct
+native relations must agree for every identity fixture. Raw approximate user/exposure sketches
+now prefix user/anonymous namespaces too; they still do not promise query-time stitching.

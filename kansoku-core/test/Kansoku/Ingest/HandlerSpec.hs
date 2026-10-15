@@ -72,7 +72,7 @@ spec = describe "Kansoku.Ingest.Handler" $ do
     renderValidationError (ReceivedBeforeOccurred occurred received)
       `shouldBe` "receivedAt (2026-07-19T09:00:00Z) precedes occurredAt (2026-07-19T10:00:00Z); occurredAt is in the future relative to the server clock"
     renderValidationError (UnknownIdentifierKind "mac_address" allowedIdentifierKindNames)
-      `shouldBe` "identifier kind 'mac_address' is not supported; allowed kinds: cookie, device, fingerprint, email_sha256"
+      `shouldBe` "identifier kind 'mac_address' is not supported; allowed kinds: cookie, device, fingerprint, email_sha256, email_hmac"
     renderValidationError (EmptyIdentifierValue "fingerprint")
       `shouldBe` "identifier 'fingerprint' must not be empty"
     renderValidationError (IdentifierValueTooLong "device" 257 256)

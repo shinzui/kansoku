@@ -48,6 +48,11 @@ spec = describe "Kansoku event schema contract" $ do
               ]
     publishedPatterns `shouldBe` ["[a-z0-9_.:-]{1,128}", "[a-z0-9_.:-]{1,128}"]
 
+  it "publishes the same closed identifier vocabulary the validator accepts" $ do
+    let SchemaCatalog {identifierKinds} = schemaCatalog defaultRegistry
+    identifierKinds `shouldBe` allowedIdentifierKindNames
+    identifierKinds `shouldContain` ["email_hmac"]
+
   it "round-trips the SDK-facing catalog JSON" $ do
     let catalog = schemaCatalog defaultRegistry
     Aeson.decode (Aeson.encode catalog) `shouldBe` Just catalog

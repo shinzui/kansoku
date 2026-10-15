@@ -77,8 +77,9 @@ Unknown versions and versions outside `1..65535` are rejected.
 
 Undeclared event names are accepted without property-schema checks, provided their optional
 schema version is in range. Declaring an event in Kansoku is the point at which its published
-property types, required fields, and constraints become enforced. Catalog version 2 publishes
-string `minLength` and numeric `minimum` alongside regular-expression `pattern`.
+property types, required fields, and constraints become enforced. Catalog version 2 added
+string `minLength` and numeric `minimum` alongside regular-expression `pattern`. Catalog version 3 also publishes the closed
+`identifierKinds` vocabulary, including `email_hmac`.
 
 `alias` v1 requires nonempty `properties.previousId` and `properties.newId` matching top-level
 `anonymousId` and `userId`. It binds an anonymous identifier to a user. `group` v1 requires
@@ -156,14 +157,42 @@ The optional `identifiers` object accepts only these keys:
 - `cookie`
 - `device`
 - `fingerprint`
-- `email_sha256`
+- `email_sha256` (legacy, discouraged)
+- `email_hmac`
 
 Each value must be 1–256 printable, non-space ASCII characters. `anonymousId` already acts as an
-implicit cookie signal, so do not duplicate it in `identifiers`. On events with an explicit
-`userId`, mapped identifiers become account-scoped identity evidence. Cookie bindings from
-`anonymousId` are created only by `identify` and `alias`. Fingerprint evidence expires after 180
-days; see the [identity deletion runbook](../runbooks/identity-data-deletion.md) for erasure and
-raw fingerprint retention.
+implicit cookie signal, so do not duplicate it in `identifiers`. Explicit user IDs win.
+Implicit cookie evidence is created by `identify`, `identify_once` and `alias`; mapped identifiers
+bind on any event carrying an explicit `userId`.
+
+Anonymous activity first uses same-cookie evidence in its `(account, sourceService, sessionId)`
+when the nonempty session identifies exactly one user, including activity before login. A
+session with two users stays ambiguous for that cookie. Without session evidence, a cookie must
+identify exactly one user across retained history. Other signal kinds also require a unique
+user before confidence ranking; a tie between different users at the strongest confidence stays
+anonymous. Confidence is email 0.95, cookie 0.90, device 0.80 and fingerprint 0.50, not certainty.
+Evidence outside the selected event window can resolve an event. Fingerprint observations expire
+after 180 days by corrected event time, both in queries and eventual physical cleanup.
+
+Canonical subjects are `user:<original id>` or `anonymous:<original id>`. Prefixing preserves
+IDs containing colons or existing prefixes and prevents equal raw text in the two namespaces
+collapsing. Events with neither identity remain empty and are excluded from user counts. No
+arbitrary transitive user merge or unrecorded logout boundary is inferred.
+
+For `email_hmac`, compute HMAC-SHA-256 in a trusted backend with a secret pepper from its secret
+manager. Normalize the email by trimming leading/trailing ASCII whitespace (U+0009–U+000D and
+U+0020), applying Unicode default lowercase without locale-specific rules, then UTF-8 encoding.
+Do not apply Unicode normalization or provider-specific dot/plus rewriting. Coordinate the
+Unicode/lowercase implementation across producers. Send a version prefix and lowercase hex,
+for example `v1:<64 hex digits>`. The generic ASCII/length validator treats this as an opaque
+identifier; it does not validate the digest's construction. Never ship the pepper to a browser.
+Pepper rotation uses a new prefix and separate explicit-user observations for old/new identifiers
+when a bridge is needed; equality does not cross versions automatically. `email_sha256` remains
+accepted for existing producers but is discouraged because it lacks the secret pepper.
+
+See the [identity deletion runbook](../runbooks/identity-data-deletion.md) for erasure and raw
+fingerprint retention. The acceptance ledger and replayable inputs also need coordinated
+lifecycle maintenance; the administrative child owns the complete fenced workflow.
 
 ## Delivery and retries
 

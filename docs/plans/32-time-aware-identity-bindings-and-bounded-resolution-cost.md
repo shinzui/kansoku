@@ -23,6 +23,11 @@ provenance:
       at: 2026-10-15T15:43:15Z
       mode: "update"
       note: "Reconcile first-release APIs, domain semantics, dependencies and acceptance with the source-validated MP-5 review."
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-10-15T18:42:36Z
+      mode: "implement"
+      note: "Begin conservative session-aware identity resolution, bounded candidate source and native ten-million-event evidence."
 ---
 
 # Time-aware identity bindings and bounded resolution cost
@@ -38,12 +43,41 @@ can infer an unrecorded logout or identify who held a shared device.
 ## Progress
 
 
-- [ ] M1: Identity semantics pass shared-device, late-arrival and namespace-collision fixtures.
-- [ ] M2: A bounded raw-event resolution source passes a ten-million-row benchmark.
+- [x] M1: Identity semantics pass shared-device, late-arrival and namespace-collision fixtures.
+- [x] M2: A bounded raw-event resolution source passes a ten-million-row benchmark.
 - [ ] M3: Keyed email identifiers and SDK validation/catalog changes agree.
 
 ## Surprises & Discoveries
 
+
+Native acceptance passes 20 explicit subject expectations before merges, after merges and
+after rebuilding migration 0018. Both independent direct SQL and the actual application
+snapshot setup return identical results without fanout; the public projection remains seven
+columns. Native pool tests cover new evidence, mutations, empty-table swaps, missing indexes,
+account/window changes, fingerprint expiry without storage changes and physical isolation.
+
+Early ten-million-event implementations missed the target by 5.9–29.9x. Per-event signal
+expansion and repeated non-deterministic scalar lookups were costly. The current HTTP path
+resolves distinct account/date-scoped contexts into exact connection-owned Join snapshots,
+then materializes one lookup per candidate row. Each use checks all three index UUIDs/parts;
+account/window changes or the next fingerprint expiry rebuild the snapshot. An engine-clock
+guard rejects expiry crossing between preparation and SELECT. No timed refresh lag is added.
+Cold preparation and steady queries are measured separately, including native preflight work.
+The required-size benchmark now passes all twelve cases (1.17–1.58x). Persisting a lossless,
+length-prefixed context key avoids five-key lookup overhead; the single-pass conditional
+conversion aggregate preserves its two distinct-user sets while sharing the resolved scan.
+
+The initial benchmark gave each session only one event. The corrected fixture puts up to
+20 events in a session with independent event names, stable session-day placement and global
+shared-cookie conflicts across sessions. Anonymous events remain exactly 70% and 40% of cookies
+have explicit evidence. Earlier reports are diagnostic only; acceptance uses the corrected
+fixture and five measured native runs for every case at three and ten million retained events.
+
+The released ClickHaskell 1.1.0 wire enum labels initial requests as secondary queries, and its
+command/insert loops reject legitimate progress/profile packets. The vendored driver repairs
+both protocol defects; query-log instrumentation requires initial classification. The upstream
+release/tag check still identifies 1.1.0 as current. The native command lifetime test proves
+CREATE-AS-SELECT, INSERT-AS-SELECT and subsequent pings consume complete protocol streams.
 
 `0012_identity_signals.sql` sets `observed_at = received_at`, not event time, and omits
 session_id. The proposed nearest-future binding cannot know which user owns an event between
@@ -56,12 +90,14 @@ The public seven-column view lacks fields needed by filters and session analytic
 On 2026-10-15 prefer unambiguous evidence to guessing. Explicit user IDs win; a uniquely
 identified session can resolve its own anonymous events, otherwise only an unambiguous
 signal binding can stitch. Conflicts stay anonymous and visible. Defer refresh-lag semantics:
-the initial exact HTTP path resolves at query time.
+the exact HTTP path uses revision-checked, expiry-bounded snapshots owned by each physical
+query connection, with a separate direct public SQL resolver.
 
 ## Outcomes & Retrospective
 
 
-Planning reviewed; benchmark and runtime evidence remain outstanding.
+The required-size performance gate passes. Native semantic and connection-lifetime acceptance pass. Packaged acceptance and the
+committed SDK contract refresh are being finalized before this child is Complete.
 
 ## Context and Orientation
 
@@ -160,6 +196,48 @@ Use focused Hspec examples while developing. Before marking Complete, require no
 counts, no pending required integration tests, regenerated contract checks, and the packaged
 executable acceptance above. Record only the relevant evidence here. This follows
 [ADR-10](../adr/0010-owned-executable-acceptance-environments.md).
+
+### Accepted performance evidence (2026-10-15)
+
+Owned report `.dev/acceptance/identity-bench-w0cmluzm/report.json`: Apple M1 Max, 64 GiB,
+macOS 26.7, ClickHouse 26.8.2.7, four threads. Three million recent facts are measured, then
+seven million older facts are appended. Exact fractions are 70% anonymous and 40% identified
+cookies, with two accounts and shared-cookie conflicts. Each cell is a five-run native median;
+resolved measurements include the index-revision preflight. Query-log rows/bytes and maximum
+SELECT memory are included below. Baselines use the same compiler and settings, replacing
+only identity resolution with raw namespaced identity. These are fixture measurements.
+
+| History | Window | Metric | Raw / resolved ms | Ratio | Resolved rows / bytes | Peak bytes |
+|---|---|---|---:|---:|---:|---:|
+| recent-only | day | funnel | 14 / 19 | 1.36 | 49166 / 3738305 | 2662224 |
+| recent-only | day | retention | 28 / 35 | 1.25 | 163854 / 12324519 | 10916391 |
+| recent-only | day | conversion | 12 / 19 | 1.58 | 49166 / 3738305 | 1964951 |
+| recent-only | month | funnel | 51 / 71 | 1.39 | 925710 / 69611224 | 55433661 |
+| recent-only | month | retention | 133 / 185 | 1.39 | 3014670 / 225066189 | 146101505 |
+| recent-only | month | conversion | 41 / 59 | 1.44 | 925710 / 69611224 | 50137212 |
+| grown-history | day | funnel | 14 / 19 | 1.36 | 49175 / 3738898 | 2661712 |
+| grown-history | day | retention | 29 / 34 | 1.17 | 163863 / 12325112 | 10917087 |
+| grown-history | day | conversion | 13 / 19 | 1.46 | 49175 / 3738898 | 1965647 |
+| grown-history | month | funnel | 48 / 67 | 1.40 | 925719 / 69611817 | 59682574 |
+| grown-history | month | retention | 131 / 182 | 1.39 | 3014679 / 225066782 | 144552843 |
+| grown-history | month | conversion | 41 / 58 | 1.41 | 925719 / 69611817 | 50143676 |
+
+Cold preparation is measured on five fresh physical sessions per window. It includes
+revision lookup, all temporary-table construction and a trivial SELECT, separately from warm
+metric latency. Index bytes are physical on-disk bytes across both fixture accounts.
+
+| History | Window | Median ms | Rows / bytes | Peak bytes | Index bytes |
+|---|---|---:|---:|---:|---:|
+| recent-only | day | 70 | 114700 / 6048217 | 37468990 | 5578341 |
+| recent-only | month | 182 | 221196 / 15171251 | 52905219 | 5578341 |
+| grown-history | day | 144 | 229397 / 11674987 | 103710747 | 18040606 |
+| grown-history | month | 259 | 352277 / 22186870 | 85625552 | 18040606 |
+
+Candidate rows for the same recent window remain stable as older history grows. Cold
+evidence preparation grows with retained account history and is bounded by explicit memory
+caps; this design does not claim history-independent total work or warm-cache latency on every
+request. Active writes/merges can invalidate a snapshot and require cold preparation.
+
 
 ## Idempotence and Recovery
 

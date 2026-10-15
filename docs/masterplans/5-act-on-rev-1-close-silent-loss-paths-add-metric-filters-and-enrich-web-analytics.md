@@ -113,7 +113,7 @@ is `mori://shinzui/kansoku-ts/okf/adrs/concepts/ADR-2`.
 | 29 | Correct client timestamp skew and count ingest rejections | docs/plans/29-correct-client-timestamp-skew-and-count-ingest-rejections.md | None | None | Complete |
 | 30 | Pipeline backpressure and storage-outage resilience | docs/plans/30-pipeline-backpressure-and-storage-outage-resilience.md | EP-29 | None | Complete |
 | 31 | Metric property filters and dual grouping | docs/plans/31-metric-property-filters-and-dual-grouping.md | EP-26; EP-30; EP-32 | None | Not Started |
-| 32 | Time-aware identity bindings and bounded resolution cost | docs/plans/32-time-aware-identity-bindings-and-bounded-resolution-cost.md | EP-29; EP-30 | None | Not Started |
+| 32 | Time-aware identity bindings and bounded resolution cost | docs/plans/32-time-aware-identity-bindings-and-bounded-resolution-cost.md | EP-29; EP-30 | None | In Progress |
 | 33 | Acquisition and device enrichment with bot flagging | docs/plans/33-acquisition-and-device-enrichment-with-bot-flagging.md | EP-26; EP-31 | None | Not Started |
 | 34 | Session analytics: duration, bounce, entry and exit pages | docs/plans/34-session-analytics-duration-bounce-entry-and-exit-pages.md | EP-26; EP-30; EP-33 | None | Not Started |
 | 35 | Rolling active users, retention modes, and lifetime cohorts | docs/plans/35-rolling-active-users-retention-modes-and-lifetime-cohorts.md | EP-26; EP-31; EP-32 | None | Not Started |
@@ -176,7 +176,13 @@ hash windows are never a substitute for this contract.
 **Identity projection — EP-32 owner.** Preserve the seven public view columns while providing
 a richer private source for query compilation. Canonical subject kind distinguishes users and
 anonymous IDs. Conflicted evidence stays ambiguous; query-time resolution may use evidence
-outside the selected event window. EP-31 and all analytic children consume this one resolver.
+outside the selected event window. EP-31 and all analytic children consume this one resolver through its query-connection
+lifetime. EP-32 supplies exact evidence/context indexes and connection-local snapshots with
+part/UUID invalidation and fingerprint-expiry deadlines, not a timed stale refresh.
+Context expansion is scoped to the requested account/date window; evidence may span history. EP-31 applies work budgets to preparation
+and final SELECT; EP-37 erases/rebuilds every derived identity index as well as raw/evidence.
+The public SQL projection uses its direct policy-equivalent relation. EP-37 also treats the
+materialized, lossless raw identity_context_key as identity data during erasure/scrubbing.
 
 **Metrics grammar and result shape — EP-31 owner.** Repeated JSON filter objects, native value
 parameters, one/two dimensions, full namespaced group keys and nullable group text form the
@@ -212,11 +218,13 @@ the migration ledger; unsafe append-backfills are replaced with verified rebuild
 ## Progress
 
 
-EP-29 and EP-30 are Complete, and ten children remain Not Started. Its packaged acceptance passed 180 core
+EP-29 and EP-30 are Complete, EP-32 is In Progress, and nine children remain Not Started. Its packaged acceptance passed 180 core
 examples, 16 client examples, four probes, extra native recovery/limit checks and 45 Hurl
 requests with no required skips or pending cases. EP-30 now owns
 the released queue baseline, event uniqueness, outage recovery, admission and capacity proofs.
-All EP-30 milestones are accepted; M1 introduces `analytics.events_canonical` as the internal replay-safe source
+EP-32 now passes the twenty-subject direct/cached semantic proof and its ten-million-event
+cost gate (all twelve cases 1.17–1.58x matching raw identity); packaged/SDK acceptance remains
+before completion. All EP-30 milestones are accepted; M1 introduces `analytics.events_canonical` as the internal replay-safe source
 for subsequent identity, grouping and enrichment work, preserving the public resolved projection. Its ten-minute 200/s native outage/restart proof
 retains 120000 logical events with zero valid archives, first write 2.48 seconds and drain
 21.21 seconds. The tested Apple M1 Max/64-GiB workload and finite capacity budget are documented

@@ -14,6 +14,7 @@ module Kansoku.ClickHouse
     closeQueryPool,
     selectEventProjections,
     withQueryConnection,
+    withIdentityQueryConnection,
     queryReachable,
   )
 where
@@ -40,10 +41,12 @@ import ClickHaskell
 import Control.Concurrent.MVar (MVar, modifyMVar, newMVar)
 import Control.Exception (SomeException, throwIO, try)
 import Data.Generics.Labels ()
+import Data.IORef (IORef, newIORef)
 import Data.Pool qualified as Pool
 import Kansoku.ClickHouse.EventRow
 import Kansoku.Config qualified as Config
 import Kansoku.Event (AnalyticsEvent)
+import Kansoku.Identity.Cache (IdentityCacheState, prepareIdentityCache)
 import Kansoku.Prelude
 
 data ClickHouseConfig = ClickHouseConfig
@@ -90,14 +93,16 @@ insertWriterEvents (WriterConnection config connectionCell) events = do
 
 -- | A fixed-size pool of ClickHouse connections for the metrics query path.
 -- The writer never uses this; it owns its own dedicated connection.
-newtype QueryPool = QueryPool (Pool.Pool Connection)
+data QueryConnection = QueryConnection !Connection !(IORef IdentityCacheState)
+
+newtype QueryPool = QueryPool (Pool.Pool QueryConnection)
 
 newQueryPool :: ClickHouseConfig -> Int -> IO QueryPool
 newQueryPool cfg size =
   QueryPool
     <$> Pool.newPool
       ( Pool.setNumStripes (Just 1) $
-          Pool.defaultPoolConfig (openClickHouse cfg) closeConnection queryConnectionIdleSeconds size
+          Pool.defaultPoolConfig (QueryConnection <$> openClickHouse cfg <*> newIORef Nothing) closeQueryConnection queryConnectionIdleSeconds size
       )
 
 -- | Idle physical connections are closed, as are all resources at shutdown.
@@ -109,7 +114,17 @@ closeQueryPool (QueryPool pool) = Pool.destroyAllResources pool
 
 -- | Failures escape the callback: disposal completes before classification.
 withQueryConnection :: QueryPool -> (Connection -> IO a) -> IO a
-withQueryConnection (QueryPool pool) = Pool.withResource pool
+withQueryConnection (QueryPool pool) action = Pool.withResource pool $ \(QueryConnection connection _) -> action connection
+
+closeQueryConnection :: QueryConnection -> IO ()
+closeQueryConnection (QueryConnection connection _) = closeConnection connection
+
+-- | Refresh exact evidence on this physical connection before any resolved
+-- query. Failures escape the pool callback and dispose both socket and caches.
+withIdentityQueryConnection :: QueryPool -> Text -> Text -> Text -> (Connection -> IO a) -> IO a
+withIdentityQueryConnection (QueryPool pool) account fromDay toDay action = Pool.withResource pool $ \(QueryConnection connection revision) -> do
+  prepareIdentityCache account fromDay toDay connection revision
+  action connection
 
 queryReachable :: QueryPool -> IO Bool
 queryReachable pool = withQueryConnection pool (\conn -> ping conn >> pure True)

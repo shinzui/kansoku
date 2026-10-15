@@ -133,3 +133,11 @@ outage-smoke:
 # Exercise the Mori-registered browser SDK against the 429 transport contract.
 sdk-rate-limit:
     python3 scripts/sdk-rate-limit.py
+
+# Own a scratch ClickHouse and verify conservative identity semantics and rebuilds.
+identity-acceptance: build-with-tests
+    python3 scripts/identity_acceptance.py
+
+# Required EP-32 cost gate: ten million events and five measured runs per case.
+identity-bench:
+    python3 scripts/identity-bench.py

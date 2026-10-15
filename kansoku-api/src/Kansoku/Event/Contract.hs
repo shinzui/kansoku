@@ -13,7 +13,7 @@ import Data.Aeson.Types (Options (..))
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Kansoku.Event.Registry
-import Kansoku.Event.Types (EventName (..))
+import Kansoku.Event.Types (EventName (..), allowedIdentifierKindNames)
 import Kansoku.Prelude
 
 data ContractProperty = ContractProperty
@@ -44,6 +44,7 @@ newtype EventVersions = EventVersions
 data SchemaCatalog = SchemaCatalog
   { catalogVersion :: !Int,
     service :: !Text,
+    identifierKinds :: ![Text],
     events :: !(Map Text EventVersions)
   }
   deriving stock (Generic, Eq, Show)
@@ -77,8 +78,9 @@ propertyTypeText = \case
 schemaCatalog :: EventRegistry -> SchemaCatalog
 schemaCatalog (EventRegistry registry) =
   SchemaCatalog
-    { catalogVersion = 2,
+    { catalogVersion = 3,
       service = "kansoku",
+      identifierKinds = allowedIdentifierKindNames,
       events =
         Map.fromList
           [ (unEventName eventName, EventVersions (toContractSchema <$> schemas))

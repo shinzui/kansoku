@@ -1,6 +1,6 @@
 module Kansoku.QueryPoolSpec (spec, Fault (..), Proxy (..), withProxy, through, drained) where
 
-import ClickHaskell (closeConnection, ping)
+import ClickHaskell (closeConnection, command, ping)
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (async, cancel, race_, waitCatch, withAsync)
 import Control.Concurrent.MVar (newEmptyMVar, putMVar, takeMVar)
@@ -33,6 +33,16 @@ data Proxy = Proxy
 
 spec :: Spec
 spec = describe "Kansoku.QueryPool native lifetime" $ do
+  it "consumes command progress/profile packets through completion on the same native connection" $ withNative $ \cfg ->
+    bracket (newQueryPool cfg 1) closeQueryPool $ \pool ->
+      withQueryConnection pool $ \conn -> do
+        command conn "CREATE TEMPORARY TABLE command_progress ENGINE=Memory AS SELECT number FROM numbers(100000) SETTINGS send_profile_events=1"
+        ping conn
+        command conn "INSERT INTO command_progress SELECT number FROM numbers(100000) SETTINGS send_profile_events=1"
+        ping conn
+        command conn "DROP TEMPORARY TABLE command_progress"
+        ping conn
+
   it "bounds failed connect and stalled handshake including socket disposal" $ withNative $ \cfg -> do
     -- Bind without listen: a real refused connect on an owned, unused endpoint.
     bracket newListener close $ \reserved -> do

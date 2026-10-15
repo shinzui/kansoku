@@ -47,7 +47,7 @@ spec = describe "Kansoku.Client" $ do
               & #anonymousId
               ?~ "anon-1"
               & #identifiers
-              ?~ Map.fromList [("fingerprint", "fp-1"), ("device", "dev-1")]
+              ?~ Map.fromList [("fingerprint", "fp-1"), ("device", "dev-1"), ("email_hmac", "v1:opaque")]
               & #organizationId
               ?~ "org-1"
               & #accountId
@@ -63,7 +63,7 @@ spec = describe "Kansoku.Client" $ do
       event ^. #userId `shouldBe` Just (UserId "user-1")
       event ^. #anonymousId `shouldBe` Just (AnonymousId "anon-1")
       event ^. #identifiers
-        `shouldBe` Just (Map.fromList [("fingerprint", "fp-1"), ("device", "dev-1")])
+        `shouldBe` Just (Map.fromList [("fingerprint", "fp-1"), ("device", "dev-1"), ("email_hmac", "v1:opaque")])
       event ^. #organizationId `shouldBe` Just (OrganizationId "org-1")
       event ^. #accountId `shouldBe` Just (AccountId "acct-1")
       event ^. #sessionId `shouldBe` Just (SessionId "sess-1")

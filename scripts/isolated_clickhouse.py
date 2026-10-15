@@ -16,13 +16,15 @@ def free_port():
 
 
 @contextmanager
-def isolated_clickhouse(block_size=65536, directory=None):
+def isolated_clickhouse(block_size=65536, directory=None, query_logging=False):
     tcp, http = free_port(), free_port()
     with (tempfile.TemporaryDirectory(prefix='kansoku-native-') if directory is None else nullcontext(directory)) as directory:
         root = Path(directory)
         root.mkdir(mode=0o700, parents=True, exist_ok=True)
         config = root / 'config.xml'
+        query_log = '<query_log><database>system</database><table>query_log</table><flush_interval_milliseconds>100</flush_interval_milliseconds></query_log>' if query_logging else ''
         config.write_text(f'''<clickhouse>
+{query_log}
 <path>{root}/data/</path><tmp_path>{root}/tmp/</tmp_path>
 <tcp_port>{tcp}</tcp_port><http_port>{http}</http_port><listen_host>127.0.0.1</listen_host>
 <logger><level>warning</level><log>{root}/server.log</log><errorlog>{root}/error.log</errorlog></logger>

@@ -2,7 +2,7 @@
 type: Architecture Decision Record
 title: Pipeline observability, readiness, and writer recovery
 description: Add OpenTelemetry tracing, Prometheus pipeline metrics, ordered readiness checks, and logical writer-connection recovery for the PGMQ-to-ClickHouse pipeline.
-timestamp: 2026-10-15T18:38:08Z
+timestamp: 2026-10-15T19:38:22Z
 generated:
   by: human:kansoku-maintainers
   at: 2026-07-19T00:00:00Z
@@ -225,3 +225,12 @@ CommandComplete. Shibuya retries the failed finalizer; the adapter's transaction
 claim prevents duplicate dead-letter insertion. This establishes queue lifecycle behavior;
 ClickHouse replay safety and source pausing require the subsequent acceptance-ledger and
 storage-breaker work.
+
+## Native command/query classification repair
+
+The same vendored 1.1.0 driver consumes progress/profile status packets during commands and
+inserts, including CREATE-AS-SELECT/INSERT-SELECT cache preparation. Commands still reject data
+rows. QueryKind wire codes are corrected to 0/1/2: the original offset labels an initial request
+as secondary, changing native analyzer and query-log behavior. Hackage and upstream tags still
+select 1.1.0 on 2026-10-15. Native same-socket command/ping and benchmark query-log checks cover
+these repairs; the benchmark counts preflight and cache construction, not only the final SELECT.

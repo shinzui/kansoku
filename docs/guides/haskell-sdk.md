@@ -147,3 +147,11 @@ the experiment convenience functions keep their credential-first signatures.
 Upgrade the API, server and client from the same checkout. There is no legacy error decoder.
 
 [Documentation index](../README.md)
+
+
+The `identifiers` map accepts `email_hmac` opaque values as well as `cookie`, `device`,
+`fingerprint` and legacy `email_sha256`. Use the catalog's `identifierKinds` vocabulary.
+Unknown kinds and non-ASCII, whitespace-bearing or over-256-character values are rejected.
+Compute keyed email identifiers in a trusted backend using the normalization and versioning
+contract in [Send events](send-events.md#identity-signals); pass only the resulting opaque
+identifier to clients.

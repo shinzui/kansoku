@@ -45,6 +45,7 @@ library
     Kansoku.Config
     Kansoku.Exception
     Kansoku.Health
+    Kansoku.Identity.Cache
     Kansoku.Ingest.Acceptance
     Kansoku.Ingest.Handler
     Kansoku.Ingest.Producer
@@ -136,6 +137,7 @@ test-suite kansoku-core-test
     Kansoku.HealthSpec
     Kansoku.HttpIntegrationSpec
     Kansoku.HttpTelemetrySpec
+    Kansoku.Identity.CacheSpec
     Kansoku.Ingest.AcceptanceSpec
     Kansoku.Ingest.AdmissionSpec
     Kansoku.Ingest.HandlerSpec
@@ -153,6 +155,7 @@ test-suite kansoku-core-test
     Kansoku.PostgresTestSupport
     Kansoku.ProblemSpec
     Kansoku.Query.ValidateSpec
+    Kansoku.QueryBenchmark
     Kansoku.QueryIntegrationSpec
     Kansoku.QueryPoolSpec
     Kansoku.QuerySpec

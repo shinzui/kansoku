@@ -263,3 +263,19 @@ retention, disk, and replica procedures appropriate to the deployed ClickHouse t
 does not currently automate backups or tenant-specific raw-event retention.
 
 [Documentation index](../README.md)
+
+
+Identity-resolved metric queries prepare exact, account/date-scoped snapshots on their physical
+ClickHouse query connection. The query role needs permission to create temporary tables and
+read the three identity indexes plus `system.tables` and `system.parts`. The public
+`analytics.events_resolved` SQL view remains independent of these application sessions.
+
+Each connection allows 64 MiB for signal observations, 64 MiB for session observations and
+128 MiB for resolved contexts; construction queries have a 256 MiB memory cap. Multiply the
+resident 256 MiB cap by the configured query pool size when sizing ClickHouse memory. Exceeding
+a cap fails the request and disposes the connection; it never serves a truncated identity map.
+New index parts, mutations and table replacements trigger rebuilding before reuse. Fingerprint
+expiry also triggers rebuilding even without storage changes; an engine-clock guard fails
+closed if a deadline crosses during request preparation. Pool disposal, idle expiry and
+shutdown remove the temporary snapshots. Complete erasure must scrub all three indexes and
+raw/replayable inputs as described in the identity deletion runbook.

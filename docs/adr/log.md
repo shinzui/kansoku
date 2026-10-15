@@ -1,6 +1,7 @@
 # Bundle Update Log
 
 ## 2026-10-15
+* **Update**: Record conservative session-aware subjects, exact query connection evidence ownership and native driver command/query repairs.
 * **Update**: Include the released batcher ready-output buffer in the conservative retained-delivery bound.
 * **Update**: Record shared credential admission, typed rate-limit retry and retained source-pausing writer recovery.
 * **Update**: ADR-1/ADR-4: record immutable transactional acceptance, indefinite identity tombstones, canonical reads and replay-safe exact count states.

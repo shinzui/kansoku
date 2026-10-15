@@ -10,6 +10,7 @@ import Kansoku.EventSpec qualified
 import Kansoku.HealthSpec qualified
 import Kansoku.HttpIntegrationSpec qualified
 import Kansoku.HttpTelemetrySpec qualified
+import Kansoku.Identity.CacheSpec qualified
 import Kansoku.Ingest.AcceptanceSpec qualified
 import Kansoku.Ingest.AdmissionSpec qualified
 import Kansoku.Ingest.HandlerSpec qualified
@@ -26,6 +27,7 @@ import Kansoku.Observability (registerPipelineMetrics)
 import Kansoku.ObservabilitySpec qualified
 import Kansoku.OpenApiSpec qualified
 import Kansoku.ProblemSpec qualified
+import Kansoku.QueryBenchmark qualified
 import Kansoku.QueryIntegrationSpec qualified
 import Kansoku.QueryPoolSpec qualified
 import Kansoku.QuerySpec qualified
@@ -40,11 +42,15 @@ import Test.Hspec (hspec, runIO)
 
 main :: IO ()
 main = do
+  sessionMode <- lookupEnv "KANSOKU_IDENTITY_BENCH_SESSION"
+  benchmarkMode <- lookupEnv "KANSOKU_IDENTITY_BENCH_SQL"
   outageMode <- lookupEnv "KANSOKU_PIPELINE_OUTAGE_CHILD"
   childMode <- lookupEnv "KANSOKU_TELEMETRY_LIFECYCLE_CHILD"
-  case (outageMode, childMode) of
-    (Just _, _) -> hspec Kansoku.Writer.OutageSpec.spec
-    (_, Just _) -> Kansoku.HttpTelemetrySpec.lifecycleChild
+  case (sessionMode, benchmarkMode, outageMode, childMode) of
+    (Just _, _, _, _) -> Kansoku.QueryBenchmark.runSession
+    (_, Just _, _, _) -> Kansoku.QueryBenchmark.emitSql
+    (_, _, Just _, _) -> hspec Kansoku.Writer.OutageSpec.spec
+    (_, _, _, Just _) -> Kansoku.HttpTelemetrySpec.lifecycleChild
     _ -> normalTests
 
 normalTests :: IO ()
@@ -58,6 +64,7 @@ normalTests = hspec $ do
   Kansoku.ClickHouseSpec.spec
   Kansoku.EventSpec.spec
   Kansoku.HealthSpec.spec
+  Kansoku.Identity.CacheSpec.spec
   Kansoku.Ingest.AcceptanceSpec.spec metrics
   Kansoku.Ingest.HandlerSpec.spec
   Kansoku.Ingest.QueueSpec.spec

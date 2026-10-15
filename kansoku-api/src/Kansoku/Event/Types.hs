@@ -44,7 +44,7 @@ eventSourceToText s = case s of
 -- | Closed set of identifier-signal kinds accepted in an event's
 -- @identifiers@ object. Adding a constructor also requires a confidence and
 -- retention policy in the ClickHouse identity migrations.
-data IdentifierKind = Cookie | Device | Fingerprint | EmailSha256
+data IdentifierKind = Cookie | Device | Fingerprint | EmailSha256 | EmailHmac
   deriving stock (Generic, Eq, Ord, Show, Enum, Bounded)
 
 identifierKindToText :: IdentifierKind -> Text
@@ -53,6 +53,7 @@ identifierKindToText kind = case kind of
   Device -> "device"
   Fingerprint -> "fingerprint"
   EmailSha256 -> "email_sha256"
+  EmailHmac -> "email_hmac"
 
 identifierKindFromText :: Text -> Maybe IdentifierKind
 identifierKindFromText name = case name of
@@ -60,6 +61,7 @@ identifierKindFromText name = case name of
   "device" -> Just Device
   "fingerprint" -> Just Fingerprint
   "email_sha256" -> Just EmailSha256
+  "email_hmac" -> Just EmailHmac
   _ -> Nothing
 
 allowedIdentifierKindNames :: [Text]

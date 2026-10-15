@@ -1,5 +1,5 @@
 {
-  "catalogVersion": 2,
+  "catalogVersion": 3,
   "events": {
     "alias": {
       "versions": [
@@ -193,5 +193,12 @@
       ]
     }
   },
+  "identifierKinds": [
+    "cookie",
+    "device",
+    "fingerprint",
+    "email_sha256",
+    "email_hmac"
+  ],
   "service": "kansoku"
 }

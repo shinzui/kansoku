@@ -339,6 +339,12 @@
             },
             "type": "object"
           },
+          "identifierKinds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "service": {
             "type": "string"
           }
@@ -346,6 +352,7 @@
         "required": [
           "catalogVersion",
           "service",
+          "identifierKinds",
           "events"
         ],
         "type": "object"

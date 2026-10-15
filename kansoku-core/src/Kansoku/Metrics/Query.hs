@@ -18,6 +18,7 @@ module Kansoku.Metrics.Query
     experimentFunnelPoint,
     queryCompileErrorCode,
     queryCompileErrorMessage,
+    resolvedSource,
     run,
     runExperimentConversion,
     runExperimentExposures,
@@ -50,7 +51,7 @@ import Data.Text.Encoding qualified as Text
 import Data.Time (Day)
 import Data.Time.Format (defaultTimeLocale, formatTime)
 import Effectful (Eff, IOE, type (:>))
-import Kansoku.ClickHouse (QueryPool, withQueryConnection)
+import Kansoku.ClickHouse (QueryPool, withIdentityQueryConnection, withQueryConnection)
 import Kansoku.Event
   ( AccountId (..),
     EventName (..),
@@ -243,7 +244,7 @@ runSQL pool name groupName =
 runSQLWith :: QueryPool -> Text -> (AggRow -> MetricPoint) -> [QueryParameter] -> Text -> IO (Either QueryExecutionError MetricResult)
 runSQLWith pool metric toPoint parameters sql = do
   outcome <- trySynchronous $
-    withQueryConnection pool $
+    (if "analytics.events_resolved_http(" `Text.isInfixOf` sql then withIdentityQueryConnection pool (required "account_id") (required "identity_from") (required "identity_to") else withQueryConnection pool) $
       -- ClickHaskell prepends each completed block; restore arrival order
       -- without sorting or reversing any rows within a repaired block.
       \conn -> concat . reverse <$> select (aggSelect parameters sql) conn (pure . repairAggRows)
@@ -252,6 +253,8 @@ runSQLWith pool metric toPoint parameters sql = do
     Right rows
       | length rows > maxMetricPoints -> Left MetricResultTooLarge
       | otherwise -> Right MetricResult {metric, points = toPoint <$> rows}
+  where
+    required key = fromMaybe (error "resolved query requires compiler scope parameter") (lookup key parameters)
 
 -- ClickHaskell 1.1.0 reverses the first field of a three-field generic record
 -- relative to the other fields. Repair each result block before it escapes the
@@ -268,7 +271,7 @@ aggSelect parameters sql =
     unsafeMkSelect $
       const $
         Text.encodeUtf8Builder $
-          sql <> "\nSETTINGS compile_expressions = 0, compile_aggregate_expressions = 0, compile_sort_description = 0"
+          sql <> "\nSETTINGS enable_analyzer=1,short_circuit_function_evaluation='force_enable', compile_expressions = 0, compile_aggregate_expressions = 0, compile_sort_description = 0"
   where
     addOne (name, value) rest =
       addParameter name (toChType (Text.unpack value) :: ChString) . rest
@@ -436,30 +439,35 @@ buildSimpleSQL registry grouping predicates def req
 -- or identity join. Day/week raw-identity sketches remain approximate; exact
 -- page-view states union event IDs across arbitrary insert boundaries.
 
+-- | The private relation bounds canonical candidate facts before expansion;
+-- evidence remains available across all retained history for this account.
+resolvedSource :: QueryRequest -> Text
+resolvedSource req =
+  "analytics.events_resolved_http(scope_all_accounts=0, scope_account={account_id:String}, scope_from=toDateTime64("
+    <> sqlString (renderDay (req ^. #from) <> " 00:00:00")
+    <> ",3,'UTC'), scope_to=toDateTime64("
+    <> sqlString (renderDay (req ^. #to) <> " 00:00:00")
+    <> ",3,'UTC'))"
+
 buildRatioSQL :: RatioMetric -> QueryRequest -> Text
 buildRatioSQL RatioMetric {numerator, denominator} req =
-  Text.unlines
-    [ "SELECT '' AS bucket, '' AS group_key,",
-      "       if(denominator = 0, 0, numerator / denominator) AS value",
-      "FROM",
-      "  ( SELECT",
-      "      ( SELECT toFloat64(uniqExact(canonical_user))",
-      "        FROM analytics.events_resolved",
-      "        WHERE " <> accountPredicate,
-      "          AND canonical_user != ''",
-      "          AND " <> eventNamePredicate "numerator_event_name" (validatedEventNames numerator),
-      "          AND " <> timestampPredicate req,
-      "      ) AS numerator,",
-      "      ( SELECT toFloat64(uniqExact(canonical_user))",
-      "        FROM analytics.events_resolved",
-      "        WHERE " <> accountPredicate,
-      "          AND canonical_user != ''",
-      "          AND " <> eventNamePredicate "denominator_event_name" (validatedEventNames denominator),
-      "          AND " <> timestampPredicate req,
-      "      ) AS denominator",
-      "  )",
-      "ORDER BY bucket, group_key"
-    ]
+  let numeratorPredicate = eventNamePredicate "numerator_event_name" (validatedEventNames numerator)
+      denominatorPredicate = eventNamePredicate "denominator_event_name" (validatedEventNames denominator)
+   in Text.unlines
+        [ "SELECT '' AS bucket, '' AS group_key,",
+          "       if(denominator = 0, 0, numerator / denominator) AS value",
+          "FROM",
+          "  ( SELECT",
+          "      toFloat64(uniqExactIf(canonical_user, " <> numeratorPredicate <> ")) AS numerator,",
+          "      toFloat64(uniqExactIf(canonical_user, " <> denominatorPredicate <> ")) AS denominator",
+          "    FROM " <> resolvedSource req,
+          "    WHERE " <> accountPredicate,
+          "      AND canonical_user != ''",
+          "      AND (" <> numeratorPredicate <> " OR " <> denominatorPredicate <> ")",
+          "      AND " <> timestampPredicate req,
+          "  )",
+          "ORDER BY bucket, group_key"
+        ]
 
 countEventsSQL :: Maybe GroupDimension -> [Text] -> MetricDefinition -> QueryRequest -> Text
 countEventsSQL grouping predicates def req =
@@ -478,7 +486,7 @@ uniqueUsersSQL grouping predicates def req =
   Text.unlines
     [ "SELECT " <> bucketExpr (effectiveGrain def req) <> " AS bucket, " <> groupExpr grouping <> " AS group_key,",
       "       toFloat64(uniqExact(canonical_user)) AS value",
-      "FROM analytics.events_resolved",
+      "FROM " <> resolvedSource req,
       "WHERE " <> accountPredicate,
       "  AND canonical_user != ''",
       "  AND " <> timestampPredicate req <> eventNameClause "event_name" (validatedEventNames def) <> propertyFilterClause predicates,
@@ -579,7 +587,7 @@ buildRetentionSQLAggregate req offsets =
       "  first_seen AS",
       "  (",
       "    SELECT canonical_user, min(toDate(occurred_at)) AS cohort_day",
-      "    FROM analytics.events_resolved",
+      "    FROM " <> resolvedSource req,
       "    WHERE " <> accountPredicate,
       "      AND canonical_user != ''",
       "      AND " <> timestampPredicate req,
@@ -588,7 +596,7 @@ buildRetentionSQLAggregate req offsets =
       "  activity AS",
       "  (",
       "    SELECT DISTINCT canonical_user, toDate(occurred_at) AS active_day",
-      "    FROM analytics.events_resolved",
+      "    FROM " <> resolvedSource req,
       "    WHERE " <> accountPredicate,
       "      AND canonical_user != ''",
       "      AND " <> timestampPredicate req,
@@ -630,10 +638,9 @@ buildFunnelSQLAggregate req window steps =
     <> Text.pack (show window)
     <> ")(toDateTime(occurred_at), "
     <> conditions
-    <> """
-       ) AS level
-         FROM analytics.events_resolved
-         WHERE """
+    <> ") AS level\nFROM "
+    <> resolvedSource req
+    <> "\nWHERE "
     <> accountPredicate
     <> """
        AND canonical_user != ''
@@ -709,7 +716,7 @@ buildExperimentConversionSQLAggregate req _experiment _conversionEvent =
       "        canonical_user,",
       "        CAST(toString(getSubcolumn(properties_json, 'variant')), 'String') AS variant,",
       "        min(occurred_at) AS first_exposure",
-      "    FROM analytics.events_resolved",
+      "    FROM " <> resolvedSource req,
       "    WHERE canonical_user != ''",
       "      AND " <> accountPredicate,
       "      AND event_name = 'experiment_viewed'",
@@ -724,7 +731,7 @@ buildExperimentConversionSQLAggregate req _experiment _conversionEvent =
       "    SELECT",
       "        canonical_user,",
       "        max(occurred_at) AS last_conversion",
-      "    FROM analytics.events_resolved",
+      "    FROM " <> resolvedSource req,
       "    WHERE canonical_user != ''",
       "      AND " <> accountPredicate,
       "      AND event_name = {conversion_event:String}",
@@ -789,7 +796,7 @@ buildExperimentFunnelSQLAggregate req _experiment window steps =
       "        canonical_user,",
       "        CAST(toString(getSubcolumn(properties_json, 'variant')), 'String') AS variant,",
       "        min(occurred_at) AS first_exposure",
-      "    FROM analytics.events_resolved",
+      "    FROM " <> resolvedSource req,
       "    WHERE canonical_user != ''",
       "      AND " <> accountPredicate,
       "      AND event_name = 'experiment_viewed'",
@@ -810,7 +817,7 @@ buildExperimentFunnelSQLAggregate req _experiment window steps =
       "        e.variant AS variant,",
       "        r.canonical_user AS canonical_user,",
       "        windowFunnel(" <> Text.pack (show window) <> ")(toDateTime(r.occurred_at), " <> conditions <> ") AS level",
-      "    FROM analytics.events_resolved AS r",
+      "    FROM " <> resolvedSource req <> " AS r",
       "    INNER JOIN exposures AS e ON e.canonical_user = r.canonical_user",
       "    WHERE r.canonical_user != ''",
       "      AND r.account_id = {account_id:String}",
@@ -1005,7 +1012,7 @@ namedParameters prefix =
   zipWith (\position value -> (Text.unpack (parameterName prefix position), renderSqlName value)) [1 :: Int ..]
 
 accountParameter :: QueryRequest -> [QueryParameter]
-accountParameter req = [("account_id", unAccountId (req ^. #accountId))]
+accountParameter req = [("account_id", unAccountId (req ^. #accountId)), ("identity_from", renderDay (req ^. #from)), ("identity_to", renderDay (req ^. #to))]
 
 experimentParameter :: SqlName -> QueryParameter
 experimentParameter experiment = ("experiment", renderSqlName experiment)

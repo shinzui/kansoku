@@ -11,6 +11,12 @@ are expensive on large tables. Run them off-peak, for one account at a time, sav
 read-only discovery output before changing anything, and test substitutions in a
 non-production account first. Never omit the `account_id` predicate.
 
+This is ClickHouse identity unlinking, not the complete cross-store erasure workflow. Fence
+writers and replay while mutating; queued or archived old payloads must be handled by the
+administrative lifecycle owner before resuming. Full erasure also covers replayable inputs,
+acceptance tombstones and derived analytical states; that executable workflow is owned by
+`docs/plans/37-administrative-executable-for-keys-erasure-retention-and-replay.md`.
+
 ## Per-user identity erasure
 
 Set `ACCOUNT` and `USER` to the exact escaped values for the request. Step 1 is read-only
@@ -74,12 +80,36 @@ ALTER TABLE analytics.events_raw
 DELETE WHERE account_id = 'ACCOUNT' AND user_id = 'USER';
 ```
 
-Delete the user's evidence rows after the raw-event scrubs have been submitted.
+Delete the user's evidence rows and both exact lookup indexes after the raw-event scrubs
+have completed. This includes every signal kind, including email_hmac.
 
 ```sql
 ALTER TABLE analytics.identity_signals
 DELETE WHERE account_id = 'ACCOUNT' AND user_id = 'USER';
+
+ALTER TABLE analytics.identity_signal_users
+DELETE WHERE account_id = 'ACCOUNT' AND user_id = 'USER';
+
+ALTER TABLE analytics.identity_session_users
+DELETE WHERE account_id = 'ACCOUNT' AND user_id = 'USER';
+
+-- Remove contexts containing a saved cookie or mapped value. These fields are
+-- server-written Tuple(source_service,session_id,anonymous_id,identifiers).
+ALTER TABLE analytics.identity_context_signals
+DELETE WHERE account_id = 'ACCOUNT'
+  AND (context_key.3 IN ('COOKIE1','COOKIE2') OR arrayExists(
+        kv -> kv.2 IN ('VALUE1','VALUE2'),
+        JSONExtractKeysAndValues(context_key.4,'String')));
 ```
+
+If no saved cookies/mapped values exist, omit their respective predicates rather than inventing
+placeholders. Mutation does not feed materialized views. After all raw and evidence mutations finish, rebuild all identity projections from canonical,
+already-scrubbed facts with migration 0018 while the writer stays stopped. This restores the
+contexts for remaining anonymous identities as well as removing erased values; deleting old
+context rows alone cannot reconstruct the scrubbed context. The migration also materializes
+the raw context key. It must run only after the raw mutations finish. HTTP's physical
+query connections detect completed index mutations or replacement by part/table identity and
+refresh their private snapshots. Deleting only identity_signals leaves cached/indexed links.
 
 All preceding `ALTER` statements are asynchronous by default. Watch them until no
 matching work remains and investigate any non-empty failure reason. In a controlled test
@@ -102,7 +132,7 @@ their remaining local identity (or the empty string when the cookie was erased).
 The table TTL automatically deletes fingerprint evidence after 180 days. Raw events still
 hold their source JSON, so run the following account-independent maintenance mutation on
 the same retention cadence. It removes only the fingerprint key and preserves other
-identifier kinds. The deployed ClickHouse 26.5.1 supports `mapFromArrays` and
+identifier kinds. The packaged ClickHouse 26.8.2.7 supports `mapFromArrays` and
 `toJSONString`; verify the expression on a sample before adopting a different version.
 
 ```sql
@@ -132,3 +162,11 @@ UPDATE identifiers = '{}'
 WHERE occurred_at < now() - INTERVAL 180 DAY
   AND JSONHas(identifiers, 'fingerprint');
 ```
+
+
+`events_raw.identity_context_key` is a materialized, lossless encoding of account, source
+service, session, anonymous ID and the original identifiers object. It contains identity data.
+Whole-row erasure removes it with the row. Any workflow that scrubs raw identity fields in
+place must recompute/materialize this column before reopening queries and rebuild the context
+index; deleting only the original map leaves another copy. Keep writers and replay fenced
+through that operation and the index replacement.

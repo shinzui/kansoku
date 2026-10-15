@@ -9,6 +9,7 @@ skips = [
     'Kansoku property metrics HTTP integration',
     'Kansoku.Query integration',
     'Kansoku.QueryPool',
+    'Kansoku.Identity.Cache native',
     'Kansoku.Metrics.Limits/native',
     'Kansoku.Writer.Batch/decodes a pgmq payload',
     'Kansoku.Writer.Batch/keeps a committed insert',
