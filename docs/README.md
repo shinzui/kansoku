@@ -34,6 +34,9 @@ file by hand.
 
 ## Operations and project records
 
+- [Architecture atlas](artifcats/kansoku-architecture.html) is a self-contained, light-theme
+  visual guide to the current system, from high-level data flow to contracts, storage,
+  identity resolution, metric queries, operations, and source modules.
 - [Identity data deletion and fingerprint retention](runbooks/identity-data-deletion.md) is the
   destructive-data runbook for identity erasure and fingerprint retention.
 - [Product vision](initial-spec.md) describes Kansoku's direction. It is not a list of shipped
