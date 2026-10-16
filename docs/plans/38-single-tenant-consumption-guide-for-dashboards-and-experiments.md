@@ -251,6 +251,5 @@ Required complete child artifacts: `docs/plans/31-metric-property-filters-and-du
 Hard dependencies: EP-31, EP-33, EP-34, EP-35, EP-36, EP-37, EP-39 and EP-40 Complete. This child owns the final release contract gate and stable SQL grants. Draft prose can be prepared earlier but the child cannot complete on interim semantics.
 
 Revision note (2026-10-15): reviewed against the current source and revised for first deployment.
-[ADR-11](../adr/0011-initial-release-analytics-contracts.md) records the proposed cross-plan
-contracts; implementation must supply the acceptance evidence before those contracts become
-accepted runtime guarantees.
+[ADR-11](../adr/0011-initial-release-analytics-contracts.md) records the accepted cross-plan
+contracts after the final implementation and acceptance evidence recorded above.

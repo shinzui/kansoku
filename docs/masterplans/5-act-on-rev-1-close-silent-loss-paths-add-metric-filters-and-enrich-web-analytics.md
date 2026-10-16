@@ -100,9 +100,9 @@ Relevant accepted decisions were read: ADRs [1](../adr/0001-sdk-grade-ingest-con
 [8](../adr/0008-rfc9457-problem-details-and-generated-client-media.md),
 [9](../adr/0009-bounded-complete-aggregate-responses.md) and
 [10](../adr/0010-owned-executable-acceptance-environments.md).
-[ADR-11](../adr/0011-initial-release-analytics-contracts.md) records the proposed first-release
-changes without claiming the current runtime already implements them. Child implementations
-update affected accepted ADRs and promote the proposal only with evidence. SDK transport context
+[ADR-11](../adr/0011-initial-release-analytics-contracts.md) records the accepted first-release
+contracts after the final implementation and acceptance evidence. Child implementations
+update affected accepted ADRs; ADRs 12–18 retain the detailed feature and integration boundaries. SDK transport context
 is `mori://shinzui/kansoku-ts/okf/adrs/concepts/ADR-2`.
 
 ## Exec-Plan Registry
