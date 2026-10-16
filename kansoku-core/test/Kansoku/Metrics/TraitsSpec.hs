@@ -44,6 +44,9 @@ spec = do
       validateEvent (base & #properties .~ KM.singleton "plan" (Aeson.String "")) `shouldSatisfy` isRight
       validateEvent (base & #schemaVersion ?~ 3) `shouldSatisfy` isLeft
       validateEvent (base & #eventName .~ EventName "identify_once" & #schemaVersion ?~ 2) `shouldSatisfy` isLeft
+      case validateEvent (base & #properties .~ KM.singleton "company_size" (Aeson.Number 1.25)) of
+        Left errors -> Text.intercalate "; " (map renderValidationError errors) `shouldSatisfy` Text.isInfixOf "finite integer >= 0"
+        Right _ -> expectationFailure "fractional company size was accepted"
     it "persists first-acceptance eligibility in queue v2 and never promotes legacy or v1 envelopes" $ do
       let event = profile "queue" "profile" "identify" 2 "user" "2026-07-01 00:00:00 UTC" [("plan", Aeson.String "pro")]
           queued = enrichedQueuedEvent emptyRequestContext event

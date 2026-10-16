@@ -183,6 +183,12 @@ def privacy(name, token, sentinel):
 
 def main():
     print(f'Private acceptance evidence: {ROOT}', flush=True)
+    sdk_path = os.environ.get('KANSOKU_SDK_PROJECT')
+    if os.environ.get('KANSOKU_REQUIRE_SDK') == '1' and not sdk_path:
+        raise RuntimeError('Required SDK acceptance needs KANSOKU_SDK_PROJECT')
+    sdk = Path(sdk_path).resolve() if sdk_path else None
+    if sdk and not (sdk / 'test/live/traits.test.ts').is_file():
+        raise RuntimeError('Configured SDK lacks required governed trait acceptance')
     env = clean_environment()
     builds = json.loads(run(['nix', 'build', '.#kansoku-server', '.#kansoku-client', '--no-link', '--json'], env, 'nix-build', timeout=1200))
     server_output = next(item['outputs']['out'] for item in builds if 'kansoku-server' in item['drvPath'])
@@ -268,6 +274,17 @@ def main():
                             verify_activity(base, credentials['enrichment_write'], credentials['enrichment_service'])
                             verify_funnels(base, credentials['enrichment_write'], credentials['enrichment_service'])
                             verify_traits(base, credentials['enrichment_write'], credentials['enrichment_service'])
+                            if sdk:
+                                # mori://shinzui/kansoku-ts (test/live/traits.test.ts; artifact-level URI pending).
+                                sdk_env = dict(settings, KANSOKU_TEST_NO_DOM='1', KANSOKU_REQUIRE_LIVE='1',
+                                               KANSOKU_LIVE_BASE_URL=base,
+                                               KANSOKU_LIVE_WRITE_KEY=credentials['enrichment_write'],
+                                               KANSOKU_LIVE_SERVICE_TOKEN=credentials['enrichment_service'])
+                                output = run(['bun', 'test', 'test/live/traits.test.ts'], sdk_env,
+                                             'sdk-traits-' + name, timeout=90, cwd=sdk)
+                                evidence = (ROOT / ('sdk-traits-' + name + '.log')).read_text()
+                                if not re.search(r'\b1 pass\b', evidence) or not re.search(r'\b0 fail\b', evidence) or re.search(r'\b[1-9]\d* skip\b', evidence):
+                                    raise RuntimeError('SDK trait acceptance needs one passing, non-skipped live test')
                             for path in ('/health', '/ready', '/health/live', '/health/ready'):
                                 urllib.request.urlopen(base + path, timeout=3).close()
                             population_filter = urllib.parse.urlencode({'filter': json.dumps(dict(dimension='event_name', op='neq', value=sentinel))})

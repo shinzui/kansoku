@@ -38,6 +38,7 @@ propertyPatternText = \case
   SqlNamePattern -> "[a-z0-9_.:-]{1,128}"
   NonEmptyStringPattern -> "nonempty string"
   NonNegativeNumberPattern -> "number >= 0"
+  NonNegativeIntegerPattern -> "finite integer >= 0"
 
 data PropertySpec = PropertySpec
   { name :: !Text,

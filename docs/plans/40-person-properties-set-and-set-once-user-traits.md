@@ -113,6 +113,13 @@ contracts, strict 16-ADR validation, three telemetry modes and four lifecycle ca
 ordinary public workflow, pinned browser/helper consumer and expanded performance acceptance
 remain pending; M3 and whole-child completion stay open.
 
+The first packaged run reached every public trait metric successfully, then exposed a missing
+NonNegativeIntegerPattern error-description case: rejected fractional values raised HTTP 500
+when the response rendered the otherwise-correct validation error. Add the exhaustive case
+and force rendering in the schema regression test. The acceptance harness can now require a
+configured pinned SDK checkout and audits a real, non-skipped helper/stitching test in every
+telemetry mode; it fails early when required SDK configuration is absent.
+
 ## Context and Orientation
 
 
