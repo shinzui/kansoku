@@ -30,7 +30,7 @@ mkdir -p .dev/acceptance/dependencies
 git clone --depth 1 --branch v5.1.0 https://github.com/growthbook/growthbook.git \
   .dev/acceptance/dependencies/growthbook
 export KANSOKU_GROWTHBOOK_SOURCE="$PWD/.dev/acceptance/dependencies/growthbook"
-nix shell --inputs-from . nixpkgs#nodejs_24 -c sh -c '
+nix shell --inputs-from . nixpkgs#nodejs_24 nixpkgs#pnpm -c sh -c '
   cd "$KANSOKU_GROWTHBOOK_SOURCE" &&
   CI=true pnpm dlx pnpm@10.33.4 install --frozen-lockfile \
     --filter growthbook-app --filter "back-end..." --ignore-scripts &&
@@ -62,3 +62,17 @@ consumer paths. The full gate executes packaged server/admin binaries; the focus
 uses source-built executables. Required SDK live, protocol and Chromium cases fail on missing
 configuration, skipped tests, zero cases or a feature mismatch. See
 [the consumption guide](consume-clickhouse.md) for the supported data contracts and boundaries.
+
+The separate ordinary adoption/reuse/recovery proof uses clean local clones, the shipped
+`just up/migrate/ch-migrate/issue-key/run` commands and the previously accepted consumer at
+`mori://shinzui/kansoku-ts/packages/kansoku-js`, commit
+`0a4eea715b5f34fad8593e3dfd123ce407976c95`. The SDK repository must contain that commit in its
+history. Its own Nix shell supplies Bun for installation, build and production-path capture.
+No database seed substitutes for migration, acceptance or queue recovery:
+
+```bash
+python3 scripts/first_use_acceptance.py
+```
+
+Use the repository root shown by `mori registry show shinzui/kansoku-ts --full` for
+`KANSOKU_SDK_PROJECT`, rather than the nested JavaScript package directory.

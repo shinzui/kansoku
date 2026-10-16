@@ -107,7 +107,7 @@ def main():
     today=datetime.now(timezone.utc).date()
     query='/metrics/events?'+urllib.parse.urlencode(dict(**{'from':str(today),'to':str(today+timedelta(days=1))},filter=json.dumps(dict(dimension='source_service',op='eq',value='ordinary-first-use'))))
     def count():return sum(point['value'] for point in request(query)['points'])
-    run(['bun','install','--frozen-lockfile'],cwd=sdk)
+    run(['nix','develop','-c','bun','install','--frozen-lockfile'],cwd=sdk)
     run(['nix','develop','-c','just','build'],cwd=sdk)
     runner=root/'previous-sdk-producer.ts'
     runner.write_text('''import assert from "node:assert/strict";
@@ -119,7 +119,7 @@ client.track("page_view",{url:"https://ordinary.example.test/first-use"});await 
 ''')
     def produce():
         settings=dict(env,KANSOKU_PREVIOUS_DIST=str(sdk/'packages/kansoku-js/dist/index.js'),KANSOKU_FIRST_URL=base,KANSOKU_FIRST_KEY=keys[0])
-        return json.loads(run(['bun',str(runner)],env=settings,cwd=root).strip().splitlines()[-1])
+        return json.loads(run(['nix','develop','-c','bun',str(runner)],env=settings,cwd=sdk).strip().splitlines()[-1])
     with running(['just','up'],'first-stack') as stack:
         wait(databases_ready,'fresh dependency startup',stack)
         actual=run(['psql','-Atc','SHOW data_directory'],env=env).strip()

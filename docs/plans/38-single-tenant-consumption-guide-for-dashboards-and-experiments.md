@@ -83,7 +83,7 @@ The strengthened fixture with incompatible historical JSON also passes in
 at block boundaries, while HTTP retains its strict complete-or-error point cap. Required SDK
 source evidence passes nine live cases, three real beacon/rate-limit protocol cases and eight
 multi-origin Chromium identity/bot cases. Final packaged acceptance, consumer pin, ordinary
-fresh-clone reuse/recovery and refreshed performance/capacity evidence remain pending.
+fresh-clone reuse/recovery and final packaged acceptance remain pending.
 
 The final mixed queue-v2 outage proof passes in `.dev/acceptance/outage-ni1sty8k/report.json`:
 120000 events at 200/s for 600.004 seconds, writer restart while storage remains blocked,
@@ -209,3 +209,16 @@ Revision note (2026-10-15): reviewed against the current source and revised for 
 [ADR-11](../adr/0011-initial-release-analytics-contracts.md) records the proposed cross-plan
 contracts; implementation must supply the acceptance evidence before those contracts become
 accepted runtime guarantees.
+
+
+Final cost repeat (2026-10-16): `.dev/acceptance/identity-bench-wm32m0ts/report.json`
+passes all 28 five-run-median comparisons over 3M recent +7M older facts, seven production
+query families and day/month windows. Ratios are 1.0355–1.3119, below 2x throughout;
+maximum resolved median is 469 ms, cold native total 946 ms, warm peak 451288707 bytes and
+cold peak 448542781 bytes, below the unchanged 536870912-byte budget. No task-owned build/test
+load overlaps this accepted run. Full source checks pass 364 core, 19 client, four probes,
+18 strict ADRs, seven telemetry cases in each mode and four lifecycle checks. SDK source
+checks pass 85 unit and two explicit SSR cases plus types/lint/format/contracts/packages/sizes.
+The first ordinary clean-clone proof passes all four cases in
+`.dev/acceptance/first-use-3vv9rsez/summary.json`; the final repeat uses the SDK's declared Nix
+shell for every Bun invocation. Final required packaged acceptance remains in progress.
