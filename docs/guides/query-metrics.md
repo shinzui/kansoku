@@ -65,7 +65,7 @@ Standard event/user/revenue routes accept `timeGrain` (`hour`, `day`, `week`, `m
 `groupBy` and repeatable `filter`. The default grain is day; ordered signup conversion rejects timeGrain and returns one
 ratio over the whole interval. `groupBy` contains one or two distinct comma-separated names:
 `event_name`, `source`, `source_service`, `host`, `route`, enrichment/acquisition dimensions
-from [web enrichment](web-enrichment.md), or `prop:<name>`.
+from [web enrichment](web-enrichment.md), `prop:<name>`, or current `user:<name>` traits.
 
 Property dimensions require a compatible scalar declaration across the selected registered
 events and their schema versions. Missing declarations in older versions are missing values;
@@ -107,8 +107,8 @@ Invalid JSON/filter grammar or incompatible filter types return `invalid_filter`
 | users | `groupBy`, `timeGrain`, repeatable `filter`, `window` (calendar/rolling7/rolling30), `includeBots` |
 | stickiness, lifecycle | `groupBy`, `timeGrain` (day only), repeatable `filter`, `includeBots` |
 | retention | `groupBy`, `timeGrain` (day only), repeatable `filter`, `days`, `mode` (on/on_or_after), `cohort` (window/lifetime), `includeBots` |
-| experiments | `experiment`, `timeGrain` (day/week/month), `measure` (exposures/diagnostics) |
-| experiments/conversion | required `experiment`, `event` |
+| experiments | `experiment`, `timeGrain` (day/week/month), `measure` (exposures/diagnostics), user-trait-only `groupBy` and repeatable `filter` |
+| experiments/conversion | required `experiment`, `event`; user-trait-only `groupBy` and repeatable `filter` |
 | experiments/funnel | required `experiment`, `steps`; optional `window`, `mode`, `measure`, repeatable `exclude`, `groupBy`, repeatable `filter` |
 
 Session/cohort/funnel filters follow their dedicated population contracts; strict funnels reject
@@ -386,7 +386,7 @@ Both `/metrics/funnel` and `/metrics/experiments/funnel` accept `mode=sequential
 JSON `filter`. Defaults are sequential/count/no exclusions. Timelines use canonical users,
 immutable event deduplication and `(occurred_at milliseconds,event_id)` ordering. One event
 cannot satisfy two repeated steps. Sequential skips intervening events; strict requires
-adjacent events, including automatic events, without an implicit repeated-event rule. Strict
+adjacent events, including automatic events, without an implicit repeated-event rule. Strict current-user filters select participants while retaining their complete timelines. Strict
 event filters return 400 because removing rows could hide interruptions.
 
 Every matching start is considered. Select greatest reach, earliest completion, earliest
@@ -428,3 +428,57 @@ A user seeing A then B has exposed_users=1, multiple_exposure=1, assigned A=1, B
 Existing experiment conversion still counts that user in both observed variants. First observed
 exposure is not an authoritative randomization log. High contamination invalidates a naive
 sample-ratio interpretation; these diagnostics do not calculate significance or select winners.
+
+
+## Current person traits
+
+Emit `identify` with explicit `schemaVersion: 2` to set current traits, or `identify_once` with
+explicit version 1 to initialize them. Both require a nonempty top-level userId. Supported
+optional strings are plan, signup_source, initial_plan, country and role; company_size is a
+finite nonnegative integer. Null is rejected, not treated as deletion. Omitted keys are
+unchanged; unknown extra properties do not become traits. Identify v1 remains valid identity
+telemetry without governed trait effects. The public catalog is version 4 and publishes the
+numeric minimum/multipleOf constraints.
+
+For each account/user/key, the latest set wins, ordered by stored millisecond occurredAt,
+first accepted receivedAt and eventId. If any set exists, it overrides set-once; otherwise the
+earliest set-once wins. Replay is idempotent. Late events can revise order. Current traits
+intentionally reclassify historical metrics; these are not event-time trait snapshots.
+
+Use repeatable typed filters such as `{"dimension":"user:company_size","op":"gt","value":2}`
+and `groupBy=user:plan,user:company_size`. Strings compare as decoded text and numeric values
+use Float64 comparison and ordering. Missing traits are null, including unresolved anonymous
+subjects. An anonymous ID with the same text as a user's ID does not inherit that user's
+traits. Pre-login events that conservative identity resolution stitches to the user do inherit
+current traits. Repeated references share one bounded pivot per resolved source.
+
+| Metric population | Current-trait ownership |
+| --- | --- |
+| Events, page views, users, revenue, feature adoption | Each event's resolved user; trait selection forces resolved reads when needed. |
+| Signup conversion | Same starter/ordered-completer population and first-start ownership. |
+| Funnels, including experiment funnels | Participant's current traits; strict user filters retain all interruptions. |
+| Rolling users, stickiness, retention, lifecycle | Identical current-trait population across the full lookback. |
+| Sessions and acquisition | First resolved user of the entire retained session, before trait/date selection; all session events remain included. |
+| Experiment exposures/conversion/diagnostics | Current user selection only; selected exposures use exact resolved users, while unselected default exposures retain the raw-identity sketch. |
+| Organizations/custom | Unimplemented stubs. |
+
+```json
+{
+  "eventId": "profile-update-1",
+  "eventName": "identify",
+  "schemaVersion": 2,
+  "source": "service",
+  "userId": "user-42",
+  "occurredAt": "2026-07-01T12:00:00Z",
+  "receivedAt": "2026-07-01T12:00:00Z",
+  "properties": {"plan": "pro", "company_size": 10},
+  "context": {}
+}
+```
+
+Trait reports accepted with public write keys are analytics observations. Do not use role,
+plan or other reported business attributes for authorization. Use service-owned producers for
+trusted business reporting. Current-trait session selection uses complete retained identity
+scope and may cost more than the materialized session fast path; the shared query budgets and
+complete-result cap still apply. Fenced deletion/rebuild primitives reserve erased source IDs;
+administrative queue/archive/acceptance cleanup is coordinated by the maintenance executable.

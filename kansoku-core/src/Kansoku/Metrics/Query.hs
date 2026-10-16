@@ -96,6 +96,7 @@ import Kansoku.Metrics.Query.Property
     resolveNumericProperty,
   )
 import Kansoku.Metrics.Query.Session (materializedSessionProjection, sessionProjection)
+import Kansoku.Metrics.Query.Traits qualified as Traits
 import Kansoku.Metrics.Query.Validate (QueryLimitError (..), SqlName, mkSqlName, renderSqlName, validateDateRange, validateObservationCutoff, validateOffsets, validateSteps)
 import Kansoku.Metrics.Registry (BuiltinMetric (..), activeUsers)
 import Kansoku.Prelude
@@ -153,7 +154,7 @@ data QueryExecutionError
   deriving stock (Generic, Eq, Show)
 
 -- No caller-supplied SQL may select a result ordering.
-data ResultOrder = FunnelDimensionsOrder | DiagnosticOrder | BucketDimensions | BucketDimensionsMeasure | RetentionDimensionsOrder | BucketGroup | ExperimentExposureOrder | ExperimentConversionOrder | RetentionOrder | FunnelOrder | ExperimentFunnelOrder
+data ResultOrder = ExperimentUserOrder | FunnelDimensionsOrder | DiagnosticOrder | BucketDimensions | BucketDimensionsMeasure | RetentionDimensionsOrder | BucketGroup | ExperimentExposureOrder | ExperimentConversionOrder | RetentionOrder | FunnelOrder | ExperimentFunnelOrder
   deriving stock (Generic)
 
 buildSQL :: EventRegistry -> BuiltinMetric -> QueryRequest -> Either QueryCompileError Text
@@ -202,14 +203,15 @@ compileAcquisition registry measure req = do
   let scope = Filters.filteredEventScope [] (req ^. #filters)
   grouping <- requestedGroupingWith (resolveSessionDimension registry scope) (req ^. #groupBy) ["channel"]
   filters <- first QueryCompileFilterError (Filters.compileFiltersWith "metric_filter" (resolveSessionDimension registry scope) (req ^. #filters))
-  let resolved = measure == AcquisitionUsers
-      source = if resolved then resolvedSource (retainedScope req) else "analytics.events_canonical"
-      aggregate = if resolved then "uniqExactIf(primary_subject,primary_subject!='')" else "count()"
+  let resolved = measure == AcquisitionUsers || hasUserTraits req
+      source = if resolved then rawResolvedSource (retainedScope req) else "analytics.events_canonical"
+      aggregate = if measure == AcquisitionUsers then "uniqExactIf(primary_subject,primary_subject!='')" else "count()"
       predicates = [timestampPredicate req] <> ["NOT is_bot" | not (req ^. #includeBots)] <> Filters.predicates filters
+      sessions = if resolved || any isPropertyDimension grouping || any (Text.isPrefixOf "prop:" . WireFilter.dimension) (req ^. #filters) then sessionProjection source resolved else materializedSessionProjection
       sql =
         Text.unlines
           [ "SELECT " <> bucketExpr (req ^. #timeGrain) <> " AS bucket," <> groupProjection grouping <> ",toFloat64(" <> aggregate <> ") AS value",
-            "FROM (" <> (if resolved || any isPropertyDimension grouping || any (Text.isPrefixOf "prop:" . WireFilter.dimension) (req ^. #filters) then sessionProjection source resolved else materializedSessionProjection) <> ")",
+            "FROM (" <> Traits.sessionSource (queryTraits req) sessions <> ")",
             "WHERE " <> accountPredicate <> " AND " <> Text.intercalate " AND " predicates,
             "GROUP BY bucket,sort_group_1,sort_group_2"
           ]
@@ -229,7 +231,7 @@ runSessionMetric pool measure req =
           pool
           "sessions"
           (compiled ^. #groupLabels)
-          (accountParameter req <> compiled ^. #filterParameters)
+          (accountParameter (if hasUserTraits req then retainedScope req else req) <> compiled ^. #filterParameters)
           (boundedSQL BucketDimensions (compiled ^. #sql))
 
 runRetention :: (IOE :> es) => QueryPool -> QueryRequest -> [Int] -> Eff es (Either QueryExecutionError MetricResult)
@@ -319,54 +321,118 @@ exclusionLimits steps excluded = do
   unless (length (List.nub excluded) <= 20) (Left (QueryLimitError "too_many_funnel_exclusions" "at most 20 distinct exclusions are supported"))
   unless (null [name | name <- excluded, name `elem` steps]) (Left (QueryLimitError "invalid_funnel_exclusion" "a step cannot also be excluded"))
 
-runExperimentDiagnostics :: (IOE :> es) => QueryPool -> QueryRequest -> Maybe SqlName -> Eff es (Either QueryExecutionError MetricResult)
-runExperimentDiagnostics pool req experiment =
-  checked req (unless (req ^. #timeGrain /= Just Hour) (Left (QueryLimitError "invalid_experiment_time_grain" "hour is unsupported for experiments"))) $
-    runSQL
-      pool
-      "experiment_diagnostics"
-      ["experiment", "measure", "variant"]
-      (accountParameter req <> maybe [] (pure . experimentParameter) experiment)
-      (boundedSQL DiagnosticOrder (experimentDiagnosticsSQL req experiment))
+-- Experiment controls deliberately accept only current user dimensions. Event
+-- filtering would change exposure/assignment denominators and is not implied.
+experimentSelection :: QueryRequest -> Either QueryCompileError ([GroupDimension], Filters.CompiledFilters)
+experimentSelection req = do
+  unless
+    (all (Text.isPrefixOf "user:") (fromMaybe [] (req ^. #groupBy) <> map WireFilter.dimension (req ^. #filters)))
+    (Left (QueryCompileFilterError "experiment selection supports only governed user: dimensions"))
+  grouping <- requestedGrouping defaultRegistry [] (req ^. #groupBy) []
+  predicates <- first QueryCompileFilterError (Filters.compileMetricFilters defaultRegistry [] (req ^. #filters))
+  pure (grouping, predicates)
 
-experimentDiagnosticsSQL :: QueryRequest -> Maybe SqlName -> Text
-experimentDiagnosticsSQL req experiment =
+hasExperimentSelection :: QueryRequest -> Bool
+hasExperimentSelection req = isJust (req ^. #groupBy) || not (null (req ^. #filters))
+
+runSelectedExperiment :: (IOE :> es) => QueryPool -> Text -> QueryRequest -> [QueryParameter] -> Either QueryCompileError CompiledMetric -> Eff es (Either QueryExecutionError MetricResult)
+runSelectedExperiment pool name req parameters compiled =
+  case first QueryLimitFailure (validateDateRange (req ^. #from) (req ^. #to) >> unless (req ^. #timeGrain /= Just Hour) (Left (QueryLimitError "invalid_experiment_time_grain" "hour is unsupported for experiments")))
+    >> first QueryCompileFailure compiled of
+    Left failure -> pure (Left failure)
+    Right result ->
+      liftIO $
+        runSQL
+          pool
+          name
+          (result ^. #groupLabels)
+          (accountParameter req <> parameters <> result ^. #filterParameters)
+          (boundedSQL ExperimentUserOrder (result ^. #sql))
+
+runExperimentDiagnostics :: (IOE :> es) => QueryPool -> QueryRequest -> Maybe SqlName -> Eff es (Either QueryExecutionError MetricResult)
+runExperimentDiagnostics pool req experiment = runSelectedExperiment pool "experiment_diagnostics" req (maybe [] (pure . experimentParameter) experiment) $ do
+  (grouping, predicates) <- experimentSelection req
+  pure
+    CompiledMetric
+      { sql = experimentDiagnosticsSQL req experiment grouping (Filters.predicates predicates),
+        groupLabels = map dimensionLabel grouping <> ["experiment", "measure", "variant"],
+        filterParameters = Filters.parameters predicates,
+        ordering = ExperimentUserOrder
+      }
+
+experimentDiagnosticsSQL :: QueryRequest -> Maybe SqlName -> [GroupDimension] -> [Text] -> Text
+experimentDiagnosticsSQL req experiment grouping predicates =
   let bucket = maybe "''" (bucketExpr . Just) (req ^. #timeGrain)
       calendar = if isNothing (req ^. #timeGrain) then "SELECT '' AS bucket" else sessionCalendar req
       experiments = case experiment of
         Just _ -> "SELECT CAST({experiment:String},'Nullable(String)') AS experiment"
         Nothing -> "SELECT DISTINCT experiment FROM assignments UNION ALL SELECT CAST(NULL,'Nullable(String)') AS experiment WHERE NOT EXISTS(SELECT 1 FROM assignments)"
+      fields = "group_key,sort_group_1,sort_group_2"
+      qualified prefix = Text.intercalate "," [prefix <> "." <> field <> " AS " <> field | field <- ["group_key", "sort_group_1", "sort_group_2"]]
+      filled =
+        if not (null grouping)
+          then "SELECT * FROM totals"
+          else
+            "SELECT calendar.bucket AS bucket,experiments.experiment AS experiment,'[]' AS group_key,CAST(NULL,'Nullable(String)') AS sort_group_1,CAST(NULL,'Nullable(String)') AS sort_group_2,ifNull(totals.exposed_users,0.) AS exposed_users,ifNull(totals.multiple_exposure,0.) AS multiple_exposure FROM (" <> calendar <> ") AS calendar CROSS JOIN (" <> experiments <> ") AS experiments LEFT JOIN totals ON calendar.bucket=totals.bucket AND isNotDistinctFrom(experiments.experiment,totals.experiment)"
    in Text.unlines
-        [ "WITH exposures AS (SELECT canonical_user,event_id,occurred_at," <> bucket <> " AS bucket,CAST(toString(getSubcolumn(properties_json,'experiment')),'Nullable(String)') AS experiment,CAST(toString(getSubcolumn(properties_json,'variant')),'String') AS variant FROM " <> resolvedSource req <> " WHERE " <> accountPredicate <> " AND canonical_user!='' AND " <> timestampPredicate req <> " AND " <> validExposurePredicate <> experimentFilterClause experiment <> "),",
-          "assignments AS (SELECT bucket,experiment,canonical_user,argMin(variant,tuple(occurred_at,event_id)) AS assigned,groupUniqArray(variant) AS variants FROM exposures GROUP BY bucket,experiment,canonical_user),",
-          "totals AS (SELECT bucket,experiment,toFloat64(count()) AS exposed_users,toFloat64(countIf(length(variants)>1)) AS multiple_exposure FROM assignments GROUP BY bucket,experiment),",
-          "observed_variants AS (SELECT DISTINCT bucket,experiment,arrayJoin(variants) AS variant FROM assignments),",
-          "assigned_counts AS (SELECT bucket,experiment,assigned AS variant,toFloat64(count()) AS assigned_users FROM assignments GROUP BY bucket,experiment,assigned),",
-          "variant_totals AS (SELECT observed.bucket AS bucket,observed.experiment AS experiment,observed.variant AS variant,ifNull(assigned.assigned_users,0.) AS assigned_users,totals.exposed_users AS exposed_users FROM observed_variants AS observed LEFT JOIN assigned_counts AS assigned ON observed.bucket=assigned.bucket AND observed.experiment=assigned.experiment AND observed.variant=assigned.variant INNER JOIN totals ON observed.bucket=totals.bucket AND observed.experiment=totals.experiment),",
-          "filled AS (SELECT calendar.bucket AS bucket,experiments.experiment AS experiment,ifNull(totals.exposed_users,0.) AS exposed_users,ifNull(totals.multiple_exposure,0.) AS multiple_exposure FROM (" <> calendar <> ") AS calendar CROSS JOIN (" <> experiments <> ") AS experiments LEFT JOIN totals ON calendar.bucket=totals.bucket AND isNotDistinctFrom(experiments.experiment,totals.experiment)),",
-          "answers AS (SELECT bucket,experiment,CAST(NULL,'Nullable(String)') AS variant,m.1 AS measure,m.2 AS value FROM filled ARRAY JOIN [('exposed_users',exposed_users),('multiple_exposure',multiple_exposure)] AS m UNION ALL SELECT bucket,experiment,CAST(variant,'Nullable(String)') AS variant,m.1 AS measure,m.2 AS value FROM variant_totals ARRAY JOIN [('assigned_users',assigned_users),('variant_share',if(exposed_users=0,0.,assigned_users/exposed_users))] AS m)",
-          "SELECT bucket,toJSONString([experiment,measure,variant]) AS group_key,experiment AS sort_experiment,measure AS sort_measure,variant AS sort_variant,value FROM answers"
+        [ "WITH exposures AS (SELECT canonical_user,event_id,occurred_at," <> bucket <> " AS bucket," <> groupProjection grouping <> ",CAST(toString(getSubcolumn(properties_json,'experiment')),'Nullable(String)') AS experiment,CAST(toString(getSubcolumn(properties_json,'variant')),'String') AS variant FROM " <> resolvedSource req <> " WHERE " <> accountPredicate <> " AND canonical_user!='' AND " <> timestampPredicate req <> " AND " <> validExposurePredicate <> experimentFilterClause experiment <> propertyFilterClause predicates <> "),",
+          "assignments AS (SELECT bucket,experiment," <> fields <> ",canonical_user,argMin(variant,tuple(occurred_at,event_id)) AS assigned,groupUniqArray(variant) AS variants FROM exposures GROUP BY bucket,experiment," <> fields <> ",canonical_user),",
+          "totals AS (SELECT bucket,experiment," <> fields <> ",toFloat64(count()) AS exposed_users,toFloat64(countIf(length(variants)>1)) AS multiple_exposure FROM assignments GROUP BY bucket,experiment," <> fields <> "),",
+          "observed_variants AS (SELECT DISTINCT bucket,experiment," <> fields <> ",arrayJoin(variants) AS variant FROM assignments),",
+          "assigned_counts AS (SELECT bucket,experiment," <> fields <> ",assigned AS variant,toFloat64(count()) AS assigned_users FROM assignments GROUP BY bucket,experiment," <> fields <> ",assigned),",
+          "variant_totals AS (SELECT observed.bucket AS bucket,observed.experiment AS experiment," <> qualified "observed" <> ",observed.variant AS variant,ifNull(assigned.assigned_users,0.) AS assigned_users,totals.exposed_users AS exposed_users FROM observed_variants AS observed LEFT JOIN assigned_counts AS assigned ON observed.bucket=assigned.bucket AND observed.experiment=assigned.experiment AND observed.group_key=assigned.group_key AND observed.variant=assigned.variant INNER JOIN totals ON observed.bucket=totals.bucket AND observed.experiment=totals.experiment AND observed.group_key=totals.group_key),",
+          "filled AS (" <> filled <> "),",
+          "answers AS (SELECT bucket,experiment," <> fields <> ",CAST(NULL,'Nullable(String)') AS variant,m.1 AS measure,m.2 AS value FROM filled ARRAY JOIN [('exposed_users',exposed_users),('multiple_exposure',multiple_exposure)] AS m UNION ALL SELECT bucket,experiment," <> fields <> ",CAST(variant,'Nullable(String)') AS variant,m.1 AS measure,m.2 AS value FROM variant_totals ARRAY JOIN [('assigned_users',assigned_users),('variant_share',if(exposed_users=0,0.,assigned_users/exposed_users))] AS m)",
+          "SELECT bucket," <> extendGroups ["experiment", "measure", "variant"] <> " AS group_key,sort_group_1,sort_group_2,experiment AS sort_experiment,measure AS sort_measure,variant AS sort_variant,value FROM answers"
         ]
 
+compileTraitExposures :: QueryRequest -> Maybe SqlName -> Either QueryCompileError CompiledMetric
+compileTraitExposures req experiment = do
+  (grouping, predicates) <- experimentSelection req
+  let bucket = maybe "''" (bucketExpr . Just) (req ^. #timeGrain)
+      sql =
+        Text.unlines
+          [ "SELECT bucket," <> extendGroups ["experiment", "variant"] <> " AS group_key,sort_group_1,sort_group_2,experiment AS sort_experiment,variant AS sort_variant,'' AS sort_measure,toFloat64(uniqExact(canonical_user)) AS value",
+            "FROM (SELECT canonical_user," <> bucket <> " AS bucket," <> groupProjection grouping <> ",CAST(toString(getSubcolumn(properties_json,'experiment')),'String') AS experiment,CAST(toString(getSubcolumn(properties_json,'variant')),'String') AS variant FROM " <> resolvedSource req <> " WHERE " <> accountPredicate <> " AND canonical_user!='' AND " <> timestampPredicate req <> " AND " <> validExposurePredicate <> experimentFilterClause experiment <> propertyFilterClause (Filters.predicates predicates) <> ") GROUP BY bucket,group_key,sort_group_1,sort_group_2,experiment,variant"
+          ]
+  pure CompiledMetric {sql, groupLabels = map dimensionLabel grouping <> ["experiment", "variant"], filterParameters = Filters.parameters predicates, ordering = ExperimentUserOrder}
+
+compileTraitExperimentConversion :: QueryRequest -> Either QueryCompileError CompiledMetric
+compileTraitExperimentConversion req = do
+  (grouping, predicates) <- experimentSelection req
+  let sql =
+        Text.unlines
+          [ "WITH base AS (SELECT * FROM " <> resolvedSource req <> " WHERE " <> accountPredicate <> " AND canonical_user!='' AND " <> timestampPredicate req <> propertyFilterClause (Filters.predicates predicates) <> "),",
+            "exposures AS (SELECT canonical_user,CAST(toString(getSubcolumn(properties_json,'variant')),'String') AS variant,min(occurred_at) AS first_exposure," <> groupProjection grouping <> " FROM base WHERE " <> validExposurePredicate <> " AND CAST(toString(getSubcolumn(properties_json,'experiment')),'String')={experiment:String} GROUP BY canonical_user,variant,sort_group_1,sort_group_2),",
+            "conversions AS (SELECT canonical_user,max(occurred_at) AS last_conversion FROM base WHERE event_name={conversion_event:String} GROUP BY canonical_user),",
+            "totals AS (SELECT e.variant AS variant,e.group_key AS group_key,e.sort_group_1 AS sort_group_1,e.sort_group_2 AS sort_group_2,toFloat64(uniqExact(e.canonical_user)) AS exposed,toFloat64(uniqExactIf(e.canonical_user,c.last_conversion>=e.first_exposure)) AS converted FROM exposures AS e LEFT JOIN conversions AS c ON e.canonical_user=c.canonical_user GROUP BY e.variant,e.group_key,e.sort_group_1,e.sort_group_2)",
+            "SELECT '' AS bucket," <> extendGroups ["m.1", "variant", "{experiment:String}"] <> " AS group_key,sort_group_1,sort_group_2,{experiment:String} AS sort_experiment,variant AS sort_variant,m.1 AS sort_measure,m.2 AS value FROM totals ARRAY JOIN [('exposed',exposed),('converted',converted),('conversion_rate',if(exposed=0,0.,converted/exposed))] AS m"
+          ]
+  pure CompiledMetric {sql, groupLabels = map dimensionLabel grouping <> ["measure", "variant", "experiment"], filterParameters = Filters.parameters predicates, ordering = ExperimentUserOrder}
+
 runExperimentExposures :: (IOE :> es) => QueryPool -> QueryRequest -> Maybe SqlName -> Eff es (Either QueryExecutionError MetricResult)
-runExperimentExposures pool req experiment =
-  checked req (Right ()) $
-    runSQLWith
-      pool
-      "experiment_exposures"
-      experimentExposuresAggPoint
-      (accountParameter req <> maybe [] (pure . experimentParameter) experiment)
-      (buildExperimentExposuresSQL req experiment)
+runExperimentExposures pool req experiment
+  | hasExperimentSelection req = runSelectedExperiment pool "experiment_exposures" req (maybe [] (pure . experimentParameter) experiment) (compileTraitExposures req experiment)
+  | otherwise =
+      checked req (Right ()) $
+        runSQLWith
+          pool
+          "experiment_exposures"
+          experimentExposuresAggPoint
+          (accountParameter req <> maybe [] (pure . experimentParameter) experiment)
+          (buildExperimentExposuresSQL req experiment)
 
 runExperimentConversion :: (IOE :> es) => QueryPool -> QueryRequest -> SqlName -> SqlName -> Eff es (Either QueryExecutionError MetricResult)
-runExperimentConversion pool req experiment conversionEvent =
-  checked req (Right ()) $
-    runSQLWith
-      pool
-      "experiment_conversion"
-      (experimentConversionAggPoint experiment)
-      (accountParameter req <> [experimentParameter experiment, conversionEventParameter conversionEvent])
-      (buildExperimentConversionSQL req experiment conversionEvent)
+runExperimentConversion pool req experiment conversionEvent
+  | hasExperimentSelection req = runSelectedExperiment pool "experiment_conversion" req [experimentParameter experiment, conversionEventParameter conversionEvent] (compileTraitExperimentConversion req)
+  | otherwise =
+      checked req (Right ()) $
+        runSQLWith
+          pool
+          "experiment_conversion"
+          (experimentConversionAggPoint experiment)
+          (accountParameter req <> [experimentParameter experiment, conversionEventParameter conversionEvent])
+          (buildExperimentConversionSQL req experiment conversionEvent)
 
 runExperimentFunnel :: (IOE :> es) => QueryPool -> QueryRequest -> SqlName -> Int -> [SqlName] -> Eff es (Either QueryExecutionError MetricResult)
 runExperimentFunnel pool req experiment = runFunnelMetric defaultRegistry pool req (Just experiment) defaultFunnelOptions
@@ -399,6 +465,7 @@ boundedSQL order sql =
       sql,
       ")",
       "ORDER BY " <> case order of
+        ExperimentUserOrder -> "bucket, sort_experiment NULLS FIRST, sort_group_1 NULLS FIRST, sort_group_2 NULLS FIRST, sort_measure, sort_variant NULLS FIRST"
         FunnelDimensionsOrder -> "sort_variant NULLS FIRST, sort_group_1 NULLS FIRST, sort_group_2 NULLS FIRST, sort_step, sort_measure"
         DiagnosticOrder -> "bucket, sort_experiment NULLS FIRST, sort_measure, sort_variant NULLS FIRST"
         BucketDimensions -> "bucket, sort_group_1 NULLS FIRST, sort_group_2 NULLS FIRST"
@@ -563,8 +630,17 @@ buildSimpleSQL registry grouping predicates def req
 
 -- | The private relation bounds canonical candidate facts before expansion;
 -- evidence remains available across all retained history for this account.
+queryTraits :: QueryRequest -> [Text]
+queryTraits req = Traits.referencedTraits (fromMaybe [] (req ^. #groupBy) <> map WireFilter.dimension (req ^. #filters))
+
+hasUserTraits :: QueryRequest -> Bool
+hasUserTraits = not . null . queryTraits
+
 resolvedSource :: QueryRequest -> Text
-resolvedSource req =
+resolvedSource req = Traits.eventSource (queryTraits req) (rawResolvedSource req)
+
+rawResolvedSource :: QueryRequest -> Text
+rawResolvedSource req =
   "analytics.events_resolved_http(scope_all_accounts=0, scope_account={account_id:String}, scope_from=toDateTime64("
     <> sqlString (renderDay (req ^. #from) <> " 00:00:00")
     <> ",3,'UTC'), scope_to=toDateTime64("
@@ -620,7 +696,7 @@ simpleAggregateSQL aggregationSQL source grouping predicates def req =
   Text.unlines
     [ "SELECT " <> bucketExpr (effectiveGrain def req) <> " AS bucket, " <> groupProjection grouping <> ",",
       "       " <> aggregationSQL <> " AS value",
-      "FROM " <> source,
+      "FROM " <> (if hasUserTraits req && source == "analytics.events_canonical" then resolvedSource req else source),
       "WHERE " <> accountPredicate,
       "  AND " <> timestampPredicate req <> eventNameClause "event_name" (validatedEventNames def) <> propertyFilterClause predicates,
       "GROUP BY bucket,sort_group_1,sort_group_2"
@@ -647,9 +723,10 @@ compileSessions measure req = do
     (Left (QueryCompileInvalidGroupBy "arbitrary property grouping is unsupported on sessions"))
   grouping <- requestedGroupingWith (resolveSessionDimension defaultRegistry []) (req ^. #groupBy) []
   predicates <- first QueryCompileFilterError (Filters.compileFiltersWith "session_filter" (resolveSessionDimension defaultRegistry []) (req ^. #filters))
-  let selected =
+  let sessions = if hasUserTraits req then sessionProjection (rawResolvedSource (retainedScope req)) True else materializedSessionProjection
+      selected =
         "SELECT * FROM ("
-          <> materializedSessionProjection
+          <> Traits.sessionSource (queryTraits req) sessions
           <> ") WHERE "
           <> accountPredicate
           <> " AND "
@@ -818,7 +895,7 @@ funnelPrefix Just {} = "experiment_funnel_step"
 compileFunnel :: EventRegistry -> QueryRequest -> Maybe SqlName -> FunnelOptions -> Int -> [SqlName] -> Either QueryCompileError CompiledMetric
 compileFunnel registry req experiment options window steps = do
   unless (isNothing (req ^. #timeGrain)) (Left (QueryCompileFilterError "timeGrain is unsupported for funnels"))
-  when (options ^. #mode == FunnelStrict && not (null (req ^. #filters))) (Left (QueryCompileFilterError "strict funnels do not support event filters; interruptions must remain visible"))
+  when (options ^. #mode == FunnelStrict && any (not . Text.isPrefixOf "user:" . WireFilter.dimension) (req ^. #filters)) (Left (QueryCompileFilterError "strict funnels do not support event filters; interruptions must remain visible"))
   let firstScope = map (EventName . renderSqlName) (take 1 steps)
   grouping <- requestedGrouping registry firstScope (req ^. #groupBy) []
   filters <- first QueryCompileFilterError (Filters.compileMetricFilters registry (map (EventName . renderSqlName) steps) (req ^. #filters))
@@ -837,7 +914,7 @@ funnelAggregate req experiment options window steps grouping predicates =
       excludeArray = if null (options ^. #exclusions) then "CAST([], 'Array(String)')" else "[" <> Text.intercalate "," [parameterPlaceholder "funnel_exclude" i | i <- [1 .. length (options ^. #exclusions)]] <> "]"
       stepTuples = "[" <> Text.intercalate "," ["(" <> Text.pack (show i) <> "," <> parameterPlaceholder prefix i <> ")" | i <- [1 .. length steps]] <> "]"
       eligible = if null predicates then "1" else "(" <> Text.intercalate " AND " predicates <> ")"
-      selection = if options ^. #mode == FunnelStrict then "1" else "(has(steps,event_name) AND " <> eligible <> ") OR has(excluded,event_name)"
+      selection = if options ^. #mode == FunnelStrict then eligible else "(has(steps,event_name) AND " <> eligible <> ") OR has(excluded,event_name)"
       source = "SELECT *," <> groupProjection grouping <> " FROM " <> resolvedSource req <> " WHERE " <> accountPredicate <> " AND canonical_user!='' AND " <> timestampPredicate req
       exposure = "exposures AS (SELECT canonical_user,CAST(toString(getSubcolumn(properties_json,'variant')),'String') AS variant,min(occurred_at) AS first_exposure FROM base WHERE " <> validExposurePredicate <> " AND CAST(toString(getSubcolumn(properties_json,'experiment')),'String')={experiment:String} GROUP BY canonical_user,variant),"
       timelineSource = case experiment of

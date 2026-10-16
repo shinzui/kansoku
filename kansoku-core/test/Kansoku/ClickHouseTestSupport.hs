@@ -40,3 +40,6 @@ resetTable :: Connection -> IO ()
 resetTable conn = do
   command conn "TRUNCATE TABLE analytics.events_raw"
   command conn "TRUNCATE TABLE analytics.sessions"
+  command conn "TRUNCATE TABLE analytics.user_properties"
+  command conn "TRUNCATE TABLE analytics.user_properties_once"
+  command conn "TRUNCATE TABLE analytics.trait_event_erasures"

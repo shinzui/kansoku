@@ -21,7 +21,7 @@ import Data.Map.Strict (Map)
 import Data.Text.Encoding qualified as Text
 import Data.Word (Word16, Word64)
 import Kansoku.Event
-import Kansoku.Ingest.QueuedEvent (QueuedEvent, legacyQueuedEvent)
+import Kansoku.Ingest.QueuedEvent (QueuedEvent (..), legacyQueuedEvent)
 import Kansoku.Prelude
 
 type EventColumns =
@@ -57,7 +57,8 @@ type EventColumns =
      Column "is_bot" Bool,
      Column "channel" ChString,
      Column "country_code" ChString,
-     Column "enrichment_version" UInt16
+     Column "enrichment_version" UInt16,
+     Column "governed_traits_valid" Bool
    ]
 
 data EventRow = EventRow
@@ -93,7 +94,8 @@ data EventRow = EventRow
     is_bot :: !Bool,
     channel :: !ByteString,
     country_code :: !ByteString,
-    enrichment_version :: !Word16
+    enrichment_version :: !Word16,
+    governed_traits_valid :: !Bool
   }
   deriving stock (Generic, Eq, Show)
   deriving anyclass (ClickHaskell EventColumns)
@@ -123,7 +125,7 @@ newtype CountRow = CountRow {count :: Word64}
   deriving anyclass (ClickHaskell CountColumns)
 
 eventRowFromEvent :: AnalyticsEvent -> EventRow
-eventRowFromEvent = eventRowFromQueuedEvent . legacyQueuedEvent
+eventRowFromEvent event = eventRowFromQueuedEvent ((legacyQueuedEvent event) {traitsEligible = governedTraitEligible event})
 
 eventRowFromQueuedEvent :: QueuedEvent -> EventRow
 eventRowFromQueuedEvent queued =
@@ -162,7 +164,8 @@ eventRowFromQueuedEvent queued =
           is_bot = derived ^. #isBot,
           channel = textBytes (derived ^. #channel),
           country_code = maybe "" textBytes (derived ^. #countryCode),
-          enrichment_version = fromIntegral (derived ^. #ruleVersion)
+          enrichment_version = fromIntegral (derived ^. #ruleVersion),
+          governed_traits_valid = queued ^. #traitsEligible && governedTraitEligible event
         }
 
 boundedSchemaVersion :: Maybe Int -> Word16

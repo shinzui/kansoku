@@ -121,7 +121,7 @@ is `mori://shinzui/kansoku-ts/okf/adrs/concepts/ADR-2`.
 | 37 | Administrative executable for keys, erasure, retention, and replay | docs/plans/37-administrative-executable-for-keys-erasure-retention-and-replay.md | EP-29; EP-30; EP-32; EP-34; EP-40 | None | Not Started |
 | 38 | Single-tenant consumption guide for dashboards and experiments | docs/plans/38-single-tenant-consumption-guide-for-dashboards-and-experiments.md | EP-31; EP-33; EP-34; EP-35; EP-36; EP-37; EP-39; EP-40 | None | Not Started |
 | 39 | Beacon ingest route for page-exit delivery | docs/plans/39-beacon-ingest-route-for-page-exit-delivery.md | EP-29; EP-30; EP-33 | None | Not Started |
-| 40 | Person properties: set and set-once user traits | docs/plans/40-person-properties-set-and-set-once-user-traits.md | EP-29; EP-31; EP-32; EP-34 | None | Not Started |
+| 40 | Person properties: set and set-once user traits | docs/plans/40-person-properties-set-and-set-once-user-traits.md | EP-29; EP-31; EP-32; EP-34 | None | In Progress |
 
 EP-26 is `docs/plans/26-bound-analytics-query-inputs-and-result-cardinality.md`, Complete in
 `docs/masterplans/4-align-kansoku-with-relevant-haskell-jitsurei-practices.md` on review day.
@@ -218,7 +218,7 @@ the migration ledger; unsafe append-backfills are replaced with verified rebuild
 ## Progress
 
 
-EP-29, EP-30, EP-32, EP-31, EP-33, EP-34, EP-35 and EP-36 are Complete; four children remain Not Started. Accepted foundations now include bounded timestamp/rejection
+EP-29, EP-30, EP-32, EP-31, EP-33, EP-34, EP-35 and EP-36 are Complete; EP-40 is In Progress and three children remain Not Started. Accepted foundations now include bounded timestamp/rejection
 handling, immutable acceptance and canonical replay-safe facts, outage recovery/admission,
 conservative exact identity resolution, typed filters, nullable dual grouping and immutable device/channel/bot/trusted-country enrichment. Child plans
 hold the native, packaged and consumer evidence. The tested ten-minute outage/restart and

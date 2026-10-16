@@ -53,7 +53,7 @@ spec = describe "Kansoku.Ingest.Enrichment" $ do
     Aeson.eitherDecode (Aeson.encode queued) `shouldBe` Right queued
     Aeson.fromJSON (Aeson.toJSON sample) `shouldBe` Aeson.Success (legacyQueuedEvent sample)
     case Aeson.toJSON queued of
-      Aeson.Object object -> (Aeson.fromJSON (Aeson.Object (KM.insert "queueVersion" (Aeson.Number 2) object)) :: Aeson.Result QueuedEvent) `shouldSatisfy` \case Aeson.Error _ -> True; _ -> False
+      Aeson.Object object -> (Aeson.fromJSON (Aeson.Object (KM.insert "queueVersion" (Aeson.Number 3) object)) :: Aeson.Result QueuedEvent) `shouldSatisfy` \case Aeson.Error _ -> True; _ -> False
       _ -> expectationFailure "queue envelope is not an object"
     (Aeson.eitherDecode "{\"queueVersion\":1,\"event\":{},\"enrichment\":{}}" :: Either String QueuedEvent) `shouldSatisfy` isLeft
 

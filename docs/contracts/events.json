@@ -1,5 +1,5 @@
 {
-  "catalogVersion": 3,
+  "catalogVersion": 4,
   "events": {
     "alias": {
       "versions": [
@@ -79,6 +79,98 @@
         {
           "note": "Initial schema (kansoku MVP).",
           "properties": [],
+          "version": 1
+        },
+        {
+          "note": "Set current governed user traits; requires a nonempty top-level userId. Omitted traits are unchanged; identify v1 remains identity-only.",
+          "properties": [
+            {
+              "description": "Current user trait plan; analytics observation, never an authorization fact.",
+              "name": "plan",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "description": "Current user trait signup_source; analytics observation, never an authorization fact.",
+              "name": "signup_source",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "description": "Current user trait initial_plan; analytics observation, never an authorization fact.",
+              "name": "initial_plan",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "description": "Current user trait country; analytics observation, never an authorization fact.",
+              "name": "country",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "description": "Current user trait role; analytics observation, never an authorization fact.",
+              "name": "role",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "description": "Finite nonnegative integer company size; numeric comparisons use Float64.",
+              "minimum": 0,
+              "multipleOf": 1,
+              "name": "company_size",
+              "required": false,
+              "type": "number"
+            }
+          ],
+          "version": 2
+        }
+      ]
+    },
+    "identify_once": {
+      "versions": [
+        {
+          "note": "Initialize governed user traits only when no set exists; earliest set-once wins. Requires a nonempty top-level userId.",
+          "properties": [
+            {
+              "description": "Current user trait plan; analytics observation, never an authorization fact.",
+              "name": "plan",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "description": "Current user trait signup_source; analytics observation, never an authorization fact.",
+              "name": "signup_source",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "description": "Current user trait initial_plan; analytics observation, never an authorization fact.",
+              "name": "initial_plan",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "description": "Current user trait country; analytics observation, never an authorization fact.",
+              "name": "country",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "description": "Current user trait role; analytics observation, never an authorization fact.",
+              "name": "role",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "description": "Finite nonnegative integer company size; numeric comparisons use Float64.",
+              "minimum": 0,
+              "multipleOf": 1,
+              "name": "company_size",
+              "required": false,
+              "type": "number"
+            }
+          ],
           "version": 1
         }
       ]

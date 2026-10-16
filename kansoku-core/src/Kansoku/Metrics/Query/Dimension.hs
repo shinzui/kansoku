@@ -14,7 +14,7 @@ where
 
 import Data.Bifunctor (first)
 import Data.Text qualified as Text
-import Kansoku.Event (EventName (..), EventRegistry)
+import Kansoku.Event (EventName (..), EventRegistry, PropertySpec (..), PropertyType (..), lookupTrait)
 import Kansoku.Metrics.Query.Property
 import Kansoku.Prelude hiding (index)
 
@@ -38,6 +38,7 @@ data GroupDimension
   | GroupByBot
   | GroupByEntryPage
   | GroupByExitPage
+  | GroupByUserTrait !Text !ScalarType
   | GroupByProperty !PropertyName
   deriving stock (Generic, Eq, Show)
 
@@ -63,9 +64,14 @@ resolveDimension registry events name = case name of
   "utm_term" -> Right GroupByUtmTerm
   "referrer_host" -> Right GroupByReferrerHost
   "is_bot" -> Right GroupByBot
-  _ -> case Text.stripPrefix "prop:" name of
-    Nothing -> Left (UnknownDimension name)
-    Just property -> GroupByProperty <$> first InvalidDimensionProperty (resolveProperty registry events property)
+  _ -> case Text.stripPrefix "user:" name of
+    Just key -> case lookupTrait key of
+      Just PropertySpec {propertyType = PTString} -> Right (GroupByUserTrait key ScalarString)
+      Just PropertySpec {propertyType = PTNumber} -> Right (GroupByUserTrait key ScalarNumber)
+      _ -> Left (UnknownDimension name)
+    Nothing -> case Text.stripPrefix "prop:" name of
+      Nothing -> Left (UnknownDimension name)
+      Just property -> GroupByProperty <$> first InvalidDimensionProperty (resolveProperty registry events property)
 
 -- Entry/exit names are scoped to whole-session sources, never ordinary rows.
 resolveSessionDimension :: EventRegistry -> [EventName] -> Text -> Either DimensionError GroupDimension
@@ -94,10 +100,12 @@ dimensionLabel = \case
   GroupByBot -> "is_bot"
   GroupByEntryPage -> "entry_page"
   GroupByExitPage -> "exit_page"
+  GroupByUserTrait name _ -> "user:" <> name
   GroupByProperty property -> "prop:" <> propertyNameText property
 
 dimensionType :: GroupDimension -> ScalarType
 dimensionType GroupByBot = ScalarBool
+dimensionType (GroupByUserTrait _ kind) = kind
 dimensionType (GroupByProperty property) = propertyScalarType property
 dimensionType _ = ScalarString
 
@@ -122,6 +130,7 @@ dimensionExpr = \case
   GroupByBot -> "is_bot"
   GroupByEntryPage -> "nullIf(path(entry_url), '')"
   GroupByExitPage -> "nullIf(path(exit_url), '')"
+  GroupByUserTrait name _ -> "user_trait_" <> name
   GroupByProperty property -> propertyTypedExpr property
 
 canonicalDomain :: Text -> Text

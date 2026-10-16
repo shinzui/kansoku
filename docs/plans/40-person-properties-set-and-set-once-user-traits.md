@@ -23,6 +23,11 @@ provenance:
       at: 2026-10-15T15:43:16Z
       mode: "update"
       note: "Reconcile first-release APIs, domain semantics, dependencies and acceptance with the source-validated MP-5 review."
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-10-16T00:35:24Z
+      mode: "implement"
+      note: "Begin governed set/set-once traits, current-user segmentation across implemented metrics and replay-safe erasure primitives after EP-36 acceptance."
 ---
 
 # Person properties: set and set-once user traits
@@ -38,8 +43,8 @@ not trusted authorization facts, since public write-key clients may report them.
 ## Progress
 
 
-- [ ] M1: Declared typed traits have deterministic set/set-once state under replay and late delivery.
-- [ ] M2: Supported routes apply user dimensions with correct identity and population semantics.
+- [x] M1: Declared typed traits have deterministic set/set-once state under replay and late delivery.
+- [x] M2: Supported routes apply user dimensions with correct identity and population semantics.
 - [ ] M3: Haskell helper, SDK contract, catalog and trait deletion/rebuild fixtures agree.
 
 ## Surprises & Discoveries
@@ -50,6 +55,14 @@ SDK traits. The old table type omitted its promised receivedAt tie-break, and JS
 values would compare as quoted text against plain filter values. Anonymous and user IDs need
 separate namespaces to prevent accidental trait joins.
 
+Native Float64/JSON extraction rounded a tiny fractional company_size to an integer (and
+underflowed another invalid value to zero), so native integral checks alone cannot establish
+ingest validation. Preserve server validation eligibility from the first accepted envelope:
+new private queue v2 stores traitsEligible, v0/v1 decode as false, raw rows store
+server-only governed_traits_valid with old rows default false. The writer revalidates flagged
+operations against the immutable declared schema before setting the raw marker. Public JSON
+cannot choose it. The actual stored schema_version remains part of native eligibility.
+
 ## Decision Log
 
 
@@ -59,10 +72,43 @@ not a permanently immutable field. If any set exists, its latest value wins; oth
 set-once wins. Omitted keys leave values untouched. Null/deletion operations are not part of
 this initial trait API and must be rejected for declared scalar traits.
 
+On 2026-10-16 store a decoded String/numeric Float64/type tuple in argMax/argMin states, not
+quoted JSON strings. One shared catalog owns identify v2/identify_once v1 and user: resolution.
+Scientific 0.3.9.0 is already the resolved dependency; Mori has no corpus entry, so its current
+Hackage release and upstream v0.3.9.0 tag (commit 17870f8706ac8b99d3973bea56fcee1290d821ec)
+were verified, and source for isInteger/toRealFloat was read before use. The API now declares
+the direct >=0.3.9,<0.4 dependency for exact, finite, nonnegative integer validation.
+
+Trait erasure owns permanent account/event-ID tombstones before clearing both state tables
+and scrubbing/deleting governed source events. Rebuilds and old raw replays exclude those IDs;
+new event IDs may initialize traits afterward. EP-37 must fence ingest/writer/readers and also
+clean queue/archive/acceptance inputs before releasing its fence. The primitives are not an
+atomic public maintenance API by themselves.
+
+Current-trait joins pivot only referenced catalog names once per source and join only the
+resolved user namespace. Session/acquisition trait selection occurs after full retained
+assembly using the first resolved user. Strict funnels accept current-user filters while
+keeping all events for each selected subject; event filters remain errors. Exposure selection
+with user dimensions uses exact resolved counts instead of the raw-identity sketch; the
+unsegmented default stays approximate. Experiments accept only user: selection dimensions.
+
 ## Outcomes & Retrospective
 
 
-Planning reviewed; implementation and native trait evidence pending.
+M1/M2 native acceptance passes eleven focused examples with no failures or pending cases:
+exact declared validation and private queue compatibility, total-order set/set-once replay,
+quoted/numeric/null/type cases, legacy exclusion, Unicode/account-isolated scrub/delete and
+rebuild/replay tombstones, every implemented metric population, first-user whole-session
+ownership across user changes, and numeric 10000/10001 point boundaries plus resource limits.
+The first-read canonical view must be refreshed after adding governed_traits_valid; its stored
+header does not follow ALTER TABLE automatically. The public seven-column resolved shape is
+preserved. Logs: `.dev/acceptance/identity-validation/ep40-native.log`.
+
+Haskell helper/default/version-override coverage and generated catalog v4 are implemented.
+The full source gate passes 361 core examples, 18 client examples, four probes, generated
+contracts, strict 16-ADR validation, three telemetry modes and four lifecycle cases. Packaged
+ordinary public workflow, pinned browser/helper consumer and expanded performance acceptance
+remain pending; M3 and whole-child completion stay open.
 
 ## Context and Orientation
 

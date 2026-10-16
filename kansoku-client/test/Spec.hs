@@ -80,6 +80,17 @@ spec = describe "Kansoku.Client" $ do
       [event] <- readEvents received
       event ^. #schemaVersion `shouldBe` Just 1
 
+  it "pins governed identify helpers while preserving explicit identity-only overrides" $
+    withRecorder (const (pure status202)) $ \port received _ -> do
+      withClient (testConfig port) $ \client -> do
+        identify client "user" (Just "cookie") ["plan" Aeson..= ("pro" :: Text)]
+        identifyOnce client "user" (Just "cookie") ["country" Aeson..= ("GB" :: Text)]
+        identifyWithVersion client "user" (Just "cookie") 1 []
+        flush client
+      events <- readEvents received
+      [(event ^. #eventName, event ^. #schemaVersion, event ^. #userId) | event <- events]
+        `shouldBe` [(EventName "identify", Just 2, Just (UserId "user")), (EventName "identify_once", Just 1, Just (UserId "user")), (EventName "identify", Just 1, Just (UserId "user"))]
+
   it "round-trips a helper-built event through the shared AnalyticsEvent JSON type" $
     withRecorder (const (pure status202)) $ \port received _ -> do
       withClient (testConfig port) $ \client -> do

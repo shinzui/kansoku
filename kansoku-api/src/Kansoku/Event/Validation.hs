@@ -6,6 +6,7 @@ module Kansoku.Event.Validation
     declaredSchemaError,
     validateEvent,
     validateEventWith,
+    governedTraitEligible,
   )
 where
 
@@ -15,6 +16,7 @@ import Data.Aeson.KeyMap qualified as KeyMap
 import Data.Char (isAsciiLower, isDigit)
 import Data.Generics.Labels ()
 import Data.Map.Strict qualified as Map
+import Data.Scientific qualified as Scientific
 import Data.Text qualified as Text
 import Data.Time.Format (defaultTimeLocale, formatTime)
 import Kansoku.Event.Registry
@@ -98,8 +100,12 @@ validateEventWith registry event =
             (Just value, Just (String property)) -> Text.null value || value /= property
             _ -> True
         ]
+      "identify" | fromMaybe 1 (event ^. #schemaVersion) == 2 -> traitIdentityErrors
+      "identify_once" -> traitIdentityErrors
       "group" -> [InvalidIdentityBinding "organizationId" | maybe True (Text.null . unOrganizationId) (event ^. #organizationId)]
       _ -> []
+
+    traitIdentityErrors = [InvalidIdentityBinding "userId" | maybe True (Text.null . unUserId) (event ^. #userId)]
 
     validateProperty :: PropertySpec -> [ValidationError]
     validateProperty spec =
@@ -113,6 +119,15 @@ validateEventWith registry event =
           | not (propertyPatternMatches ((spec ^. #validationPattern)) value) ->
               [InvalidPropertyValue ((event ^. #eventName)) ((spec ^. #name)) ("expected " <> maybe "valid value" propertyPatternText (spec ^. #validationPattern))]
           | otherwise -> []
+
+-- | Server-owned eligibility. Never infer governed state from legacy v1
+-- identify data or from Float64-rounded native JSON values.
+governedTraitEligible :: AnalyticsEvent -> Bool
+governedTraitEligible event =
+  let operation = (unEventName (event ^. #eventName), fromMaybe 1 (event ^. #schemaVersion))
+   in operation `elem` [("identify", 2), ("identify_once", 1)] && case validateEvent event of
+        Right _ -> True
+        Left _ -> False
 
 validateEvent :: AnalyticsEvent -> Either [ValidationError] AnalyticsEvent
 validateEvent = validateEventWith defaultRegistry
@@ -232,6 +247,9 @@ propertyPatternMatches :: Maybe PropertyPattern -> Value -> Bool
 propertyPatternMatches Nothing _ = True
 propertyPatternMatches (Just NonEmptyStringPattern) (String value) = not (Text.null value)
 propertyPatternMatches (Just NonNegativeNumberPattern) (Number value) = value >= 0
+propertyPatternMatches (Just NonNegativeIntegerPattern) (Number value) =
+  let numeric = Scientific.toRealFloat value :: Double
+   in not (isInfinite numeric || isNaN numeric) && value >= 0 && Scientific.isInteger value
 propertyPatternMatches (Just SqlNamePattern) (String value) = isSqlSafeName value
 propertyPatternMatches (Just _) _ = False
 

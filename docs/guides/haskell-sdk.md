@@ -157,3 +157,21 @@ Unknown kinds and non-ASCII, whitespace-bearing or over-256-character values are
 Compute keyed email identifiers in a trusted backend using the normalization and versioning
 contract in [Send events](send-events.md#identity-signals); pass only the resulting opaque
 identifier to clients.
+
+
+## Governed person traits
+
+`identify client user anonymous traits` explicitly emits identify v2. `identifyOnce` emits
+identify_once v1 and initializes otherwise unset traits. Use `identifyWithVersion` or
+`identifyOnceWithVersion` for an explicit override; identify v1 is identity-only. Both require
+nonempty user IDs for governed trait writes. Omitted keys are unchanged; null is rejected.
+
+```haskell
+identify client "user-42" (Just "browser-cookie") ["plan" .= ("pro" :: Text)]
+identifyOnce client "user-42" (Just "browser-cookie") ["initial_plan" .= ("starter" :: Text)]
+identifyWithVersion client "user-42" (Just "browser-cookie") 1 []
+```
+
+The pure `identifyEvent`/`identifyOnceEvent` constructors also select versions 2/1. Explicit
+schemaVersion updates remain available. The server owns schema validation and rejection;
+[query metrics](query-metrics.md) defines current-trait ordering and segmentation.

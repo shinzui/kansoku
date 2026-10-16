@@ -12,6 +12,7 @@ module Kansoku.Event
     baseEvent,
     groupEvent,
     identifyEvent,
+    identifyOnceEvent,
   )
 where
 
@@ -35,12 +36,19 @@ identifyEvent ::
   AnalyticsEvent
 identifyEvent eid src occ recv anonId usr traits =
   baseEvent eid (EventName "identify") src occ recv
+    & #schemaVersion
+    ?~ 2
     & #anonymousId
     .~ anonId
     & #userId
     .~ usr
     & #properties
     .~ traits
+
+-- | Set-once initializes current traits; callers may explicitly override the version.
+identifyOnceEvent :: EventId -> EventSource -> UTCTime -> UTCTime -> Maybe AnonymousId -> Maybe UserId -> Object -> AnalyticsEvent
+identifyOnceEvent eid src occ recv anonId usr traits =
+  identifyEvent eid src occ recv anonId usr traits & #eventName .~ EventName "identify_once" & #schemaVersion ?~ 1
 
 aliasEvent ::
   EventId ->

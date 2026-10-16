@@ -114,8 +114,8 @@ metricsServer pool =
         Left message -> pure (KansokuBadRequest (badRequest "invalid_retention_days" message))
         Right offsets -> effToHandler (Query.runRetentionMetric defaultRegistry pool (fromMaybe RetentionOn mode) (fromMaybe WindowCohort cohort) (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain filters) {Query.includeBots = fromMaybe False bots} offsets)
 
-    experimentsHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> Maybe ExperimentMeasure -> Handler (KansokuResult MetricResult)
-    experimentsHandler (MetricsPrincipal principal) fromDay toDay experimentParam timeGrain measure =
+    experimentsHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> Maybe ExperimentMeasure -> Maybe Text -> [MetricFilter] -> Handler (KansokuResult MetricResult)
+    experimentsHandler (MetricsPrincipal principal) fromDay toDay experimentParam timeGrain measure groupBy filters =
       case timeGrain of
         Just Hour ->
           pure
@@ -133,12 +133,12 @@ metricsServer pool =
               effToHandler
                 ( (if measure == Just ExperimentDiagnostics then Query.runExperimentDiagnostics else Query.runExperimentExposures)
                     pool
-                    (queryRequest (principal ^. #accountId) fromDay toDay Nothing timeGrain [])
+                    (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain filters)
                     experiment
                 )
 
-    experimentConversionHandler :: MetricsPrincipal -> Text -> Text -> Day -> Day -> Handler (KansokuResult MetricResult)
-    experimentConversionHandler (MetricsPrincipal principal) experimentParam eventParam fromDay toDay =
+    experimentConversionHandler :: MetricsPrincipal -> Text -> Text -> Day -> Day -> Maybe Text -> [MetricFilter] -> Handler (KansokuResult MetricResult)
+    experimentConversionHandler (MetricsPrincipal principal) experimentParam eventParam fromDay toDay groupBy filters =
       case mkSqlName experimentParam of
         Left invalid ->
           pure
@@ -162,7 +162,7 @@ metricsServer pool =
                   effToHandler
                     ( Query.runExperimentConversion
                         pool
-                        (queryRequest (principal ^. #accountId) fromDay toDay Nothing Nothing [])
+                        (queryRequest (principal ^. #accountId) fromDay toDay groupBy Nothing filters)
                         experiment
                         conversionEvent
                     )

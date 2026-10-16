@@ -47,7 +47,7 @@ allowedParameters = \case
   ["metrics", "sessions"] -> Just ["from", "to", "groupBy", "timeGrain", "filter", "measure", "includeBots"]
   ["metrics", "funnel"] -> Just ["from", "to", "steps", "window", "mode", "measure", "exclude", "groupBy", "filter"]
   ["metrics", "retention"] -> Just ["from", "to", "groupBy", "timeGrain", "filter", "days", "mode", "cohort", "includeBots"]
-  ["metrics", "experiments"] -> Just ["from", "to", "experiment", "timeGrain", "measure"]
-  ["metrics", "experiments", "conversion"] -> Just ["from", "to", "experiment", "event"]
+  ["metrics", "experiments"] -> Just ["from", "to", "experiment", "timeGrain", "measure", "groupBy", "filter"]
+  ["metrics", "experiments", "conversion"] -> Just ["from", "to", "experiment", "event", "groupBy", "filter"]
   ["metrics", "experiments", "funnel"] -> Just ["from", "to", "experiment", "steps", "window", "mode", "measure", "exclude", "groupBy", "filter"]
   _ -> Nothing

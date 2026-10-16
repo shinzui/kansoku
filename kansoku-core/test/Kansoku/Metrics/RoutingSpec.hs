@@ -277,7 +277,7 @@ sentinelMetricsServer =
       Metrics.revenue = standardSentinel "revenue",
       Metrics.organizations = stubSentinel "organizations",
       Metrics.custom = stubSentinel "custom",
-      Metrics.experiments = \principal fromDay toDay experiment grain _measure -> metricSentinel "experiments" principal fromDay toDay experiment grain,
+      Metrics.experiments = \principal fromDay toDay experiment grain _measure _group _filters -> metricSentinel "experiments" principal fromDay toDay experiment grain,
       Metrics.experimentConversion = experimentConversionSentinel,
       Metrics.experimentFunnel = experimentFunnelSentinel
     }
@@ -300,8 +300,8 @@ sentinelMetricsServer =
     retentionSentinel :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe Metrics.TimeGrain -> [MetricFilter] -> Maybe Text -> Maybe Metrics.RetentionMode -> Maybe Metrics.CohortMode -> Maybe Bool -> Handler (Response.KansokuResult Metrics.MetricResult)
     retentionSentinel _principal _fromDay _toDay _group _grain _filters _days _mode _cohort _bots = pure (Response.KansokuOk (sentinelResult "retention"))
 
-    experimentConversionSentinel :: MetricsPrincipal -> Text -> Text -> Day -> Day -> Handler (Response.KansokuResult Metrics.MetricResult)
-    experimentConversionSentinel _principal _experiment _event _fromDay _toDay =
+    experimentConversionSentinel :: MetricsPrincipal -> Text -> Text -> Day -> Day -> Maybe Text -> [MetricFilter] -> Handler (Response.KansokuResult Metrics.MetricResult)
+    experimentConversionSentinel _principal _experiment _event _fromDay _toDay _group _filters =
       pure (Response.KansokuOk (sentinelResult "experiment-conversion"))
 
     experimentFunnelSentinel :: MetricsPrincipal -> Text -> Text -> Day -> Day -> Maybe Int -> Maybe Metrics.FunnelMode -> Maybe Metrics.FunnelMeasure -> [Text] -> Maybe Text -> [MetricFilter] -> Handler (Response.KansokuResult Metrics.MetricResult)

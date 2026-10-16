@@ -6,6 +6,8 @@ module Kansoku.Event.Registry
     PropertySpec (..),
     PropertyType (..),
     defaultRegistry,
+    governedTraits,
+    lookupTrait,
     emptyRegistry,
     knownVersions,
     latestSchema,
@@ -28,7 +30,7 @@ data PropertyType = PTString | PTNumber | PTBool | PTObject | PTArray | PTAny
   deriving stock (Generic, Eq, Show)
 
 -- | A syntactic constraint applied after a property's JSON type is validated.
-data PropertyPattern = SqlNamePattern | NonEmptyStringPattern | NonNegativeNumberPattern
+data PropertyPattern = SqlNamePattern | NonEmptyStringPattern | NonNegativeNumberPattern | NonNegativeIntegerPattern
   deriving stock (Generic, Eq, Show)
 
 propertyPatternText :: PropertyPattern -> Text
@@ -127,6 +129,8 @@ defaultRegistry =
         1
         initialSchemaNote
         [],
+      EventSchema (EventName "identify") 2 "Set current governed user traits; requires a nonempty top-level userId. Omitted traits are unchanged; identify v1 remains identity-only." governedTraits,
+      EventSchema (EventName "identify_once") 1 "Initialize governed user traits only when no set exists; earliest set-once wins. Requires a nonempty top-level userId." governedTraits,
       EventSchema
         (EventName "user_registered")
         1
@@ -161,6 +165,18 @@ defaultRegistry =
           sqlNameProperty "variant" "Variant shown to the user."
         ]
     ]
+
+-- | One catalog owns ingest schemas, storage eligibility and user: dimensions.
+-- Changing any trait type requires an explicit storage/schema migration.
+governedTraits :: [PropertySpec]
+governedTraits =
+  [ plainProperty name PTString False ("Current user trait " <> name <> "; analytics observation, never an authorization fact.")
+  | name <- ["plan", "signup_source", "initial_plan", "country", "role"]
+  ]
+    <> [PropertySpec "company_size" PTNumber False (Just NonNegativeIntegerPattern) (Just "Finite nonnegative integer company size; numeric comparisons use Float64.")]
+
+lookupTrait :: Text -> Maybe PropertySpec
+lookupTrait key = find (\PropertySpec {name} -> name == key) governedTraits
 
 initialSchemaNote :: Text
 initialSchemaNote = "Initial schema (kansoku MVP)."

@@ -75,11 +75,13 @@ library
     Kansoku.Metrics.Query.Funnel
     Kansoku.Metrics.Query.Property
     Kansoku.Metrics.Query.Session
+    Kansoku.Metrics.Query.Traits
     Kansoku.Metrics.Query.Validate
     Kansoku.Metrics.Registry
     Kansoku.Metrics.RequestValidation
     Kansoku.Migrations
     Kansoku.Observability
+    Kansoku.PersonProperties
     Kansoku.Postgres
     Kansoku.Readiness
     Kansoku.RequestLog
@@ -181,6 +183,7 @@ test-suite kansoku-core-test
     Kansoku.Metrics.LimitsSpec
     Kansoku.Metrics.RoutingSpec
     Kansoku.Metrics.SessionIntegrationSpec
+    Kansoku.Metrics.TraitsSpec
     Kansoku.MigrationsSpec
     Kansoku.ObservabilitySpec
     Kansoku.OpenApiSpec

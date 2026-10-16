@@ -16,6 +16,9 @@ module Kansoku.Client
     flush,
     group,
     identify,
+    identifyWithVersion,
+    identifyOnce,
+    identifyOnceWithVersion,
     kansokuCredential,
     newClient,
     track,
@@ -195,10 +198,20 @@ trackEventWithVersion clientHandle ids name version pairs =
     <&> (#schemaVersion ?~ version)
     >>= track clientHandle
 
+-- | Governed current traits. Explicit v1 remains available for identity-only events.
 identify :: Client -> Text -> Maybe Text -> [Pair] -> IO ()
-identify clientHandle user anonId traits =
-  buildEvent (clientHandle ^. #config) (emptyIds & #userId ?~ user & #anonymousId .~ anonId) "identify" traits
-    >>= track clientHandle
+identify clientHandle user anonId = identifyWithVersion clientHandle user anonId 2
+
+identifyWithVersion :: Client -> Text -> Maybe Text -> Int -> [Pair] -> IO ()
+identifyWithVersion clientHandle user anonId version traits =
+  trackEventWithVersion clientHandle (emptyIds & #userId ?~ user & #anonymousId .~ anonId) "identify" version traits
+
+identifyOnce :: Client -> Text -> Maybe Text -> [Pair] -> IO ()
+identifyOnce clientHandle user anonId = identifyOnceWithVersion clientHandle user anonId 1
+
+identifyOnceWithVersion :: Client -> Text -> Maybe Text -> Int -> [Pair] -> IO ()
+identifyOnceWithVersion clientHandle user anonId version traits =
+  trackEventWithVersion clientHandle (emptyIds & #userId ?~ user & #anonymousId .~ anonId) "identify_once" version traits
 
 group :: Client -> EventIds -> Text -> [Pair] -> IO ()
 group clientHandle ids organization pairs =
