@@ -5,7 +5,7 @@ description: Expose explicit versioned single-tenant projections through constra
 docId: ADR-18
 status: Accepted
 date: 2026-10-16
-timestamp: 2026-10-16T05:06:29Z
+timestamp: 2026-10-16T12:58:00Z
 generated:
   by: process:codex
   at: 2026-10-16T04:23:20Z
@@ -22,7 +22,9 @@ The retained-history and current-identity rules in ADRs 4, 5 and 17 apply to SQL
 
 ## Decision
 
-Keep the ordered seven-column events_resolved/events_resolved_v3 contract unchanged. Add
+Keep the ordered events_resolved/events_resolved_v3 projection stable. The organisation
+extension in [ADR-21](0021-organization-aggregation-and-current-membership.md) appends
+organization_id as column eight, preserving the original seven-column prefix. Add
 an explicitly named events_analytics_v1 projection with account/from_time/to_time parameters,
 half-open UTC candidate bounds, canonical subject names, properties and named source/session/
 bot/device/acquisition columns. It delegates to the conservative parameterized resolver,
@@ -68,7 +70,7 @@ approximation and implementation details without a consumer need.
 
 Named SQL versions can evolve independently of storage. Full retained-history and identity
 work can still reach the finite resource bounds; result limits do not promise constant scan cost.
-The seven-column view includes bots and profile events; metric parity uses the richer view with
+The compatibility view includes bots and profile events; metric parity uses the richer view with
 explicit matching population predicates. The actual constrained reader reproduces all three HTTP recipes before and after retention.
 GrowthBook 5.1.0 passes four real adapter cases; Grafana 13.2.4/plugin 4.22.1 passes datasource
 health, saved panel import/readback and real panel query. These are local integration proofs,

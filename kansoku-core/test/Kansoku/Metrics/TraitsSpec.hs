@@ -222,7 +222,7 @@ spec = do
     now = read "2026-07-01 00:00:00 UTC"
 
 request :: Text -> Query.QueryRequest
-request account = Query.QueryRequest (AccountId account) (fromGregorian 2026 7 1) (fromGregorian 2026 7 3) Nothing Nothing [] [] False
+request account = Query.QueryRequest (AccountId account) (fromGregorian 2026 7 1) (fromGregorian 2026 7 3) Nothing Nothing [] [] False False False
 
 activity :: Text -> Text -> Text -> Text -> String -> AnalyticsEvent
 activity account eid name user stamp = baseEvent (EventId eid) (EventName name) Web (read stamp) (read stamp) & #accountId ?~ AccountId account & #userId ?~ UserId user & #sourceService ?~ "traits" & #url ?~ "https://example.com/entry"

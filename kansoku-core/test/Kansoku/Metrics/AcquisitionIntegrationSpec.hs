@@ -78,7 +78,7 @@ spec = describe "Kansoku.Acquisition native" $ do
       runEff (Query.runAcquisition defaultRegistry pool AcquisitionSessions req) `shouldReturn` Left Query.MetricResultTooLarge
 
 request :: Query.QueryRequest
-request = Query.QueryRequest (AccountId "acquisition-native") (fromGregorian 2026 7 1) (fromGregorian 2026 7 3) Nothing (Just Day) [] [] False
+request = Query.QueryRequest (AccountId "acquisition-native") (fromGregorian 2026 7 1) (fromGregorian 2026 7 3) Nothing (Just Day) [] [] False False False
 
 acquisition :: QueryPool -> AcquisitionMeasure -> Query.QueryRequest -> IO MetricResult
 acquisition pool measure req = runEff (Query.runAcquisition defaultRegistry pool measure req) >>= either (fail . show) pure

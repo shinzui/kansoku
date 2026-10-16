@@ -133,7 +133,7 @@ options :: Q.PathOptions
 options = Q.PathOptions PathEvent (Just "a") Nothing 5 10 7776000 [] []
 
 request :: Text -> Q.QueryRequest
-request account = Q.QueryRequest (AccountId account) (fromGregorian 2026 7 1) (fromGregorian 2026 7 3) Nothing Nothing [] [] False
+request account = Q.QueryRequest (AccountId account) (fromGregorian 2026 7 1) (fromGregorian 2026 7 3) Nothing Nothing [] [] False False False
 
 event :: Text -> Text -> Text -> Text -> String -> AnalyticsEvent
 event account eid name user stamp = baseEvent (EventId eid) (EventName name) Web (read stamp) (read stamp) & #accountId ?~ AccountId account & #userId ?~ UserId user

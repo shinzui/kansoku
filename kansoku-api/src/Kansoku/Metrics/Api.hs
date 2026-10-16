@@ -2,6 +2,8 @@
 module Kansoku.Metrics.Api
   ( MetricPoint (..),
     MetricQuery,
+    AggregateBy (..),
+    OrganizationAttribution (..),
     AcquisitionMeasure (..),
     SessionMeasure (..),
     UserWindow (..),
@@ -12,6 +14,7 @@ module Kansoku.Metrics.Api
     FunnelMeasure (..),
     FunnelCounting (..),
     FunnelAttribution (..),
+    parseFunnelAttribution,
     ExperimentMeasure (..),
     MetricResult (..),
     MetricsRoutes (..),
@@ -41,6 +44,38 @@ import Servant.API.Generic (type (:-))
 import Servant.API.MultiVerb (MultiVerb)
 import Servant.API.Verbs qualified as Servant
 import Web.HttpApiData (FromHttpApiData (..), ToHttpApiData (..))
+
+data AggregateBy = AggregateUsers | AggregateOrganizations
+  deriving stock (Generic, Eq, Show)
+
+instance FromHttpApiData AggregateBy where
+  parseUrlPiece "users" = Right AggregateUsers
+  parseUrlPiece "organizations" = Right AggregateOrganizations
+  parseUrlPiece _ = Left "aggregate must be users or organizations"
+
+instance ToHttpApiData AggregateBy where
+  toUrlPiece AggregateUsers = "users"
+  toUrlPiece AggregateOrganizations = "organizations"
+
+data OrganizationAttribution = EventOrganization | UserOrganization
+  deriving stock (Generic, Eq, Show)
+
+instance FromHttpApiData OrganizationAttribution where
+  parseUrlPiece "event" = Right EventOrganization
+  parseUrlPiece "user_organization" = Right UserOrganization
+  parseUrlPiece _ = Left "attribution must be event or user_organization"
+
+instance ToHttpApiData OrganizationAttribution where
+  toUrlPiece EventOrganization = "event"
+  toUrlPiece UserOrganization = "user_organization"
+
+type OrganizationOptions result =
+  Description "aggregate=users (default) or organizations merges member timelines and excludes empty organization IDs. The organizations route always counts organizations. attribution=event (default) preserves event organization IDs; user_organization fills only missing IDs from the resolved user current group membership. Current org:plan, org:industry, org:country and numeric org:seats traits reclassify historical reports. Experiments retain user aggregation. See Organisations in the query guide."
+    :> QueryParam "aggregate" AggregateBy
+    :> QueryParam "attribution" OrganizationAttribution
+    :> result
+
+type OrganizationMetricQuery = MetricParameters (OrganizationOptions MetricResponse)
 
 data TimeGrain = Hour | Day | Week | Month
   deriving stock (Generic, Eq, Ord, Show)
@@ -207,6 +242,9 @@ instance FromHttpApiData FunnelAttribution where
             _ -> Left "attribution step must be 1..20 and within the requested steps"
     _ -> Left "attribution must be first_touch, last_touch or step:<n>"
 
+parseFunnelAttribution :: Text -> Either Text FunnelAttribution
+parseFunnelAttribution = parseUrlPiece
+
 instance ToHttpApiData FunnelAttribution where
   toUrlPiece FunnelFirstTouch = "first_touch"
   toUrlPiece FunnelLastTouch = "last_touch"
@@ -237,7 +275,7 @@ instance ToHttpApiData ExperimentMeasure where
   toUrlPiece ExperimentDiagnostics = "diagnostics"
 
 type MetricParameters result =
-  Description "Every metric requires a positive half-open from/to range of at most 366 days and returns at most 10000 complete points. groupBy accepts one or two distinct dimensions: event_name, source, source_service, host, route, enrichment/acquisition fields prop:<declared scalar property>, or current user:<governed trait>. Repeated filter parameters are AND-combined JSON terms, JSON {or:[term,...]} groups, or shorthand dimension:op:value terms separated by | for OR (literal | requires JSON; omit value for set/unset): at most 8 groups of at most 8 terms, 100 in values, 1024 UTF-8 bytes per string and 16384 decoded bytes combined. Missing/null values are unset; comparisons including neq do not match unset values. Group keys keep full dimension names and null differs from an empty string. Unsupported parameters are errors. See the documented route matrix."
+  Description "Every metric requires a positive half-open from/to range of at most 366 days and returns at most 10000 complete points. groupBy accepts one or two distinct dimensions: event_name, source, source_service, host, route, enrichment/acquisition fields prop:<declared scalar property>, current user:<governed trait>, organization, or org:<governed organization trait> on event sources. Repeated filter parameters are AND-combined JSON terms, JSON {or:[term,...]} groups, or shorthand dimension:op:value terms separated by | for OR (literal | requires JSON; omit value for set/unset): at most 8 groups of at most 8 terms, 100 in values, 1024 UTF-8 bytes per string and 16384 decoded bytes combined. Missing/null values are unset; comparisons including neq do not match unset values. Group keys keep full dimension names and null differs from an empty string. Unsupported parameters are errors. See the documented route matrix."
     :> MetricArguments result
 
 type MetricArguments result =
@@ -260,7 +298,7 @@ type SessionQuery =
 
 type UserQuery =
   Description "Exact canonical active subjects; identity/profile-only events are excluded. window=calendar (default), rolling7 or rolling30. Rolling windows require day grain and count [d-(N-1),d+1) UTC for each returned day d. Filters/grouping apply to the same activity population; up to two dimensions and eight bounded repeated JSON filters. Bot rows are excluded unless includeBots=true. Positive half-open range at most 366 days, to no later than the current UTC day (only closed days), at most 10000 complete points."
-    :> MetricArguments (QueryParam "window" UserWindow :> QueryParam "includeBots" Bool :> MetricResponse)
+    :> MetricArguments (QueryParam "window" UserWindow :> QueryParam "includeBots" Bool :> OrganizationOptions MetricResponse)
 
 type DailyActivityQuery =
   Description "Exact canonical daily activity with retained-history lookback; identity/profile-only events are excluded throughout. Day grain only. Filters and one/two group dimensions define the same population throughout lookback; each group is a separate population. Bot rows are excluded unless includeBots=true. Positive half-open range at most 366 days; to no later than the current UTC day; at most 10000 complete points. Stickiness emits daily_active, rolling30_active and ratio (0..1) in group.measure. Lifecycle emits nonnegative new, returning, resurrecting and dormant in group.status; first means first retained matching activity. Empty ungrouped days return zero measures."
@@ -298,7 +336,7 @@ data MetricsRoutes mode = MetricsRoutes
         :- MetricsAuth
           :> "metrics"
           :> "funnel"
-          :> Description "Canonical user timelines ordered by millisecond occurred_at then event_id, with immutable duplicates removed. At most 20 steps; one event cannot satisfy repeated steps. mode=any_order opens one window at the earliest matching step and counts distinct step positions; mode=sequential (default) allows intervening events; strict requires adjacency including automatic events, accepts current-user filters over complete participant timelines, and rejects event filters. counting=uniques (default) selects maximum reach, earliest completion, earliest start, then event IDs for sequential/strict. counting=totals counts nonoverlapping entries, restarting after completion, expiry or interruption; any-order entries start at any step, others at step one. Totals add an ungrouped measure=entries point per variant and label reach rows measure=count. There is no exclusion grace period. window is inclusive seconds from first step, default range capped at 7776000. Repeat exclude up to 20 distinct validated names; exclusions between matched steps stop a chain, and cannot overlap steps. measure=count (default) emits cumulative reach. time_to_convert emits exact nearest-rank p50_seconds/p90_seconds for reached steps >=2, from the same selected chain. One/two group dimensions use the earliest eligible start (per attempt for totals). prop attribution=first_touch (default), last_touch or step:<n> uses the start, last matched event or named step; absent/unreached values are other. Validate declarations in that step, or compatible declared properties across steps when touch varies; user dimensions use participant current traits. Sequential event filters select step rows and cannot hide exclusions. Positive half-open range at most 366 days; native execution/memory limits; at most 10000 complete points or HTTP 400."
+          :> Description "aggregate=users (default) or organizations; organizations merge member timelines, excluding empty organization IDs. attribution=event or user_organization selects organization attribution with first-touch property selection; user_organization fills only missing event IDs from current resolved-user membership. Existing property attribution values retain event organization attribution. Canonical subject timelines ordered by millisecond occurred_at then event_id, with immutable duplicates removed. At most 20 steps; one event cannot satisfy repeated steps. mode=any_order opens one window at the earliest matching step and counts distinct step positions; mode=sequential (default) allows intervening events; strict requires adjacency including automatic events, accepts current-user filters over complete participant timelines, and rejects event filters. counting=uniques (default) selects maximum reach, earliest completion, earliest start, then event IDs for sequential/strict. counting=totals counts nonoverlapping entries, restarting after completion, expiry or interruption; any-order entries start at any step, others at step one. Totals add an ungrouped measure=entries point per variant and label reach rows measure=count. There is no exclusion grace period. window is inclusive seconds from first step, default range capped at 7776000. Repeat exclude up to 20 distinct validated names; exclusions between matched steps stop a chain, and cannot overlap steps. measure=count (default) emits cumulative reach. time_to_convert emits exact nearest-rank p50_seconds/p90_seconds for reached steps >=2, from the same selected chain. One/two group dimensions use the earliest eligible start (per attempt for totals). prop attribution=first_touch (default), last_touch or step:<n> uses the start, last matched event or named step; absent/unreached values are other. Validate declarations in that step, or compatible declared properties across steps when touch varies; user dimensions use participant current traits. Sequential event filters select step rows and cannot hide exclusions. Positive half-open range at most 366 days; native execution/memory limits; at most 10000 complete points or HTTP 400."
           :> QueryParam' '[Required] "from" Day
           :> QueryParam' '[Required] "to" Day
           :> QueryParam' '[Required] "steps" Text
@@ -306,10 +344,11 @@ data MetricsRoutes mode = MetricsRoutes
           :> QueryParam "mode" FunnelMode
           :> QueryParam "measure" FunnelMeasure
           :> QueryParam "counting" FunnelCounting
-          :> QueryParam "attribution" FunnelAttribution
+          :> QueryParam "attribution" Text
           :> QueryParams "exclude" Text
           :> QueryParam "groupBy" Text
           :> QueryParams "filter" MetricFilter
+          :> QueryParam "aggregate" AggregateBy
           :> MultiVerb 'Servant.GET '[JSON, ProblemJSON] (OkResponses "Metric result" MetricResult) (KansokuResult MetricResult),
     retention ::
       mode
@@ -317,15 +356,15 @@ data MetricsRoutes mode = MetricsRoutes
           :> "metrics"
           :> "retention"
           :> Description "Exact canonical retention over closed UTC days. mode=on (default) counts the exact offset day; on_or_after counts any day from offset through the largest requested offset, including unrequested intermediate days. cohort=window (default) means first matching activity in range; lifetime means first matching activity in retained history, not first ever. Date bounds select the observed activity interval and cohort dates. Offset 0 always emits cohort size. Omit immature on offsets; on_or_after omits nonzero offsets unless the full maximum horizon is closed by to. to cannot exceed the current UTC day. Day grain only; filters/grouping define identical populations throughout lookback. Bot rows are excluded unless includeBots=true. Up to two dimensions, eight bounded JSON filters, 32 distinct offsets 1..365, range at most 366 days and 10000 complete points."
-          :> MetricArguments (QueryParam "days" Text :> QueryParam "mode" RetentionMode :> QueryParam "cohort" CohortMode :> QueryParam "includeBots" Bool :> MetricResponse),
+          :> MetricArguments (QueryParam "days" Text :> QueryParam "mode" RetentionMode :> QueryParam "cohort" CohortMode :> QueryParam "includeBots" Bool :> OrganizationOptions MetricResponse),
     acquisition :: mode :- MetricsAuth :> "metrics" :> "acquisition" :> AcquisitionQuery,
-    featureAdoption :: mode :- MetricsAuth :> "metrics" :> "feature-adoption" :> MetricQuery,
-    conversion :: mode :- MetricsAuth :> "metrics" :> "conversion" :> Description "Exact ordered signup conversion: starters are the denominator; only starters with a later signup_completed in the millisecond/event-ID timeline within range (window capped at 90 days) convert. Zero denominator returns zero; ratio stays 0..1. Group ownership is the earliest eligible start. timeGrain and prop grouping are rejected." :> MetricQuery,
+    featureAdoption :: mode :- MetricsAuth :> "metrics" :> "feature-adoption" :> OrganizationMetricQuery,
+    conversion :: mode :- MetricsAuth :> "metrics" :> "conversion" :> Description "Exact ordered signup conversion: starters are the denominator; only starters with a later signup_completed in the millisecond/event-ID timeline within range (window capped at 90 days) convert. Zero denominator returns zero; ratio stays 0..1. Group ownership is the earliest eligible start. timeGrain and prop grouping are rejected." :> OrganizationMetricQuery,
     users :: mode :- MetricsAuth :> "metrics" :> "users" :> UserQuery,
     stickiness :: mode :- MetricsAuth :> "metrics" :> "stickiness" :> DailyActivityQuery,
     lifecycle :: mode :- MetricsAuth :> "metrics" :> "lifecycle" :> DailyActivityQuery,
     revenue :: mode :- MetricsAuth :> "metrics" :> "revenue" :> MetricQuery,
-    organizations :: mode :- MetricsAuth :> "metrics" :> "organizations" :> MetricQuery,
+    organizations :: mode :- MetricsAuth :> "metrics" :> "organizations" :> OrganizationMetricQuery,
     custom :: mode :- MetricsAuth :> "metrics" :> "custom" :> MetricParameters (QueryParam "metric" Text :> QueryParam "events" Text :> QueryParam "aggregation" Text :> QueryParam "property" Text :> QueryParam "denominatorEvents" Text :> QueryParam "denominatorAggregation" Text :> MetricResponse),
     experiments ::
       mode

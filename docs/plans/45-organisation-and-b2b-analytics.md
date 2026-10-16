@@ -10,6 +10,12 @@ provenance:
     model: "claude-fable-5-1"
     harness: "claude-code"
     at: 2026-10-15T15:14:00Z
+  revisions:
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-10-16T12:47:09Z
+      mode: "implement"
+      note: "Implement organisation aggregation, governed traits and current membership attribution"
 ---
 
 # Organisation and B2B analytics
@@ -33,15 +39,20 @@ unit, which is what PostHog calls group analytics and Amplitude calls accounts.
 
 ## Progress
 
-- [ ] M1: `analytics.events_resolved` exposes `organization_id` as an eighth column and `GET /metrics/organizations` returns active organisations per bucket with filters and grouping.
-- [ ] M2: `aggregate=organizations` on users, funnel, retention, conversion and feature-adoption counts organisations instead of users.
-- [ ] M3: Organisation properties from `group` events are stored and usable as `org:<name>` dimensions.
-- [ ] M4: Events without an organisation can be attributed to their user's current organisation with `attribution=user_organization`.
+- [x] M1 (2026-10-16): Migration 0025 appends organization_id without changing the original seven-column prefix. The public route returns exact bucket counts and organization filters; owned fixtures return [2,1], and the conservative identity battery plus two native cache cases pass.
+- [x] M2 (2026-10-16): All five routes support organisation aggregation. Native/public checks distinguish [2,1] organisation funnel reach from [3,2] user reach, verify a chain completed by different members, retention [2,1], conversion 0.5 and feature adoption 1. User defaults and experiment parameter rejection pass.
+- [x] M3 (2026-10-16): Governed group v2 stores current typed organisation traits with deterministic replay-safe ordering. Enterprise then pro resolves to pro; revenue groups as plan=pro, seats=10, value=7. Group v1 remains context-only; Haskell helper versions, erasure runbook and current-definition maintenance rebuild are updated.
+- [x] M4 (2026-10-16): Current membership fills only unstamped events for resolved user subjects. Native/public checks cover pre-login stitching, anonymous/user text collisions, explicit-event precedence, moves outside the reporting range and rebuilds. Generated OpenAPI/contracts, client, documentation and all required bounds checks pass.
 
 
 ## Surprises & Discoveries
 
-(None yet.)
+The rich resolved relations already include organization_id, so migration 0025 only
+extends the public projections. The ordinary funnel already uses attribution for property
+selection; the organisation values must coexist with first_touch/last_touch/step values.
+The initial native run caught ClickHouse aggregate aliases shadowing raw organization_id;
+qualifying source columns preserves the intended state type. The shared shorthand parser
+also needed org added alongside user and prop.
 
 
 ## Decision Log
@@ -62,9 +73,45 @@ unit, which is what PostHog calls group analytics and Amplitude calls accounts.
   Date: 2026-10-15
 
 
+- Decision: Use typed trait values and the total ordering (occurred_at, received_at,
+  event_id), matching the implemented person-trait model rather than timestamp-only String
+  states. Reuse first-acceptance eligibility for group v2; group v1 stays context-only.
+  Rationale: Seats needs numeric comparisons, and equal-timestamp writes must have a
+  deterministic replay-safe winner. Date: 2026-10-16.
+- Decision: Preserve the ordinary funnel's existing property attribution values. The new
+  event/user_organization values select organisation attribution with first-touch property
+  selection; experiment funnels retain their existing attribution type.
+  Rationale: The parameter name is already released. Date: 2026-10-16.
+- Decision: Current membership records any explicit nonempty user/organisation group binding,
+  including group v1; only group v2 writes governed traits. Membership fallback applies
+  only to resolved user subjects and only when the event organisation is empty.
+  Rationale: Existing context-only SDK producers already establish membership without
+  granting legacy properties trait eligibility. Date: 2026-10-16.
+- Decision: Include both new aggregate tables in the current-definition administrative
+  rebuild. Whole-session/acquisition sources reject organisation dimensions because this
+  plan defines event-level organisation attribution only. Date: 2026-10-16.
+
+
 ## Outcomes & Retrospective
 
-(To be filled during and after implementation.)
+All four milestones are implemented. The owned organisation gate builds the repository,
+runs five non-pending native/schema cases and exercises ordinary public ingest/reporting
+against private PostgreSQL/ClickHouse and the built server. It verifies immutable replay,
+member timelines, retention, current typed traits, attribution, account isolation, invalid
+options and permanent error codes. The original conservative identity proof passes all
+20 expected subjects, cached/direct parity and repeated rebuilds; both native cache lifecycle
+cases pass. Deterministic coverage passes 380 core examples, 21 client examples and four
+production probes. Generated contracts/OpenAPI checks, OpenAPI lint, formatting and strict
+ADR validation pass.
+
+The source adapter lets the existing engines share organisation populations without changing
+their event ordering or ratio rules. The main integration lessons were preserving person
+selectors before aggregation, qualifying ClickHouse aggregate inputs, and respecting the
+released funnel attribution namespace. Durable decisions are recorded in
+[ADR-21](../adr/0021-organization-aggregation-and-current-membership.md), with the view,
+schema and reader records updated consistently. Current traits and membership deliberately
+reclassify historical queries. Organisation erasure is a fenced manual runbook operation;
+this plan does not add a public organisation-deletion command. No milestone remains open.
 
 
 ## Context and Orientation
@@ -73,10 +120,12 @@ unit, which is what PostHog calls group analytics and Amplitude calls accounts.
 (`kansoku-api/src/Kansoku/Event/Types.hs`), stored as `events_raw.organization_id`
 (`String DEFAULT ''`, `db/clickhouse/migrations/0004_events_raw_v2.sql`). Both SDKs set it
 through `group`: the Haskell client in `kansoku-client/src/Kansoku/Client.hs` and the browser
-SDK (`mori://shinzui/kansoku-ts`, `packages/kansoku-js/src/identity-api.ts`), which persists
+SDK (`mori://shinzui/kansoku-ts`, project-relative `packages/kansoku-js/src/identity-api.ts`;
+code artifact URI pending), which persists
 the organisation and stamps it on subsequent events. The `group` event is declared by
 `docs/plans/29-correct-client-timestamp-skew-and-count-ingest-rejections.md`. The
-identity-resolved view `analytics.events_resolved` has a frozen seven-column contract
+identity-resolved view `analytics.events_resolved` now has an eight-column contract with
+its original seven-column prefix preserved
 ([ADR 4](../adr/0004-queryable-event-properties-and-identity-resolved-projection.md)) that does
 not include the organisation; `docs/plans/32-time-aware-identity-bindings-and-bounded-resolution-cost.md`
 rewrites the view's internals, so this plan's column addition must be coordinated with it.
@@ -85,7 +134,8 @@ The `organizations` route in `kansoku-api/src/Kansoku/Metrics/Api.hs` carries th
 `user:` dimension pattern come from
 `docs/plans/40-person-properties-set-and-set-once-user-traits.md`; filters from
 `docs/plans/31-metric-property-filters-and-dual-grouping.md`; bounds from
-[ADR 9](../adr/0009-bounded-complete-aggregate-responses.md). No cross-repository ADR applies.
+[ADR 9](../adr/0009-bounded-complete-aggregate-responses.md). The implementation decisions are in
+[ADR-21](../adr/0021-organization-aggregation-and-current-membership.md). No cross-repository ADR applies.
 
 
 ## Plan of Work
@@ -110,8 +160,8 @@ aggregation.
 
 ### M3: Organisation properties
 
-Add `analytics.organization_properties` (`account_id, organization_id, name, value
-AggregateFunction(argMax, String, DateTime64(3,'UTC'))`) fed by a materialized view over
+Add `analytics.organization_properties` with account/organisation/name keys and typed
+argMax states ordered by (occurred_at, received_at, event_id) fed by a materialized view over
 `group` events with a non-empty organisation, and a view `organization_traits`. Declare the
 initial optional traits on `group` version 2 (`plan`, `seats`, `industry`, `country`) under
 ADR 7, and add the `org:<name>` dimension to filters and grouping with the same join shape as
@@ -130,9 +180,14 @@ traits. Regenerate OpenAPI and the client and document everything in the query g
 ## Concrete Steps
 
 ```bash
-just ch-migrate
-cabal test kansoku-core --test-options='--match "Organization"'
-just contracts && just openapi && just contracts-check && just openapi-check
+nix develop -c cabal build all --enable-tests
+nix develop -c python3 scripts/organizations_acceptance.py
+nix develop -c python3 scripts/identity_acceptance.py
+nix develop -c python3 scripts/deterministic-tests.py
+nix develop -c just contracts
+nix develop -c just openapi
+nix develop -c just contracts-check
+nix develop -c just openapi-check
 ```
 
 Example:
@@ -156,13 +211,20 @@ curl -s --get http://localhost:8080/metrics/funnel -H "Authorization: Bearer $TO
    `groupBy=org:plan` on revenue splits by organisation plan.
 4. M4: a browser `page_view` without an organisation counts for its user's organisation only
    under `user_organization`.
-5. Point cap, account predicate test and codes hold.
+5. Point cap, account predicate test and codes hold. The owned organisation gate runs
+   nonzero native examples with no pending tests, then drives public ingest/reporting over
+   private PostgreSQL/ClickHouse and the built server. Deterministic tests separately
+   validate routing, client signatures, schema eligibility and compiler rejection paths.
 
 
 ## Idempotence and Recovery
 
 View recreation is additive in columns; the previous definition is kept as a comment in the
-migration for rollback. New tables and views are replay-safe aggregate states.
+migration for rollback. New tables and views are replay-safe aggregate states. The migration ledger skips already
+applied filenames; retrying 0025 after partial DDL is safe because repeated argMax backfill
+states cannot change winners. Ordinary maintenance uses current materialized-view definitions,
+including the new organisation tables. The runbook documents fenced source deletion and
+membership rebuild; do not erase only an aggregate row or replay old migrations as recovery.
 
 
 ## Interfaces and Dependencies
@@ -175,3 +237,8 @@ pattern), `docs/plans/36-funnel-modes-and-experiment-exposure-diagnostics.md` (a
 for organisation funnels if exclusions are wanted). Claims the eighth view column, the
 `aggregate` and `attribution` parameters, the `organization` and `org:` dimensions, `group`
 version 2, and the `organization_properties` and `user_organizations` objects.
+
+Revision note (2026-10-16): Align the implementation with landed typed person traits,
+first-acceptance eligibility and deterministic ordering; reconcile the released funnel
+attribution parameter and current-definition administrative rebuilds. Acceptance remains
+the four original organisation outcomes.

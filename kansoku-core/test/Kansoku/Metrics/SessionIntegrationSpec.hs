@@ -107,7 +107,7 @@ spec = describe "Kansoku.Sessions native" $ do
       runEff (Query.runSessionMetric pool SessionCount capped) `shouldReturn` Left Query.MetricResultTooLarge
 
 request :: Query.QueryRequest
-request = Query.QueryRequest (AccountId "sessions-native") (fromGregorian 2026 7 1) (fromGregorian 2026 7 3) Nothing (Just Day) [] [] False
+request = Query.QueryRequest (AccountId "sessions-native") (fromGregorian 2026 7 1) (fromGregorian 2026 7 3) Nothing (Just Day) [] [] False False False
 
 sessions :: QueryPool -> SessionMeasure -> Query.QueryRequest -> IO MetricResult
 sessions pool measure req = runEff (Query.runSessionMetric pool measure req) >>= either (fail . show) pure

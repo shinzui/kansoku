@@ -266,6 +266,8 @@ dayRequest =
       timeGrain = Just Day,
       filters = [],
       cohorts = [],
+      aggregateOrganizations = False,
+      userOrganization = False,
       includeBots = False
     }
 

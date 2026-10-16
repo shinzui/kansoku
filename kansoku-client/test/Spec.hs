@@ -20,6 +20,7 @@ import GHC.Clock (getMonotonicTime)
 import Kansoku.Api.Response (KansokuResult (..), problem)
 import Kansoku.Api.Response qualified as Response
 import Kansoku.Client
+import Kansoku.Client qualified as Client
 import Kansoku.Client.Metrics
 import Kansoku.Event
 import Kansoku.Ingest.Api (BatchAck (..), BeaconAPI, BeaconEnvelope (..), PlainTextJSON, ingestEvent)
@@ -117,6 +118,15 @@ spec = describe "Kansoku.Client" $ do
       events <- readEvents received
       [(event ^. #eventName, event ^. #schemaVersion, event ^. #userId) | event <- events]
         `shouldBe` [(EventName "identify", Just 2, Just (UserId "user")), (EventName "identify_once", Just 1, Just (UserId "user")), (EventName "identify", Just 1, Just (UserId "user"))]
+
+  it "pins the group helper to governed v2 while retaining organisation context" $
+    withRecorder (const (pure status202)) $ \port received _ -> do
+      withClient (testConfig port) $ \client -> do
+        Client.group client emptyIds "org" ["seats" Aeson..= (10 :: Int)]
+        flush client
+      [event] <- readEvents received
+      event ^. #schemaVersion `shouldBe` Just 2
+      event ^. #organizationId `shouldBe` Just (OrganizationId "org")
 
   it "round-trips a helper-built event through the shared AnalyticsEvent JSON type" $
     withRecorder (const (pure status202)) $ \port received _ -> do

@@ -39,7 +39,7 @@ spec = describe "Cohort compiler" $ do
   it "forces resolved event and whole-session paths, with matching cohort groups" $ do
     membership <- either (fail . T.unpack) pure (compileMembership ident end definition)
     selected <- either (fail . T.unpack) pure (F.mkMetricFilter "cohort" F.FilterEq (Just (A.String ident)))
-    let request = Q.QueryRequest (AccountId "cohort-sentinel") (fromGregorian 2026 7 1) end (Just ["cohort:" <> ident]) Nothing [selected] [(ident, membership)] False
+    let request = Q.QueryRequest (AccountId "cohort-sentinel") (fromGregorian 2026 7 1) end (Just ["cohort:" <> ident]) Nothing [selected] [(ident, membership)] False False False
     users <- either (fail . show) pure (Q.buildSQL defaultRegistry (Registry.Simple Registry.activeUsers) request)
     users `shouldSatisfy` T.isInfixOf "events_resolved_http"
     users `shouldSatisfy` T.isInfixOf "'in', 'out'"

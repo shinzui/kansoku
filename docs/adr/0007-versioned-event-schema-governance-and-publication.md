@@ -2,7 +2,7 @@
 type: Architecture Decision Record
 title: Versioned event schema governance and publication
 description: Govern event schemas as immutable, contiguous versions authored in the Haskell registry, with accepted events recording the schema version they matched.
-timestamp: 2026-10-16T01:41:00Z
+timestamp: 2026-10-16T12:55:33Z
 generated:
   by: human:kansoku-maintainers
   at: 2026-07-19T00:00:00Z
@@ -104,3 +104,13 @@ Catalog v4 adds numeric multipleOf, with company_size minimum 0 and multipleOf 1
 validation and immutable first-acceptance eligibility precede native Float64 storage, as
 [ADR-16](0016-governed-current-user-traits-and-replay-safe-erasure.md) defines. Older raw rows and
 private queue versions never acquire trait eligibility from a later catalog declaration.
+
+## Governed organisation schemas
+
+Group v1 remains context-only. Group v2 adds optional string plan, industry and country,
+and finite nonnegative integer seats. Top-level organizationId must be nonempty. The
+Haskell group helpers select v2; explicit version APIs remain available. First-acceptance
+eligibility uses the existing private queue marker, revalidated before writing. Legacy
+queue envelopes and raw rows cannot promote properties into governed state. Omitted
+keys preserve values; null/type-invalid values are rejected. Current state and membership
+semantics are recorded in [ADR-21](0021-organization-aggregation-and-current-membership.md).

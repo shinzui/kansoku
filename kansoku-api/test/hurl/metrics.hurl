@@ -112,12 +112,10 @@ jsonpath "$.points" count > 0
 
 GET {{base_url}}/metrics/organizations?from={{from}}&to={{to}}
 Authorization: Bearer {{service_token}}
-HTTP 404
+HTTP 200
 [Asserts]
-header "Content-Type" contains "application/problem+json"
-jsonpath "$.code" == "not_implemented"
-jsonpath "$.status" == 404
-jsonpath "$.retryable" == false
+header "Content-Type" contains "application/json"
+jsonpath "$.metric" == "organizations"
 
 GET {{base_url}}/metrics/custom?from={{from}}&to={{to}}
 Authorization: Bearer {{service_token}}

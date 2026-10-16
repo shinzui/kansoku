@@ -8,6 +8,8 @@ module Kansoku.Event.Registry
     defaultRegistry,
     governedTraits,
     lookupTrait,
+    organizationTraits,
+    lookupOrganizationTrait,
     emptyRegistry,
     knownVersions,
     latestSchema,
@@ -110,6 +112,7 @@ defaultRegistry =
           PropertySpec "newId" PTString True (Just NonEmptyStringPattern) (Just "User identifier; must equal userId.")
         ],
       EventSchema (EventName "group") 1 "Stamp organization context; requires a nonempty top-level organizationId." [],
+      EventSchema (EventName "group") 2 "Set current organization traits; omitted traits remain unchanged." organizationTraits,
       EventSchema
         (EventName "page_leave")
         1
@@ -175,6 +178,14 @@ governedTraits =
   | name <- ["plan", "signup_source", "initial_plan", "country", "role"]
   ]
     <> [PropertySpec "company_size" PTNumber False (Just NonNegativeIntegerPattern) (Just "Finite nonnegative integer company size; numeric comparisons use Float64.")]
+
+organizationTraits :: [PropertySpec]
+organizationTraits =
+  [plainProperty name PTString False ("Current organization " <> name) | name <- ["plan", "industry", "country"]]
+    <> [PropertySpec "seats" PTNumber False (Just NonNegativeIntegerPattern) (Just "Finite nonnegative integer seat count.")]
+
+lookupOrganizationTrait :: Text -> Maybe PropertySpec
+lookupOrganizationTrait key = find (\PropertySpec {name} -> name == key) organizationTraits
 
 lookupTrait :: Text -> Maybe PropertySpec
 lookupTrait key = find (\PropertySpec {name} -> name == key) governedTraits

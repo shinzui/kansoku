@@ -3,13 +3,15 @@
 module Kansoku.Metrics.Query.Traits
   ( referencedTraits,
     eventSource,
+    organizationSource,
+    referencedOrganizationTraits,
     sessionSource,
   )
 where
 
 import Data.List (nub)
 import Data.Text qualified as Text
-import Kansoku.Event (PropertySpec (..), PropertyType (..), lookupTrait)
+import Kansoku.Event (PropertySpec (..), PropertyType (..), lookupOrganizationTrait, lookupTrait)
 import Kansoku.Prelude
 
 referencedTraits :: [Text] -> [Text]
@@ -42,3 +44,25 @@ projection name =
         Just PropertySpec {propertyType = PTNumber} -> ("number_value", "Float64")
         _ -> ("text_value", "String")
    in "if(countIf(name='" <> name <> "')>0,anyIf(" <> column <> ",name='" <> name <> "'),CAST(NULL,'Nullable(" <> kind <> ")')) AS user_trait_" <> name
+
+referencedOrganizationTraits :: [Text] -> [Text]
+referencedOrganizationTraits dimensions = nub [name | dimension <- dimensions, Just name <- [Text.stripPrefix "org:" dimension], isJust (lookupOrganizationTrait name)]
+
+organizationSource :: [Text] -> Text -> Text
+organizationSource [] source = source
+organizationSource names source =
+  "(SELECT e.*,"
+    <> Text.intercalate "," ["traits.org_trait_" <> name <> " AS org_trait_" <> name | name <- names]
+    <> " FROM "
+    <> source
+    <> " AS e LEFT JOIN (SELECT account_id,organization_id,"
+    <> Text.intercalate "," (map project names)
+    <> " FROM analytics.organization_traits WHERE account_id={account_id:String} AND name IN ("
+    <> Text.intercalate "," ["'" <> name <> "'" | name <- names]
+    <> ") GROUP BY account_id,organization_id) AS traits ON e.account_id=traits.account_id AND e.organization_id=traits.organization_id)"
+  where
+    project name =
+      let (column, kind) = case lookupOrganizationTrait name of
+            Just PropertySpec {propertyType = PTNumber} -> ("number_value", "Float64")
+            _ -> ("text_value", "String")
+       in "if(countIf(name='" <> name <> "')>0,anyIf(" <> column <> ",name='" <> name <> "'),CAST(NULL,'Nullable(" <> kind <> ")')) AS org_trait_" <> name

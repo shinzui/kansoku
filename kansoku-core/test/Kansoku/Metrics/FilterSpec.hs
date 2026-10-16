@@ -133,7 +133,7 @@ spec = describe "Kansoku.Metrics filters" $ do
         req "funnel" [("timeGrain", Just "day")]
       ]
   where
-    request = Query.QueryRequest (AccountId "filters-unit") (fromGregorian 2026 7 1) (fromGregorian 2026 7 2) Nothing Nothing [] [] False
+    request = Query.QueryRequest (AccountId "filters-unit") (fromGregorian 2026 7 1) (fromGregorian 2026 7 2) Nothing Nothing [] [] False False False
 
 validFilter :: Text -> IO Filter.MetricFilter
 validFilter = either (fail . Text.unpack) pure . Filter.parseMetricFilter

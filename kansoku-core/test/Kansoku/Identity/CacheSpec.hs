@@ -99,7 +99,7 @@ spec = describe "Kansoku.Identity.Cache native" $ do
 -- reversal affecting event/subject association in a multirow native result.
 subjects :: QueryPool -> Text -> IO (Map.Map Text Text)
 subjects pool account = withIdentityQueryConnection pool account "2026-07-01" "2026-07-02" $ \conn -> do
-  let req = QueryRequest (AccountId account) (fromGregorian 2026 7 1) (fromGregorian 2026 7 2) Nothing Nothing [] [] False
+  let req = QueryRequest (AccountId account) (fromGregorian 2026 7 1) (fromGregorian 2026 7 2) Nothing Nothing [] [] False False False
       sql = "SELECT toJSONString(tuple(event_id,canonical_user)) AS pair FROM " <> resolvedSource req
       statement :: Select '[Column "pair" ChString] PairRow
       statement = passParameters (addParameter "account_id" (toChType (Text.encodeUtf8 account) :: ChString)) $ unsafeMkSelect $ const (Text.encodeUtf8Builder sql)

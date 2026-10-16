@@ -32,7 +32,7 @@ import Text.Read (readMaybe)
 
 queriesFor :: Day -> Day -> Map.Map Text Text
 queriesFor fromDay toDay =
-  let req = QueryRequest (AccountId "bench-a") fromDay toDay Nothing Nothing [] [] False
+  let req = QueryRequest (AccountId "bench-a") fromDay toDay Nothing Nothing [] [] False False False
       step value = either (error . show) id (mkSqlName value)
       ratio = either (error . show) id (buildSQL defaultRegistry (Ratioed conversionRate) req)
    in Map.fromList
@@ -100,7 +100,7 @@ runSession = do
             _ -> fromDay
           checkout = if baseline then withMetricsQueryConnection pool else withIdentityQueryConnection pool "bench-a" (Text.pack (show scopeFrom)) (Text.pack (show toDay))
       -- Fail if the compiler and this connection's evidence scope drift apart.
-      let expectedSource = resolvedSource (QueryRequest (AccountId "bench-a") scopeFrom toDay Nothing Nothing [] [] False)
+      let expectedSource = resolvedSource (QueryRequest (AccountId "bench-a") scopeFrom toDay Nothing Nothing [] [] False False False)
       unless (expectedSource `Text.isInfixOf` sql) (fail "benchmark evidence scope differs from compiler source")
       if cold then closeQueryPool pool else pure ()
       -- Instrumentation setup stays outside measured application time.

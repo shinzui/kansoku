@@ -8,13 +8,14 @@ credentials on the consumer server, and restrict network access to that server.
 ## Stable projections and reader setup
 
 Apply all numbered ClickHouse migrations with the writer stopped, as described in
-[operations](operations.md). Migration 0023 establishes these supported projections:
+[operations](operations.md). Migration 0023 establishes the reader projections; migration 0025 appends organisation
+context to the two compatibility views while preserving the analytical v1 projection:
 
 | View | Ordered columns / purpose |
 | --- | --- |
-| `analytics.events_resolved` | Exactly `event_id, event_name, occurred_at, url, account_id, canonical_user, properties_json`. |
-| `analytics.events_resolved_v3` | The same seven-column contract, with the current conservative identity resolver. |
-| `analytics.events_analytics_v1(account=…, from_time=…, to_time=…)` | Those seven columns, followed by `source, source_service, session_id, is_bot, browser_family, os_family, device_class, channel, country_code`. |
+| `analytics.events_resolved` | Exactly `event_id, event_name, occurred_at, url, account_id, canonical_user, properties_json, organization_id`. |
+| `analytics.events_resolved_v3` | The same eight-column contract, with the current conservative identity resolver. |
+| `analytics.events_analytics_v1(account=…, from_time=…, to_time=…)` | `event_id, event_name, occurred_at, url, account_id, canonical_user, properties_json`, followed by `source, source_service, session_id, is_bot, browser_family, os_family, device_class, channel, country_code`. |
 
 The versioned analytical projection takes an account String and UTC DateTime64(3) half-open
 bounds. `canonical_user` is `user:<id>`, otherwise `anonymous:<id>`, otherwise empty. Explicit

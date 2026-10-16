@@ -84,6 +84,8 @@ groupEvent ::
   AnalyticsEvent
 groupEvent eid src occ recv usr org properties =
   baseEvent eid (EventName "group") src occ recv
+    & #schemaVersion
+    ?~ 2
     & #userId
     .~ usr
     & #organizationId

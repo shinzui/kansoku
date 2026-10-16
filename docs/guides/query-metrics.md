@@ -161,7 +161,7 @@ conversion returns a single zero when its denominator is zero.
 | `/metrics/experiments/funnel` | Exact post-exposure funnel reach/timing per variant, including any-order, attempt totals and property attribution. |
 
 `/metrics/custom` computes ad-hoc or saved definitions as described below.
-`/metrics/organizations` remains reserved and returns HTTP 404 `not_implemented`.
+`/metrics/organizations` counts exact organisations per bucket; see Organisations below.
 
 ## Standard metric example
 
@@ -530,6 +530,61 @@ A user seeing A then B has exposed_users=1, multiple_exposure=1, assigned A=1, B
 Existing experiment conversion still counts that user in both observed variants. First observed
 exposure is not an authoritative randomization log. High contamination invalidates a naive
 sample-ratio interpretation; these diagnostics do not calculate significance or select winners.
+
+
+## Organisations
+
+`GET /metrics/organizations` counts distinct nonempty organisation IDs on matching events,
+with day buckets by default. It supports `timeGrain`, one/two dimensions and bounded repeated
+filters. Use `filter=organization:eq:workspace_123` to inspect one organisation, or
+`groupBy=organization,source_service`. Identity-only `group` events count on this route;
+`/metrics/users?aggregate=organizations` counts activity and excludes identity/profile events.
+
+Users, funnel, retention, conversion and feature-adoption accept `aggregate=users|organizations`,
+defaulting to users. Organisations merge their members' event streams: one member may start a
+funnel and another finish it. Sequential/strict order and exclusions still apply. A retention
+cohort is the organisation's first matching activity in the selected window (or retained history
+with `cohort=lifetime`); any member can retain it. Feature adoption counts organisations using
+the feature; conversion keeps the existing ordered signup denominator and ratio semantics.
+Organisation aggregation excludes events without an organisation and bypasses user rollups.
+Experiments, sessions, acquisition, paths, stickiness and lifecycle keep their existing user or
+session aggregation and reject `aggregate`. All queries retain account isolation, execution and
+memory limits, and the complete-or-error 10,000-point cap.
+
+Emit `group` with explicit `schemaVersion: 2`, a nonempty top-level `organizationId`, and optional
+`plan`, `industry`, `country` strings or finite nonnegative integral `seats`. Omitted properties
+remain unchanged; null is rejected. Version 1 remains context-only. Haskell `group` and
+`groupEvent` helpers select version 2; explicit version APIs can still send v1. Other producers
+must select version 2 explicitly to write traits. For each account/organisation/key the latest
+(occurredAt milliseconds, first accepted receivedAt milliseconds, eventId) wins. Duplicate
+immutable events cannot change the winner. Use `org:plan`, `org:industry`, `org:country`,
+`org:seats` for typed filters and grouping on ordinary event-based metrics, including revenue
+(experiment exposure/conversion selection keeps its existing user/cohort-only contract):
+
+```bash
+curl --fail-with-body --get http://localhost:8080/metrics/revenue \
+  -H "Authorization: Bearer $TOKEN" \
+  --data-urlencode from=2026-07-01 --data-urlencode to=2026-08-01 \
+  --data-urlencode groupBy=org:plan
+```
+
+`attribution=event` is the default on organisation aggregation. With
+`attribution=user_organization`, an event lacking an organisation inherits its resolved user's
+current organisation, taken from the latest `group` event with a nonempty explicit userId and
+organisationId. Existing event organisation IDs always win. Unresolved anonymous identities,
+including an anonymous ID with the same text as a user ID, never inherit membership. Membership
+is account scoped; a pre-login event stitched to a user can inherit it. User aggregation rejects
+`user_organization`; `/metrics/organizations` always aggregates organisations and rejects
+`aggregate=users`.
+
+Current traits and membership intentionally reclassify historical metrics; these are not
+event-time snapshots. A later group/move may change historical results. No implicit ungroup or
+membership deletion event is defined. The ordinary funnel's existing `attribution=first_touch`,
+`last_touch` and `step:<n>` values remain property attribution with event organisation IDs.
+Its `event` and `user_organization` values use first-touch property attribution. Experiment
+funnels retain only their original property attribution values. Organisation dimensions are
+unsupported on whole-session/acquisition sources. Business traits are analytics observations,
+never authorization facts. See the [erasure runbook](../runbooks/identity-data-deletion.md).
 
 
 ## Current person traits

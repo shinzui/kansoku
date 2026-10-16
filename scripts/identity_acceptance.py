@@ -107,7 +107,7 @@ def verify_identity(env):
         for table in ['dau', 'wau']:
             assert ch(f"SELECT uniqCombinedMerge(users) FROM analytics.{table} WHERE account_id='namespace'") == '2'
         columns = ch('DESCRIBE analytics.events_resolved').splitlines()
-        assert [line.split('\t')[0] for line in columns] == ['event_id','event_name','occurred_at','url','account_id','canonical_user','properties_json']
+        assert [line.split('\t')[0] for line in columns] == ['event_id','event_name','occurred_at','url','account_id','canonical_user','properties_json','organization_id']
         assert ch("SELECT subject_kind || ':' || subject_id FROM " + source() + " WHERE event_id='pre-a'") == 'user:A'
 
     assert int(ch("SELECT count() FROM analytics.identity_signal_users WHERE signal_kind='fingerprint' AND signal_value='expired'")) > 0, 'expiry fixture must exist physically before query-time filtering'
@@ -115,6 +115,7 @@ def verify_identity(env):
     ch('SYSTEM START MERGES analytics.events_raw; OPTIMIZE TABLE analytics.events_raw FINAL')
     verify()
     ch(Path('db/clickhouse/migrations/0018_conservative_identity_resolution.sql').read_text())
+    ch(Path('db/clickhouse/migrations/0025_organization_analytics.sql').read_text())
     verify()
     print(f'Conservative identity: {len(expected)} expected subjects, no fanout, account isolation, namespaced sketches and repeat rebuild passed.', flush=True)
 

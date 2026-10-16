@@ -71,6 +71,38 @@
           "note": "Stamp organization context; requires a nonempty top-level organizationId.",
           "properties": [],
           "version": 1
+        },
+        {
+          "note": "Set current organization traits; omitted traits remain unchanged.",
+          "properties": [
+            {
+              "description": "Current organization plan",
+              "name": "plan",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "description": "Current organization industry",
+              "name": "industry",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "description": "Current organization country",
+              "name": "country",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "description": "Finite nonnegative integer seat count.",
+              "minimum": 0,
+              "multipleOf": 1,
+              "name": "seats",
+              "required": false,
+              "type": "number"
+            }
+          ],
+          "version": 2
         }
       ]
     },

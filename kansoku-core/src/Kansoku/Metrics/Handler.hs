@@ -28,7 +28,7 @@ import Kansoku.Cohort.Store qualified as CohortStore
 import Kansoku.Event (AccountId, defaultRegistry)
 import Kansoku.Exception (trySynchronous)
 import Kansoku.Logging (logError, runLogStderr)
-import Kansoku.Metrics.Api (AcquisitionMeasure (..), CohortMode (..), ExperimentMeasure (..), FunnelAttribution (..), FunnelCounting (..), FunnelMeasure (..), FunnelMode (..), MetricResult, MetricsRoutes (..), PathBy (..), RetentionMode (..), SessionMeasure (..), TimeGrain (..), UserWindow (..))
+import Kansoku.Metrics.Api (AcquisitionMeasure (..), AggregateBy (..), CohortMode (..), ExperimentMeasure (..), FunnelAttribution (..), FunnelCounting (..), FunnelMeasure (..), FunnelMode (..), MetricResult, MetricsRoutes (..), OrganizationAttribution (..), PathBy (..), RetentionMode (..), SessionMeasure (..), TimeGrain (..), UserWindow (..), parseFunnelAttribution)
 import Kansoku.Metrics.Custom
 import Kansoku.Metrics.Definition
 import Kansoku.Metrics.DefinitionStore qualified as DefinitionStore
@@ -57,13 +57,13 @@ metricsServerUsing pg pool =
       funnel = funnelHandler,
       retention = retentionHandler,
       acquisition = acquisitionHandler,
-      featureAdoption = metricHandler "feature_adoption",
-      conversion = metricHandler "conversion_rate",
+      featureAdoption = organizationMetricHandler "feature_adoption",
+      conversion = organizationMetricHandler "conversion_rate",
       users = usersHandler,
       stickiness = stickinessHandler,
       lifecycle = lifecycleHandler,
       revenue = metricHandler "revenue",
-      organizations = notImplemented "organizations",
+      organizations = organizationMetricHandler "organizations",
       custom = customHandler,
       experiments = experimentsHandler,
       experimentConversion = experimentConversionHandler,
@@ -77,6 +77,13 @@ metricsServerUsing pg pool =
         Just metric ->
           metricEffToHandler
             (withCohorts pg (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain filters) (\request -> Query.run defaultRegistry pool metric request))
+
+    organizationMetricHandler :: Text -> MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> [MetricFilter] -> Maybe AggregateBy -> Maybe OrganizationAttribution -> Handler (KansokuResult MetricResult)
+    organizationMetricHandler key (MetricsPrincipal principal) fromDay toDay groupBy grain filters aggregate attribution =
+      withOrganizationOptions (key == "organizations") aggregate attribution $ \org current ->
+        case builtinMetric key of
+          Nothing -> pure (KansokuNotFound (notFound "metric_not_found" key))
+          Just metric -> metricEffToHandler (withCohorts pg (queryRequest (principal ^. #accountId) fromDay toDay groupBy grain filters) (\request -> Query.run defaultRegistry pool metric request {Query.aggregateOrganizations = org, Query.userOrganization = current}))
 
     customHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> [MetricFilter] -> Maybe Text -> Maybe Text -> Maybe Text -> Maybe Text -> Maybe Text -> Maybe Text -> Handler (KansokuResult MetricResult)
     customHandler (MetricsPrincipal principal) fromDay toDay group grain filters savedName events aggregation property denominatorEvents denominatorAggregation =
@@ -116,9 +123,10 @@ metricsServerUsing pg pool =
         Nothing -> pure (KansokuNotFound (notFound "metric_not_found" ("no such metric: " <> key)))
         Just metric -> metricEffToHandler (withCohorts pg (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain filters) (\request -> Query.run defaultRegistry pool metric request {Query.includeBots = fromMaybe False bots}))
 
-    usersHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> [MetricFilter] -> Maybe UserWindow -> Maybe Bool -> Handler (KansokuResult MetricResult)
-    usersHandler (MetricsPrincipal principal) fromDay toDay groupBy timeGrain filters window bots =
-      effToHandler (withCohorts pg (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain filters) (\request -> Query.runUsers defaultRegistry pool (fromMaybe CalendarWindow window) request {Query.includeBots = fromMaybe False bots}))
+    usersHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> [MetricFilter] -> Maybe UserWindow -> Maybe Bool -> Maybe AggregateBy -> Maybe OrganizationAttribution -> Handler (KansokuResult MetricResult)
+    usersHandler (MetricsPrincipal principal) fromDay toDay groupBy timeGrain filters window bots aggregate attribution =
+      withOrganizationOptions False aggregate attribution $ \org current ->
+        effToHandler (withCohorts pg (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain filters) (\request -> Query.runUsers defaultRegistry pool (fromMaybe CalendarWindow window) request {Query.includeBots = fromMaybe False bots, Query.aggregateOrganizations = org, Query.userOrganization = current}))
 
     stickinessHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> [MetricFilter] -> Maybe Bool -> Handler (KansokuResult MetricResult)
     stickinessHandler (MetricsPrincipal principal) fromDay toDay groupBy timeGrain filters bots =
@@ -153,33 +161,35 @@ metricsServerUsing pg pool =
               Left (QueryLimitError code message) -> pure (KansokuBadRequest (badRequest code message))
               Right () -> effToHandler (withCohorts pg (queryRequest (principal ^. #accountId) fromDay toDay Nothing Nothing filters) (\request -> Query.runPaths defaultRegistry pool request options))
 
-    funnelHandler :: MetricsPrincipal -> Day -> Day -> Text -> Maybe Int -> Maybe FunnelMode -> Maybe FunnelMeasure -> Maybe FunnelCounting -> Maybe FunnelAttribution -> [Text] -> Maybe Text -> [MetricFilter] -> Handler (KansokuResult MetricResult)
-    funnelHandler (MetricsPrincipal principal) fromDay toDay stepsParam requestedWindow mode measure counting attribution excludes groupBy filters =
-      withDateRange fromDay toDay $
-        case nonEmptyCsv stepsParam of
-          [] -> pure (KansokuBadRequest (badRequest "invalid_funnel_steps" ("invalid funnel steps: " <> stepsParam)))
-          rawSteps ->
-            case traverse mkSqlName rawSteps of
-              Left invalid ->
-                pure
-                  ( KansokuBadRequest
-                      (badRequest "invalid_funnel_step" ("invalid funnel step: " <> invalid))
-                  )
-              Right steps ->
-                case funnelWindow fromDay toDay requestedWindow of
-                  Left invalid ->
-                    pure
-                      ( KansokuBadRequest
-                          (badRequest "invalid_funnel_window" ("invalid funnel window: " <> invalid <> "; expected 1..7776000 seconds"))
-                      )
-                  Right window ->
-                    withExclusions excludes $ \excluded -> effToHandler (withCohorts pg (queryRequest (principal ^. #accountId) fromDay toDay groupBy Nothing filters) (\request -> Query.runFunnelMetric defaultRegistry pool request Nothing (Query.FunnelOptions (fromMaybe FunnelSequential mode) (fromMaybe FunnelCount measure) excluded (fromMaybe FunnelUniques counting) (fromMaybe FunnelFirstTouch attribution)) window steps))
+    funnelHandler :: MetricsPrincipal -> Day -> Day -> Text -> Maybe Int -> Maybe FunnelMode -> Maybe FunnelMeasure -> Maybe FunnelCounting -> Maybe Text -> [Text] -> Maybe Text -> [MetricFilter] -> Maybe AggregateBy -> Handler (KansokuResult MetricResult)
+    funnelHandler (MetricsPrincipal principal) fromDay toDay stepsParam requestedWindow mode measure counting attribution excludes groupBy filters aggregate =
+      withFunnelAttribution aggregate attribution $ \org current touch ->
+        withDateRange fromDay toDay $
+          case nonEmptyCsv stepsParam of
+            [] -> pure (KansokuBadRequest (badRequest "invalid_funnel_steps" ("invalid funnel steps: " <> stepsParam)))
+            rawSteps ->
+              case traverse mkSqlName rawSteps of
+                Left invalid ->
+                  pure
+                    ( KansokuBadRequest
+                        (badRequest "invalid_funnel_step" ("invalid funnel step: " <> invalid))
+                    )
+                Right steps ->
+                  case funnelWindow fromDay toDay requestedWindow of
+                    Left invalid ->
+                      pure
+                        ( KansokuBadRequest
+                            (badRequest "invalid_funnel_window" ("invalid funnel window: " <> invalid <> "; expected 1..7776000 seconds"))
+                        )
+                    Right window ->
+                      withExclusions excludes $ \excluded -> effToHandler (withCohorts pg (queryRequest (principal ^. #accountId) fromDay toDay groupBy Nothing filters) (\request -> Query.runFunnelMetric defaultRegistry pool request {Query.aggregateOrganizations = org, Query.userOrganization = current} Nothing (Query.FunnelOptions (fromMaybe FunnelSequential mode) (fromMaybe FunnelCount measure) excluded (fromMaybe FunnelUniques counting) touch) window steps))
 
-    retentionHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> [MetricFilter] -> Maybe Text -> Maybe RetentionMode -> Maybe CohortMode -> Maybe Bool -> Handler (KansokuResult MetricResult)
-    retentionHandler (MetricsPrincipal principal) fromDay toDay groupBy timeGrain filters daysParam mode cohort bots =
-      case parseOffsets daysParam of
-        Left message -> pure (KansokuBadRequest (badRequest "invalid_retention_days" message))
-        Right offsets -> effToHandler (withCohorts pg (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain filters) (\request -> Query.runRetentionMetric defaultRegistry pool (fromMaybe RetentionOn mode) (fromMaybe WindowCohort cohort) request {Query.includeBots = fromMaybe False bots} offsets))
+    retentionHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> [MetricFilter] -> Maybe Text -> Maybe RetentionMode -> Maybe CohortMode -> Maybe Bool -> Maybe AggregateBy -> Maybe OrganizationAttribution -> Handler (KansokuResult MetricResult)
+    retentionHandler (MetricsPrincipal principal) fromDay toDay groupBy timeGrain filters daysParam mode cohort bots aggregate attribution =
+      withOrganizationOptions False aggregate attribution $ \org current ->
+        case parseOffsets daysParam of
+          Left message -> pure (KansokuBadRequest (badRequest "invalid_retention_days" message))
+          Right offsets -> effToHandler (withCohorts pg (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain filters) (\request -> Query.runRetentionMetric defaultRegistry pool (fromMaybe RetentionOn mode) (fromMaybe WindowCohort cohort) request {Query.includeBots = fromMaybe False bots, Query.aggregateOrganizations = org, Query.userOrganization = current} offsets))
 
     experimentsHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> Maybe ExperimentMeasure -> Maybe Text -> [MetricFilter] -> Handler (KansokuResult MetricResult)
     experimentsHandler (MetricsPrincipal principal) fromDay toDay experimentParam timeGrain measure groupBy filters =
@@ -288,13 +298,6 @@ metricsServerUsing pg pool =
                                 )
                             )
 
-    notImplemented :: Text -> MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> [MetricFilter] -> Handler (KansokuResult MetricResult)
-    notImplemented name _principal _ _ _ _ _ =
-      pure
-        ( KansokuNotFound
-            (notFound "not_implemented" ("metric endpoint is stubbed in the MVP: " <> name))
-        )
-
 queryRequest :: AccountId -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> [MetricFilter] -> Query.QueryRequest
 queryRequest accountId fromDay toDay groupBy timeGrain filters =
   Query.QueryRequest
@@ -305,6 +308,8 @@ queryRequest accountId fromDay toDay groupBy timeGrain filters =
       timeGrain,
       filters,
       cohorts = [],
+      aggregateOrganizations = False,
+      userOrganization = False,
       includeBots = False
     }
 
@@ -392,3 +397,23 @@ withCohorts pg request action = do
   case sequence loaded of
     Left failure -> pure (Left failure)
     Right definitions -> action request {Query.cohorts = definitions}
+
+withOrganizationOptions :: Bool -> Maybe AggregateBy -> Maybe OrganizationAttribution -> (Bool -> Bool -> Handler (KansokuResult MetricResult)) -> Handler (KansokuResult MetricResult)
+withOrganizationOptions fixed aggregate attribution action
+  | fixed && aggregate == Just AggregateUsers = invalidOrganization "organizations always aggregates organizations"
+  | current && not org = invalidOrganization "user_organization attribution requires aggregate=organizations"
+  | otherwise = action org current
+  where
+    org = fixed || aggregate == Just AggregateOrganizations
+    current = attribution == Just UserOrganization
+
+invalidOrganization :: Text -> Handler (KansokuResult MetricResult)
+invalidOrganization = pure . KansokuBadRequest . badRequest "invalid_organization_options"
+
+withFunnelAttribution :: Maybe AggregateBy -> Maybe Text -> (Bool -> Bool -> FunnelAttribution -> Handler (KansokuResult MetricResult)) -> Handler (KansokuResult MetricResult)
+withFunnelAttribution aggregate value action = case value of
+  Just "user_organization" -> withOrganizationOptions False aggregate (Just UserOrganization) (\org current -> action org current FunnelFirstTouch)
+  Just "event" -> withOrganizationOptions False aggregate (Just EventOrganization) (\org current -> action org current FunnelFirstTouch)
+  _ -> case traverse parseFunnelAttribution value of
+    Left message -> pure (KansokuBadRequest (badRequest "malformed_request" message))
+    Right touch -> action (aggregate == Just AggregateOrganizations) False (fromMaybe FunnelFirstTouch touch)

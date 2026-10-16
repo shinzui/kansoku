@@ -30,6 +30,7 @@ builtinMetrics =
       ("page_views", Simple pageViews),
       ("sessions", Simple sessions),
       ("active_users", Simple activeUsers),
+      ("organizations", Simple (metric "organizations" "Exact organizations active in each bucket." [] UniqueCount [] (Just Day))),
       ("new_users", Simple newUsers),
       ("returning_users", Simple returningUsers),
       ("conversion_rate", Ratioed conversionRate),

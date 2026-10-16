@@ -125,7 +125,7 @@ validateEventWith registry event =
 governedTraitEligible :: AnalyticsEvent -> Bool
 governedTraitEligible event =
   let operation = (unEventName (event ^. #eventName), fromMaybe 1 (event ^. #schemaVersion))
-   in operation `elem` [("identify", 2), ("identify_once", 1)] && case validateEvent event of
+   in operation `elem` [("identify", 2), ("identify_once", 1), ("group", 2)] && case validateEvent event of
         Right _ -> True
         Left _ -> False
 

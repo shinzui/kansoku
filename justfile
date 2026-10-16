@@ -153,3 +153,7 @@ paths-acceptance: build-with-tests
 # Own disposable stores and verify custom metrics and saved definitions.
 custom-metrics-acceptance: build-with-tests
     python3 scripts/custom_metrics_acceptance.py
+
+# Own disposable stores and verify organisation metrics, traits and membership.
+organizations-acceptance: build-with-tests
+    python3 scripts/organizations_acceptance.py

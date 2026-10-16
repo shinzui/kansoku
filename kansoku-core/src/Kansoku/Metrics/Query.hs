@@ -121,6 +121,8 @@ data QueryRequest = QueryRequest
     timeGrain :: !(Maybe TimeGrain),
     filters :: ![MetricFilter],
     cohorts :: ![(Text, Cohort.Membership)],
+    aggregateOrganizations :: !Bool,
+    userOrganization :: !Bool,
     includeBots :: !Bool
   }
   deriving stock (Generic, Eq, Show)
@@ -693,6 +695,7 @@ decodeUtf8 = first (Text.pack . show) . Text.decodeUtf8'
 compileMetric :: EventRegistry -> BuiltinMetric -> QueryRequest -> Either QueryCompileError CompiledMetric
 compileMetric registry metric req = case metric of
   Simple def | def ^. #name == "sessions" -> compileSessions SessionCount req
+  Simple def | def ^. #name == "organizations" -> compileSimpleMetric registry def req {aggregateOrganizations = True}
   Simple def -> compileSimpleMetric registry def req
   Ratioed ratio | ratio ^. #name == "conversion_rate" -> compileOrderedConversion registry req
   Ratioed ratio -> do
@@ -755,10 +758,22 @@ queryTraits :: QueryRequest -> [Text]
 queryTraits req = Traits.referencedTraits (fromMaybe [] (req ^. #groupBy) <> map WireFilter.dimension (concatMap WireFilter.filterTerms (req ^. #filters)))
 
 hasUserTraits :: QueryRequest -> Bool
-hasUserTraits req = not (null (queryTraits req)) || not (null (cohorts req))
+hasUserTraits req = not (null (queryTraits req)) || not (null (queryOrganizationTraits req)) || aggregateOrganizations req || userOrganization req || not (null (cohorts req))
 
 resolvedSource :: QueryRequest -> Text
-resolvedSource req = Traits.eventSource (queryTraits req) (rawResolvedSource req)
+resolvedSource req =
+  let source = Traits.eventSource (queryTraits req) (rawResolvedSource req)
+      attributed =
+        if userOrganization req
+          then "(SELECT e.* REPLACE(if(e.organization_id!='',e.organization_id,ifNull(o.organization_id,'')) AS organization_id) FROM " <> source <> " AS e LEFT JOIN (SELECT account_id,user_id,argMaxMerge(organization_id) AS organization_id FROM analytics.user_organizations WHERE account_id={account_id:String} GROUP BY account_id,user_id) AS o ON e.account_id=o.account_id AND e.subject_kind='user' AND e.subject_id=o.user_id)"
+          else source
+      enriched = Traits.organizationSource (queryOrganizationTraits req) attributed
+   in if aggregateOrganizations req
+        then "(SELECT * REPLACE(organization_id AS canonical_user) FROM " <> enriched <> " WHERE organization_id!='')"
+        else enriched
+
+queryOrganizationTraits :: QueryRequest -> [Text]
+queryOrganizationTraits req = Traits.referencedOrganizationTraits (fromMaybe [] (req ^. #groupBy) <> map WireFilter.dimension (concatMap WireFilter.filterTerms (req ^. #filters)))
 
 rawResolvedSource :: QueryRequest -> Text
 rawResolvedSource req =
@@ -1031,7 +1046,7 @@ funnelPrefix Just {} = "experiment_funnel_step"
 compileFunnel :: EventRegistry -> QueryRequest -> Maybe SqlName -> FunnelOptions -> Int -> [SqlName] -> Either QueryCompileError CompiledMetric
 compileFunnel registry req experiment options window steps = do
   unless (isNothing (req ^. #timeGrain)) (Left (QueryCompileFilterError "timeGrain is unsupported for funnels"))
-  when (options ^. #mode == FunnelStrict && any (\f -> not (Text.isPrefixOf "user:" (WireFilter.dimension f) || WireFilter.dimension f == "cohort")) (concatMap WireFilter.filterTerms (req ^. #filters))) (Left (QueryCompileFilterError "strict funnels do not support event filters; interruptions must remain visible"))
+  when (options ^. #mode == FunnelStrict && any (\f -> not (Text.isPrefixOf "user:" (WireFilter.dimension f) || (aggregateOrganizations req && (Text.isPrefixOf "org:" (WireFilter.dimension f) || WireFilter.dimension f == "organization")) || WireFilter.dimension f == "cohort")) (concatMap WireFilter.filterTerms (req ^. #filters))) (Left (QueryCompileFilterError "strict funnels do not support event filters; interruptions must remain visible"))
   case attributionLimits steps (options ^. #attribution) of
     Left (QueryLimitError _ detail) -> Left (QueryCompileFilterError detail)
     Right () -> pure ()
@@ -1380,11 +1395,14 @@ cohortDimension req subject fallback label = case Text.stripPrefix "cohort:" lab
   Nothing -> fallback label
   Just ident -> case lookup ident (cohorts req) of
     Nothing -> Left (UnknownDimension label)
-    Just membership -> Right (GroupByCohort ident (if subject == "canonical_user" then Cohort.predicate membership else replaceSubject (Cohort.predicate membership)))
+    Just membership -> Right (GroupByCohort ident (if outerSubject == "canonical_user" then Cohort.predicate membership else replaceSubject (Cohort.predicate membership)))
   where
-    -- Only outer references change. Membership subqueries keep their own
-    -- canonical_user columns and are shared by event and session metrics.
-    replaceSubject = Text.replace "startsWith(canonical_user,'user:')" "startsWith(primary_subject,'user:')" . Text.replace "canonical_user IN (SELECT" "primary_subject IN (SELECT" . Text.replace "canonical_user NOT IN (SELECT" "primary_subject NOT IN (SELECT"
+    -- Rewrite only outer membership references; nested populations retain users.
+    outerSubject
+      | subject /= "canonical_user" = subject
+      | aggregateOrganizations req = "if(subject_kind='user',concat('user:',subject_id),'')"
+      | otherwise = "canonical_user"
+    replaceSubject = Text.replace "startsWith(canonical_user,'user:')" ("startsWith(" <> outerSubject <> ",'user:')") . Text.replace "canonical_user IN (SELECT" (outerSubject <> " IN (SELECT") . Text.replace "canonical_user NOT IN (SELECT" (outerSubject <> " NOT IN (SELECT")
 
 requestGrouping :: QueryRequest -> EventRegistry -> [EventName] -> Maybe [Text] -> [Text] -> Either QueryCompileError [GroupDimension]
 requestGrouping req registry scope = requestedGroupingWith (cohortDimension req "canonical_user" (resolveDimension registry scope))

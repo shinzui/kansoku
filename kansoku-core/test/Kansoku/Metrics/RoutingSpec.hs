@@ -200,7 +200,7 @@ assertMetricRoute manager port (path, expected) = do
       Metrics.metric result `shouldBe` expected
 
 stubPaths :: [String]
-stubPaths = ["organizations"]
+stubPaths = []
 
 assertIngestRoutes :: HTTP.Manager -> Warp.Port -> Expectation
 assertIngestRoutes manager port = do
@@ -298,13 +298,13 @@ sentinelMetricsServer =
       Metrics.funnel = funnelSentinel,
       Metrics.retention = retentionSentinel,
       Metrics.acquisition = \principal fromDay toDay groupBy grain filters _measure _bots -> standardSentinel "acquisition" principal fromDay toDay groupBy grain filters,
-      Metrics.featureAdoption = standardSentinel "feature-adoption",
-      Metrics.conversion = standardSentinel "conversion",
-      Metrics.users = \principal fromDay toDay groupBy grain filters _window _bots -> standardSentinel "users" principal fromDay toDay groupBy grain filters,
+      Metrics.featureAdoption = organizationSentinel "feature-adoption",
+      Metrics.conversion = organizationSentinel "conversion",
+      Metrics.users = \principal fromDay toDay groupBy grain filters _window _bots _aggregate _attribution -> standardSentinel "users" principal fromDay toDay groupBy grain filters,
       Metrics.stickiness = webSentinel "stickiness",
       Metrics.lifecycle = webSentinel "lifecycle",
       Metrics.revenue = standardSentinel "revenue",
-      Metrics.organizations = stubSentinel "organizations",
+      Metrics.organizations = organizationSentinel "organizations",
       Metrics.custom = \p f t g grain fs _ _ _ _ _ _ -> standardSentinel "custom" p f t g grain fs,
       Metrics.experiments = \principal fromDay toDay experiment grain _measure _group _filters -> metricSentinel "experiments" principal fromDay toDay experiment grain,
       Metrics.experimentConversion = experimentConversionSentinel,
@@ -319,15 +319,13 @@ sentinelMetricsServer =
     metricSentinel :: Text -> MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe Metrics.TimeGrain -> Handler (Response.KansokuResult Metrics.MetricResult)
     metricSentinel name _principal _fromDay _toDay _groupBy _timeGrain = pure (Response.KansokuOk (sentinelResult name))
 
-    stubSentinel :: Text -> MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe Metrics.TimeGrain -> [MetricFilter] -> Handler (Response.KansokuResult Metrics.MetricResult)
-    stubSentinel name _principal _fromDay _toDay _groupBy _timeGrain _filters =
-      pure (Response.KansokuNotFound (Response.notFound "not_implemented" ("metric endpoint is stubbed in the MVP: " <> name)))
+    organizationSentinel name p f t g grain fs _aggregate _attribution = standardSentinel name p f t g grain fs
 
-    funnelSentinel :: MetricsPrincipal -> Day -> Day -> Text -> Maybe Int -> Maybe Metrics.FunnelMode -> Maybe Metrics.FunnelMeasure -> Maybe Metrics.FunnelCounting -> Maybe Metrics.FunnelAttribution -> [Text] -> Maybe Text -> [MetricFilter] -> Handler (Response.KansokuResult Metrics.MetricResult)
-    funnelSentinel _principal _fromDay _toDay _steps _window _mode _measure _counting _attribution _exclude _group _filters = pure (Response.KansokuOk (sentinelResult "funnel"))
+    funnelSentinel :: MetricsPrincipal -> Day -> Day -> Text -> Maybe Int -> Maybe Metrics.FunnelMode -> Maybe Metrics.FunnelMeasure -> Maybe Metrics.FunnelCounting -> Maybe Text -> [Text] -> Maybe Text -> [MetricFilter] -> Maybe Metrics.AggregateBy -> Handler (Response.KansokuResult Metrics.MetricResult)
+    funnelSentinel _principal _fromDay _toDay _steps _window _mode _measure _counting _attribution _exclude _group _filters _aggregate = pure (Response.KansokuOk (sentinelResult "funnel"))
 
-    retentionSentinel :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe Metrics.TimeGrain -> [MetricFilter] -> Maybe Text -> Maybe Metrics.RetentionMode -> Maybe Metrics.CohortMode -> Maybe Bool -> Handler (Response.KansokuResult Metrics.MetricResult)
-    retentionSentinel _principal _fromDay _toDay _group _grain _filters _days _mode _cohort _bots = pure (Response.KansokuOk (sentinelResult "retention"))
+    retentionSentinel :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe Metrics.TimeGrain -> [MetricFilter] -> Maybe Text -> Maybe Metrics.RetentionMode -> Maybe Metrics.CohortMode -> Maybe Bool -> Maybe Metrics.AggregateBy -> Maybe Metrics.OrganizationAttribution -> Handler (Response.KansokuResult Metrics.MetricResult)
+    retentionSentinel _principal _fromDay _toDay _group _grain _filters _days _mode _cohort _bots _aggregate _attribution = pure (Response.KansokuOk (sentinelResult "retention"))
 
     experimentConversionSentinel :: MetricsPrincipal -> Text -> Text -> Day -> Day -> Maybe Text -> [MetricFilter] -> Handler (Response.KansokuResult Metrics.MetricResult)
     experimentConversionSentinel _principal _experiment _event _fromDay _toDay _group _filters =

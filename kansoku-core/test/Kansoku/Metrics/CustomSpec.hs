@@ -59,4 +59,4 @@ base :: MetricDefinition
 base = MetricDefinition "payments" Nothing ["payment_completed"] Count Nothing [] [] Nothing
 
 request :: Q.QueryRequest
-request = Q.QueryRequest (AccountId "custom") (fromGregorian 2026 7 1) (fromGregorian 2026 7 2) Nothing Nothing [] [] False
+request = Q.QueryRequest (AccountId "custom") (fromGregorian 2026 7 1) (fromGregorian 2026 7 2) Nothing Nothing [] [] False False False

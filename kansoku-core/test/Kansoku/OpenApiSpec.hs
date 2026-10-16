@@ -411,7 +411,6 @@ assertRouted manager port path = do
 expectedStatus :: Text -> Status
 expectedStatus path
   | path `elem` ["/v1/events", "/v1/batch", "/v1/beacon"] = status202
-  | path `elem` ["/metrics/organizations"] = status404
   | otherwise = status200
 
 requestForPath :: HTTP.Manager -> Warp.Port -> Text -> IO (HTTP.Response BSL.ByteString)

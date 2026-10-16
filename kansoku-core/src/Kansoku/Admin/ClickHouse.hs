@@ -112,7 +112,9 @@ projections =
     ("mv_experiment_exposures", "experiment_exposures"),
     ("mv_sessions", "sessions"),
     ("mv_user_properties", "user_properties"),
-    ("mv_user_properties_once", "user_properties_once")
+    ("mv_user_properties_once", "user_properties_once"),
+    ("mv_organization_properties", "organization_properties"),
+    ("mv_user_organizations", "user_organizations")
   ]
 
 verifyMutations :: Connection -> IO ()

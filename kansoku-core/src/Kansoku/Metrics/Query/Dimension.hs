@@ -14,12 +14,14 @@ where
 
 import Data.Bifunctor (first)
 import Data.Text qualified as Text
-import Kansoku.Event (EventName (..), EventRegistry, PropertySpec (..), PropertyType (..), lookupTrait)
+import Kansoku.Event (EventName (..), EventRegistry, PropertySpec (..), PropertyType (..), lookupOrganizationTrait, lookupTrait)
 import Kansoku.Metrics.Query.Property
 import Kansoku.Prelude hiding (index)
 
 data GroupDimension
   = GroupByCohort !Text !Text
+  | GroupByOrganization
+  | GroupByOrganizationTrait !Text !ScalarType
   | GroupByEventName
   | GroupBySource
   | GroupBySourceService
@@ -48,6 +50,7 @@ data DimensionError = UnknownDimension !Text | InvalidDimensionProperty !Propert
 
 resolveDimension :: EventRegistry -> [EventName] -> Text -> Either DimensionError GroupDimension
 resolveDimension registry events name = case name of
+  "organization" -> Right GroupByOrganization
   "event_name" -> Right GroupByEventName
   "source" -> Right GroupBySource
   "source_service" -> Right GroupBySourceService
@@ -65,6 +68,10 @@ resolveDimension registry events name = case name of
   "utm_term" -> Right GroupByUtmTerm
   "referrer_host" -> Right GroupByReferrerHost
   "is_bot" -> Right GroupByBot
+  _ | Just key <- Text.stripPrefix "org:" name -> case lookupOrganizationTrait key of
+    Just PropertySpec {propertyType = PTString} -> Right (GroupByOrganizationTrait key ScalarString)
+    Just PropertySpec {propertyType = PTNumber} -> Right (GroupByOrganizationTrait key ScalarNumber)
+    _ -> Left (UnknownDimension name)
   _ -> case Text.stripPrefix "user:" name of
     Just key -> case lookupTrait key of
       Just PropertySpec {propertyType = PTString} -> Right (GroupByUserTrait key ScalarString)
@@ -78,11 +85,14 @@ resolveDimension registry events name = case name of
 resolveSessionDimension :: EventRegistry -> [EventName] -> Text -> Either DimensionError GroupDimension
 resolveSessionDimension _ _ "entry_page" = Right GroupByEntryPage
 resolveSessionDimension _ _ "exit_page" = Right GroupByExitPage
+resolveSessionDimension _ _ name | name == "organization" || "org:" `Text.isPrefixOf` name = Left (UnknownDimension name)
 resolveSessionDimension registry events name = resolveDimension registry events name
 
 dimensionLabel :: GroupDimension -> Text
 dimensionLabel = \case
   GroupByCohort ident _ -> "cohort:" <> ident
+  GroupByOrganization -> "organization"
+  GroupByOrganizationTrait name _ -> "org:" <> name
   GroupByEventName -> "event_name"
   GroupBySource -> "source"
   GroupBySourceService -> "source_service"
@@ -106,6 +116,7 @@ dimensionLabel = \case
   GroupByProperty property -> "prop:" <> propertyNameText property
 
 dimensionType :: GroupDimension -> ScalarType
+dimensionType (GroupByOrganizationTrait _ kind) = kind
 dimensionType GroupByBot = ScalarBool
 dimensionType (GroupByUserTrait _ kind) = kind
 dimensionType (GroupByProperty property) = propertyScalarType property
@@ -114,6 +125,8 @@ dimensionType _ = ScalarString
 dimensionExpr :: GroupDimension -> Text
 dimensionExpr = \case
   GroupByCohort _ predicate -> "if(" <> predicate <> ", 'in', 'out')"
+  GroupByOrganization -> "nullIf(organization_id, '')"
+  GroupByOrganizationTrait name _ -> "org_trait_" <> name
   GroupByEventName -> "nullIf(toString(event_name), '')"
   GroupBySource -> "nullIf(toString(source), '')"
   GroupBySourceService -> "nullIf(source_service, '')"

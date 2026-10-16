@@ -222,6 +222,7 @@ identifyOnceWithVersion clientHandle user anonId version traits =
 group :: Client -> EventIds -> Text -> [Pair] -> IO ()
 group clientHandle ids organization pairs =
   buildEvent (clientHandle ^. #config) (ids & #organizationId ?~ organization) "group" pairs
+    <&> (#schemaVersion ?~ 2)
     >>= track clientHandle
 
 alias :: Client -> Text -> Text -> [Pair] -> IO ()

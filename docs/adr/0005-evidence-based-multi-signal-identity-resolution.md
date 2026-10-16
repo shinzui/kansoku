@@ -2,7 +2,7 @@
 type: Architecture Decision Record
 title: Evidence-based multi-signal identity resolution
 description: Resolve identity at query time from evidence-based multi-signal identifier bindings instead of a latest-wins cookie-to-user map.
-timestamp: 2026-10-16T03:24:40Z
+timestamp: 2026-10-16T12:58:00Z
 generated:
   by: human:kansoku-maintainers
   at: 2026-07-19T00:00:00Z
@@ -71,7 +71,7 @@ automatically delete anonymous facts reached through probabilistic signals becau
 signals can be shared.
 
 The resolution implementation replaces the internals of
-`analytics.events_resolved` while preserving ADR 0004's ordered seven-column contract.
+`analytics.events_resolved` while preserving ADR 0004's ordered projection (now eight columns after the additive organisation extension in ADR-21).
 
 ## Alternatives considered
 
@@ -111,7 +111,7 @@ raw identifier scrubbing must recompute this derived column as part of the fence
 
 HTTP's `resolvedSource` uses a rich parameterized relation with account and requested occurrence
 bounds applied to canonical facts. Its explicit all-account flag is always zero for HTTP; an
-empty account is not a bypass. The public seven-column SQL view delegates to a direct relation,
+empty account is not a bypass. The public eight-column SQL view delegates to a direct relation,
 so it does not depend on an application connection lifetime.
 
 Each metrics connection may hold session-local Join tables of exact evidence observations

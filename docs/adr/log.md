@@ -1,6 +1,11 @@
 # Bundle Update Log
 
 ## 2026-10-16
+* **Update**: Align ADR-5, ADR-11 and ADR-18 with the additive eighth organisation column; retain the original analytical v1 reader projection.
+* **Update**: Record organisation aggregation, typed current traits, membership fallback and lifecycle boundaries.
+* **Update**: Link current organisation semantics to ADR-21.
+* **Update**: Publish governed group v2 traits and explicit helper versions.
+* **Update**: Append organization\_id to the stable resolved projection while preserving the first seven columns.
 * **Update**: Add ADR-20: custom metric definitions compiled under builtin safety rules and bounded AND-of-OR filter groups.
 * **Update**: Clarify ADR-4 with the explicit funnel attribution declaration scope and missing-value other grouping exception from ADR-15.
 * **Update**: Extend ADR-6 and ADR-15 with any-order earliest windows, nonoverlapping attempt totals and per-step property attribution.

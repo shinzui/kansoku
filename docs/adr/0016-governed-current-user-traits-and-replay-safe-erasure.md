@@ -5,7 +5,7 @@ description: Persist first-acceptance schema eligibility for typed current trait
 docId: ADR-16
 status: Accepted
 date: 2026-10-16
-timestamp: 2026-10-16T01:48:30Z
+timestamp: 2026-10-16T12:55:33Z
 generated:
   by: process:codex
   at: 2026-10-16T01:01:59Z
@@ -65,7 +65,8 @@ when required. Query identity scopes include the complete retained session/histo
 Experiment selection supports user dimensions only. Segmented exposure counts use exact
 resolved subjects; unsegmented default exposure counts retain the explicit raw-identity sketch.
 Conversion, funnel and diagnostics retain their exposure gating and assignment denominators
-within each selected trait population. Unimplemented organization/custom routes remain stubs.
+within each selected trait population. Organisation aggregation and current membership are defined separately in
+[ADR-21](0021-organization-aggregation-and-current-membership.md).
 All metric paths inherit native memory/time budgets, outer cancellation and complete point caps.
 
 Fenced lifecycle primitives reserve account/event-ID tombstones before deleting or scrubbing

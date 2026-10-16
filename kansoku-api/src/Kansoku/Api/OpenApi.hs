@@ -34,7 +34,7 @@ import Kansoku.Event
     VersionedEventSchema,
   )
 import Kansoku.Ingest.Api (BatchAck, BeaconEnvelope, IngestAck, IngestEvent, RejectedEvent)
-import Kansoku.Metrics.Api (AcquisitionMeasure, CohortMode, ExperimentMeasure, FunnelAttribution, FunnelCounting, FunnelMeasure, FunnelMode, MetricPoint, MetricResult, PathBy, RetentionMode, SessionMeasure, TimeGrain, UserWindow)
+import Kansoku.Metrics.Api (AcquisitionMeasure, AggregateBy, CohortMode, ExperimentMeasure, FunnelAttribution, FunnelCounting, FunnelMeasure, FunnelMode, MetricPoint, MetricResult, OrganizationAttribution, PathBy, RetentionMode, SessionMeasure, TimeGrain, UserWindow)
 import Kansoku.Metrics.Definition
 import Kansoku.Metrics.Filter (FilterOp, MetricFilter)
 import Kansoku.Metrics.Limits (maxMetricPoints)
@@ -185,6 +185,12 @@ instance O.ToParamSchema AcquisitionMeasure where
 
 instance O.ToParamSchema SessionMeasure where
   toParamSchema _ = O.toParamSchema (Proxy @Text) & O.enum_ ?~ ["count", "bounce_rate", "average_duration_seconds"]
+
+instance O.ToParamSchema AggregateBy where
+  toParamSchema _ = O.toParamSchema (Proxy @Text) & O.enum_ ?~ ["users", "organizations"]
+
+instance O.ToParamSchema OrganizationAttribution where
+  toParamSchema _ = O.toParamSchema (Proxy @Text) & O.enum_ ?~ ["event", "user_organization"]
 
 instance O.ToParamSchema UserWindow where
   toParamSchema _ = O.toParamSchema (Proxy @Text) & O.enum_ ?~ ["calendar", "rolling7", "rolling30"]

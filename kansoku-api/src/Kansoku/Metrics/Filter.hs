@@ -155,7 +155,7 @@ parseMetricFilter raw
     shorthand text = do
       let parts = Text.splitOn ":" text
           (name, rest) = case parts of
-            prefix : key : tail | prefix `elem` ["prop", "user"] -> (prefix <> ":" <> key, tail)
+            prefix : key : tail | prefix `elem` ["prop", "user", "org"] -> (prefix <> ":" <> key, tail)
             key : tail -> (key, tail)
             [] -> ("", [])
       case rest of

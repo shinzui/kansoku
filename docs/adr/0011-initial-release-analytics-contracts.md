@@ -5,7 +5,7 @@ description: Establish coherent event identity, analytical populations and lifec
 docId: ADR-11
 status: Accepted
 date: 2026-10-15
-timestamp: 2026-10-16T05:40:26Z
+timestamp: 2026-10-16T12:58:00Z
 generated:
   by: process:codex
   at: 2026-10-15T15:38:35Z
@@ -39,7 +39,7 @@ carries derived fields independently of the public event schema.
 Resolve explicit users first. Anonymous evidence must be unambiguous within a qualifying session
 or signal; conflicts remain visible rather than assigned to the nearest future login. Distinguish
 anonymous and user subject namespaces. Candidate events are time-bounded, while relevant evidence
-may be outside the requested range. Preserve the public seven-column view and keep a richer
+may be outside the requested range. Preserve the public view (eight columns after the additive organisation extension in ADR-21) and keep a richer
 internal source for filters/enrichment. Exact HTTP user counts use the same resolved population
 with and without filters; approximate raw sketches are named separately. Identity-only profile
 updates do not constitute active-user activity.

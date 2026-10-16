@@ -2,7 +2,7 @@
 type: Architecture Decision Record
 title: Queryable event properties and identity-resolved projection
 description: Store event properties as native ClickHouse JSON and expose them for metric grouping only after registry declaration.
-timestamp: 2026-10-16T12:10:52Z
+timestamp: 2026-10-16T12:55:33Z
 generated:
   by: human:kansoku-maintainers
   at: 2026-07-19T00:00:00Z
@@ -70,7 +70,8 @@ alias and group events, with the same population under filtering. Page views/cou
 canonical facts consistently; raw identity sketches remain an explicit SQL/experiment policy.
 
 `analytics.events_resolved` extends its stable projection with a seventh,
-server-only `properties_json` column. This lets unique-user property metrics keep canonical
+server-only `properties_json` column, then an eighth `organization_id` column for
+organisation analytics. The first seven names, types and order remain unchanged. This lets unique-user property metrics keep canonical
 identity stitching instead of falling back to raw `user_id` or `anonymous_id` values.
 
 ## Alternatives considered
@@ -84,7 +85,7 @@ identity stitching instead of falling back to raw `user_id` or `anonymous_id` va
 - Reading unique-user property metrics from `events_raw` was rejected because it would
   bypass canonical identity resolution and change metric meaning.
 - Independent public identity policies are rejected because their populations could drift.
-  The rich private source and stable seven-column projection share the conservative policy
+  The rich private source and stable eight-column projection share the conservative policy
   and native conformance fixtures described in ADR-5.
 
 ## Consequences
@@ -95,8 +96,8 @@ Property names remain limited to a conservative identifier charset and must be d
 every event in a metric, except for the explicit funnel attribution scope in ADR-15.
 
 Future migrations that recreate `analytics.events_resolved`, including multi-signal
-identity work, must preserve the ordered seven-column contract: `event_id`, `event_name`,
-`occurred_at`, `url`, `account_id`, `canonical_user`, `properties_json`. Experiment
+identity work, must preserve the ordered eight-column contract: `event_id`, `event_name`,
+`occurred_at`, `url`, `account_id`, `canonical_user`, `properties_json`, `organization_id`. Experiment
 rollups consume the same native JSON expressions. If ClickHaskell later gains JSON wire
 support, changing the insert or result protocol remains a separate measured decision.
 
@@ -106,7 +107,7 @@ support, changing the insert or result protocol remains a separate measured deci
 joins. Its current implementation reads immutable accepted rows from `events_raw FINAL` and
 explicitly includes `properties_json`, since ClickHouse's default asterisk excludes materialized
 columns. Identity evidence projections also apply FINAL before observations are joined/counted.
-The ordered seven-column public resolved view remains unchanged.
+The ordered eight-column public resolved view appends only `organization_id`.
 
 Daily event/page-view rollups union `uniqExact` event-ID states. Sums and averages read canonical
 rows; additive materialized-view count states cannot retract a duplicate insert. Correctness
@@ -118,7 +119,7 @@ The earlier JSON representation benchmark does not establish the cost of FINAL; 
 capacity measurement must include this canonical source.
 
 HTTP identity queries use the parameterized `resolvedSource` helper, with candidate account/date
-bounds and server-owned temporary evidence snapshots. The public seven columns remain stable;
+bounds and server-owned temporary evidence snapshots. The public eight columns remain stable;
 new filter/session/enrichment fields belong to the rich private relation. Cached and direct
 native relations must agree for every identity fixture. Raw approximate user/exposure sketches
 now prefix user/anonymous namespaces too; they still do not promise query-time stitching.
