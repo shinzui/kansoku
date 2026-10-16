@@ -1,5 +1,8 @@
 # Bundle Update Log
 
+## 2026-10-16
+* **Addition**: REV-2 reviews implementation correctness at 138d9a316931bbf46781757a29ab6c7fdd90f870 after REV-1, with deterministic and live verification. Requests changes for accepted JSON that parks the shared writer, organization trait conditions that create unusable cohorts, unredacted native query errors in application logs, and shared cohort fixtures that fail the packaged acceptance gate.
+
 ## 2026-10-15
 * **Update**: REV-1 produced list extended with ExecPlans 39 (beacon route) and 40 (person properties) after the owner promoted three exclusions into MasterPlan 5 scope; Part III wording updated.
 * **Update**: REV-1 now records the MasterPlan 5 and ExecPlan 29-38 Mori URIs it produced, and Part III points to that plan set instead of a hypothetical improvement-request bundle.
