@@ -1,0 +1,25 @@
+{
+  "growthbook": {
+    "version": "5.1.0",
+    "commit": "7cbc85d1d113595757f6808b5c440657e4325b47",
+    "project": "mori://growthbook/growthbook",
+    "source_path": "packages/back-end/src/integrations/ClickHouse.ts",
+    "artifact_uri_pending": true
+  },
+  "grafana": {
+    "version": "13.2.4",
+    "darwin_arm64_archive_sha256": "a910966466359212f1d875748a72a4638c7d3724448d0c369210b31d763b165d",
+    "project": "mori://grafana/grafana",
+    "artifact_uri_pending": true
+  },
+  "plugin": {
+    "id": "grafana-clickhouse-datasource",
+    "version": "4.22.1",
+    "commit": "bee67e528c8d7fd3e761ad4642b39140e4531d42",
+    "darwin_arm64_zip_sha256": "95efe0f32c2dc78ed29c63cc37c7fbe38cd7a25b9efd66be6b82497c3c0cc37f",
+    "darwin_arm64_backend_sha256": "844dd98745ce005265470416cc54832691e5bd06bf2bdb70aca89ddb6a4f7b0d",
+    "project": "mori://grafana/clickhouse-datasource",
+    "source_path": "pkg/plugin/driver.go",
+    "artifact_uri_pending": true
+  }
+}

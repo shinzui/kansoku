@@ -60,6 +60,10 @@ from its context deadline plus five seconds. The accepted recipe uses a 25-secon
 inside the unchanged 30-second reader ceiling. GrowthBook runs with its upstream Node/tsconfig
 semantics; Bun class-field initialization would clear constructor-populated adapter params.
 
+First-use command inspection found both process-compose and Kansoku defaulting to TCP 8080.
+The shipped `just up` now defaults its control API to 8081 while honoring PC_PORT_NUM, leaving
+the product API at 8080. The ordinary fresh-clone gate must execute that shipped recipe.
+
 ## Decision Log
 
 
@@ -80,6 +84,16 @@ at block boundaries, while HTTP retains its strict complete-or-error point cap. 
 source evidence passes nine live cases, three real beacon/rate-limit protocol cases and eight
 multi-origin Chromium identity/bot cases. Final packaged acceptance, consumer pin, ordinary
 fresh-clone reuse/recovery and refreshed performance/capacity evidence remain pending.
+
+The final mixed queue-v2 outage proof passes in `.dev/acceptance/outage-ni1sty8k/report.json`:
+120000 events at 200/s for 600.004 seconds, writer restart while storage remains blocked,
+4.651-second first recovered write and 40.822-second full drain, against a 362.834-second
+calibrated bound. All 120000 facts retain nonempty sessions and authoritative enrichment;
+12000 governed trait operations exercise current projections. Zero valid events are archived.
+Database growth is 212238336 bytes and generated WAL 547020800 bytes. The revised finite
+10-GiB/50%-headroom/200-sample budget is about 1.18 hours, extrapolated from a tested ten-minute
+outage with input stopped at recovery. `docs/guides/capacity.md` replaces the older small-payload
+measurement. No task-owned build/test load overlapped the accepted measurement.
 
 ## Context and Orientation
 

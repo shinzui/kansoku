@@ -5,6 +5,10 @@ Run inside the repository's Nix development shell. Evidence and credentials stay
 The ordinary `just acceptance` always tests reader SQL/HTTP parity; use the required consumer
 mode below for the release gate. Missing consumer paths are fatal in that mode.
 
+The checked-in [consumer manifest](../examples/consumer-versions.json) records upstream
+commits, release hashes and the exact backend executable hash. The harness refuses a different
+GrowthBook commit, modified upstream adapter sources or a different plugin backend.
+
 The accepted macOS arm64 consumer artifacts are Grafana OSS 13.2.4 (SHA256
 `a910966466359212f1d875748a72a4638c7d3724448d0c369210b31d763b165d`) and official ClickHouse
 plugin 4.22.1 (zip SHA256

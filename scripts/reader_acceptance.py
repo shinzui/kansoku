@@ -168,6 +168,11 @@ def verify_reader(server, admin, env, root, growthbook=None, tokens=None):
             assert {row['variation_id'] for row in assignments} == {'0','1'}
             assert all(row['user_id'] == 'user:reader-user' for row in assignments)
             if growthbook:
+                version=json.loads((REPO / 'docs/examples/consumer-versions.json').read_text())['growthbook']
+                head=subprocess.check_output(['git','rev-parse','HEAD'],cwd=growthbook,text=True).strip()
+                assert head==version['commit'], 'GrowthBook consumer must use the pinned upstream commit'
+                assert subprocess.run(['git','diff','--quiet','HEAD','--','packages/back-end/src','packages/shared/src'],cwd=growthbook).returncode==0, 'upstream consumer sources were modified'
+                (root / 'growthbook-version.json').write_text(json.dumps(dict(version=version['version'],commit=head))+'\n')
                 def literal(value):
                     if isinstance(value, int):
                         return str(value)

@@ -91,7 +91,7 @@ dev-keys: migrate
 
 # Start the local services (postgres, clickhouse, create_schema) via process-compose.
 up:
-    process-compose up
+    process-compose --port "${PC_PORT_NUM:-8081}" up
 
 # Build every local component, including test executables.
 build-with-tests:

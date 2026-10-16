@@ -7,6 +7,8 @@ WITH exposures AS MATERIALIZED
     WHERE source_service={source_service:String} AND canonical_user!=''
       AND event_name='experiment_viewed'
       AND dynamicElement(getSubcolumn(properties_json,'experiment'),'String')={experiment:String}
+      AND match(dynamicElement(getSubcolumn(properties_json,'experiment'),'String'),'^[a-z0-9_.:-]{1,128}$')
+      AND match(dynamicElement(getSubcolumn(properties_json,'variant'),'String'),'^[a-z0-9_.:-]{1,128}$')
 ), map('control','0','variant_b','1') AS variations
 SELECT canonical_user AS user_id,
        occurred_at AS timestamp,

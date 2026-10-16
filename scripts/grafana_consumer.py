@@ -1,6 +1,8 @@
 """Use the real pinned Grafana server/plugin to import and execute the panel recipe."""
 import base64
 import json
+import hashlib
+import platform
 import os
 from pathlib import Path
 import time
@@ -17,6 +19,13 @@ REPO = Path(__file__).resolve().parent.parent
 def verify_grafana(env, root, home, plugins, connection, sql, expected):
     root = Path(root).resolve()
     root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    versions=json.loads((REPO / 'docs/examples/consumer-versions.json').read_text())
+    plugin=Path(plugins).resolve() / versions['plugin']['id']
+    assert json.loads((plugin / 'plugin.json').read_text())['info']['version']==versions['plugin']['version']
+    assert platform.system()=='Darwin' and platform.machine()=='arm64', 'record and verify consumer artifacts for this platform before claiming conformance'
+    digest=hashlib.sha256((plugin / 'gpx_clickhouse_darwin_arm64').read_bytes()).hexdigest()
+    assert digest==versions['plugin']['darwin_arm64_backend_sha256'], 'pinned consumer backend hash differs'
+    (root / 'versions.json').write_text(json.dumps(versions,indent=2)+'\n')
     port, password = free_port(), uuid.uuid4().hex
     authorization = 'Basic ' + base64.b64encode(('admin:' + password).encode()).decode()
     base = f'http://127.0.0.1:{port}'

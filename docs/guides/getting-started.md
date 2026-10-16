@@ -24,7 +24,8 @@ just up
 
 `just up` runs `process-compose.yaml`. It starts rootless PostgreSQL and ClickHouse instances
 whose data stays inside the checkout, then creates the local PostgreSQL database. Leave this
-terminal running.
+terminal running. Its process-control API uses port 8081 by default, leaving port 8080
+for Kansoku; set `PC_PORT_NUM` before `just up` to choose another control port.
 
 ## 2. Apply both migration systems
 
@@ -37,7 +38,7 @@ just ch-migrate
 ```
 
 `just migrate` applies the explicit PostgreSQL plan: the vendored PGMQ queue schema and
-Kansoku's API-key table. `just ch-migrate` applies forward-only ClickHouse migrations and records
+Kansoku's API-key, immutable acceptance, quarantine and resumable maintenance tables. `just ch-migrate` applies forward-only ClickHouse migrations and records
 them in `analytics.schema_migrations`. Normal `kansoku-server` startup does not perform either
 schema migration.
 
@@ -155,6 +156,25 @@ account:
 
 If the first query returns an empty `points` array, wait for the writer's next flush and retry.
 If the account already contains data, `value` may be greater than 1.
+
+## Reuse and recover this checkout
+
+Stop the server, then stop `just up` with Ctrl-C. Keep the checkout's `db/` and `clickhouse/`
+directories to retain data. Start `just up` again, repeat both migration commands, then start
+`just run` with the same account credentials. Already-applied migrations are skipped. Retrying
+the exact event ID and producer content acknowledges the original event without creating a
+second metric event; changing that content returns an immutable-ID conflict.
+
+A ClickHouse outage leaves new accepted events in PostgreSQL; restore storage and let the
+writer retry. The readiness probe can fail during the outage while ingest still accepts within
+its finite queue/disk budget. See [capacity](capacity.md) and [operations](operations.md) before
+choosing that budget. Restarting the writer preserves leased queue deliveries and eventually
+retries them; an HTTP 202 remains durable acceptance, not immediate metric visibility.
+
+For a headless owned development stack, `PC_DISABLE_TUI=1 PC_PORT_NUM=<free-port> just up`
+uses the same processes. Configure database and HTTP ports after entering the shell when
+running multiple checkouts. PostgreSQL uses a checkout-local Unix socket; keep its full path
+short enough for the operating system's socket-path limit.
 
 ## Next steps
 

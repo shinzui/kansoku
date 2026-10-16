@@ -117,6 +117,7 @@ def main():
                      userId='synthetic-' + str(number // 20), anonymousId='cookie-' + str(number // 20),
                      sessionId=prefix + 'session-' + str(number // 20),
                      identifiers={'device':'device-' + str(number // 20)},
+                     url='https://capacity.example.test/checkout?utm_source=owned&utm_medium=email', utmSource='owned', utmMedium='email',
                      properties=properties, context={})
         # A mixed production-path workload exercises private queue v2, governed
         # traits, shared identity, nonempty sessions and HTTP UA/URL enrichment.
@@ -274,6 +275,8 @@ def main():
                 database_after = int(pg('SELECT pg_database_size(current_database())'))
                 wal_generated = int(float(pg(f"SELECT pg_wal_lsn_diff(pg_current_wal_lsn(),'{wal_before}')")))
                 assert int(pg("SELECT count(*) FROM pgmq.q_outage_events WHERE (message->>'queueVersion')::int=2 AND message->'event'->>'sessionId' != ''")) == total
+                assert int(pg("SELECT count(*) FROM pgmq.q_outage_events WHERE message->'enrichment'->>'browserFamily'='chrome' AND message->'enrichment'->>'channel'='email'")) == total
+                assert int(pg("SELECT count(*) FROM pgmq.q_outage_events WHERE (message->>'traitsEligible')::boolean")) == total // 10
                 oldest_age = float(pg("SELECT coalesce(extract(epoch FROM (now() - min(enqueued_at))),0) FROM pgmq.q_outage_events"))
                 recovered = time.monotonic()
                 sentinel.unlink()
@@ -283,6 +286,11 @@ def main():
                 wait_for(lambda: written('outage_') == total and int(pg('SELECT count(*) FROM pgmq.q_outage_events')) == 0, bound, 'measured backlog drain')
                 drain_seconds = time.monotonic() - recovered
                 assert valid_archive() == 0
+                enriched = int(ch(f"SELECT count() FROM analytics.events_canonical WHERE account_id='{account}' AND startsWith(event_id,'outage_') AND browser_family='chrome' AND channel='email' AND session_id!='' AND url!=''"))
+                assert enriched == total, 'enriched session workload was not persisted'
+                assert int(ch(f"SELECT count() FROM analytics.user_properties WHERE account_id='{account}'")) > 0
+                assert int(ch(f"SELECT count() FROM analytics.user_properties_once WHERE account_id='{account}'")) > 0
+                report.update(enriched_session_events=enriched, governed_trait_events=total // 10)
                 assert metric(base, 'kansoku_writer_breaker_state') == 0
                 final_counters = counters(base)
                 assert retired_counters is not None

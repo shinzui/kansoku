@@ -7,12 +7,17 @@ Its default proof schedules 200 events/s for 600 seconds, restarts the server wh
 is open, verifies paused source reads and zero valid archives, then checks the acceptance ledger
 and canonical analytical count. `just outage-smoke` uses 40 seconds for development.
 
-The fixed producer event is approximately 512 bytes with compressible padding, one account,
-one synthetic user and low-cardinality properties. This exercises durability and drain capacity;
-measure realistic payload distributions and analytical query contention separately. Settings are writer batch 5000, adapter
-batch 1000, inbox 1, ready-batch buffer 1, prefetch disabled, visibility 60 seconds, probe 5 seconds, insert deadline
-30 seconds, flush latency 100 ms and default credential admission 2000/s with burst 10000.
-The benchmark's 100 ms flush setting differs from the production default of 5000 ms; include
+The mixed producer workload targets about 768 bytes/event with compressible padding (the
+recorded identify sample is 770 bytes): one account, 6000 synthetic users and source-scoped
+sessions, with 20 events/session. It includes identify v2, identify_once v1, page views and
+payments; every event carries a URL/campaign and device identifier, and HTTP user-agent
+classification runs before private queue-v2 persistence. The full run verifies 120000 enriched
+session events and 12000 governed trait operations. This exercises the final projections,
+durability and drain capacity; realistic payload distributions and analytical query contention
+still need deployment-specific measurements. Settings are writer batch 5000, adapter batch
+1000, inbox 1, ready-batch buffer 1, prefetch disabled, visibility 60 seconds, probe 5 seconds,
+insert deadline 30 seconds, flush latency 100 ms and default credential admission 2000/s with
+burst 10000. The 100 ms flush setting differs from production's default 5000 ms; include
 that extra latency when choosing response/recovery expectations for another configuration.
 
 Reports remain private in `.dev/acceptance/outage-*/report.json`; they record hardware,
@@ -23,45 +28,47 @@ includes probe startup in its conservative drain capacity. The long run must fin
 finish within 68 seconds (probe, visibility and scheduling/flush tolerance). Actual logical
 count equality and queue emptiness are required, not just an increase in the writer counter.
 
-## Development measurement, 2026-10-15
+## Final development measurement, 2026-10-16
 
-Apple M1 Max, 64 GiB RAM, arm64 macOS 26.7; local native PostgreSQL and ClickHouse on a shared
-development workstation. The packaged server passed the full owned run. Other deployment or
-reference hardware remains unmeasured; repeat this procedure there before assigning its budget.
-The separate acceptance suite ran during the blocked interval, after calibration and before drain.
+Apple M1 Max, 64 GiB RAM, arm64 macOS 26.7; local native PostgreSQL and ClickHouse 26.8.2.7
+on a shared development workstation. The packaged server passed the full owned run without
+other build/test load from this task. Other deployment or reference hardware remains
+unmeasured; repeat this procedure there before assigning its budget. This replaces the earlier
+small v1-style capacity workload; it does not extrapolate that older drain result to new writes.
 
 | Measurement | Result |
 | --- | ---: |
-| Actual storage outage | 600.005 s |
+| Actual storage outage | 600.004 s |
 | Wire accepted / newly queued / logical writes | 120000 / 120000 / 120000 |
 | Accepted and newly queued rate | 200.00 events/s |
 | Writes while blocked | 0 |
-| Oldest backlog at recovery | 600.17 s |
-| First recovered write | 2.48 s |
-| Full backlog drain | 21.21 s |
-| Logical drain rate | 5657.44 events/s |
-| Successful writer counter / rate during drain | 121049 / 5706.89 events/s |
-| Conservative 5000-event calibration capacity | 870.94 events/s |
-| Accepted drain bound | 336.28 s |
-| PostgreSQL database growth | 146194432 bytes (1218.29/event) |
-| Generated WAL | 416709088 bytes (3472.58/event) |
-| Active ClickHouse part bytes at finish | 3031810 |
+| Oldest backlog at recovery | 600.66 s |
+| First recovered write | 4.65 s |
+| Full backlog drain | 40.82 s |
+| Logical drain rate | 2939.58 events/s |
+| Successful writer counter / rate during drain | 120800 / 2959.18 events/s |
+| Conservative 5000-event calibration capacity | 810.51 events/s |
+| Accepted drain bound | 362.83 s |
+| PostgreSQL database growth | 212238336 bytes (1768.65/event) |
+| Generated WAL | 547020800 bytes (4558.51/event) |
+| Active ClickHouse part bytes at finish | 9949230 |
+| Enriched events with nonempty sessions | 120000 |
+| Governed trait operations | 12000 |
 | Valid archived events | 0 |
 
-Reads stayed at 200 before restart and 7200 afterward while the backlog grew to 120000. The
-successful writer counter exceeds logical writes because leased buffered deliveries can be
-retried; exact canonical reads remain 120000. Thus the counter measures successful insert
-payloads, not unique events. Private source evidence is
-`.dev/acceptance/outage-mk1fy7bw/report.json` (one non-skipped Hspec example).
+Reads stayed at 200 before restart and 7200 afterward while the backlog grew to 120000.
+The successful writer counter exceeds logical writes because leased buffered deliveries can be
+retried; exact canonical reads remain 120000. The counter measures successful insert payloads,
+not unique events. Private evidence is `.dev/acceptance/outage-ni1sty8k/report.json`
+(one non-skipped Hspec example).
 
-As an illustrative conservative budget for **10 GiB reserved disk, 50% usable headroom,
-200 new events/s**, the measured database-plus-generated-WAL cost gives about **5723 seconds
-(1.59 hours)** before that budget is consumed. At that horizon, the conservative spare
-capacity is 670.94 events/s; the resulting backlog
-would take about 1706 seconds to drain with
-continued 200/s input. This extrapolation is not a tested outage duration. The actual exercised
-outage is ten minutes, with producer traffic stopped at recovery; continued-arrival drain must
-be validated for the target workload. Use the model below with actual reserved disk and payloads.
+For **10 GiB reserved disk, 50% usable headroom, 200 new events/s**, the measured
+database-plus-generated-WAL cost gives approximately **4243 seconds (1.18 hours)** before
+that budget is consumed. At that horizon, conservative spare capacity is
+610.51 events/s and the projected backlog would take about
+1390 seconds to drain with continued 200/s input. This is an extrapolation, not a tested
+outage duration. The actual exercised outage is ten minutes, with producer traffic stopped
+at recovery; continued-arrival drain must be validated for the target workload.
 
 ## Size a finite outage budget
 

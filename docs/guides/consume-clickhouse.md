@@ -31,6 +31,10 @@ connection-private HTTP identity caches are not stable interfaces and receive no
 Apply [reader-role.sql](../../db/clickhouse/reader-role.sql) as the migration/view owner, then
 create a dedicated password user with `DEFAULT ROLE kansoku_reader`. Use an interactive secret
 input or your secret manager; do not commit a password or put it in shared shell history.
+The ClickHouse operator configuration must enable `access_management` for the authenticated
+migration user and set `access_control_path` to a writable operator-owned directory. These
+are ClickHouse server/user settings; the embedded local-development default is not an SQL
+access-management deployment configuration.
 The owner must retain access to underlying objects: these views deliberately use SQL SECURITY
 DEFINER with the migration operator as definer. Verify owner identity on every deployment.
 For example, run the role file through the operator's configured client:
