@@ -1,5 +1,6 @@
 """Required real browser delivery against an owned server and fresh fixture account."""
 import json
+import hashlib
 import os
 from pathlib import Path
 import signal
@@ -20,6 +21,10 @@ def verify_beacon_browser(server, admin, env, root, sdk, tokens=None):
     root.mkdir(mode=0o700, parents=True, exist_ok=True)
     sdk = Path(sdk).resolve()
     assert (sdk / 'scripts/beacon-browser.ts').is_file(), 'required SDK browser beacon proof is missing'
+    commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=sdk, text=True).strip()
+    bundle = sdk / 'packages/kansoku-js/dist/index.js'
+    (root / 'consumer.json').write_text(json.dumps(dict(source='mori://shinzui/kansoku-ts/packages/kansoku-js',
+        commit=commit, bundle_sha256=hashlib.sha256(bundle.read_bytes()).hexdigest()), indent=2) + '\n')
     account = 'browser-' + uuid.uuid4().hex
     keys = []
     for kind in ('write', 'service'):
@@ -32,7 +37,7 @@ def verify_beacon_browser(server, admin, env, root, sdk, tokens=None):
     base, origin, denied = [f'http://127.0.0.1:{value}' for value in (port, origin_port, denied_port)]
     settings = dict(env, KANSOKU_QUEUE_NAME='beacon_' + uuid.uuid4().hex,
                     KANSOKU_SERVER_PORT=str(port), KANSOKU_CORS_ORIGINS=origin,
-                    KANSOKU_INGEST_QUARANTINE='true',
+                    KANSOKU_INGEST_QUARANTINE='true', KANSOKU_INGEST_MAX_BODY_BYTES='1048576',
                     KANSOKU_BEACON_BASE_URL=base, KANSOKU_BEACON_WRITE_KEY=keys[0],
                     KANSOKU_BEACON_SERVICE_TOKEN=keys[1], KANSOKU_BROWSER_ORIGIN=origin,
                     KANSOKU_BROWSER_DENIED_ORIGIN=denied)
