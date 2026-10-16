@@ -8,7 +8,7 @@ description: >-
   also fails because its scenarios share leftover cohort fixtures.
 generated:
   by: process:codex
-  at: "2026-10-16T18:12:01Z"
+  at: "2026-10-16T18:38:02Z"
 reviewId: REV-2
 subject: mori://shinzui/kansoku
 subjectKind: project
@@ -287,6 +287,19 @@ four probes, 22 live client examples, all three telemetry modes, reader parity a
 administrative families. Private evidence is `.dev/acceptance/run-1szhsbva/`; the packaged
 outage report is `.dev/acceptance/outage-kthl2ca1/report.json`. `just check` also exits zero.
 
+F2 is resolved by [EP-47](../plans/47-support-organization-trait-filters-in-saved-cohorts.md)
+in `509d873`. Each cohort event condition attaches its referenced typed organization traits,
+including OR-only references, under the existing account and event-organization join.
+Fresh-store public creation and updates now return exact member sizes and forward/backward
+pages for string/numeric traits, nullable filters, complements, zero occurrences, current
+updates and replay, combined user traits and duplicate IDs in a second account. Saved custom
+metrics, positive/negative organization aggregation and a widened whole-session consumer
+also pass. The candidate passes `just check`, cohort/organization/custom-metric acceptance
+and the complete packaged gate: 526 core examples, four probes, 22 live client examples,
+all three telemetry modes, repeated fixture-isolation scenarios, reader checks and all seven
+administration families. Private packaged evidence is `.dev/acceptance/run-dtcofhbw/`;
+focused cohort evidence is `.dev/acceptance/cohort-hpu9muhb/`.
+
 This follow-up records implementation acceptance evidence, not a new independent review or
-release approval. F2 and F3 remain outside this repair. The separate external browser/consumer
+release approval. F3 remains outside these repairs. The separate external browser/consumer
 configuration, long outage proof and capacity benchmarks were not rerun here.

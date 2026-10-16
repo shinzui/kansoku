@@ -1,6 +1,7 @@
 # Bundle Update Log
 
 ## 2026-10-16
+* **Update**: REV-2: record F2 organization-cohort repair in 509d873 with exact public/native populations and a passing complete packaged gate; F3 remains outstanding.
 * **Update**: REV-2: record F1/F4 implementation acceptance in e5af95f, the passing complete packaged gate and preserved outage recovery; retain F2/F3 and separate release verification scope.
 * **Addition**: REV-2 reviews implementation correctness at 138d9a316931bbf46781757a29ab6c7fdd90f870 after REV-1, with deterministic and live verification. Requests changes for accepted JSON that parks the shared writer, organization trait conditions that create unusable cohorts, unredacted native query errors in application logs, and shared cohort fixtures that fail the packaged acceptance gate.
 

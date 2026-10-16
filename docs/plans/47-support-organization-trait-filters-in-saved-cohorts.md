@@ -39,7 +39,7 @@ This plan has three milestones. [EP-48](48-clean-acceptance-fixtures-across-tele
 
 - [x] M1: (2026-10-16) Condition-local typed organization sources include OR-only references; eight deterministic compiler examples pass. Public creation, size and both member-page directions select exactly A/B on the owned native stack before the expanded scenario proceeds.
 - [x] M2: (2026-10-16) `nix develop -c just cohorts-acceptance` exits zero; private evidence `.dev/acceptance/cohort-hpu9muhb/`. Exact size and forward/backward member walks prove pro/seats A/B, OR A/B/C, set/unset, negative C/D/E, upper-bound B/C/D/E, user-trait A, foreign-account C, and current updates/replay. Existing cohorts, 50,000-member replacement and erasure remain green.
-- [ ] M3: Metric composition and packaged gates pass, and the cohort contract documents organization trait conditions.
+- [x] M3: (2026-10-16) Code candidate `509d873` passes `just check`, cohort/organization/custom-metric acceptance, documentation checks and strict ADR enforcement. `nix develop -c just acceptance` exits zero with 526 core examples, four probes, 22 live client examples, all three telemetry modes, reader checks and seven administration families; private evidence `.dev/acceptance/run-dtcofhbw/`. The guide and ADR-19 document current, event-attributed organization conditions.
 
 ## Surprises & Discoveries
 
@@ -58,18 +58,43 @@ Revision note (2026-10-16): Removed pre-fix persisted-definition and upgrade exp
 ## Outcomes & Retrospective
 
 
-The focused native/public scenario passes on fresh stores, including saved custom metrics,
-positive/negative organization aggregation, fixed event attribution under current-membership
-fallback, and a whole-session consumer whose widened source includes B's out-of-window
-feature events while the original cohort still selects only A. The final packaged gate
-and remaining required checks are pending; M3 remains open until their results are recorded.
+All three milestones are complete in implementation commit `509d873`. Conditions attach
+the shared typed organization-trait source only where referenced, including OR leaves.
+Definition creation and updates now execute successfully through size, bidirectional members
+and metric selection. Public JSON, parameter binding, identified-user populations and
+lookback bounds remain unchanged; no dependency change or persisted-definition migration
+was needed for this first release.
+
+`nix develop -c just cohorts-acceptance` passes on fresh stores, including saved custom
+metrics, positive/negative organization aggregation, fixed event attribution under
+current-membership fallback, and a whole-session consumer whose widened source includes
+B's out-of-window feature events while the original cohort still selects only A. Its
+private evidence is `.dev/acceptance/cohort-hpu9muhb/`. Organization acceptance passes
+with five deterministic/native examples and the prior public scenario
+(`.dev/acceptance/cohort-v_4q_1ek/`); custom-metric acceptance passes its native/public
+scenarios (`.dev/acceptance/cohort-pi3gjq6x/`).
+
+The final code candidate passes `nix develop -c just check` and
+`nix develop -c just acceptance` (exit zero). The packaged gate runs 526 core examples,
+four probes, 22 live client examples, all three HTTP telemetry modes, reader checks and
+all seven required administration families. The new cohort scenario passes five times,
+including both shared-store fixture-isolation repetitions, with successful cleanup.
+Private evidence is `.dev/acceptance/run-dtcofhbw/`, with sanitized shared logs in its
+`sanitized/` child. Guides, ADR and review checks, explicit strict ADR profile/log
+enforcement, and `git diff --check` pass. No required prerequisite was skipped; the
+separate optional external browser/consumer configuration was not enabled.
+
+ADR-19 and the query guide carry the durable condition-local join and attribution
+decisions. Current trait updates deliberately reclassify historical event conditions,
+while outer organization aggregation and membership fallback preserve the saved cohort's
+identified-user meaning. F2 in REV-2 is addressed with public/native evidence.
 
 ## Context and Orientation
 
 
-`kansoku-core/src/Kansoku/Cohort/Query.hs` validates definitions and builds membership subqueries. In `compileCondition`, filters compile successfully but the population reads `analytics.events_resolved_http` without the aliases needed by `org:` predicates. ClickHouse then reports unknown identifier `org_trait_plan`. The native error is wrapped as a storage failure even though the backend is healthy.
+`kansoku-core/src/Kansoku/Cohort/Query.hs` validates definitions and builds membership subqueries. Before this repair, `compileCondition` compiled filters successfully but read `analytics.events_resolved_http` without the aliases needed by `org:` predicates. ClickHouse reported unknown identifier `org_trait_plan`, wrapped as a storage failure even though the backend was healthy. Conditions now attach their own referenced organization-trait source before counting events.
 
-`kansoku-core/src/Kansoku/Metrics/Query/Traits.hs` supplies `referencedOrganizationTraits :: [Text] -> [Text]` and `organizationSource :: [Text] -> Text -> Text`. The latter adds one account/organization join, exposing typed nullable `org_trait_*` columns. `kansoku-core/src/Kansoku/Metrics/Filter.hs` supplies `filterTerms`, which finds leaves inside filter alternatives. `kansoku-core/src/Kansoku/Metrics/Query/Filter.hs` compiles parameterized predicates. Reuse these functions, including numeric seats and missing-value semantics.
+`kansoku-core/src/Kansoku/Metrics/Query/Traits.hs` supplies `referencedOrganizationTraits :: [Text] -> [Text]` and `organizationSource :: [Text] -> Text -> Text`. The latter adds one account/organization join, exposing typed nullable `org_trait_*` columns. `kansoku-api/src/Kansoku/Metrics/Filter.hs` supplies `filterTerms`, which finds leaves inside filter alternatives. `kansoku-core/src/Kansoku/Metrics/Query/Filter.hs` compiles parameterized predicates. Reuse these functions, including numeric seats and missing-value semantics.
 
 [ADR-19](../adr/0019-saved-query-time-cohorts-and-static-membership.md) defines identified-user cohorts, distinct-event counts, original exclusive `to` anchoring, zero-occurrence membership and `didNot` complements. [ADR-21](../adr/0021-organization-aggregation-and-current-membership.md) defines current traits joined by account and organization, nullable missing traits, and event attribution. [ADR-20](../adr/0020-custom-metric-definitions-and-bounded-or-filters.md) defines bounded OR alternatives inside ANDed filters. Preserve these decisions. A current trait is its latest retained value, so changing it can intentionally reclassify historical event membership.
 
