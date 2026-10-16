@@ -17,7 +17,7 @@ import Kansoku.ClickHouseTestSupport
 import Kansoku.Event
 import Kansoku.Ingest.QueuedEvent (QueuedEvent (..), enrichedQueuedEvent, legacyQueuedEvent)
 import Kansoku.Ingest.RequestContext (emptyRequestContext)
-import Kansoku.Metrics.Api (AcquisitionMeasure (..), CohortMode (..), FunnelMeasure (..), FunnelMode (..), MetricPoint, MetricResult, RetentionMode (..), SessionMeasure (..), UserWindow (..))
+import Kansoku.Metrics.Api (AcquisitionMeasure (..), CohortMode (..), FunnelAttribution (..), FunnelCounting (..), FunnelMeasure (..), FunnelMode (..), MetricPoint, MetricResult, RetentionMode (..), SessionMeasure (..), UserWindow (..))
 import Kansoku.Metrics.Filter qualified as Filter
 import Kansoku.Metrics.Query qualified as Query
 import Kansoku.Metrics.Query.Validate (mkSqlName)
@@ -167,11 +167,11 @@ spec = do
         converted <- metric (Query.runExperimentConversion pool byTrait experiment conversionEvent)
         pointValues converted `shouldBe` replicate 6 1
         forM_ [FunnelSequential, FunnelStrict] $ \mode -> do
-          funnel <- metric (Query.runFunnelMetric defaultRegistry pool byTrait (Just experiment) (Query.FunnelOptions mode FunnelCount []) 10 steps)
+          funnel <- metric (Query.runFunnelMetric defaultRegistry pool byTrait (Just experiment) (Query.FunnelOptions mode FunnelCount [] FunnelUniques FunnelFirstTouch) 10 steps)
           pointValues funnel `shouldBe` replicate 4 1
 
         forM_ [FunnelSequential, FunnelStrict] $ \mode -> do
-          funnel <- metric (Query.runFunnelMetric defaultRegistry pool req Nothing (Query.FunnelOptions mode FunnelCount []) 10 steps)
+          funnel <- metric (Query.runFunnelMetric defaultRegistry pool req Nothing (Query.FunnelOptions mode FunnelCount [] FunnelUniques FunnelFirstTouch) 10 steps)
           pointValues funnel `shouldBe` [1, 1]
         sessions <- metric (Query.runSessionMetric pool SessionCount req)
         sum (pointValues sessions) `shouldBe` 1

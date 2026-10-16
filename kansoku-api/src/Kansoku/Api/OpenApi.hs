@@ -34,7 +34,7 @@ import Kansoku.Event
     VersionedEventSchema,
   )
 import Kansoku.Ingest.Api (BatchAck, BeaconEnvelope, IngestAck, IngestEvent, RejectedEvent)
-import Kansoku.Metrics.Api (AcquisitionMeasure, CohortMode, ExperimentMeasure, FunnelMeasure, FunnelMode, MetricPoint, MetricResult, PathBy, RetentionMode, SessionMeasure, TimeGrain, UserWindow)
+import Kansoku.Metrics.Api (AcquisitionMeasure, CohortMode, ExperimentMeasure, FunnelAttribution, FunnelCounting, FunnelMeasure, FunnelMode, MetricPoint, MetricResult, PathBy, RetentionMode, SessionMeasure, TimeGrain, UserWindow)
 import Kansoku.Metrics.Filter (FilterOp, MetricFilter)
 import Kansoku.Metrics.Limits (maxMetricPoints)
 import Kansoku.Prelude
@@ -195,7 +195,13 @@ instance O.ToParamSchema PathBy where
   toParamSchema _ = O.toParamSchema (Proxy @Text) & O.enum_ ?~ ["event", "route"]
 
 instance O.ToParamSchema FunnelMode where
-  toParamSchema _ = O.toParamSchema (Proxy @Text) & O.enum_ ?~ ["sequential", "strict"]
+  toParamSchema _ = O.toParamSchema (Proxy @Text) & O.enum_ ?~ ["sequential", "strict", "any_order"]
+
+instance O.ToParamSchema FunnelCounting where
+  toParamSchema _ = O.toParamSchema (Proxy @Text) & O.enum_ ?~ ["uniques", "totals"]
+
+instance O.ToParamSchema FunnelAttribution where
+  toParamSchema _ = O.toParamSchema (Proxy @Text) & O.enum_ ?~ (["first_touch", "last_touch"] <> [toJSON ("step:" <> Text.pack (show n)) | n <- [1 .. 20 :: Int]])
 
 instance O.ToParamSchema FunnelMeasure where
   toParamSchema _ = O.toParamSchema (Proxy @Text) & O.enum_ ?~ ["count", "time_to_convert"]

@@ -16,7 +16,7 @@ The public limits are fixed:
 | --- | --- |
 | Date range | Positive, at most 366 days |
 | Paths | 1..10 transitions; top 1..20 per step; window 1..7776000 seconds |
-| Ordered funnel | 1..20 non-empty steps; repeated names retain their meaning |
+| Funnels | 1..20 non-empty steps; repeated names retain their meaning |
 | Retention offsets | At most 32 distinct values in 1..365, normalized to ascending unique order |
 | Complete metric answer | At most 10,000 points |
 | AND-combined filters | At most 8 JSON objects |
@@ -105,13 +105,13 @@ Invalid JSON/filter grammar or incompatible filter types return `invalid_filter`
 | sessions | `groupBy`, `timeGrain`, repeatable session-attribute `filter`, `measure` (count/bounce_rate/average_duration_seconds), `includeBots` (default false) |
 | conversion | `groupBy` (no prop), repeatable `filter`; timeGrain rejected |
 | paths | optional `start` or `end`, `by`, `steps`, `top`, `window`, CSV `events`, CSV `exclude`, repeatable `filter`; event mode requires an anchor |
-| funnel | required `steps`; optional `window`, `mode`, `measure`, repeatable `exclude`, `groupBy`, repeatable `filter` |
+| funnel | required `steps`; optional `window`, `mode`, `counting`, `attribution`, `measure`, repeatable `exclude`, `groupBy`, repeatable `filter` |
 | users | `groupBy`, `timeGrain`, repeatable `filter`, `window` (calendar/rolling7/rolling30), `includeBots` |
 | stickiness, lifecycle | `groupBy`, `timeGrain` (day only), repeatable `filter`, `includeBots` |
 | retention | `groupBy`, `timeGrain` (day only), repeatable `filter`, `days`, `mode` (on/on_or_after), `cohort` (window/lifetime), `includeBots` |
 | experiments | `experiment`, `timeGrain` (day/week/month), `measure` (exposures/diagnostics), user-trait-only `groupBy` and repeatable `filter` |
 | experiments/conversion | required `experiment`, `event`; user-trait-only `groupBy` and repeatable `filter` |
-| experiments/funnel | required `experiment`, `steps`; optional `window`, `mode`, `measure`, repeatable `exclude`, `groupBy`, repeatable `filter` |
+| experiments/funnel | required `experiment`, `steps`; optional `window`, `mode`, `counting`, `attribution`, `measure`, repeatable `exclude`, `groupBy`, repeatable `filter` |
 
 Session/cohort/funnel filters follow their dedicated population contracts; strict funnels reject
 event filters so that interruptions remain visible.
@@ -148,7 +148,7 @@ conversion returns a single zero when its denominator is zero.
 | `/metrics/acquisition` | Complete retained web sessions, first-touch attribution and exact primary-subject users; defaults to sessions grouped by channel, excluding any-bot sessions. |
 | `/metrics/sessions` | Whole retained web sessions, assigned to their earliest event bucket; count, bounce rate and observed duration, excluding any-bot sessions by default. |
 | `/metrics/paths` | Exact canonical-user event paths or page flows, forward or backward. |
-| `/metrics/funnel` | Exact identity-resolved users completing ordered event steps. |
+| `/metrics/funnel` | Exact identity-resolved users or nonoverlapping attempts, with ordered or any-order reach and timing. |
 | `/metrics/retention` | Exact closed-day on/on-or-after retention for window or retained-history lifetime cohorts, omitting immature offsets. |
 | `/metrics/feature-adoption` | Exact identity-resolved users emitting `feature_used`, grouped by its `feature` property by default. |
 | `/metrics/conversion` | Ordered signup completers among starters within the bounded default window; 0 for empty denominator, always 0..1. |
@@ -158,7 +158,7 @@ conversion returns a single zero when its denominator is zero.
 | `/metrics/revenue` | Sum of numeric `amount` on `payment_completed` events. |
 | `/metrics/experiments` | Approximate raw identities exposed per experiment/variant, or exact contamination and exclusive first-observed assignment diagnostics. |
 | `/metrics/experiments/conversion` | Exact identity-resolved exposed and post-exposure converted users per variant, plus rate. |
-| `/metrics/experiments/funnel` | Exact identity-resolved selected-chain post-exposure funnel counts/timing per variant. |
+| `/metrics/experiments/funnel` | Exact post-exposure funnel reach/timing per variant, including any-order, attempt totals and property attribution. |
 
 `/metrics/organizations` and `/metrics/custom` are reserved in the
 contract but not implemented. They currently return HTTP 404 with code `not_implemented`; do not
@@ -270,8 +270,8 @@ use `pathsClient` or `Metrics.paths metricsClient`, both derived from the served
 
 ## Ordered funnels
 
-Supply a non-empty comma-separated `steps` list. A user counted at step N performed steps 1
-through N in order. `window` is seconds from the first step to the last counted step and must be
+Supply a non-empty comma-separated `steps` list. By default, a user counted at step N
+performed steps 1 through N in order. Any-order and totals controls are described below. `window` is seconds from the first step to the last counted step and must be
 between 1 and 7,776,000 (90 days). When omitted, it is the requested date-range duration capped
 at 90 days.
 
@@ -382,7 +382,7 @@ curl --fail-with-body --get http://localhost:8080/metrics/experiments/conversion
   --data-urlencode 'to=2026-08-01' | jq .
 ```
 
-The experiment funnel applies the normal ordered window only to events at or after each user's
+The experiment funnel applies the selected mode and window only to events at or after each user's
 first exposure:
 
 ```bash
@@ -452,7 +452,7 @@ controls browser sessions. Identical IDs in different source services remain sep
 
 ## Deterministic funnels and conversion
 
-Both `/metrics/funnel` and `/metrics/experiments/funnel` accept `mode=sequential|strict`,
+Both `/metrics/funnel` and `/metrics/experiments/funnel` accept `mode=sequential|strict|any_order`,
 `measure=count|time_to_convert`, repeatable `exclude`, one/two `groupBy` dimensions and repeated
 JSON `filter`. Defaults are sequential/count/no exclusions. Timelines use canonical users,
 immutable event deduplication and `(occurred_at milliseconds,event_id)` ordering. One event
@@ -460,7 +460,7 @@ cannot satisfy two repeated steps. Sequential skips intervening events; strict r
 adjacent events, including automatic events, without an implicit repeated-event rule. Strict current-user filters select participants while retaining their complete timelines. Strict
 event filters return 400 because removing rows could hide interruptions.
 
-Every matching start is considered. Select greatest reach, earliest completion, earliest
+For sequential/strict `counting=uniques` (the default), every matching start is considered. Select greatest reach, earliest completion, earliest
 start, then event IDs. The inclusive window measures milliseconds from that start; public
 `window` remains seconds, defaulting to range length capped at 90 days. An excluded event
 between matched steps stops further reach; a later start may still qualify. Up to 20 distinct
@@ -473,9 +473,41 @@ Counts emit cumulative reach by `group.index` and `group.step`. Timing emits rea
 2 onward with `group.measure=p50_seconds|p90_seconds`. These are exact nearest-rank quantiles:
 sort selected-chain elapsed milliseconds/1000, select rank ceil(p*N). No reached chains means
 no timing rows. Group attributes belong to the earliest eligible first-step event, even if
-a later attempt wins. A `prop:` breakdown requires only the first-step schema; missing is null.
+a later attempt wins. Property attribution is described below; missing property values use `other`.
 Typed dimensions, numeric steps and measure names determine final ordering. Large timelines
 fail the shared resource limit instead of being truncated.
+
+`mode=any_order` opens one inclusive window at the earliest event matching any step.
+Reach is the number of distinct step positions matched before completion, expiry or an
+exclusion. For `steps=a,b`, `b,a` reaches 2, while sequential reaches 1. Repeated names
+require separate immutable events. Intermediate `index` values are reach ranks; `step`
+retains the requested label at that index. Timing measures elapsed time to each reach rank.
+Uniques does not search later windows in any-order mode.
+
+`counting=totals` counts nonoverlapping attempts instead of users. Each attempt opens at
+step one in sequential/strict mode, or any matching step in any-order mode. Completion
+consumes the final event; expiry, an exclusion, or a strict interruption closes the current
+attempt while preserving its reached prefix. The closing event can start the next attempt
+if it is eligible. There is no two-second exclusion grace period. Repeating a completed
+`a,b` twice yields 2 at both ranks, versus 1 under uniques. Each attempt owns its start
+group and its timing values. Count rows have `group.measure=count`; totals also emits an
+unbucketed `group.measure=entries` point with null step/index and null breakdown dimensions,
+per variant for experiment funnels. This counts all attempts, including partial ones,
+even when `measure=time_to_convert`. An empty ordinary population emits entries=0.
+
+For `groupBy=prop:<name>`, `attribution=first_touch|last_touch|step:<n>` selects the
+property at the earliest eligible start, at the last matched event of the selected chain,
+or at the matched event for the requested step position (1-based, within `steps`). Totals
+applies this per attempt. In any-order, first touch is the earliest matching event and
+`step:n` names the requested position even when that event occurs first chronologically.
+Missing, null and unreached values use `other`, including a user who never reaches the
+attribution step. A property set only at step three therefore groups under its value for
+`step:3` and under `other` for first touch. For ordered modes the first-touch schema is checked first, with
+other step declarations used when that property is absent there; any-order first touch and last touch require
+compatible scalar declarations wherever declared among the steps. `step:n` validates its
+own step schema. Undeclared properties and incompatible declarations remain errors.
+Other grouping dimensions continue to use the start event; `attribution` does not change
+their ownership. These controls apply identically after experiment exposure gating.
 
 `/metrics/conversion` now means ordered signup conversion: denominator = canonical users with
 signup_started; numerator = those starters with a valid subsequent signup_completed within

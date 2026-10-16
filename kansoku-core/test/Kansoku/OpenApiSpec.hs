@@ -87,7 +87,7 @@ spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
     let funnelOperation = fromMaybe Aeson.Null (valueAt ["paths", "/metrics/funnel", "get"] documentValue)
     lookupText ["description"] funnelOperation
       `shouldSatisfy` maybe False (Text.isInfixOf "millisecond occurred_at then event_id")
-    operationParameterNames funnelOperation `shouldContain` ["window", "mode", "measure", "exclude", "groupBy", "filter"]
+    operationParameterNames funnelOperation `shouldContain` ["window", "mode", "measure", "counting", "attribution", "exclude", "groupBy", "filter"]
 
   it "documents closed-day retained-history retention modes and offset zero" $ do
     let retentionOperation = fromMaybe Aeson.Null (valueAt ["paths", "/metrics/retention", "get"] documentValue)
@@ -115,7 +115,7 @@ spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
       `shouldSatisfy` maybe False (Text.isInfixOf "no significance testing")
     lookupText ["description"] funnelOperation
       `shouldSatisfy` maybe False (Text.isInfixOf "at or after that user/variant first exposure")
-    operationParameterNames funnelOperation `shouldContain` ["window", "mode", "measure", "exclude", "groupBy", "filter"]
+    operationParameterNames funnelOperation `shouldContain` ["window", "mode", "measure", "counting", "attribution", "exclude", "groupBy", "filter"]
 
   it "keeps every wire DTO's ToJSON representation within its ToSchema" $ do
     conforms "AnalyticsEvent" sampleEvent

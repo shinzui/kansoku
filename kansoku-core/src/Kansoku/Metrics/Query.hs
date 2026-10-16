@@ -89,7 +89,7 @@ import Kansoku.Event
     defaultRegistry,
   )
 import Kansoku.Exception (trySynchronous)
-import Kansoku.Metrics.Api (AcquisitionMeasure (..), CohortMode (..), FunnelMeasure (..), FunnelMode (..), MetricPoint (..), MetricResult (..), PathBy (..), RetentionMode (..), SessionMeasure (..), TimeGrain (..), UserWindow (..))
+import Kansoku.Metrics.Api (AcquisitionMeasure (..), CohortMode (..), FunnelAttribution (..), FunnelCounting (..), FunnelMeasure (..), FunnelMode (..), MetricPoint (..), MetricResult (..), PathBy (..), RetentionMode (..), SessionMeasure (..), TimeGrain (..), UserWindow (..))
 import Kansoku.Metrics.Definition (Aggregation (..), MetricDefinition (..), RatioMetric (..))
 import Kansoku.Metrics.Filter (MetricFilter)
 import Kansoku.Metrics.Filter qualified as WireFilter
@@ -100,8 +100,11 @@ import Kansoku.Metrics.Query.Funnel qualified as Funnel
 import Kansoku.Metrics.Query.Property
   ( PropertyError (..),
     PropertyName,
+    ScalarType (..),
     propertyFloatExpr,
     resolveNumericProperty,
+    resolveOptionalProperty,
+    resolveProperty,
   )
 import Kansoku.Metrics.Query.Session (materializedSessionProjection, sessionProjection)
 import Kansoku.Metrics.Query.Traits qualified as Traits
@@ -400,12 +403,14 @@ buildPathsSQLAggregate req options predicates =
 data FunnelOptions = FunnelOptions
   { mode :: !FunnelMode,
     measure :: !FunnelMeasure,
-    exclusions :: ![SqlName]
+    exclusions :: ![SqlName],
+    counting :: !FunnelCounting,
+    attribution :: !FunnelAttribution
   }
   deriving stock (Generic, Eq, Show)
 
 defaultFunnelOptions :: FunnelOptions
-defaultFunnelOptions = FunnelOptions FunnelSequential FunnelCount []
+defaultFunnelOptions = FunnelOptions FunnelSequential FunnelCount [] FunnelUniques FunnelFirstTouch
 
 runFunnel :: (IOE :> es) => QueryPool -> QueryRequest -> Int -> [SqlName] -> Eff es (Either QueryExecutionError MetricResult)
 runFunnel pool req = runFunnelMetric defaultRegistry pool req Nothing defaultFunnelOptions
@@ -413,7 +418,7 @@ runFunnel pool req = runFunnelMetric defaultRegistry pool req Nothing defaultFun
 runFunnelMetric :: (IOE :> es) => EventRegistry -> QueryPool -> QueryRequest -> Maybe SqlName -> FunnelOptions -> Int -> [SqlName] -> Eff es (Either QueryExecutionError MetricResult)
 runFunnelMetric registry pool req experiment requestedOptions window steps =
   let options = requestedOptions {exclusions = List.nub (requestedOptions ^. #exclusions)}
-   in case first QueryLimitFailure (validateDateRange (req ^. #from) (req ^. #to) >> funnelLimits window steps >> exclusionLimits steps (options ^. #exclusions))
+   in case first QueryLimitFailure (validateDateRange (req ^. #from) (req ^. #to) >> funnelLimits window steps >> exclusionLimits steps (options ^. #exclusions) >> attributionLimits steps (options ^. #attribution))
         >> first QueryCompileFailure (compileFunnel registry req experiment options window steps) of
         Left failure -> pure (Left failure)
         Right compiled ->
@@ -429,6 +434,10 @@ exclusionLimits :: [SqlName] -> [SqlName] -> Either QueryLimitError ()
 exclusionLimits steps excluded = do
   unless (length (List.nub excluded) <= 20) (Left (QueryLimitError "too_many_funnel_exclusions" "at most 20 distinct exclusions are supported"))
   unless (null [name | name <- excluded, name `elem` steps]) (Left (QueryLimitError "invalid_funnel_exclusion" "a step cannot also be excluded"))
+
+attributionLimits :: [SqlName] -> FunnelAttribution -> Either QueryLimitError ()
+attributionLimits steps (FunnelStep n) = unless (n >= 1 && n <= length steps) (Left (QueryLimitError "invalid_funnel_attribution" "attribution step must be within the requested steps"))
+attributionLimits _ _ = Right ()
 
 -- Experiment controls deliberately accept only current user dimensions. Event
 -- filtering would change exposure/assignment denominators and is not implied.
@@ -1006,13 +1015,27 @@ compileFunnel :: EventRegistry -> QueryRequest -> Maybe SqlName -> FunnelOptions
 compileFunnel registry req experiment options window steps = do
   unless (isNothing (req ^. #timeGrain)) (Left (QueryCompileFilterError "timeGrain is unsupported for funnels"))
   when (options ^. #mode == FunnelStrict && any (\f -> not (Text.isPrefixOf "user:" (WireFilter.dimension f) || WireFilter.dimension f == "cohort")) (req ^. #filters)) (Left (QueryCompileFilterError "strict funnels do not support event filters; interruptions must remain visible"))
-  let firstScope = map (EventName . renderSqlName) (take 1 steps)
-  grouping <- requestGrouping req registry firstScope (req ^. #groupBy) []
+  case attributionLimits steps (options ^. #attribution) of
+    Left (QueryLimitError _ detail) -> Left (QueryCompileFilterError detail)
+    Right () -> pure ()
+  let scope = map (EventName . renderSqlName) steps
+      firstScope = take 1 scope
+      property name = case options ^. #attribution of
+        FunnelStep n -> resolveProperty registry (take 1 (drop (n - 1) scope)) name
+        FunnelLastTouch -> resolveOptionalProperty registry scope name
+        FunnelFirstTouch | options ^. #mode == FunnelAnyOrder -> resolveOptionalProperty registry scope name
+        FunnelFirstTouch -> case resolveProperty registry firstScope name of
+          Left PropertyErrorUndeclared {} -> resolveOptionalProperty registry scope name
+          result -> result
+      resolve name = case Text.stripPrefix "prop:" name of
+        Just key -> first InvalidDimensionProperty (GroupByProperty <$> property key)
+        Nothing -> cohortDimension req "canonical_user" (resolveDimension registry firstScope) name
+  grouping <- requestedGroupingWith resolve (req ^. #groupBy) []
   filters <- first QueryCompileFilterError (requestFilters req "metric_filter" registry (map (EventName . renderSqlName) steps) (req ^. #filters))
   pure
     CompiledMetric
       { sql = funnelAggregate req experiment options window steps grouping (Filters.predicates filters),
-        groupLabels = map dimensionLabel grouping <> ["index", "step"] <> (if isJust experiment then ["variant", "experiment"] else []) <> ["measure" | options ^. #measure == FunnelTimeToConvert],
+        groupLabels = map dimensionLabel grouping <> ["index", "step"] <> (if isJust experiment then ["variant", "experiment"] else []) <> ["measure" | options ^. #measure == FunnelTimeToConvert || options ^. #counting == FunnelTotals],
         filterParameters = Filters.parameters filters,
         ordering = FunnelDimensionsOrder
       }
@@ -1031,17 +1054,49 @@ funnelAggregate req experiment options window steps grouping predicates =
         Nothing -> "SELECT *,CAST(NULL,'Nullable(String)') AS variant FROM base WHERE " <> selection
         Just _ -> "SELECT b.*,e.variant AS variant FROM base AS b INNER JOIN exposures AS e ON b.canonical_user=e.canonical_user WHERE b.occurred_at>=e.first_exposure AND (" <> selection <> ")"
       timeline = "timelines AS (SELECT canonical_user,variant," <> Funnel.sortedTimelineSQL "groupArray(tuple(toInt64(toUnixTimestamp64Milli(occurred_at)),event_id,toString(event_name),sort_group_1,sort_group_2,group_key))" <> " AS timeline FROM (" <> timelineSource <> ") GROUP BY canonical_user,variant),"
-      selectedCTE = "chosen AS (SELECT *,timeline[arrayFirstIndex(event->event.3=steps[1],timeline)].4 AS sort_group_1,timeline[arrayFirstIndex(event->event.3=steps[1],timeline)].5 AS sort_group_2,timeline[arrayFirstIndex(event->event.3=steps[1],timeline)].6 AS group_key," <> Funnel.selectedChainSQL "timeline" "steps" "excluded" (Text.pack (show (toInteger window * 1000))) (if options ^. #mode == FunnelStrict then "1" else "0") <> " AS selected FROM timelines WHERE arrayExists(event->event.3=steps[1],timeline))"
+      extended = options ^. #mode == FunnelAnyOrder || options ^. #counting == FunnelTotals
+      firstIndex = if options ^. #mode == FunnelAnyOrder then "arrayFirstIndex(event->has(steps,event.3),timeline)" else "arrayFirstIndex(event->event.3=steps[1],timeline)"
+      selected =
+        if extended
+          then "arrayJoin(" <> Funnel.entryChainsSQL "timeline" "steps" "excluded" (Text.pack (show (toInteger window * 1000))) (options ^. #mode == FunnelStrict) (options ^. #mode == FunnelAnyOrder) (options ^. #counting == FunnelTotals) <> ")"
+          else Funnel.selectedChainSQL "timeline" "steps" "excluded" (Text.pack (show (toInteger window * 1000))) (if options ^. #mode == FunnelStrict then "1" else "0")
+      owner = if options ^. #counting == FunnelTotals then "selected[1]" else firstIndex
+      touch = case options ^. #attribution of
+        FunnelFirstTouch -> owner
+        FunnelLastTouch -> "arrayElement(selected,-1)"
+        FunnelStep n
+          | options ^. #mode == FunnelAnyOrder ->
+              -- Assign each occurrence of a repeated name to its next unused position.
+              let pos = Text.pack (show n)
+               in "arrayElement(arrayFilter(i->timeline[i].3=steps[" <> pos <> "],selected),arrayCount(p->steps[p]=steps[" <> pos <> "],arraySlice(arrayEnumerate(steps),1," <> pos <> ")))"
+        FunnelStep n -> "selected[" <> Text.pack (show n) <> "]"
+      groupField i dimension =
+        let eventIndex = if isPropertyDimension dimension then touch else owner
+            field = "timeline[" <> eventIndex <> "]." <> Text.pack (show (i + 3 :: Int))
+         in if isPropertyDimension dimension && dimensionType dimension == ScalarString then "coalesce(" <> field <> ",'other')" else field
+      fields = [groupField i dimension | (i, dimension) <- zip [1 ..] grouping]
+      label i dimension =
+        let value = "toString(sort_group_" <> Text.pack (show (i :: Int)) <> ")"
+         in if isPropertyDimension dimension then "coalesce(" <> value <> ",'other')" else value
+      projection =
+        "toJSONString(["
+          <> Text.intercalate "," [label i dimension | (i, dimension) <- zip [1 ..] grouping]
+          <> "]) AS group_key,"
+          <> Text.intercalate "," [(if i <= length fields then fields !! (i - 1) else "CAST(NULL,'Nullable(String)')") <> " AS sort_group_" <> Text.pack (show i) | i <- [1, 2 :: Int]]
+      selectedCTE = "matched AS (SELECT *," <> selected <> " AS selected FROM timelines WHERE " <> firstIndex <> ">0),chosen AS (SELECT *," <> projection <> " FROM matched)"
       withClause = "WITH " <> stepArray <> " AS steps," <> excludeArray <> " AS excluded,base AS (" <> source <> ")," <> (if isJust experiment then exposure else "") <> timeline <> selectedCTE
       variantFields = if isJust experiment then ["sort_variant", "{experiment:String}"] else []
       metadata extra = extendGroups (["toString(step.1)", "step.2"] <> variantFields <> extra)
       grouped = not (null grouping) || isJust experiment
       groupCols = "group_key,sort_group_1,sort_group_2,variant"
       countAggregate = "SELECT " <> (if grouped then groupCols <> "," else "'[]' AS group_key,CAST(NULL,'Nullable(String)') AS sort_group_1,CAST(NULL,'Nullable(String)') AS sort_group_2,CAST(NULL,'Nullable(String)') AS variant,") <> "groupArray(length(selected)) AS levels FROM chosen" <> (if grouped then " GROUP BY " <> groupCols else "")
-      countSQL = "SELECT '' AS bucket," <> metadata [] <> " AS group_key,sort_group_1,sort_group_2,variant AS sort_variant,step.1 AS sort_step,'' AS sort_measure,toFloat64(arrayCount(level->level>=step.1,levels)) AS value FROM (" <> countAggregate <> ") ARRAY JOIN " <> stepTuples <> " AS step"
+      countSQL = "SELECT '' AS bucket," <> metadata ["'count'" | options ^. #counting == FunnelTotals] <> " AS group_key,sort_group_1,sort_group_2,variant AS sort_variant,step.1 AS sort_step,'' AS sort_measure,toFloat64(arrayCount(level->level>=step.1,levels)) AS value FROM (" <> countAggregate <> ") ARRAY JOIN " <> stepTuples <> " AS step"
       durations = "SELECT " <> groupCols <> ",step,arraySort(groupArrayIf(toFloat64(timeline[selected[step.1]].1-timeline[selected[1]].1)/1000,length(selected)>=step.1)) AS durations FROM chosen ARRAY JOIN " <> stepTuples <> " AS step WHERE step.1>=2 GROUP BY " <> groupCols <> ",step HAVING notEmpty(durations)"
       timeSQL = "SELECT '' AS bucket," <> metadata ["quantile.1"] <> " AS group_key,sort_group_1,sort_group_2,variant AS sort_variant,step.1 AS sort_step,quantile.1 AS sort_measure,durations[toUInt64(ceil(quantile.2*length(durations)))] AS value FROM (" <> durations <> ") ARRAY JOIN [('p50_seconds',0.5),('p90_seconds',0.9)] AS quantile"
-   in withClause <> " " <> if options ^. #measure == FunnelCount then countSQL else timeSQL
+      entryVariant = if isJust experiment then "variant" else "CAST(NULL,'Nullable(String)')"
+      entryGroups = replicate (length grouping + 2) "CAST(NULL,'Nullable(String)')" <> (if isJust experiment then ["variant", "{experiment:String}"] else []) <> ["'entries'"]
+      entriesSQL = "SELECT '' AS bucket,toJSONString([" <> Text.intercalate "," entryGroups <> "]) AS group_key,NULL AS sort_group_1,NULL AS sort_group_2," <> entryVariant <> " AS sort_variant,toUInt64(0) AS sort_step,'entries' AS sort_measure,toFloat64(count()) AS value FROM chosen" <> (if isJust experiment then " GROUP BY variant" else "")
+   in withClause <> " " <> (if options ^. #measure == FunnelCount then countSQL else timeSQL) <> (if options ^. #counting == FunnelTotals then " UNION ALL " <> entriesSQL else "")
 
 validExposurePredicate :: Text
 validExposurePredicate = "event_name='experiment_viewed' AND match(CAST(toString(getSubcolumn(properties_json,'experiment')),'String'),'^[a-z0-9_.:-]{1,128}$') AND match(CAST(toString(getSubcolumn(properties_json,'variant')),'String'),'^[a-z0-9_.:-]{1,128}$')"

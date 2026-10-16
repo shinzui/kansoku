@@ -2,7 +2,7 @@
 type: Architecture Decision Record
 title: Queryable event properties and identity-resolved projection
 description: Store event properties as native ClickHouse JSON and expose them for metric grouping only after registry declaration.
-timestamp: 2026-10-16T01:41:00Z
+timestamp: 2026-10-16T12:10:52Z
 generated:
   by: human:kansoku-maintainers
   at: 2026-07-19T00:00:00Z
@@ -55,6 +55,10 @@ One or two distinct dimensions retain their complete names, including prop:<name
 are nullable strings; null, empty string and literal other remain distinct. Native group_key is
 a JSON array of nullable strings, decoded structurally with arity validation. Separate scalar
 sort columns preserve numeric/Boolean/string ordering independently of JSON serialization.
+Funnel property attribution is an explicit exception: missing/null/unreached values use
+`other` and merge with literal `other` strings. Its selected-step or compatible finite-scope
+declaration rules and retained typed sorting are defined in
+[ADR-15](0015-deterministic-selected-funnel-chains-and-exclusive-exposure-diagnostics.md).
 Funnel, retention and experiment metadata use the same structural transport. Property default
 groups in internal definitions omit the prop: prefix; the wire always includes it. Sum/Average
 inputs use aggregationProperty and exclude missing/incompatible values before aggregation.
@@ -88,7 +92,7 @@ identity stitching instead of falling back to raw `user_id` or `anonymous_id` va
 The raw `properties` string remains the source of truth and the ClickHaskell insert block is
 unchanged. New registry declarations become queryable without a ClickHouse migration.
 Property names remain limited to a conservative identifier charset and must be declared for
-every event in a metric.
+every event in a metric, except for the explicit funnel attribution scope in ADR-15.
 
 Future migrations that recreate `analytics.events_resolved`, including multi-signal
 identity work, must preserve the ordered seven-column contract: `event_id`, `event_name`,

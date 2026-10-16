@@ -50,7 +50,7 @@ experimentConversionClient credential experiment event fromDay toDay =
 
 experimentFunnelClient :: AuthenticatedRequest MetricsAuth -> Text -> Text -> Day -> Day -> Maybe Int -> ClientM (KansokuResult MetricResult)
 experimentFunnelClient credential experiment steps fromDay toDay window =
-  Metrics.experimentFunnel metricsClient credential experiment steps fromDay toDay window Nothing Nothing [] Nothing []
+  Metrics.experimentFunnel metricsClient credential experiment steps fromDay toDay window Nothing Nothing Nothing Nothing [] Nothing []
 
 -- | Management and member routes derived from the served cohort contract.
 cohortsClient :: Cohorts (AsClientT ClientM)

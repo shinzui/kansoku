@@ -1,6 +1,8 @@
 # Bundle Update Log
 
 ## 2026-10-16
+* **Update**: Clarify ADR-4 with the explicit funnel attribution declaration scope and missing-value other grouping exception from ADR-15.
+* **Update**: Extend ADR-6 and ADR-15 with any-order earliest windows, nonoverlapping attempt totals and per-step property attribution.
 * **Update**: ADR-9: record bounded deterministic paths, reverse traversal, route collapse and exact top-K folding.
 * **Update**: Added ADR-19: saved query-time cohorts, versioned static membership, cursor pages and fenced erasure.
 * **Update**: Accept ADR-11 after all twelve MasterPlan 5 children and final packaged, consumer, workflow, performance and capacity gates pass.

@@ -2,7 +2,7 @@
 type: Architecture Decision Record
 title: Exposure-based experiment analytics
 description: Define exposure-based experiment analytics using an approximate daily rollup for exposure counts and exact query-time resolution for conversion and funnels.
-timestamp: 2026-10-16T00:12:46Z
+timestamp: 2026-10-16T12:10:14Z
 generated:
   by: human:kansoku-maintainers
   at: 2026-07-19T00:00:00Z
@@ -47,7 +47,8 @@ first exposure to that variant. The experiment funnel similarly ignores step eve
 before first exposure and then applies [ADR-15](0015-deterministic-selected-funnel-chains-and-exclusive-exposure-diagnostics.md)'s
 deterministic selected-chain semantics over millisecond time and event IDs. One physical event
 cannot satisfy repeated steps. A user exposed to multiple variants
-counts in every variant observed; cross-variant exposure is retained as a data-quality
+counts in every variant observed; all funnel modes, attempt resets and attribution use only
+the exposure-gated timeline under ADR-15; cross-variant exposure is retained as a data-quality
 signal rather than silently reassigned.
 
 All endpoints inherit service-token authentication and bind account and validated names
@@ -56,7 +57,8 @@ same anchored name pattern before they become composite group keys. A syntactica
 experiment with no data returns HTTP 200 with an empty point list for exposure counts and
 conversion; diagnostics instead emit zero totals without variant rows.
 
-The API returns exposure counts, conversion counts and rates, ordered funnel counts/timing,
+The API returns exposure counts, conversion counts and rates, funnel counts/timing with sequential, strict or any_order mode, uniques or totals counting,
+and first_touch, last_touch or step:n property attribution,
 and exact contamination and exclusive first-observed assignment diagnostics under ADR-15.
 It does not calculate statistical significance, confidence intervals, sample-size
 adequacy, or winner recommendations.

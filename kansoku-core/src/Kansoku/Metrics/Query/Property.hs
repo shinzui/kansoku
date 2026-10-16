@@ -10,6 +10,7 @@ module Kansoku.Metrics.Query.Property
     propertyScalarType,
     resolveNumericProperty,
     resolveProperty,
+    resolveOptionalProperty,
   )
 where
 
@@ -65,6 +66,15 @@ resolveProperty registry events name
     scalar _ PTNumber = Right ScalarNumber
     scalar _ PTBool = Right ScalarBool
     scalar event _ = Left (PropertyErrorNotScalar name event)
+
+-- | Funnel attribution may select an event on which a known property is absent.
+-- Require a declaration somewhere in the finite scope and compatible declared
+-- types, while retaining NULL extraction for the other steps.
+resolveOptionalProperty :: EventRegistry -> [EventName] -> Text -> Either PropertyError PropertyName
+resolveOptionalProperty registry events name =
+  let declared event = any (isJust . findProperty name) (maybe [] toList (lookupVersions event registry))
+      scope = filter declared events
+   in resolveProperty registry (if null scope then events else scope) name
 
 resolveNumericProperty :: EventRegistry -> [EventName] -> Text -> Either PropertyError PropertyName
 resolveNumericProperty registry events name = do

@@ -5,7 +5,7 @@ description: Share one deterministic chain evaluator for funnel counts, timing a
 docId: ADR-15
 status: Accepted
 date: 2026-10-16
-timestamp: 2026-10-16T00:34:14Z
+timestamp: 2026-10-16T12:10:14Z
 generated:
   by: process:codex
   at: 2026-10-16T00:12:46Z
@@ -28,7 +28,7 @@ Use one pure reference and equivalent native array evaluator for both funnel rou
 ordered signup conversion. Canonical immutable events are deduplicated before ordering by
 stored millisecond occurred_at then event_id. A physical event satisfies at most one step.
 Sequential mode permits intervening events; strict mode requires adjacent timeline events,
-including automatic events. Strict mode has no implicit deduplication rule. Consider every
+including automatic events. Strict mode has no implicit deduplication rule. In sequential/strict uniques, consider every
 matching start. Select maximum reached level, earliest completion, earliest start and event
 ID list in that order. The inclusive window bounds elapsed milliseconds from the start.
 
@@ -39,9 +39,31 @@ select matching step rows, while excluded rows always remain visible. Strict eve
 are rejected because they could hide interruptions. Future current-trait selection must
 select subjects without removing their intervening events.
 
-Group ownership is the earliest eligible first-step event in the selected population, even
-when another start wins. Validate prop dimensions against the first-step schema only. Missing
-and null stay null. Exposure-gated timelines include events at or after first exposure for
+Any-order uniques opens exactly one window at the earliest event matching any requested
+step. Count distinct matched step positions, assigning repeated names to their next unused
+position; one physical event still satisfies at most one position. Intermediate indices
+report reach ranks, and timing follows that chronological reach. An exclusion or expiry ends
+this window without searching later windows.
+
+Totals counting uses nonoverlapping attempts. Start at step one for sequential/strict, or
+any matching step for any-order. After completion consume the completing event. On expiry,
+exclusion or strict interruption, preserve the reached prefix and allow the closing event
+to start a new eligible attempt. Do not add an exclusion grace period. Count each attempt
+in cumulative reach and timing; emit an additional unbucketed measure=entries point with
+null index/step/breakdown fields (per variant for experiments), and measure=count on totals
+reach rows. Include partial attempts. The entries row shares the final result limit.
+
+Group ownership is the earliest eligible start in the selected population, even when
+another start wins; totals owns groups per attempt. Only prop dimensions respond to
+attribution: first_touch uses that start, last_touch the selected chain's last matched
+event, and step:n the event for the named requested position. This remains the named
+position in any-order, independent of reach rank. Missing/null/unreached properties render
+as other while typed nullable sort columns preserve numeric/boolean ordering. Missing string values coalesce before aggregation so they merge
+with a literal other value. Ordered first-touch
+validates its first-step schema first, with compatible declarations from other steps as a
+fallback for a property absent there. Any-order first-touch and last-touch validate compatible scalar types wherever
+declared across the finite step scope. step:n validates that step's schema and must be in
+range. Unknown properties remain errors. Built-in/current-trait groups keep start ownership. Exposure-gated timelines include events at or after first exposure for
 each user/variant within the requested range; multi-variant users remain in each variant.
 Counts and durations use the same selected chain. Exact nearest-rank percentiles sort elapsed
 milliseconds/1000 and select ceil(p*N), for p=0.5 and 0.9, on reached steps >=2. No approximate
@@ -77,9 +99,12 @@ exclusive assignment shares. No new persisted state is required.
 Array construction and evaluation are bounded by shared native work limits, not by truncating
 user sequences. Large histories can produce a resource error. Reference/native differential
 acceptance must compare full event IDs and millisecond durations for at least 1000 seeded
-timelines in both modes. Native route, packaged public in all three telemetry modes, pinned SDK and ten-million-event
+timelines per path: sequential/strict selected-chain uniques, any-order uniques, and all
+three totals modes. Baseline selected-chain native route, packaged public in all three telemetry modes, pinned SDK and ten-million-event
 retained-history acceptance pass. All 28 performance cases remain below 2x identity overhead
 and the unchanged native memory budget. The diagnostic boundary fixture required grouped
 assignment counts, rather than a subject-by-variant array scan. Evidence is recorded in
 [EP-36](../plans/36-funnel-modes-and-experiment-exposure-diagnostics.md). Final joint browser,
 trait and operational integration remains the MasterPlan's responsibility.
+Extended any-order, totals and attribution native/public acceptance is recorded in
+[EP-43](../plans/43-funnel-extensions-any-order-re-entry-counting-and-per-step-attribution.md).

@@ -28,7 +28,7 @@ import Kansoku.Cohort.Store qualified as CohortStore
 import Kansoku.Event (AccountId, defaultRegistry)
 import Kansoku.Exception (trySynchronous)
 import Kansoku.Logging (logError, runLogStderr)
-import Kansoku.Metrics.Api (AcquisitionMeasure (..), CohortMode (..), ExperimentMeasure (..), FunnelMeasure (..), FunnelMode (..), MetricResult, MetricsRoutes (..), PathBy (..), RetentionMode (..), SessionMeasure (..), TimeGrain (..), UserWindow (..))
+import Kansoku.Metrics.Api (AcquisitionMeasure (..), CohortMode (..), ExperimentMeasure (..), FunnelAttribution (..), FunnelCounting (..), FunnelMeasure (..), FunnelMode (..), MetricResult, MetricsRoutes (..), PathBy (..), RetentionMode (..), SessionMeasure (..), TimeGrain (..), UserWindow (..))
 import Kansoku.Metrics.Filter (MetricFilter)
 import Kansoku.Metrics.Filter qualified as Filter
 import Kansoku.Metrics.Query qualified as Query
@@ -118,8 +118,8 @@ metricsServerUsing pg pool =
               Left (QueryLimitError code message) -> pure (KansokuBadRequest (badRequest code message))
               Right () -> effToHandler (withCohorts pg (queryRequest (principal ^. #accountId) fromDay toDay Nothing Nothing filters) (\request -> Query.runPaths defaultRegistry pool request options))
 
-    funnelHandler :: MetricsPrincipal -> Day -> Day -> Text -> Maybe Int -> Maybe FunnelMode -> Maybe FunnelMeasure -> [Text] -> Maybe Text -> [MetricFilter] -> Handler (KansokuResult MetricResult)
-    funnelHandler (MetricsPrincipal principal) fromDay toDay stepsParam requestedWindow mode measure excludes groupBy filters =
+    funnelHandler :: MetricsPrincipal -> Day -> Day -> Text -> Maybe Int -> Maybe FunnelMode -> Maybe FunnelMeasure -> Maybe FunnelCounting -> Maybe FunnelAttribution -> [Text] -> Maybe Text -> [MetricFilter] -> Handler (KansokuResult MetricResult)
+    funnelHandler (MetricsPrincipal principal) fromDay toDay stepsParam requestedWindow mode measure counting attribution excludes groupBy filters =
       withDateRange fromDay toDay $
         case nonEmptyCsv stepsParam of
           [] -> pure (KansokuBadRequest (badRequest "invalid_funnel_steps" ("invalid funnel steps: " <> stepsParam)))
@@ -138,7 +138,7 @@ metricsServerUsing pg pool =
                           (badRequest "invalid_funnel_window" ("invalid funnel window: " <> invalid <> "; expected 1..7776000 seconds"))
                       )
                   Right window ->
-                    withExclusions excludes $ \excluded -> effToHandler (withCohorts pg (queryRequest (principal ^. #accountId) fromDay toDay groupBy Nothing filters) (\request -> Query.runFunnelMetric defaultRegistry pool request Nothing (Query.FunnelOptions (fromMaybe FunnelSequential mode) (fromMaybe FunnelCount measure) excluded) window steps))
+                    withExclusions excludes $ \excluded -> effToHandler (withCohorts pg (queryRequest (principal ^. #accountId) fromDay toDay groupBy Nothing filters) (\request -> Query.runFunnelMetric defaultRegistry pool request Nothing (Query.FunnelOptions (fromMaybe FunnelSequential mode) (fromMaybe FunnelCount measure) excluded (fromMaybe FunnelUniques counting) (fromMaybe FunnelFirstTouch attribution)) window steps))
 
     retentionHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> [MetricFilter] -> Maybe Text -> Maybe RetentionMode -> Maybe CohortMode -> Maybe Bool -> Handler (KansokuResult MetricResult)
     retentionHandler (MetricsPrincipal principal) fromDay toDay groupBy timeGrain filters daysParam mode cohort bots =
@@ -209,8 +209,8 @@ metricsServerUsing pg pool =
                         )
                     )
 
-    experimentFunnelHandler :: MetricsPrincipal -> Text -> Text -> Day -> Day -> Maybe Int -> Maybe FunnelMode -> Maybe FunnelMeasure -> [Text] -> Maybe Text -> [MetricFilter] -> Handler (KansokuResult MetricResult)
-    experimentFunnelHandler (MetricsPrincipal principal) experimentParam stepsParam fromDay toDay requestedWindow mode measure excludes groupBy filters =
+    experimentFunnelHandler :: MetricsPrincipal -> Text -> Text -> Day -> Day -> Maybe Int -> Maybe FunnelMode -> Maybe FunnelMeasure -> Maybe FunnelCounting -> Maybe FunnelAttribution -> [Text] -> Maybe Text -> [MetricFilter] -> Handler (KansokuResult MetricResult)
+    experimentFunnelHandler (MetricsPrincipal principal) experimentParam stepsParam fromDay toDay requestedWindow mode measure counting attribution excludes groupBy filters =
       withDateRange fromDay toDay $
         case mkSqlName experimentParam of
           Left invalid ->
@@ -247,7 +247,7 @@ metricsServerUsing pg pool =
                                       pool
                                       request
                                       (Just experiment)
-                                      (Query.FunnelOptions (fromMaybe FunnelSequential mode) (fromMaybe FunnelCount measure) excluded)
+                                      (Query.FunnelOptions (fromMaybe FunnelSequential mode) (fromMaybe FunnelCount measure) excluded (fromMaybe FunnelUniques counting) (fromMaybe FunnelFirstTouch attribution))
                                       window
                                       steps
                                 )

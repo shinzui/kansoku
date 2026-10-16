@@ -79,6 +79,40 @@ def verify_funnels(base, write_key, service_token):
                 assert failure.code == 400 and json.load(failure)['code'] == code
             else:
                 raise AssertionError('invalid funnel controls were accepted')
+    # EP-43: public controls use the same exposure-gated, replay-safe timelines.
+    extra = []
+    for eid, name, stamp, properties in [
+            ('second-start', first, '00:00:04', {}),
+            ('second-end', last, '00:00:05', {}),
+            ('attribution', 'subscription_started', '00:00:06', {'plan': 'pro', 'billing_period': 'monthly'})]:
+        value = event(prefix + eid, prefix, name=name, timestamp='2026-07-01T' + stamp + 'Z')
+        value.update(userId=prefix, sourceService=prefix, properties=properties)
+        extra.append(value)
+    send(base, write_key, extra)
+    eventually(lambda: report('funnel', steps=first + ',' + last, counting='totals')[-1]['value'] == 2)
+    for endpoint in ('funnel', 'experiments/funnel'):
+        common = dict(steps=first + ',' + last, window=10)
+        if endpoint.startswith('experiments/'):
+            common['experiment'] = prefix
+        totals = report(endpoint, **common, counting='totals')
+        assert all(point['value'] == 2 for point in totals), totals
+        assert {point['group']['measure'] for point in totals} == {'count', 'entries'}, totals
+        for point in totals:
+            if point['group']['measure'] == 'entries':
+                assert point['bucket'] is None and point['group']['index'] is None and point['group']['step'] is None, point
+        reverse_steps = dict(common, steps=last + ',' + first)
+        any_order = report(endpoint, **reverse_steps, mode='any_order')
+        assert all(point['value'] == 1 for point in any_order), any_order
+        for attribution, expected in [('first_touch', 'other'), ('last_touch', 'pro'), ('step:3', 'pro')]:
+            points = report(endpoint, **dict(common, steps=first + ',' + last + ',subscription_started'), groupBy='prop:plan', attribution=attribution)
+            assert all(point['group']['prop:plan'] == expected for point in points), points
+        for parameters in [dict(counting='bad'), dict(attribution='step:0'), dict(attribution='step:3'), dict(mode='bad')]:
+            try:
+                report(endpoint, **common, **parameters)
+            except urllib.error.HTTPError as failure:
+                assert failure.code == 400, failure
+            else:
+                raise AssertionError('invalid extension control accepted')
     diagnostic = report('experiments', experiment=prefix, measure='diagnostics')
     values = {(point['group']['measure'], point['group']['variant']): point['value'] for point in diagnostic}
     assert values == {('exposed_users', None): 1, ('multiple_exposure', None): 1,
@@ -97,4 +131,4 @@ def verify_funnels(base, write_key, service_token):
         send(base, write_key, signup[start:start + 3])
     population = json.dumps(dict(dimension='source_service', op='eq', value=prefix))
     eventually(lambda: report('conversion', filter=[population]) == [dict(bucket=None, group={}, value=1/3)])
-    print('EP-36 public workflow: both routes/all mode/measure/exclusion/group combinations, replay, timing, validation, exact diagnostics and ordered signup conversion passed.', flush=True)
+    print('EP-36/43 public workflow: both routes/all mode/measure/exclusion/group combinations, replay, timing, validation, exact diagnostics and ordered signup conversion passed.', flush=True)

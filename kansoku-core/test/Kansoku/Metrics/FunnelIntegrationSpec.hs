@@ -13,7 +13,7 @@ import Effectful (Eff, IOE, runEff)
 import Kansoku.ClickHouse
 import Kansoku.ClickHouseTestSupport
 import Kansoku.Event
-import Kansoku.Metrics.Api (FunnelMeasure (..), FunnelMode (..), MetricPoint, MetricResult, TimeGrain (..))
+import Kansoku.Metrics.Api (FunnelAttribution (..), FunnelCounting (..), FunnelMeasure (..), FunnelMode (..), MetricPoint, MetricResult, TimeGrain (..))
 import Kansoku.Metrics.Filter qualified as Filter
 import Kansoku.Metrics.Query qualified as Query
 import Kansoku.Metrics.Query.Validate (QueryLimitError (..), SqlName, mkSqlName)
@@ -31,12 +31,73 @@ spec = do
       field <- either (fail . Text.unpack) pure (Filter.mkMetricFilter "source" Filter.FilterEq (Just (Aeson.String "web")))
       let unused = error "funnel validation acquired storage"
           run options req = runEff (Query.runFunnelMetric defaultRegistry unused req Nothing options 10 steps)
-      run (Query.FunnelOptions FunnelSequential FunnelCount x) (request "unused") `shouldReturn` limit "invalid_funnel_exclusion"
-      run (Query.FunnelOptions FunnelSequential FunnelCount many) (request "unused") `shouldReturn` limit "too_many_funnel_exclusions"
-      run (Query.FunnelOptions FunnelStrict FunnelCount []) ((request "unused") {Query.filters = [field]}) >>= (`shouldSatisfy` isCompileFailure)
+      run (Query.FunnelOptions FunnelSequential FunnelCount x FunnelUniques FunnelFirstTouch) (request "unused") `shouldReturn` limit "invalid_funnel_exclusion"
+      run (Query.FunnelOptions FunnelSequential FunnelCount many FunnelUniques FunnelFirstTouch) (request "unused") `shouldReturn` limit "too_many_funnel_exclusions"
+      run (Query.FunnelOptions FunnelStrict FunnelCount [] FunnelUniques FunnelFirstTouch) ((request "unused") {Query.filters = [field]}) >>= (`shouldSatisfy` isCompileFailure)
       conversion unused ((request "unused") {Query.timeGrain = Just Day}) >>= (`shouldSatisfy` isCompileFailure)
       conversion unused ((request "unused") {Query.groupBy = Just ["prop:plan"]}) >>= (`shouldSatisfy` isCompileFailure)
   describe "Kansoku.Funnel native" $ do
+    it "counts reversed steps within the earliest any-order window and attributes by named position" $ withClickHouse $ \connection -> do
+      let account = "funnel-reversed"
+          row eid name stamp properties = event account eid name "one" ("2026-07-01 00:00:" <> stamp <> " UTC") & #properties .~ props properties
+      insertEvents connection [row "exposure" "experiment_viewed" "00" [("experiment", "exp"), ("variant", "a")], row "b" "subscription_started" "01" [("plan", "pro")], row "a" "a" "02.001" []]
+      steps <- names ["a", "subscription_started"]
+      experiment <- oneName "exp"
+      withPool $ \pool -> forM_ [Nothing, Just experiment] $ \variant -> do
+        let run req options window = metric (Query.runFunnelMetric defaultRegistry pool req variant options window steps)
+        ordered <- run (request account) Query.defaultFunnelOptions 10
+        map (view #value) (ordered ^. #points) `shouldBe` [1, 0]
+        unordered <- run (request account) Query.defaultFunnelOptions {Query.mode = FunnelAnyOrder} 10
+        map (view #value) (unordered ^. #points) `shouldBe` [1, 1]
+        expired <- run (request account) Query.defaultFunnelOptions {Query.mode = FunnelAnyOrder} 1
+        map (view #value) (expired ^. #points) `shouldBe` [1, 0]
+        attributed <- run ((request account) {Query.groupBy = Just ["prop:plan"]}) Query.defaultFunnelOptions {Query.mode = FunnelAnyOrder, Query.attribution = FunnelStep 2} 10
+        map (group "prop:plan") (attributed ^. #points) `shouldBe` [Just "pro", Just "pro"]
+        lastTouch <- run ((request account) {Query.groupBy = Just ["prop:plan"]}) Query.defaultFunnelOptions {Query.mode = FunnelAnyOrder, Query.attribution = FunnelLastTouch} 10
+        map (group "prop:plan") (lastTouch ^. #points) `shouldBe` [Just "other", Just "other"]
+
+    it "shares any-order, totals, expiry and attribution across ordinary and exposure-gated populations" $ withClickHouse $ \connection -> do
+      let account = "funnel-extensions"
+          row eid name stamp properties = event account eid name "one" ("2026-07-01 00:00:" <> stamp <> " UTC") & #properties .~ props properties
+          rows = [row "exposure" "experiment_viewed" "00" [("experiment", "exp"), ("variant", "a")], row "b1" "b" "01" [], row "a1" "a" "02" [], row "a2" "a" "03" [], row "b2" "b" "04" []]
+      insertEvents connection (rows <> reverse rows)
+      steps <- names ["a", "b"]
+      experiment <- oneName "exp"
+      withPool $ \pool -> forM_ [Nothing, Just experiment] $ \variant -> do
+        let run mode counting = metric (Query.runFunnelMetric defaultRegistry pool (request account) variant Query.defaultFunnelOptions {Query.mode = mode, Query.counting = counting} 10 steps)
+            reaches result = [point ^. #value | point <- result ^. #points, group "index" point /= Nothing]
+        sequential <- run FunnelSequential FunnelUniques
+        reaches sequential `shouldBe` [1, 1]
+        anyOrder <- run FunnelAnyOrder FunnelUniques
+        reaches anyOrder `shouldBe` [1, 1]
+        forM_ [FunnelSequential, FunnelStrict, FunnelAnyOrder] $ \mode -> do
+          totals <- run mode FunnelTotals
+          reaches totals `shouldBe` if mode == FunnelAnyOrder then [2, 2] else if mode == FunnelStrict then [2, 1] else [1, 1]
+          [point ^. #value | point <- totals ^. #points, group "measure" point == Just "entries"] `shouldBe` [if mode == FunnelSequential then 1 else 2]
+
+      let account2 = "funnel-repeat"
+          repeated eid name stamp = event account2 eid name "one" ("2026-07-01 00:00:" <> stamp <> " UTC")
+      insertEvents connection [repeated "a1" "a" "00", repeated "b1" "b" "01", repeated "a2" "a" "02", repeated "b2" "b" "03", repeated "a3" "a" "04", repeated "a4" "a" "15", repeated "b4" "b" "16"]
+      withPool $ \pool -> do
+        totals <- metric (Query.runFunnelMetric defaultRegistry pool (request account2) Nothing Query.defaultFunnelOptions {Query.counting = FunnelTotals} 10 steps)
+        [(group "index" point, group "measure" point, point ^. #value) | point <- totals ^. #points] `shouldBe` [(Nothing, Just "entries", 4), (Just "1", Just "count", 4), (Just "2", Just "count", 3)]
+
+    it "attributes properties to the requested matched event, keeping missing/unreached values in other" $ withClickHouse $ \connection -> do
+      let account = "funnel-attribution"
+          row user eid name stamp properties = event account eid name user ("2026-07-01 00:00:" <> stamp <> " UTC") & #properties .~ props properties
+          rows = [row user (user <> eid) name stamp (if user == "literal" && name == "b" then [("plan", "other")] else properties) | user <- ["complete", "partial", "literal"], (eid, name, stamp, properties) <- [("exposure", "experiment_viewed", "00", [("experiment", "exp"), ("variant", "a")]), ("start", "a", "01", []), ("middle", "b", "02", [])] <> [("finish", "subscription_started", "03", [("plan", "pro")]) | user == "complete"]]
+      insertEvents connection rows
+      steps <- names ["a", "b", "subscription_started"]
+      experiment <- oneName "exp"
+      withPool $ \pool -> forM_ [Nothing, Just experiment] $ \variant -> do
+        let run mode attribution = metric (Query.runFunnelMetric defaultRegistry pool ((request account) {Query.groupBy = Just ["source_service", "prop:plan"]}) variant Query.defaultFunnelOptions {Query.mode = mode, Query.attribution = attribution} 10 steps)
+        forM_ [FunnelSequential, FunnelStrict, FunnelAnyOrder] $ \mode -> do
+          firstTouch <- run mode FunnelFirstTouch
+          map (group "prop:plan") (firstTouch ^. #points) `shouldBe` replicate 3 (Just "other")
+          forM_ [FunnelStep 3, FunnelLastTouch] $ \attribution -> do
+            attributed <- run mode attribution
+            [(group "prop:plan" point, point ^. #value) | point <- attributed ^. #points, group "index" point == Just "3"] `shouldBe` [(Just "other", 0), (Just "pro", 1)]
+            all ((== Just "a") . group "source_service") (attributed ^. #points) `shouldBe` True
     it "shares count, exclusions, exact timing and first-touch ownership across both routes" $ withClickHouse $ \connection -> do
       let account = "funnel-chains"
           rows =
@@ -60,7 +121,7 @@ spec = do
       withPool $ \pool -> do
         forM_ [Nothing, Just experiment] $ \variant -> do
           let req = (request account) {Query.groupBy = Just ["source_service", "country_code"]}
-              run mode measure exclusions = metric (Query.runFunnelMetric defaultRegistry pool req variant (Query.FunnelOptions mode measure exclusions) 10 steps)
+              run mode measure exclusions = metric (Query.runFunnelMetric defaultRegistry pool req variant (Query.FunnelOptions mode measure exclusions FunnelUniques FunnelFirstTouch) 10 steps)
           sequential <- run FunnelSequential FunnelCount []
           counts "first" sequential `shouldBe` Map.fromList [("1", 1), ("2", 1)]
           strict <- run FunnelStrict FunnelCount []
@@ -74,7 +135,7 @@ spec = do
           -- The filter hides the excluded row and the later start. The exclusion
           -- must still block the remaining early chain on both route populations.
           selection <- either (fail . Text.unpack) pure (Filter.mkMetricFilter "source_service" Filter.FilterIn (Just (Aeson.toJSON (["first", "finish"] :: [Text]))))
-          let filtered exclusions = metric (Query.runFunnelMetric defaultRegistry pool req {Query.filters = [selection]} variant (Query.FunnelOptions FunnelSequential FunnelCount exclusions) 10 steps)
+          let filtered exclusions = metric (Query.runFunnelMetric defaultRegistry pool req {Query.filters = [selection]} variant (Query.FunnelOptions FunnelSequential FunnelCount exclusions FunnelUniques FunnelFirstTouch) 10 steps)
           unblocked <- filtered []
           counts "first" unblocked `shouldBe` Map.fromList [("1", 1), ("2", 1)]
           blocked <- filtered excluded
@@ -88,8 +149,24 @@ spec = do
       insertEvents connection (row "one" "2026-07-01 00:00:00 UTC" "2026-07-01 00:00:00.001 UTC" <> row "two" "2026-07-01 00:00:00 UTC" "2026-07-01 00:00:01.001 UTC" <> row "three" "2026-07-01 00:00:00 UTC" "2026-07-01 00:00:03 UTC")
       steps <- names ["subscription_started", "page_view"]
       withPool $ \pool -> do
-        result <- metric (Query.runFunnelMetric defaultRegistry pool ((request account) {Query.groupBy = Just ["prop:plan"]}) Nothing (Query.FunnelOptions FunnelSequential FunnelTimeToConvert []) 10 steps)
+        result <- metric (Query.runFunnelMetric defaultRegistry pool ((request account) {Query.groupBy = Just ["prop:plan"]}) Nothing (Query.FunnelOptions FunnelSequential FunnelTimeToConvert [] FunnelUniques FunnelFirstTouch) 10 steps)
         [(group "prop:plan" point, group "measure" point, point ^. #value) | point <- result ^. #points] `shouldBe` [(Just "starter", Just "p50_seconds", 1.001), (Just "starter", Just "p90_seconds", 3)]
+
+    it "keeps per-attempt attribution, numeric ordering, timing and empty totals consistent" $ withClickHouse $ \connection -> do
+      let account = "funnel-numeric-entries"
+          start eid stamp amount plan = event account eid "subscription_started" "one" ("2026-07-01 00:00:" <> stamp <> " UTC") & #properties .~ KM.fromList [("amount", Aeson.Number amount), ("plan", Aeson.String plan)]
+          finish eid stamp = event account eid "page_view" "one" ("2026-07-01 00:00:" <> stamp <> " UTC")
+      insertEvents connection [start "s10" "00" 10 "ten", finish "f10" "01", start "s2" "02" 2 "two", finish "f2" "04"]
+      steps <- names ["subscription_started", "page_view"]
+      withPool $ \pool -> do
+        let run req measure = metric (Query.runFunnelMetric defaultRegistry pool req Nothing Query.defaultFunnelOptions {Query.counting = FunnelTotals, Query.measure = measure} 10 steps)
+        result <- run ((request account) {Query.groupBy = Just ["prop:amount", "prop:plan"]}) FunnelCount
+        [(group "prop:amount" point, group "prop:plan" point) | point <- result ^. #points, group "index" point == Just "1"] `shouldBe` [(Just "2", Just "two"), (Just "10", Just "ten")]
+        [point ^. #value | point <- result ^. #points, group "measure" point == Just "entries"] `shouldBe` [2]
+        timing <- run (request account) FunnelTimeToConvert
+        [(group "measure" point, point ^. #value) | point <- timing ^. #points] `shouldBe` [(Just "entries", 2), (Just "p50_seconds", 1), (Just "p90_seconds", 2)]
+        empty <- run (request "funnel-empty-totals") FunnelCount
+        map (view #value) (empty ^. #points) `shouldBe` [0, 0, 0]
 
     it "bounds ordered conversion by the starting population and owns groups at the first start" $ withClickHouse $ \connection -> do
       let account = "ordered-conversion"
@@ -131,6 +208,7 @@ spec = do
         let req = (request "funnel-cap") {Query.groupBy = Just ["source_service"]}
         result <- metric (Query.runFunnelMetric defaultRegistry pool req Nothing Query.defaultFunnelOptions 10 steps)
         length (result ^. #points) `shouldBe` 10000
+        runEff (Query.runFunnelMetric defaultRegistry pool req Nothing Query.defaultFunnelOptions {Query.counting = FunnelTotals} 10 steps) `shouldReturn` Left Query.MetricResultTooLarge
         seedCap connection "funnel-cap" 5000 1
         runEff (Query.runFunnelMetric defaultRegistry pool req Nothing Query.defaultFunnelOptions 10 steps) `shouldReturn` Left Query.MetricResultTooLarge
         seedDiagnostics connection 0 4999

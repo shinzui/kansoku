@@ -20,6 +20,21 @@ import Test.Hspec
 
 spec :: Spec
 spec = describe "Kansoku.Metrics.Handler" $ do
+  it "rejects invalid funnel counting and attribution before storage on both routes" $
+    Warp.testWithApplication (pure validationApplication) $ \port -> do
+      manager <- HTTP.newManager HTTP.defaultManagerSettings
+      traverse_
+        ( \endpoint ->
+            traverse_
+              ( \control -> do
+                  request <- HTTP.parseRequest ("http://127.0.0.1:" <> show port <> "/metrics/" <> endpoint <> "?from=2026-06-01&to=2026-06-08&steps=a,b&" <> (if endpoint == "experiments/funnel" then "experiment=exp&" else "") <> control)
+                  response <- HTTP.httpLbs request manager
+                  HTTP.responseStatus response `shouldBe` status400
+              )
+              ["counting=bad", "attribution=step:0", "attribution=step:3", "attribution=step:999999999999999999999999999", "attribution=unknown", "mode=unknown"]
+        )
+        ["funnel", "experiments/funnel"]
+
   it "rejects an invalid funnel step before forcing the query pool" $
     Warp.testWithApplication (pure validationApplication) $ \port -> do
       manager <- HTTP.newManager HTTP.defaultManagerSettings

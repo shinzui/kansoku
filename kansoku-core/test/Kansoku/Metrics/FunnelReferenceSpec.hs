@@ -11,7 +11,7 @@ import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import Data.Word (Word64)
 import Kansoku.ClickHouseTestSupport
-import Kansoku.Metrics.Api (FunnelMode (..))
+import Kansoku.Metrics.Api (FunnelCounting (..), FunnelMode (..))
 import Kansoku.Metrics.Query.Funnel qualified as Funnel
 import Kansoku.Prelude
 import Test.Hspec
@@ -19,6 +19,19 @@ import Test.Hspec
 spec :: Spec
 spec = do
   describe "Kansoku.Funnel reference" $ do
+    it "opens one any-order window at the earliest matching step, retaining distinct positions" $ do
+      let rows = [node 0 "b" "b", node 500 "a" "a"]
+      Funnel.level (evaluate FunnelAnyOrder ["a", "b"] [] rows) `shouldBe` 2
+      Funnel.level (evaluate FunnelSequential ["a", "b"] [] rows) `shouldBe` 1
+      Funnel.level (evaluate FunnelAnyOrder ["a", "b"] [] [node 0 "b" "b", node 1001 "a" "a"]) `shouldBe` 1
+      Funnel.level (evaluate FunnelAnyOrder ["a", "a", "b"] [] (rows <> rows)) `shouldBe` 2
+    it "counts nonoverlapping attempts after completion, expiry and exclusions" $ do
+      let run = Funnel.evaluateEntries FunnelSequential FunnelTotals 1000 ["a", "b"] ["x"]
+          twice = [node 0 "a1" "a", node 500 "b1" "b", node 600 "a2" "a", node 1000 "b2" "b"]
+      map Funnel.level (run twice) `shouldBe` [2, 2]
+      map Funnel.level (run [node 0 "a1" "a", node 1001 "a2" "a", node 1500 "b2" "b"]) `shouldBe` [1, 2]
+      map Funnel.level (run [node 0 "a1" "a", node 100 "x" "x", node 200 "a2" "a", node 500 "b2" "b"]) `shouldBe` [1, 2]
+      map Funnel.eventIds (run (reverse twice <> twice)) `shouldBe` [["a1", "b1"], ["a2", "b2"]]
     it "lets sequential chains skip automatic events while strict requires adjacency" $ do
       let rows = [node 0 "a" "a", node 500 "page" "page_view", node 1000 "b" "b"]
       Funnel.level (evaluate FunnelSequential ["a", "b"] [] rows) `shouldBe` 2
@@ -62,6 +75,19 @@ spec = do
       evaluate FunnelSequential ["a", "b"] [] [node 0 "b" "b"] `shouldBe` Funnel.SelectedChain 0 [] []
 
   describe "Kansoku.Funnel native parity" $ do
+    it "matches nonoverlapping and any-order chains on 1000 seeded timelines per combination" $ withClickHouse $ \connection -> do
+      command connection "SET max_execution_time=30,max_memory_usage=536870912"
+      command connection "CREATE TEMPORARY TABLE native_entry_cases(case_id UInt64,raw Array(Tuple(Int64,String,String)),steps Array(String),excluded Array(String),window_ms Int64,strict UInt8) ENGINE=Memory"
+      forM_ [(mode, counting) | mode <- [FunnelSequential, FunnelStrict, FunnelAnyOrder], counting <- [FunnelUniques, FunnelTotals], mode == FunnelAnyOrder || counting == FunnelTotals] $ \(mode, counting) -> do
+        command connection "TRUNCATE TABLE native_entry_cases"
+        let cases = [sample seed seed mode | seed <- [1 .. 1000]]
+        forM_ (chunks 100 cases) $ \batch -> command connection (fromString (Text.unpack ("INSERT INTO native_entry_cases VALUES " <> Text.intercalate "," (map caseValues batch))))
+        let chains = Funnel.entryChainsSQL "timeline" "steps" "excluded" "window_ms" (mode == FunnelStrict) (mode == FunnelAnyOrder) (counting == FunnelTotals)
+            sql = "SELECT toJSONString(tuple(case_id,arrayMap(chain->tuple(arrayMap(i->timeline[i].2,chain),arrayMap(i->timeline[i].1-timeline[chain[1]].1,chain)),chains))) AS value FROM (SELECT *," <> chains <> " AS chains FROM (SELECT *," <> Funnel.sortedTimelineSQL "raw" <> " AS timeline FROM native_entry_cases)) ORDER BY case_id SETTINGS short_circuit_function_evaluation='force_enable'"
+        actual <- values connection sql
+        let expected = [Aeson.toJSON (ident, [(Funnel.eventIds result, Funnel.elapsedMillis result) | result <- Funnel.evaluateEntries mode counting window steps excluded rows]) | Case ident _ window steps excluded rows <- cases]
+        length actual `shouldBe` 1000
+        actual `shouldBe` expected
     it "matches the reference on 1000 seeded timelines in both modes with full chain IDs and millisecond durations" $ withClickHouse $ \connection -> do
       command connection "SET max_execution_time=30,max_memory_usage=536870912"
       command connection "CREATE TEMPORARY TABLE native_funnel_cases(case_id UInt64,raw Array(Tuple(Int64,String,String)),steps Array(String),excluded Array(String),window_ms Int64,strict UInt8) ENGINE=Memory"
