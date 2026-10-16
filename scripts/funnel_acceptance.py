@@ -38,7 +38,11 @@ def verify_funnels(base, write_key, service_token):
             send(base, write_key, body[start:start + 3])
     def report(endpoint, **parameters):
         return query(base, service_token, endpoint, **parameters)
-    eventually(lambda: len(report('experiments', experiment=prefix, measure='diagnostics')) == 6)
+    def ready():
+        counts = report('funnel', steps=first + ',' + last, window=10)
+        return (len(counts) == 2 and counts[1]['value'] == 1 and
+                len(report('experiments', experiment=prefix, measure='diagnostics')) == 6)
+    eventually(ready)
     for endpoint in ('funnel', 'experiments/funnel'):
         for mode in ('sequential', 'strict'):
             for measure in ('count', 'time_to_convert'):

@@ -414,7 +414,7 @@ is the earliest eligible start. timeGrain and prop grouping return explicit 400 
 
 ## Exposure diagnostics
 
-`/metrics/experiments?measure=diagnostics` uses exact resolved users; default `measure=exposures`
+`/metrics/experiments?measure=diagnostics` returns `metric=experiment_diagnostics` and uses exact resolved users; default `measure=exposures`
 retains the approximate raw-identity sketch. Select an optional experiment and whole-range,
 day, week or month scope. For each experiment/bucket, assign each user once to their earliest
 valid exposure ordered by millisecond time then event ID. Missing/invalid variant names do

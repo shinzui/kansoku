@@ -45,7 +45,7 @@ spec = do
               event account "page" "page_view" "one" "2026-07-01 00:00:01.250 UTC",
               event account "blocked" "x" "one" "2026-07-01 00:00:01.500 UTC",
               event account "later" "a" "one" "2026-07-01 00:00:02 UTC" & #sourceService ?~ "later",
-              event account "complete" "b" "one" "2026-07-01 00:00:02.750 UTC",
+              event account "complete" "b" "one" "2026-07-01 00:00:02.750 UTC" & #sourceService ?~ "finish",
               event account "second-start" "a" "two" "2026-07-01 00:00:01 UTC",
               event account "second-page" "page_view" "two" "2026-07-01 00:00:01.250 UTC",
               event account "second-end" "b" "two" "2026-07-01 00:00:02 UTC",
@@ -71,6 +71,14 @@ spec = do
           strictTimes <- run FunnelStrict FunnelTimeToConvert []
           [point ^. #value | point <- strictTimes ^. #points, group "source_service" point == Just "first"] `shouldBe` [0.75, 0.75]
           if isNothing variant then counts "a" strict `shouldBe` Map.fromList [("1", 2), ("2", 0)] else counts "a" strict `shouldBe` Map.empty
+          -- The filter hides the excluded row and the later start. The exclusion
+          -- must still block the remaining early chain on both route populations.
+          selection <- either (fail . Text.unpack) pure (Filter.mkMetricFilter "source_service" Filter.FilterIn (Just (Aeson.toJSON (["first", "finish"] :: [Text]))))
+          let filtered exclusions = metric (Query.runFunnelMetric defaultRegistry pool req {Query.filters = [selection]} variant (Query.FunnelOptions FunnelSequential FunnelCount exclusions) 10 steps)
+          unblocked <- filtered []
+          counts "first" unblocked `shouldBe` Map.fromList [("1", 1), ("2", 1)]
+          blocked <- filtered excluded
+          counts "first" blocked `shouldBe` Map.fromList [("1", 1), ("2", 0)]
         missing <- metric (Query.runFunnel pool ((request account) {Query.accountId = AccountId "other"}) 10 steps)
         map (view #value) (missing ^. #points) `shouldBe` [0, 0]
 

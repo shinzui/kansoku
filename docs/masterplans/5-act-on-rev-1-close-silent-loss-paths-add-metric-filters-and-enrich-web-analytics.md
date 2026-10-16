@@ -117,7 +117,7 @@ is `mori://shinzui/kansoku-ts/okf/adrs/concepts/ADR-2`.
 | 33 | Acquisition and device enrichment with bot flagging | docs/plans/33-acquisition-and-device-enrichment-with-bot-flagging.md | EP-26; EP-31 | None | Complete |
 | 34 | Session analytics: duration, bounce, entry and exit pages | docs/plans/34-session-analytics-duration-bounce-entry-and-exit-pages.md | EP-26; EP-30; EP-33 | None | Complete |
 | 35 | Rolling active users, retention modes, and lifetime cohorts | docs/plans/35-rolling-active-users-retention-modes-and-lifetime-cohorts.md | EP-26; EP-31; EP-32 | None | Complete |
-| 36 | Funnel modes and experiment exposure diagnostics | docs/plans/36-funnel-modes-and-experiment-exposure-diagnostics.md | EP-26; EP-31; EP-32 | None | In Progress |
+| 36 | Funnel modes and experiment exposure diagnostics | docs/plans/36-funnel-modes-and-experiment-exposure-diagnostics.md | EP-26; EP-31; EP-32 | None | Complete |
 | 37 | Administrative executable for keys, erasure, retention, and replay | docs/plans/37-administrative-executable-for-keys-erasure-retention-and-replay.md | EP-29; EP-30; EP-32; EP-34; EP-40 | None | Not Started |
 | 38 | Single-tenant consumption guide for dashboards and experiments | docs/plans/38-single-tenant-consumption-guide-for-dashboards-and-experiments.md | EP-31; EP-33; EP-34; EP-35; EP-36; EP-37; EP-39; EP-40 | None | Not Started |
 | 39 | Beacon ingest route for page-exit delivery | docs/plans/39-beacon-ingest-route-for-page-exit-delivery.md | EP-29; EP-30; EP-33 | None | Not Started |
@@ -218,7 +218,7 @@ the migration ledger; unsafe append-backfills are replaced with verified rebuild
 ## Progress
 
 
-EP-29, EP-30, EP-32, EP-31, EP-33, EP-34 and EP-35 are Complete; EP-36 is In Progress and four children remain Not Started. Accepted foundations now include bounded timestamp/rejection
+EP-29, EP-30, EP-32, EP-31, EP-33, EP-34, EP-35 and EP-36 are Complete; four children remain Not Started. Accepted foundations now include bounded timestamp/rejection
 handling, immutable acceptance and canonical replay-safe facts, outage recovery/admission,
 conservative exact identity resolution, typed filters, nullable dual grouping and immutable device/channel/bot/trusted-country enrichment. Child plans
 hold the native, packaged and consumer evidence. The tested ten-minute outage/restart and
@@ -241,7 +241,14 @@ SSR examples. EP-34 adds replay-idempotent whole-session state and count/bounce/
 388 native core examples, packaged public workflows in all three telemetry modes and pinned
 SDK consumer `bfe281c`. EP-35 adds exact closed-day rolling/stickiness, mature retained-history retention and lifecycle,
 with 394 native core examples, packaged public workflows, pinned SDK consumer `3501e45` and
-28 ten-million-event performance cases below 2× (1.09–1.54×). EP-36 is active; the final joint SDK/browser and outage gates remain EP-38 obligations.
+28 ten-million-event performance cases below 2× (1.09–1.54×). EP-36 adds deterministic selected-chain modes, exclusions, exact timing, first-touch breakdown,
+ordered signup conversion and exact exclusive exposure diagnostics. Its 2000 seeded native
+chain comparisons, 412-example packaged core gate, three-mode public workflows and pinned
+SDK consumer `5db6d5c` pass. The repeated 28-case ten-million-event cost gate is below 2×
+(1.02–1.54×), with peak native memory below 452 MB against the unchanged 512 MiB budget.
+[ADR-15](../adr/0015-deterministic-selected-funnel-chains-and-exclusive-exposure-diagnostics.md)
+is Accepted. EP-40 follows; the final joint SDK/browser, performance and outage gates remain
+EP-38 obligations.
 
 ## Surprises & Discoveries
 

@@ -44,8 +44,8 @@ actually sums to one without hiding multi-variant users.
 
 
 - [x] M1: Strict/sequential funnels have a deterministic reference evaluator and native parity.
-- [ ] M2: Exclusions, durations and first-touch breakdown use the same selected-chain semantics.
-- [ ] M3: Exposure diagnostics distinguish contamination from mutually exclusive assignment share.
+- [x] M2: Exclusions, durations and first-touch breakdown use the same selected-chain semantics.
+- [x] M3: Exposure diagnostics distinguish contamination from mutually exclusive assignment share.
 
 ## Surprises & Discoveries
 
@@ -79,7 +79,7 @@ starts may qualify. Empty diagnostic buckets emit zero totals without variant ro
 a null experiment label when no experiment is selected and none is observed. Current-trait
 population integration remains EP-40's responsibility; strict event filters are rejected.
 [ADR-15](../adr/0015-deterministic-selected-funnel-chains-and-exclusive-exposure-diagnostics.md)
-records these decisions (Proposed pending all acceptance gates).
+records these decisions (Accepted after all child acceptance gates).
 
 Dependency lookup used Mori's registered ClickHouse client corpus and the vendored driver;
 DateTime64 conversion stores floor(POSIX*1000), so native integer milliseconds match the
@@ -94,21 +94,48 @@ native implementation; current-release-only modes were not assumed on the pinned
 ## Outcomes & Retrospective
 
 
-M1 native/reference parity passes 1000 seeded timelines in both modes (2000 full selected-ID
+Complete on 2026-10-16. M1 native/reference parity passes 1000 seeded timelines in both modes (2000 full selected-ID
 and millisecond-duration comparisons), alongside ten explicit semantic fixtures. M2/M3
 functional native cases pass, including both 10000-point boundaries and native resource
 classification (18 focused examples, zero failures). The full source gate passes 356 core
 examples, 17 client examples, four probes, regenerated contracts, strict 15-ADR validation,
-three HTTP telemetry modes and four lifecycle cases. Public packaged, SDK and expanded
-performance gates remain pending. The diagnostics cost issue is corrected with grouped
+three HTTP telemetry modes and four lifecycle cases. The pinned TypeScript consumer at `mori://shinzui/kansoku-ts/packages/kansoku-js`
+commit 5db6d5c1d4767f105615bb1bf8872f572a6a5bb1 pins server candidate
+57667d135bd06c4ef19c007107e36f20317b1bcf: 63 unit and two SSR cases pass, as do post-commit
+`just check`, regenerated contracts/types, package validation and gzip budgets (8614/10240
+JavaScript; 1764/3072 React). Seven unconfigured live cases remain explicitly for EP-38.
+Public packaged acceptance passes in
+`.dev/acceptance/run-s21wrtw5/sanitized`: 412 core examples, 18 client examples, four probes,
+59 executed Hurl requests (43 safe +15 stateful +1 disabled, including retries), native pool/limits,
+1001-block replay/restart and identity proofs, all EP-33/34/35/36 public workflows in three
+telemetry modes, geography-off/startup/privacy checks. EP-36 exercises all 32 combinations
+of route, mode, measure, exclusions and grouping, with replay, exact diagnostics, input errors
+and ordered signup conversion.
+
+The expanded ten-million-event benchmark passes all 28 cases (three million recent plus
+seven million older facts, day/month windows, seven query families, five-run medians per
+raw/resolved case) in `.dev/acceptance/identity-bench-enmysv_1/report.json`. Identity overhead
+is 1.017822..1.541667x, below 2x throughout. Maximum warm native memory is 451186549 bytes,
+maximum cold native memory 448094683 bytes, below the unchanged 536870912-byte query budget.
+Largest resolved median is 550 ms; largest cold native total is 1001 ms. The month funnel
+is 505/514 ms raw/resolved before older history and 440/467 ms after; ordered conversion is
+534/550 ms and 449/474 ms. The selected-chain evaluator costs more than the obsolete
+windowFunnel aggregate; these measurements describe the current compiler, not the old path.
+Retained-history lifecycle/cohort work remains history-dependent. The final MasterPlan gate
+must repeat this workload after EP-40 and integration. The final focused native run passes all 18 examples, including the added assertion that
+sequential filters cannot hide exclusion barriers on either route. Public acceptance waits
+for a completed chain as well as exposures, avoiding dependence on writer flush timing.
+Only final cross-plan integration obligations remain with EP-38; this child has no open
+implementation or acceptance work. The diagnostics cost issue is corrected with grouped
 assignment counts; no budget was raised. Private logs are under
 `.dev/acceptance/identity-validation/ep36-{native,check}.log`.
 
 ## Context and Orientation
 
 
-`buildFunnelSQLAggregate` and `buildExperimentFunnelSQLAggregate` in `Metrics/Query.hs` currently
-use second-resolution windowFunnel and IN(step names). Public responses use MetricPoint.
+Before this child, funnel builders used second-resolution windowFunnel and IN(step names).
+`runFunnelMetric`/`compileFunnel` now share `Metrics/Query/Funnel.hs`'s reference/native evaluator;
+legacy wrappers select sequential/count defaults. Public responses use MetricPoint.
 `0014_experiment_exposures.sql` stores approximate raw-identity sketches.
 Read [ADR-6](../adr/0006-exposure-based-experiment-analytics.md) and
 [ClickHouse windowFunnel documentation](https://clickhouse.com/docs/sql-reference/aggregate-functions/parametric-functions).

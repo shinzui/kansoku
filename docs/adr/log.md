@@ -1,6 +1,7 @@
 # Bundle Update Log
 
 ## 2026-10-16
+* **Update**: Accept ADR-15 after native selected-chain parity, packaged three-mode workflows, pinned SDK and ten-million-event cost acceptance
 * **Update**: Align ADR-6 exposure semantics with ADR-15 deterministic funnels and explicit diagnostics
 * **Update**: Add ADR-15 selected-chain funnel and exclusive exposure diagnostics contract (Proposed)
 

@@ -3,9 +3,9 @@ type: Architecture Decision Record
 title: Deterministic selected funnel chains and exclusive exposure diagnostics
 description: Share one deterministic chain evaluator for funnel counts, timing and ordered signup conversion; separate experiment contamination from exclusive first-observed assignment shares.
 docId: ADR-15
-status: Proposed
+status: Accepted
 date: 2026-10-16
-timestamp: 2026-10-16T00:12:46Z
+timestamp: 2026-10-16T00:34:14Z
 generated:
   by: process:codex
   at: 2026-10-16T00:12:46Z
@@ -77,5 +77,9 @@ exclusive assignment shares. No new persisted state is required.
 Array construction and evaluation are bounded by shared native work limits, not by truncating
 user sequences. Large histories can produce a resource error. Reference/native differential
 acceptance must compare full event IDs and millisecond durations for at least 1000 seeded
-timelines in both modes. Native route, packaged public, SDK and retained-history performance
-acceptance remain required before this record is Accepted.
+timelines in both modes. Native route, packaged public in all three telemetry modes, pinned SDK and ten-million-event
+retained-history acceptance pass. All 28 performance cases remain below 2x identity overhead
+and the unchanged native memory budget. The diagnostic boundary fixture required grouped
+assignment counts, rather than a subject-by-variant array scan. Evidence is recorded in
+[EP-36](../plans/36-funnel-modes-and-experiment-exposure-diagnostics.md). Final joint browser,
+trait and operational integration remains the MasterPlan's responsibility.
