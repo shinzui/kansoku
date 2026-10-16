@@ -171,7 +171,7 @@ start :: Data.Time.Calendar.Day
 start = fromGregorian 2026 7 1
 
 request :: Query.QueryRequest
-request = Query.QueryRequest (AccountId "acct_sentinel") start (addDays 1 start) Nothing (Just Day) [] False
+request = Query.QueryRequest (AccountId "acct_sentinel") start (addDays 1 start) Nothing (Just Day) [] [] False
 
 leftValue :: Either a b -> Maybe a
 leftValue (Left value) = Just value

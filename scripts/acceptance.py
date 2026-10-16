@@ -18,6 +18,7 @@ from ingest_acceptance import verify_ingest
 from activity_acceptance import verify_activity
 from funnel_acceptance import verify_funnels
 from traits_acceptance import verify_traits
+from cohorts_acceptance import verify_cohorts
 from admin_acceptance import verify_admin
 from beacon_acceptance import verify_beacon_browser
 from identity_browser_acceptance import verify_identity_browser
@@ -285,6 +286,7 @@ def main():
                             verify_activity(base, credentials['enrichment_write'], credentials['enrichment_service'])
                             verify_funnels(base, credentials['enrichment_write'], credentials['enrichment_service'])
                             verify_traits(base, credentials['enrichment_write'], credentials['enrichment_service'])
+                            verify_cohorts(base, credentials['enrichment_write'], credentials['enrichment_service'], credentials['other_token'])
                             if sdk:
                                 # mori://shinzui/kansoku-ts (test/live/traits.test.ts; artifact-level URI pending).
                                 sdk_env = dict(settings, KANSOKU_TEST_NO_DOM='1', KANSOKU_REQUIRE_LIVE='1',

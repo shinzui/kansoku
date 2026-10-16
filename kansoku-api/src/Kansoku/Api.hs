@@ -6,6 +6,7 @@ module Kansoku.Api
   )
 where
 
+import Kansoku.Cohort.Api (Cohorts)
 import Kansoku.Event.Contract (SchemaCatalog)
 import Kansoku.Ingest.Api (IngestRoutes)
 import Kansoku.Metrics.Api (MetricsRoutes)
@@ -17,6 +18,7 @@ import Servant.API.Generic (type (:-))
 data KansokuAPI mode = KansokuAPI
   { ingest :: mode :- NamedRoutes IngestRoutes,
     metrics :: mode :- NamedRoutes MetricsRoutes,
+    cohorts :: mode :- NamedRoutes Cohorts,
     schemas :: mode :- SchemaAPI
   }
   deriving stock (Generic)

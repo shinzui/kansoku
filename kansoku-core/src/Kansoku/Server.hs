@@ -39,6 +39,7 @@ import Kansoku.Api.Response qualified as Response
 import Kansoku.Auth.Handler (beaconAuthHandlerWithContext, ingestAuthHandlerWithContext, metricsAuthHandler)
 import Kansoku.Auth.Store (lookupApiKey)
 import Kansoku.ClickHouse (QueryPool)
+import Kansoku.Cohort.Handler (cohortsServer)
 import Kansoku.Config (Config)
 import Kansoku.Event.Contract (schemaCatalog)
 import Kansoku.Event.Registry (defaultRegistry)
@@ -48,7 +49,7 @@ import Kansoku.Ingest.Handler (ingestServer)
 import Kansoku.Ingest.Service (IngestService, ingestRequestContext, newIngestService)
 import Kansoku.Logging (Log, logError, logInfo, runLogStderr)
 import Kansoku.Maintenance (MaintenancePool, MaintenanceUnavailable (..), withTraffic)
-import Kansoku.Metrics.Handler (metricsServer)
+import Kansoku.Metrics.Handler (metricsServerWithCohorts)
 import Kansoku.Observability (PipelineMetrics)
 import Kansoku.Prelude
 import Kansoku.Readiness (ReadyCheckFailure (..), checkName)
@@ -94,11 +95,12 @@ healthApp req respond =
     _ ->
       respond (responseLBS status404 [(hContentType, "text/plain")] "Not Found")
 
-kansokuServer :: IngestService -> QueryPool -> KansokuAPI (AsServerT Handler)
-kansokuServer service queryPool =
+kansokuServer :: Pool.Pool -> Text -> IngestService -> QueryPool -> KansokuAPI (AsServerT Handler)
+kansokuServer pgPool settings service queryPool =
   KansokuAPI
     { ingest = ingestServer service,
-      metrics = metricsServer queryPool,
+      metrics = metricsServerWithCohorts pgPool queryPool,
+      cohorts = cohortsServer settings pgPool queryPool,
       schemas = pure (schemaCatalog defaultRegistry)
     }
 
@@ -122,6 +124,7 @@ maintenanceTraffic pool app request respond
     protected = case pathInfo request of
       "v1" : name : _ -> name `elem` ["events", "batch", "beacon"]
       "metrics" : _ : _ -> True
+      "cohorts" : _ -> True
       _ -> False
 
 -- | Production assembly with independently injectable checks. The conformance kit
@@ -150,7 +153,7 @@ appWithGate maintenanceGate liveCheck readyCheck _pipelineMetrics config probe p
                               :. metricsAuthHandler pool
                               :. EmptyContext
                           )
-                          (kansokuServer service queryPool)
+                          (kansokuServer pool (config ^. #pgConnectionString) service queryPool)
                       )
               )
           )

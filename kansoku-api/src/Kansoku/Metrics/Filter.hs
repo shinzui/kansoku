@@ -115,6 +115,7 @@ maxFilterBytes = 16384
 
 parseMetricFilter :: Text -> Either Text MetricFilter
 parseMetricFilter raw
+  | ["cohort", operator, ident] <- Text.splitOn ":" raw, Just op <- lookup operator [("eq", FilterEq), ("neq", FilterNeq)] = mkMetricFilter "cohort" op (Just (Aeson.String ident))
   | utf8Size raw > maxFilterBytes = Left "decoded filters are limited to 16384 UTF-8 bytes"
   | otherwise = do
       parsed <- first Text.pack (Aeson.eitherDecodeStrict' (Text.encodeUtf8 raw))

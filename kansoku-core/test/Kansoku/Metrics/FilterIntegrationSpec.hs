@@ -183,7 +183,7 @@ filterValue dimension operator operand =
     Aeson.object (["dimension" Aeson..= dimension, "op" Aeson..= operator] <> maybe [] (\value -> ["value" Aeson..= value]) operand)
 
 request :: Query.QueryRequest
-request = Query.QueryRequest (AccountId "metrics-filter-native") (fromGregorian 2026 7 1) (fromGregorian 2026 7 2) Nothing (Just Day) [] False
+request = Query.QueryRequest (AccountId "metrics-filter-native") (fromGregorian 2026 7 1) (fromGregorian 2026 7 2) Nothing (Just Day) [] [] False
 
 registry :: EventRegistry
 registry = foldr registerSchema defaultRegistry [schema 1, schema 2]

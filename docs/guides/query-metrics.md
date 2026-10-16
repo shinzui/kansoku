@@ -490,3 +490,100 @@ Grafana/GrowthBook recipes. Revenue is a Float64 analytical sum in one producer-
 account currency/unit; it does not convert currencies, account for refunds/net revenue or
 provide an exact monetary ledger. Feature adoption is a distinct-user count, not a percentage
 without a defined eligible denominator.
+
+## Cohorts
+
+A saved cohort names a set of identified users in the service token's account. Create,
+read, update and delete definitions at `/cohorts` and `/cohorts/{id}`. The response has
+`id`, `definition`, `createdAt` and `updatedAt`; IDs are UUIDs. Names are unique within
+an account. Updating a definition preserves its kind. Write keys cannot manage cohorts.
+Missing IDs, including IDs owned by another account, return `cohort_not_found` (404).
+Invalid definitions return `invalid_cohort` (400).
+
+A behavioural definition has one to four event conditions, optional current trait filters,
+and a name. A trait-only definition may omit event conditions. All conditions and filters
+are ANDed. Each condition has exactly one of `did` or `didNot`, an event name,
+`withinDays` in 1..365, optional `atLeast` and `atMost` nonnegative occurrence counts,
+and optional `filters` in the existing JSON metric-filter grammar. Without occurrence
+bounds the minimum is one; an upper bound alone includes zero occurrences. `didNot`
+negates the complete occurrence test. Duplicate event IDs count once. Event names need not
+be registered, but event property filters must be declared for that event. `traits` accepts
+only governed `user:` filters. Nested cohort references are unsupported.
+
+```json
+{
+  "name": "power_users",
+  "kind": "behavioural",
+  "conditions": [
+    {"did": "feature_used", "atLeast": 3, "withinDays": 30,
+     "filters": [{"dimension": "prop:feature", "op": "eq", "value": "export"}]},
+    {"didNot": "subscription_cancelled", "withinDays": 90}
+  ],
+  "traits": [{"dimension": "user:plan", "op": "eq", "value": "pro"}]
+}
+```
+
+Membership is evaluated at query time, after identity resolution, over each condition's
+`[to - withinDays, to)` UTC window. The metric's `from` bound does not truncate that
+lookback. Current traits and identity evidence may change historical answers. Anonymous
+activity can contribute after it resolves to an identified user; an anonymous-only subject
+belongs to the `out` group. Sequences, first-ever occurrence, and stopped-doing criteria
+are deferred. Definitions are stored in PostgreSQL; member facts are queried in ClickHouse.
+
+Use `{"dimension":"cohort","op":"eq","value":"<uuid>"}` to include members and
+`neq` to exclude them. Only these two cohort operators are supported. The shorthand
+`cohort:eq:<uuid>` and `cohort:neq:<uuid>` is also accepted. `groupBy=cohort:<uuid>`
+labels groups `in` and `out`; it can be combined with another dimension under the existing
+two-dimension limit. Cohort selection forces identity-aware queries, including whole
+session attribution for sessions/acquisition. Strict funnels accept cohort selection;
+experiment routes accept cohort and governed user selection. Query date, point, memory,
+and execution-time limits continue to apply.
+
+For example, retention of power users uses the saved ID returned by the create response:
+
+```bash
+curl -sS --get "$BASE/metrics/retention" -H "Authorization: Bearer $TOKEN" \
+  --data-urlencode from=2026-07-01 --data-urlencode to=2026-08-01 \
+  --data-urlencode "filter=cohort:eq:$COHORT_ID"
+```
+
+For a Q3 beta list, create a static definition and upload explicit, unprefixed user IDs.
+`PUT` replaces the entire list; sending an empty list clears it. At most 50,000 nonempty
+IDs of at most 1024 characters are accepted, subject to the server's request-body limit.
+Duplicates are removed. Repeated uploads are safe. Replacements are serialized per
+cohort across server processes and use a single versioned ClickHouse insert.
+
+```bash
+curl -sS "$BASE/cohorts" -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d '{"name":"q3_beta","kind":"static"}'
+curl -sS -X PUT "$BASE/cohorts/$BETA_ID/members" -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d '{"userIds":["alice","bob"]}'
+curl -sS --get "$BASE/metrics/revenue" -H "Authorization: Bearer $TOKEN" \
+  --data-urlencode from=2026-07-01 --data-urlencode to=2026-10-01 \
+  --data-urlencode "filter=cohort:eq:$BETA_ID"
+```
+
+Page views split by churn risk use the same ID syntax for grouping:
+
+```bash
+curl -sS --get "$BASE/metrics/page-views" -H "Authorization: Bearer $TOKEN" \
+  --data-urlencode from=2026-07-01 --data-urlencode to=2026-08-01 \
+  --data-urlencode "groupBy=cohort:$CHURN_RISK_ID"
+```
+
+`GET /cohorts` and `GET /cohorts/{id}/members?from=2026-07-01&to=2026-08-01`
+return Relay connections with `edges` (`node`, opaque `cursor`) and `pageInfo`.
+Use `first`/`after` or `last`/`before`, with default size 20 and maximum 100. Definition
+pages order by UUID; member pages order by user ID in ClickHouse. Return cursors unchanged;
+a cursor for another ordering returns `invalid_cursor`. Pagination faults use the Relay
+JSON error shape (`code`, `message`, `retryable`, `parameter`). Other failures use problem
+JSON. Behavioural member lists include identified users observed in `[from,to)` who satisfy
+the definition anchored on `to`; static lists return all present uploaded IDs, independent
+of event history. `GET /cohorts/{id}/size` takes the same `from` and `to` parameters and
+returns `{"size":123}` for that population. Concurrent edits can change a page walk;
+there is no cross-request snapshot. User erasure removes static member facts as well.
+
+The Haskell `cohortsClient` in `Kansoku.Client.Metrics` is derived from the served route
+record. It uses `kansokuMetricsCredential`, the cohort DTOs in `Kansoku.Cohort.Types`, and
+Relay `ClientPage` arguments. Deleting a cohort makes subsequent metric references fail
+with `cohort_not_found`, including future saved metric definitions that reference it.

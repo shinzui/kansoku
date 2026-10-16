@@ -141,3 +141,7 @@ identity-acceptance: build-with-tests
 # Required EP-32 cost gate: ten million events and five measured runs per case.
 identity-bench:
     python3 scripts/identity-bench.py
+
+# Own disposable stores and verify public cohort management and metric selection.
+cohorts-acceptance: build-with-tests
+    python3 scripts/cohorts_acceptance.py

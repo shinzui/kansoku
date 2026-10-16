@@ -37,6 +37,8 @@ import Kansoku.Auth.Types
     IngestPrincipal (..),
     MetricsPrincipal (..),
   )
+import Kansoku.Cohort.Api qualified as Cohort
+import Kansoku.Cohort.Types qualified as Cohort
 import Kansoku.Event
   ( AccountId (..),
     AnalyticsEvent,
@@ -63,6 +65,7 @@ import Network.HTTP.Types
   )
 import Network.Wai (Application, Request)
 import Network.Wai.Handler.Warp qualified as Warp
+import Relay.Pagination qualified as Relay
 import Servant
   ( Context (..),
     Handler,
@@ -253,6 +256,7 @@ sentinelKansokuServer =
   Api.KansokuAPI
     { Api.ingest = sentinelIngestServer,
       Api.metrics = sentinelMetricsServer,
+      Api.cohorts = sentinelCohorts,
       Api.schemas = pure (schemaCatalog defaultRegistry)
     }
 
@@ -314,3 +318,20 @@ sentinelMetricsServer =
 
 sentinelResult :: Text -> Metrics.MetricResult
 sentinelResult name = Metrics.MetricResult {Metrics.metric = name, Metrics.points = []}
+
+sentinelCohorts :: Cohort.Cohorts (AsServerT Handler)
+sentinelCohorts =
+  Cohort.Cohorts
+    { Cohort.createCohort = \_ definition -> pure (Response.KansokuOk (sample definition)),
+      Cohort.getCohort = \_ _ -> pure (Response.KansokuOk (sample definition)),
+      Cohort.listCohorts = \_ _ -> pure (Cohort.PageOk emptyPage),
+      Cohort.updateCohort = \_ _ input -> pure (Response.KansokuOk (sample input)),
+      Cohort.deleteCohort = \_ _ -> pure (Response.KansokuOk True),
+      Cohort.putMembers = \_ _ _ -> pure (Response.KansokuOk (Cohort.CohortSize 0)),
+      Cohort.getMembers = \_ _ _ _ _ -> pure (Cohort.PageOk emptyPage),
+      Cohort.getSize = \_ _ _ _ -> pure (Response.KansokuOk (Cohort.CohortSize 0))
+    }
+  where
+    definition = Cohort.CohortDefinition "sentinel" "static" [] []
+    sample input = Cohort.Cohort UUID.nil input (read "2026-07-01 00:00:00 UTC") (read "2026-07-01 00:00:00 UTC")
+    emptyPage = Relay.Connection [] (Relay.PageInfo False False Nothing Nothing)

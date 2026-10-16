@@ -17,6 +17,7 @@ import Data.Text qualified as Text
 import Kansoku.Api (kansokuAPI)
 import Kansoku.Api.OpenApi (kansokuOpenApi)
 import Kansoku.Api.Response (ProblemDetails (..), problem)
+import Kansoku.Cohort.Types qualified as Cohort
 import Kansoku.Event
 import Kansoku.Ingest.Api qualified as Ingest
 import Kansoku.Metrics.Api qualified as Metrics
@@ -53,7 +54,7 @@ spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
     lookupText ["components", "securitySchemes", "serviceToken", "scheme"] documentValue `shouldBe` Just "bearer"
     traverse_ assertSecurity operationValues
 
-  it "documents exactly the twenty-one analytics paths with stable operation IDs" $ do
+  it "documents exactly the analytics and cohort paths with stable operation IDs" $ do
     documentedPaths `shouldBe` expectedServedPaths
     fmap operationIdentity operationValues `shouldMatchList` expectedOperationIds
 
@@ -62,16 +63,21 @@ spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
 
   it "documents problem JSON with schemas on every error, including authentication" $
     traverse_
-      ( \(_path, _method, operation) ->
+      ( \(path, method, operation) ->
           traverse_
             ( \(key, response) ->
                 if Key.toText key < "400"
                   then pure ()
-                  else do
-                    let contents = objectAt ["content"] response
-                    KeyMap.keys contents `shouldBe` ["application/problem+json"]
-                    lookupText ["content", "application/problem+json", "schema", "$ref"] response
-                      `shouldBe` Just "#/components/schemas/ProblemDetails"
+                  else
+                    if isRelayPage path method && Key.toText key == "400"
+                      then do
+                        KeyMap.keys (objectAt ["content"] response) `shouldMatchList` ["application/json", "application/json;charset=utf-8"]
+                        lookupText ["content", "application/json", "schema", "$ref"] response `shouldBe` Just "#/components/schemas/RelayPageError"
+                      else do
+                        let contents = objectAt ["content"] response
+                        KeyMap.keys contents `shouldBe` ["application/problem+json"]
+                        lookupText ["content", "application/problem+json", "schema", "$ref"] response
+                          `shouldBe` Just "#/components/schemas/ProblemDetails"
             )
             (KeyMap.toList (objectAt ["responses"] operation))
       )
@@ -123,6 +129,10 @@ spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
           Ingest.eventId = Nothing,
           Ingest.errors = ["eventId must not be empty"]
         }
+    conforms "CohortDefinition" (Cohort.CohortDefinition "beta" "static" [] [])
+    conforms "CohortCondition" (Cohort.CohortCondition (Just "feature_used") Nothing (Just 3) Nothing 30 [])
+    conforms "CohortMembers" (Cohort.CohortMembers ["alice", "bob"])
+    conforms "CohortSize" (Cohort.CohortSize 2)
     conforms "MetricPoint" sampleMetricPoint
     conforms "MetricResult" Metrics.MetricResult {Metrics.metric = "events", Metrics.points = [sampleMetricPoint]}
     conforms "TimeGrain" Metrics.Hour
@@ -207,7 +217,11 @@ spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
 expectedServedPaths :: [Text]
 expectedServedPaths =
   List.sort
-    [ "/metrics/acquisition",
+    [ "/cohorts",
+      "/cohorts/{id}",
+      "/cohorts/{id}/members",
+      "/cohorts/{id}/size",
+      "/metrics/acquisition",
       "/metrics/conversion",
       "/metrics/custom",
       "/metrics/events",
@@ -235,7 +249,15 @@ operationalPaths = ["/health/live", "/health/ready", "/health", "/ready", "/inte
 
 expectedOperationIds :: [(Text, Text, Text)]
 expectedOperationIds =
-  [ ("/metrics/acquisition", "get", "getMetricsAcquisition"),
+  [ ("/cohorts", "get", "getCohorts"),
+    ("/cohorts", "post", "postCohorts"),
+    ("/cohorts/{id}", "get", "getCohortsId"),
+    ("/cohorts/{id}", "put", "putCohortsId"),
+    ("/cohorts/{id}", "delete", "deleteCohortsId"),
+    ("/cohorts/{id}/members", "get", "getCohortsIdMembers"),
+    ("/cohorts/{id}/members", "put", "putCohortsIdMembers"),
+    ("/cohorts/{id}/size", "get", "getCohortsIdSize"),
+    ("/metrics/acquisition", "get", "getMetricsAcquisition"),
     ("/metrics/conversion", "get", "getMetricsConversion"),
     ("/metrics/custom", "get", "getMetricsCustom"),
     ("/metrics/events", "get", "getMetricsEvents"),
@@ -284,19 +306,21 @@ operationIdentity (path, method, operation) =
 assertStatuses :: OperationValue -> Expectation
 assertStatuses (path, method, operation) = do
   let actual = List.sort (Key.toText <$> KeyMap.keys (objectAt ["responses"] operation))
-      success = if method == "post" then "202" else "200"
+      success = if method == "post" && not ("/cohorts" `Text.isPrefixOf` path) then "202" else "200"
       authStatuses
-        | "/metrics/" `Text.isPrefixOf` path || path == "/v1/beacon" = ["401", "403"]
+        | "/metrics/" `Text.isPrefixOf` path || "/cohorts" `Text.isPrefixOf` path || path == "/v1/beacon" = ["401", "403"]
         | otherwise = ["401"]
       expected
         | path == "/v1/schemas" = ["200", "405", "406", "413", "500"]
-        | otherwise = [success, "400", "404", "405", "406", "413", "429", "500", "503"] <> authStatuses <> ["415" | method == "post"]
+        | isRelayPage path method = ["200", "400", "401", "403", "404", "405", "406", "413", "500", "503"]
+        | otherwise = [success, "400", "404", "405", "406", "413", "429", "500", "503"] <> authStatuses <> ["415" | method `elem` ["post", "put"]]
   actual `shouldBe` List.sort expected
   when (path /= "/v1/schemas") $ do
     lookupText ["responses", "401", "headers", "WWW-Authenticate", "schema", "type"] operation
       `shouldBe` Just "string"
     valueAt ["responses", "401", "headers", "WWW-Authenticate", "required"] operation
       `shouldBe` Just (Aeson.Bool True)
+  when (path /= "/v1/schemas" && not (isRelayPage path method)) $ do
     lookupText ["responses", "429", "headers", "Retry-After", "schema", "type"] operation
       `shouldBe` Just "integer"
     valueAt ["responses", "429", "headers", "Retry-After", "required"] operation
@@ -313,7 +337,7 @@ assertSecurity (path, _method, operation) =
     ("/v1/schemas", securityValue) ->
       expectationFailure ("public schema operation unexpectedly secured: " <> show securityValue)
     (_, Just (Aeson.Array requirements))
-      | "/metrics/" `Text.isPrefixOf` path ->
+      | "/metrics/" `Text.isPrefixOf` path || "/cohorts" `Text.isPrefixOf` path ->
           requirements `shouldSatisfy` any (containsObjectKey "serviceToken")
       | otherwise ->
           requirements `shouldSatisfy` any (containsObjectKey "writeKey")
@@ -386,7 +410,7 @@ requestForPath manager port path
   | path == "/v1/events" = post manager port path (Aeson.encode sampleEvent)
   | path == "/v1/beacon" = post manager port path (Aeson.encode (Ingest.BeaconEnvelope "ksk_w_fixture" [Ingest.ingestEvent sampleEvent]))
   | path == "/v1/batch" = post manager port path (Aeson.encode [sampleEvent])
-  | otherwise = get manager port (path <> metricQuery path)
+  | otherwise = get manager port (Text.replace "{id}" "00000000-0000-0000-0000-000000000000" path <> metricQuery path)
 
 metricQuery :: Text -> Text
 metricQuery path
@@ -491,3 +515,7 @@ containsFailedCheck expectedName expectedObserved = \case
       lookupText ["check"] check == Just expectedName
         && valueAt ["ok"] check == Just (Aeson.Bool False)
         && valueAt ["observed"] check == Just (Aeson.toJSON expectedObserved)
+
+-- These two Relay endpoints use the released pagination 400 JSON exemption.
+isRelayPage :: Text -> Text -> Bool
+isRelayPage path method = method == "get" && path `elem` ["/cohorts", "/cohorts/{id}/members"]

@@ -35,7 +35,8 @@ kansokuApplicationMigrations = do
   rejections <- sqlMigration "0002-ingest-rejections" rejectionsSql
   acceptance <- sqlMigration "0003-accepted-events" acceptanceSql
   maintenance <- sqlMigration "0004-maintenance" maintenanceSql
-  migrationComponent "kansoku" (Set.singleton "pgmq") (apiKeys :| [rejections, acceptance, maintenance])
+  cohorts <- sqlMigration "0005-cohorts" cohortsSql
+  migrationComponent "kansoku" (Set.singleton "pgmq") (apiKeys :| [rejections, acceptance, maintenance, cohorts])
 
 apiKeysSql :: ByteString
 apiKeysSql =
@@ -171,4 +172,16 @@ maintenanceSql =
           WHERE coalesce(scope->'signals','[]') @> jsonb_build_array(jsonb_build_array(kv.key,kv.value)))
       ))) FROM (SELECT kansoku.event_body(body) e) source;
   $$;
+  """
+
+cohortsSql :: ByteString
+cohortsSql =
+  """
+  CREATE TABLE kansoku.cohorts (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(), account_id text NOT NULL,
+    name text NOT NULL, kind text NOT NULL CHECK(kind IN ('behavioural','static')),
+    definition jsonb NOT NULL, created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(), UNIQUE(account_id,name)
+  );
+  CREATE INDEX cohorts_account_id ON kansoku.cohorts(account_id,id);
   """

@@ -153,6 +153,7 @@ validationApplicationWithPool pool =
     sentinelContext
     Api.KansokuAPI
       { Api.ingest = sentinelIngestServer,
+        Api.cohorts = error "cohort routes are unused in metric handler tests",
         Api.metrics = metricsServer pool,
         Api.schemas = pure (schemaCatalog defaultRegistry)
       }

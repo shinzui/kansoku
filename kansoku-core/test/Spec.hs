@@ -3,6 +3,7 @@ module Main (main) where
 import Kansoku.Auth.HandlerSpec qualified
 import Kansoku.Auth.TokenSpec qualified
 import Kansoku.ClickHouseSpec qualified
+import Kansoku.Cohort.QuerySpec qualified
 import Kansoku.ConfigSpec qualified
 import Kansoku.ContractSpec qualified
 import Kansoku.CorsSpec qualified
@@ -70,6 +71,7 @@ normalTests = hspec $ do
   metrics <- runIO registerPipelineMetrics
   Kansoku.Auth.HandlerSpec.spec
   Kansoku.Auth.TokenSpec.spec
+  Kansoku.Cohort.QuerySpec.spec
   Kansoku.ConfigSpec.spec
   Kansoku.ContractSpec.spec
   Kansoku.CorsSpec.spec

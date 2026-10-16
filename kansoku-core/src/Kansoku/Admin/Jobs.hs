@@ -133,7 +133,8 @@ executeJob config connection tables initial output = do
           verifySources connection tables scope
           remaining <- chJSON native scope ("SELECT toJSONString(count()) AS value FROM analytics.identity_signals FINAL WHERE " <> explicitSubject)
           traits <- chJSON native scope ("SELECT toJSONString(count()) AS value FROM analytics.user_traits WHERE " <> explicitSubject)
-          unless (remaining == [A.Number 0] && traits == [A.Number 0]) (fail "erased evidence or current traits survived rebuild")
+          cohortMembers <- chJSON native scope ("SELECT toJSONString(count()) AS value FROM analytics.cohort_members WHERE " <> explicitSubject)
+          unless (remaining == [A.Number 0] && traits == [A.Number 0] && cohortMembers == [A.Number 0]) (fail "erased evidence or current traits survived rebuild")
           when (field "delete" scope == A.Bool True) $ do
             explicit <- chJSON native scope ("SELECT toJSONString(count()) AS value FROM analytics.events_canonical WHERE " <> explicitSubject)
             unless (explicit == [A.Number 0]) (fail "explicit-user facts survived deletion")
@@ -188,6 +189,7 @@ eraseNative native scope = do
   account <- AccountId <$> decodeValue (field "account" scope)
   user <- UserId <$> decodeValue (field "user" scope)
   let deleting = field "delete" scope == A.Bool True
+  chCommand native scope ("ALTER TABLE analytics.cohort_members DELETE WHERE " <> explicitSubject <> " SETTINGS mutations_sync=2")
   eraseUserTraits native account user (if deleting then DeleteTraitEvents else ScrubTraitEvents)
   when deleting $ chCommand native scope ("ALTER TABLE analytics.events_raw DELETE WHERE " <> explicitSubject <> " SETTINGS mutations_sync=2")
   chCommand native scope ("ALTER TABLE analytics.events_raw UPDATE identifiers='{}',anonymous_id='',session_id='',properties=if(event_name IN ('identify','identify_once','alias'),'{}',properties),governed_traits_valid=if(event_name IN ('identify','identify_once'),false,governed_traits_valid) WHERE " <> affected <> " SETTINGS mutations_sync=2")

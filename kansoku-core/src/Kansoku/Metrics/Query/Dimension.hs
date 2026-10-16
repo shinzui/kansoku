@@ -19,7 +19,8 @@ import Kansoku.Metrics.Query.Property
 import Kansoku.Prelude hiding (index)
 
 data GroupDimension
-  = GroupByEventName
+  = GroupByCohort !Text !Text
+  | GroupByEventName
   | GroupBySource
   | GroupBySourceService
   | GroupByHost
@@ -81,6 +82,7 @@ resolveSessionDimension registry events name = resolveDimension registry events 
 
 dimensionLabel :: GroupDimension -> Text
 dimensionLabel = \case
+  GroupByCohort ident _ -> "cohort:" <> ident
   GroupByEventName -> "event_name"
   GroupBySource -> "source"
   GroupBySourceService -> "source_service"
@@ -111,6 +113,7 @@ dimensionType _ = ScalarString
 
 dimensionExpr :: GroupDimension -> Text
 dimensionExpr = \case
+  GroupByCohort _ predicate -> "if(" <> predicate <> ", 'in', 'out')"
   GroupByEventName -> "nullIf(toString(event_name), '')"
   GroupBySource -> "nullIf(toString(source), '')"
   GroupBySourceService -> "nullIf(source_service, '')"

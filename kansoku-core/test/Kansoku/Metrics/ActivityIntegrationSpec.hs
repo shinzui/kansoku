@@ -182,7 +182,7 @@ spec = do
         forM_ outcomes (`shouldBe` Left Query.QueryResourceLimit)
 
 request :: Text -> Query.QueryRequest
-request account = Query.QueryRequest (AccountId account) (fromGregorian 2026 7 1) (fromGregorian 2026 7 11) Nothing (Just Day) [] False
+request account = Query.QueryRequest (AccountId account) (fromGregorian 2026 7 1) (fromGregorian 2026 7 11) Nothing (Just Day) [] [] False
 
 event :: Text -> Text -> Text -> Text -> String -> AnalyticsEvent
 event account eid name user timestamp =

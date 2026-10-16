@@ -14,6 +14,7 @@ import Data.OpenApi.Declare (runDeclare)
 import Data.Text qualified as Text
 import Kansoku.Api (kansokuAPI)
 import Kansoku.Api.Response (ProblemDetails, problemFieldName)
+import Kansoku.Cohort.Types
 import Kansoku.Event
   ( AccountId,
     AnalyticsEvent,
@@ -34,9 +35,10 @@ import Kansoku.Event
   )
 import Kansoku.Ingest.Api (BatchAck, BeaconEnvelope, IngestAck, IngestEvent, RejectedEvent)
 import Kansoku.Metrics.Api (AcquisitionMeasure, CohortMode, ExperimentMeasure, FunnelMeasure, FunnelMode, MetricPoint, MetricResult, RetentionMode, SessionMeasure, TimeGrain, UserWindow)
-import Kansoku.Metrics.Filter (MetricFilter)
+import Kansoku.Metrics.Filter (FilterOp, MetricFilter)
 import Kansoku.Metrics.Limits (maxMetricPoints)
 import Kansoku.Prelude
+import Relay.Pagination.Servant.OpenApi ()
 import Servant.API (type (:>))
 import Servant.API.Experimental.Auth (AuthProtect)
 import Servant.OpenApi (HasOpenApi, toOpenApi)
@@ -352,6 +354,14 @@ withOperationIds =
         . _Just
         . O.operationId
         %~ orSet ("post" <> key)
+        & O.put
+        . _Just
+        . O.operationId
+        %~ orSet ("put" <> key)
+        & O.delete
+        . _Just
+        . O.operationId
+        %~ orSet ("delete" <> key)
       where
         key = camel path
 
@@ -369,3 +379,62 @@ camel =
       case Text.uncons segment of
         Just (first, rest) -> Text.cons (toUpper first) rest
         Nothing -> segment
+
+instance O.ToSchema CohortCondition where
+  declareNamedSchema proxy = do
+    named <- O.genericDeclareNamedSchema O.defaultSchemaOptions proxy
+    pure (named & O.schema . O.required %~ filter (/= "filters") & O.schema . O.properties . ix "withinDays" %~ boundedInteger 1 365)
+    where
+      boundedInteger low high = \case
+        O.Inline schema -> O.Inline (schema & O.minimum_ ?~ low & O.maximum_ ?~ high)
+        reference -> reference
+
+instance O.ToSchema CohortDefinition where
+  declareNamedSchema proxy = do
+    named <- O.genericDeclareNamedSchema O.defaultSchemaOptions proxy
+    pure
+      ( named
+          & O.schema
+          . O.required
+          %~ filter (`notElem` ["conditions", "traits"])
+          & O.schema
+          . O.properties
+          . ix "kind"
+          %~ (\case O.Inline schema -> O.Inline (schema & O.enum_ ?~ ["behavioural", "static"]); reference -> reference)
+          & O.schema
+          . O.properties
+          . ix "conditions"
+          %~ (\case O.Inline schema -> O.Inline (schema & O.maxItems ?~ 4); reference -> reference)
+      )
+
+instance O.ToSchema Cohort
+
+instance O.ToSchema CohortMembers where
+  declareNamedSchema proxy = do
+    named <- O.genericDeclareNamedSchema O.defaultSchemaOptions proxy
+    pure (named & O.schema . O.properties . ix "userIds" %~ (\case O.Inline schema -> O.Inline (schema & O.maxItems ?~ 50000); reference -> reference))
+
+instance O.ToSchema CohortSize
+
+instance O.ToSchema MetricFilter where
+  declareNamedSchema _ = do
+    operator <- O.declareSchemaRef (Proxy @FilterOp)
+    pure
+      ( O.NamedSchema
+          (Just "MetricFilter")
+          ( mempty
+              & O.type_
+              ?~ O.OpenApiTypeSingle O.OpenApiObject
+              & O.required
+              .~ ["dimension", "op"]
+              & O.properties
+              .~ (mempty & at "dimension" ?~ O.Inline (O.toSchema (Proxy @Text)) & at "op" ?~ operator & at "value" ?~ O.Inline mempty)
+              & O.additionalProperties
+              ?~ O.AdditionalPropertiesAllowed False
+              & O.description
+              ?~ "JSON filter with dimension, op, and scalar value (omitted for set/unset); in accepts an array of matching scalar types."
+          )
+      )
+
+instance O.ToSchema FilterOp where
+  declareNamedSchema _ = pure (O.NamedSchema (Just "FilterOp") (O.toSchema (Proxy @Text) & O.enum_ ?~ ["eq", "neq", "in", "contains", "gt", "lt", "set", "unset"]))

@@ -35,6 +35,8 @@ library
     Kansoku.Api.OpenApi
     Kansoku.Api.Response
     Kansoku.Auth.Api
+    Kansoku.Cohort.Api
+    Kansoku.Cohort.Types
     Kansoku.Event
     Kansoku.Event.Contract
     Kansoku.Event.Registry
@@ -57,6 +59,8 @@ library
     http-types,
     lens ^>=5.3,
     openapi-hs,
+    relay-pagination ==0.1.1.2,
+    relay-pagination-servant ==0.1.1.2,
     scientific >=0.3.8 && <0.4,
     servant,
     servant-openapi-hs,

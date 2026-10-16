@@ -3,12 +3,17 @@
 -- | Servant handlers for the semantic metrics API.
 module Kansoku.Metrics.Handler
   ( metricsServer,
+    metricsServerWithCohorts,
   )
 where
 
+import Data.Aeson qualified as Aeson
+import Data.List (nub)
 import Data.Text qualified as Text
 import Data.Time (Day, diffDays)
+import Data.UUID qualified as UUID
 import Effectful (Eff, IOE, runEff)
+import Hasql.Pool qualified as Pool
 import Kansoku.Api.Response
   ( KansokuResult (..),
     badRequest,
@@ -18,11 +23,14 @@ import Kansoku.Api.Response
 import Kansoku.Auth.Handler ()
 import Kansoku.Auth.Types (MetricsPrincipal (..))
 import Kansoku.ClickHouse (QueryPool)
+import Kansoku.Cohort.Query qualified as Cohort
+import Kansoku.Cohort.Store qualified as CohortStore
 import Kansoku.Event (AccountId, defaultRegistry)
 import Kansoku.Exception (trySynchronous)
 import Kansoku.Logging (logError, runLogStderr)
 import Kansoku.Metrics.Api (AcquisitionMeasure (..), CohortMode (..), ExperimentMeasure (..), FunnelMeasure (..), FunnelMode (..), MetricResult, MetricsRoutes (..), RetentionMode (..), SessionMeasure (..), TimeGrain (..), UserWindow (..))
 import Kansoku.Metrics.Filter (MetricFilter)
+import Kansoku.Metrics.Filter qualified as Filter
 import Kansoku.Metrics.Query qualified as Query
 import Kansoku.Metrics.Query.Validate (QueryLimitError (..), SqlName, mkSqlName, renderSqlName, validateDateRange)
 import Kansoku.Metrics.Registry (builtinMetric)
@@ -31,7 +39,13 @@ import Servant (Handler)
 import Servant.Server.Generic (AsServerT)
 
 metricsServer :: QueryPool -> MetricsRoutes (AsServerT Handler)
-metricsServer pool =
+metricsServer = metricsServerUsing Nothing
+
+metricsServerWithCohorts :: Pool.Pool -> QueryPool -> MetricsRoutes (AsServerT Handler)
+metricsServerWithCohorts pg = metricsServerUsing (Just pg)
+
+metricsServerUsing :: Maybe Pool.Pool -> QueryPool -> MetricsRoutes (AsServerT Handler)
+metricsServerUsing pg pool =
   MetricsRoutes
     { events = metricHandler "events",
       pageViews = webMetricHandler "page_views",
@@ -58,33 +72,33 @@ metricsServer pool =
         Nothing -> pure (KansokuNotFound (notFound "metric_not_found" ("no such metric: " <> key)))
         Just metric ->
           metricEffToHandler
-            (Query.run defaultRegistry pool metric (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain filters))
+            (withCohorts pg (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain filters) (\request -> Query.run defaultRegistry pool metric request))
 
     webMetricHandler :: Text -> MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> [MetricFilter] -> Maybe Bool -> Handler (KansokuResult MetricResult)
     webMetricHandler key (MetricsPrincipal principal) fromDay toDay groupBy timeGrain filters bots =
       case builtinMetric key of
         Nothing -> pure (KansokuNotFound (notFound "metric_not_found" ("no such metric: " <> key)))
-        Just metric -> metricEffToHandler (Query.run defaultRegistry pool metric (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain filters) {Query.includeBots = fromMaybe False bots})
+        Just metric -> metricEffToHandler (withCohorts pg (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain filters) (\request -> Query.run defaultRegistry pool metric request {Query.includeBots = fromMaybe False bots}))
 
     usersHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> [MetricFilter] -> Maybe UserWindow -> Maybe Bool -> Handler (KansokuResult MetricResult)
     usersHandler (MetricsPrincipal principal) fromDay toDay groupBy timeGrain filters window bots =
-      effToHandler (Query.runUsers defaultRegistry pool (fromMaybe CalendarWindow window) (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain filters) {Query.includeBots = fromMaybe False bots})
+      effToHandler (withCohorts pg (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain filters) (\request -> Query.runUsers defaultRegistry pool (fromMaybe CalendarWindow window) request {Query.includeBots = fromMaybe False bots}))
 
     stickinessHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> [MetricFilter] -> Maybe Bool -> Handler (KansokuResult MetricResult)
     stickinessHandler (MetricsPrincipal principal) fromDay toDay groupBy timeGrain filters bots =
-      effToHandler (Query.runStickiness defaultRegistry pool (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain filters) {Query.includeBots = fromMaybe False bots})
+      effToHandler (withCohorts pg (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain filters) (\request -> Query.runStickiness defaultRegistry pool request {Query.includeBots = fromMaybe False bots}))
 
     lifecycleHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> [MetricFilter] -> Maybe Bool -> Handler (KansokuResult MetricResult)
     lifecycleHandler (MetricsPrincipal principal) fromDay toDay groupBy timeGrain filters bots =
-      effToHandler (Query.runLifecycle defaultRegistry pool (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain filters) {Query.includeBots = fromMaybe False bots})
+      effToHandler (withCohorts pg (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain filters) (\request -> Query.runLifecycle defaultRegistry pool request {Query.includeBots = fromMaybe False bots}))
 
     acquisitionHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> [MetricFilter] -> Maybe AcquisitionMeasure -> Maybe Bool -> Handler (KansokuResult MetricResult)
     acquisitionHandler (MetricsPrincipal principal) fromDay toDay groupBy timeGrain filters measure bots =
-      effToHandler (Query.runAcquisition defaultRegistry pool (fromMaybe AcquisitionSessions measure) (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain filters) {Query.includeBots = fromMaybe False bots})
+      effToHandler (withCohorts pg (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain filters) (\request -> Query.runAcquisition defaultRegistry pool (fromMaybe AcquisitionSessions measure) request {Query.includeBots = fromMaybe False bots}))
 
     sessionsHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> [MetricFilter] -> Maybe SessionMeasure -> Maybe Bool -> Handler (KansokuResult MetricResult)
     sessionsHandler (MetricsPrincipal principal) fromDay toDay groupBy timeGrain filters measure bots =
-      effToHandler (Query.runSessionMetric pool (fromMaybe SessionCount measure) (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain filters) {Query.includeBots = fromMaybe False bots})
+      effToHandler (withCohorts pg (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain filters) (\request -> Query.runSessionMetric pool (fromMaybe SessionCount measure) request {Query.includeBots = fromMaybe False bots}))
 
     funnelHandler :: MetricsPrincipal -> Day -> Day -> Text -> Maybe Int -> Maybe FunnelMode -> Maybe FunnelMeasure -> [Text] -> Maybe Text -> [MetricFilter] -> Handler (KansokuResult MetricResult)
     funnelHandler (MetricsPrincipal principal) fromDay toDay stepsParam requestedWindow mode measure excludes groupBy filters =
@@ -106,13 +120,13 @@ metricsServer pool =
                           (badRequest "invalid_funnel_window" ("invalid funnel window: " <> invalid <> "; expected 1..7776000 seconds"))
                       )
                   Right window ->
-                    withExclusions excludes $ \excluded -> effToHandler (Query.runFunnelMetric defaultRegistry pool (queryRequest (principal ^. #accountId) fromDay toDay groupBy Nothing filters) Nothing (Query.FunnelOptions (fromMaybe FunnelSequential mode) (fromMaybe FunnelCount measure) excluded) window steps)
+                    withExclusions excludes $ \excluded -> effToHandler (withCohorts pg (queryRequest (principal ^. #accountId) fromDay toDay groupBy Nothing filters) (\request -> Query.runFunnelMetric defaultRegistry pool request Nothing (Query.FunnelOptions (fromMaybe FunnelSequential mode) (fromMaybe FunnelCount measure) excluded) window steps))
 
     retentionHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> [MetricFilter] -> Maybe Text -> Maybe RetentionMode -> Maybe CohortMode -> Maybe Bool -> Handler (KansokuResult MetricResult)
     retentionHandler (MetricsPrincipal principal) fromDay toDay groupBy timeGrain filters daysParam mode cohort bots =
       case parseOffsets daysParam of
         Left message -> pure (KansokuBadRequest (badRequest "invalid_retention_days" message))
-        Right offsets -> effToHandler (Query.runRetentionMetric defaultRegistry pool (fromMaybe RetentionOn mode) (fromMaybe WindowCohort cohort) (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain filters) {Query.includeBots = fromMaybe False bots} offsets)
+        Right offsets -> effToHandler (withCohorts pg (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain filters) (\request -> Query.runRetentionMetric defaultRegistry pool (fromMaybe RetentionOn mode) (fromMaybe WindowCohort cohort) request {Query.includeBots = fromMaybe False bots} offsets))
 
     experimentsHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> Maybe ExperimentMeasure -> Maybe Text -> [MetricFilter] -> Handler (KansokuResult MetricResult)
     experimentsHandler (MetricsPrincipal principal) fromDay toDay experimentParam timeGrain measure groupBy filters =
@@ -131,10 +145,15 @@ metricsServer pool =
                 )
             Right experiment ->
               effToHandler
-                ( (if measure == Just ExperimentDiagnostics then Query.runExperimentDiagnostics else Query.runExperimentExposures)
-                    pool
+                ( withCohorts
+                    pg
                     (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain filters)
-                    experiment
+                    ( \request ->
+                        (if measure == Just ExperimentDiagnostics then Query.runExperimentDiagnostics else Query.runExperimentExposures)
+                          pool
+                          request
+                          experiment
+                    )
                 )
 
     experimentConversionHandler :: MetricsPrincipal -> Text -> Text -> Day -> Day -> Maybe Text -> [MetricFilter] -> Handler (KansokuResult MetricResult)
@@ -160,11 +179,16 @@ metricsServer pool =
                     )
               | otherwise ->
                   effToHandler
-                    ( Query.runExperimentConversion
-                        pool
+                    ( withCohorts
+                        pg
                         (queryRequest (principal ^. #accountId) fromDay toDay groupBy Nothing filters)
-                        experiment
-                        conversionEvent
+                        ( \request ->
+                            Query.runExperimentConversion
+                              pool
+                              request
+                              experiment
+                              conversionEvent
+                        )
                     )
 
     experimentFunnelHandler :: MetricsPrincipal -> Text -> Text -> Day -> Day -> Maybe Int -> Maybe FunnelMode -> Maybe FunnelMeasure -> [Text] -> Maybe Text -> [MetricFilter] -> Handler (KansokuResult MetricResult)
@@ -196,14 +220,19 @@ metricsServer pool =
                       Right window ->
                         withExclusions excludes $ \excluded ->
                           effToHandler
-                            ( Query.runFunnelMetric
-                                defaultRegistry
-                                pool
+                            ( withCohorts
+                                pg
                                 (queryRequest (principal ^. #accountId) fromDay toDay groupBy Nothing filters)
-                                (Just experiment)
-                                (Query.FunnelOptions (fromMaybe FunnelSequential mode) (fromMaybe FunnelCount measure) excluded)
-                                window
-                                steps
+                                ( \request ->
+                                    Query.runFunnelMetric
+                                      defaultRegistry
+                                      pool
+                                      request
+                                      (Just experiment)
+                                      (Query.FunnelOptions (fromMaybe FunnelSequential mode) (fromMaybe FunnelCount measure) excluded)
+                                      window
+                                      steps
+                                )
                             )
 
     notImplemented :: Text -> MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> [MetricFilter] -> Handler (KansokuResult MetricResult)
@@ -222,6 +251,7 @@ queryRequest accountId fromDay toDay groupBy timeGrain filters =
       groupBy = (map Text.strip . Text.splitOn ",") <$> groupBy,
       timeGrain,
       filters,
+      cohorts = [],
       includeBots = False
     }
 
@@ -269,6 +299,7 @@ effToHandler action = do
       Query.QueryCompileFailure compileError ->
         pure $
           KansokuBadRequest (badRequest (Query.queryCompileErrorCode compileError) (Query.queryCompileErrorMessage compileError))
+      Query.QueryCohortNotFound -> pure (KansokuNotFound (notFound "cohort_not_found" "cohort does not exist in this account"))
       Query.QueryLimitFailure (QueryLimitError code message) -> pure (KansokuBadRequest (badRequest code message))
       Query.MetricResultTooLarge -> pure (KansokuBadRequest (badRequest "metric_result_too_large" "narrow the query range or grouping to at most 10000 metric points"))
       Query.QueryResourceLimit -> pure (KansokuBadRequest (badRequest "query_resource_limit" "narrow the query to fit the configured execution and memory limits"))
@@ -290,3 +321,21 @@ withExclusions :: [Text] -> ([SqlName] -> Handler (KansokuResult MetricResult)) 
 withExclusions raw action = case traverse mkSqlName raw of
   Left invalid -> pure (KansokuBadRequest (badRequest "invalid_funnel_exclusion" ("invalid exclusion: " <> invalid)))
   Right names -> action names
+
+withCohorts :: Maybe Pool.Pool -> Query.QueryRequest -> (Query.QueryRequest -> Eff '[IOE] (Either Query.QueryExecutionError MetricResult)) -> Eff '[IOE] (Either Query.QueryExecutionError MetricResult)
+withCohorts pg request action = do
+  let references = nub ([ident | input <- Query.filters request, Filter.dimension input == "cohort", Just (Aeson.String ident) <- [Filter.value input]] <> [ident | label <- fromMaybe [] (Query.groupBy request), Just ident <- [Text.stripPrefix "cohort:" label]])
+      load ident = case (pg, UUID.fromText ident) of
+        (_, Nothing) -> pure (Left (Query.QueryCompileFailure (Query.QueryCompileFilterError "invalid cohort id")))
+        (Nothing, _) -> pure (Left (Query.QueryStorageFailure "cohort store unavailable"))
+        (Just pool, Just uuid) ->
+          liftIO (CohortStore.loadCohort pool (Query.accountId request) uuid) >>= \case
+            Left _ -> pure (Left (Query.QueryStorageFailure "cohort store unavailable"))
+            Right Nothing -> pure (Left Query.QueryCohortNotFound)
+            Right (Just saved) -> pure $ case Cohort.compileMembership ident (Query.to request) (saved ^. #definition) of
+              Left message -> Left (Query.QueryCompileFailure (Query.QueryCompileFilterError message))
+              Right member -> Right (ident, member)
+  loaded <- traverse load references
+  case sequence loaded of
+    Left failure -> pure (Left failure)
+    Right definitions -> action request {Query.cohorts = definitions}

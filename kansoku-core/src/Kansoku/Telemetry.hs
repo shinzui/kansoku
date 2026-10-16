@@ -1,3 +1,7 @@
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
+
 -- | OpenTelemetry tracer bootstrap for the service.
 module Kansoku.Telemetry
   ( Telemetry (..),
@@ -23,6 +27,7 @@ import Network.Wai (Middleware, Request (..))
 import OpenTelemetry.Attributes qualified as Attr
 import OpenTelemetry.Exporter.Handle qualified as Handle
 import OpenTelemetry.Instrumentation.Servant (openTelemetryServantMiddleware)
+import OpenTelemetry.Instrumentation.Servant.Internal (HasEndpoint (..))
 import OpenTelemetry.Instrumentation.Wai qualified as WaiOTel
 import OpenTelemetry.Metric qualified as Metric
 import OpenTelemetry.Metric.Core qualified as MetricCore
@@ -30,6 +35,8 @@ import OpenTelemetry.Registry qualified as Registry
 import OpenTelemetry.Trace qualified as TraceSdk
 import OpenTelemetry.Trace.Core qualified as OTel
 import OpenTelemetry.Trace.Id qualified as Id
+import Relay.Pagination.Servant (RelayPage)
+import Servant.API (type (:>))
 import System.Environment (lookupEnv)
 
 -- | The tracer and the matching provider shutdown action. Keeping them in one
@@ -137,3 +144,7 @@ consoleFormatter span' = do
         "events" Aeson..= show (OTel.hotEvents hot),
         "status" Aeson..= show (OTel.hotStatus hot)
       ]
+
+-- Pagination adds query parameters and leaves the route template unchanged.
+instance (HasEndpoint sub) => HasEndpoint (RelayPage defaultSize maximumSize :> sub) where
+  getEndpoint _ = getEndpoint (Proxy @sub)

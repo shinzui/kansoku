@@ -66,6 +66,23 @@
               dontCheck (doJailbreak (self.callCabal2nix name (threadUtilsSrc + subdir) { }));
           in
           {
+            # mori://shinzui/relay-pagination; Hackage and upstream v0.1.1.2 verified.
+            # mori://hasql/hasql; released codecs matching the existing Hasql 1.10 runtime.
+            hasql-implicits = callHackageNoCheck "hasql-implicits" "0.2.0.3" "19zffkzwdqvlkj0akh68avgxfb1dmqshy0r3c0i8vranhrp3m3gy";
+            hasql-dynamic-statements = dontCheck (doJailbreak (self.callHackageDirect
+              {
+                pkg = "hasql-dynamic-statements";
+                ver = "0.5.1.2";
+                sha256 = "1d8y0vcp0w1hhzm5qwk2amijp231299i8lhg1nvyqg0ms6r2gwk8";
+              }
+              {
+                # These are upstream integration-test dependencies only.
+                pqi-native = null;
+                testcontainers-postgresql = null;
+              }));
+            relay-pagination = callHackageNoCheck "relay-pagination" "0.1.1.2" "1axyz9271q9al8jmmy5kjfvry7dlcaaz85rhdq4gis50qh0ayw61";
+            relay-pagination-servant = callHackageNoCheck "relay-pagination-servant" "0.1.1.2" "192md77zmdlh5bqq0gc5mbwqb3fv65bfpd771m2xl398bh0nyblm";
+            relay-pagination-hasql = callHackageNoCheck "relay-pagination-hasql" "0.1.1.2" "0xlsq918ji0c755ib7a9487l8rj3i404jya9mfa0lrnwa9rbgfbc";
             ClickHaskell = dontCheck (doJailbreak (self.callCabal2nix "ClickHaskell" (builtins.path { path = inputs.self + "/vendor/ClickHaskell"; name = "ClickHaskell-source"; }) { }));
             unicode-data = dontCheck super.unicode-data;
             warp = disableCabalFlag "x509" super.warp;

@@ -53,6 +53,10 @@ library
     Kansoku.Auth.Types
     Kansoku.ClickHouse
     Kansoku.ClickHouse.EventRow
+    Kansoku.Cohort.Handler
+    Kansoku.Cohort.Members
+    Kansoku.Cohort.Query
+    Kansoku.Cohort.Store
     Kansoku.Config
     Kansoku.Exception
     Kansoku.Health
@@ -114,6 +118,7 @@ library
     effectful-core,
     generic-lens >=2.2 && <2.4,
     hasql,
+    hasql-dynamic-statements,
     hasql-pool,
     hasql-transaction,
     hs-opentelemetry-api,
@@ -133,6 +138,9 @@ library
     pgmq-migration,
     postgresql-libpq >=0.11 && <0.12,
     prometheus-client,
+    relay-pagination ==0.1.1.2,
+    relay-pagination-hasql ==0.1.1.2,
+    relay-pagination-servant ==0.1.1.2,
     resource-pool,
     servant,
     servant-health >=0.1.0.0 && <0.2,
@@ -162,6 +170,7 @@ test-suite kansoku-core-test
     Kansoku.Auth.TokenSpec
     Kansoku.ClickHouseSpec
     Kansoku.ClickHouseTestSupport
+    Kansoku.Cohort.QuerySpec
     Kansoku.ConfigSpec
     Kansoku.ContractSpec
     Kansoku.CorsSpec
@@ -243,6 +252,7 @@ test-suite kansoku-core-test
     pgmq-hasql,
     process,
     prometheus-client,
+    relay-pagination,
     servant,
     servant-client,
     servant-client-core,

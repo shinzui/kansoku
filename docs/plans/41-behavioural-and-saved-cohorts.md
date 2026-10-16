@@ -10,6 +10,12 @@ provenance:
     model: "claude-fable-5-1"
     harness: "claude-code"
     at: 2026-10-15T15:14:00Z
+  revisions:
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-10-16T10:36:12Z
+      mode: "implement"
+      note: "Implement cohort management, query-time membership and public contract"
 ---
 
 # Behavioural and saved cohorts
@@ -35,15 +41,34 @@ refresh job; static cohorts live in ClickHouse next to the events they filter.
 
 ## Progress
 
-- [ ] M1: Cohort definitions can be created, read, listed with cursor pagination, updated and deleted at `/cohorts` with a service token, stored in PostgreSQL per account.
-- [ ] M2: `filter=cohort:eq:<id>` and `filter=cohort:neq:<id>` work on every filterable metric route for behavioural cohorts, and `groupBy=cohort:<id>` splits a series into `in` and `out`.
-- [ ] M3: Static cohorts accept member uploads, and `GET /cohorts/{id}/members` lists current members of either kind with cursor pagination and a size endpoint.
-- [ ] M4: OpenAPI, the Haskell client, the query guide and a new ADR describe the cohort model.
+- [x] M1 (2026-10-16): Account-scoped definition CRUD and bidirectional Relay pagination pass the public roundtrip, including invalid bounds, a fifth condition, and foreign-account 404s.
+- [x] M2 (2026-10-16): Behavioural eq/neq selection and in/out grouping pass across every implemented metric family, including strict funnels and experiments; fixtures cover negative/trait criteria, identity-resolved pre-login activity, replay and exclusive lookback bounds. Account-scope compiler checks pass.
+- [x] M3 (2026-10-16): Static replacements, member pages and size agree for two-to-one uploads and a 50,000-member upload/retry/clear. Fenced user erasure removes static facts. The Nix-packaged server, migrator and administrator pass the same owned-database proof.
+- [x] M4 (2026-10-16): OpenAPI and typed client compile; generated-artifact, OpenAPI lint, formatting and strict ADR gates pass. Query guide and ADR-19 document the contract. Regression evidence is 369 core examples, 19 client examples and four production probe tests, all passing.
 
 
 ## Surprises & Discoveries
 
-(None yet.)
+The shipped filter grammar is URL-decoded JSON, rather than the older colon syntax in
+this plan. Cohorts use `{"dimension":"cohort","op":"eq","value":"<uuid>"}`; the
+plan's cohort-only shorthand remains accepted. Condition property filters use JSON objects.
+
+The public `analytics.events_resolved` view is a frozen seven-column reader contract.
+Membership uses the existing bounded `events_resolved_http` path and extends the
+connection-owned identity snapshot to include cohort lookbacks. Widened retention and
+session scopes must not move the original cohort `to` anchor.
+`mori://shinzui/relay-pagination` 0.1.1.2 was verified against Hackage and upstream tags before adding the published packages. The telemetry
+route classifier needs a transparent RelayPage instance.
+
+The Nix package set initially selected codecs incompatible with the existing Hasql 1.10
+runtime. Released `mori://hasql/hasql/packages/hasql-dynamic-statements` 0.5.1.2 and
+`mori://hasql/hasql/packages/hasql-implicits` 0.2.0.3 were verified against Hackage and
+upstream tags and aligned in both build paths. Test-only upstream container dependencies
+are omitted from the Nix codec derivation, whose checks are disabled.
+
+The 50,000-member acceptance case needs set-based deduplication and grouped replacement
+rows; repeated linear membership scans per uploaded ID would make replacement quadratic.
+The final native proof passes upload, retry and clear at the advertised limit.
 
 
 ## Decision Log
@@ -66,14 +91,48 @@ refresh job; static cohorts live in ClickHouse next to the events they filter.
   `to` makes a query reproducible.
   Date: 2026-10-15
 - Decision: Cohort references use the existing filter grammar with `eq` and `neq`, and
-  cohort grouping yields exactly two groups.
+  cohort grouping uses the two labels `in` and `out`.
   Rationale: No new parameter shape; generated clients and the point cap are unaffected.
   Date: 2026-10-15
+
+- Decision: Cohorts target identified users, and member endpoints return explicit user IDs.
+  Behavioural membership uses resolved pre-login activity; anonymous-only subjects are out.
+  Behavioural member lists use identified users observed in the requested from/to window;
+  static lists contain every present uploaded ID independent of event history.
+  Rationale: Keeps the member list/size and static-ID contract aligned, without confusing
+  cookie text with a user ID. Definitions are anchored on the original to bound, including
+  negative-only and zero-occurrence conditions.
+  Date: 2026-10-16
+- Decision: Serialize member replacements, definition updates and deletion with a PostgreSQL
+  transaction advisory lock per account/cohort; write one ClickHouse insert with versions
+  strictly greater than the prior cohort maximum. Keep kind immutable, and remove static
+  member facts during fenced user erasure.
+  Rationale: Full replacements must remain repeatable across server processes and cannot
+  depend on merge timing or leave user identifiers outside the existing erasure protocol.
+  Date: 2026-10-16
 
 
 ## Outcomes & Retrospective
 
-(To be filled during and after implementation.)
+All four milestones are complete. Cohorts are reusable across implemented metrics, with
+current identity-aware behavioural membership and explicit static lists. The public
+management/member contract, typed Haskell client, migrations, guide and durable decision
+are delivered. No refresh worker is needed. Deferred sequence/first-ever/stopped-doing
+criteria remain outside this plan.
+
+Final validation ran `cabal build all --enable-tests`, the deterministic regression runner,
+`just openapi-check`, `just openapi-lint`, the non-mutating formatter check, strict ADR
+validation, and Nix builds of the server and client. `scripts/cohorts_acceptance.py` passed
+against both Cabal binaries and Nix-packaged binaries in fresh owned stores, including
+50,000-member replacement and user erasure. Packaged proof evidence is under
+`.dev/acceptance/cohort-2afofp08`; these private runtime artifacts are not committed.
+
+The durable lessons are recorded in
+[ADR-19](../adr/0019-saved-query-time-cohorts-and-static-membership.md): anchor membership
+before widening metric scopes, preserve whole-session attribution, namespace subjects,
+serialize cross-store replacements, and include static identifiers in erasure. Current
+traits, identity evidence and definition changes intentionally affect historical answers;
+member pages are current reads without a cross-request snapshot.
 
 
 ## Context and Orientation
@@ -82,13 +141,14 @@ Metric routes are Servant NamedRoutes in `kansoku-api/src/Kansoku/Metrics/Api.hs
 to SQL in `kansoku-core/src/Kansoku/Metrics/Query.hs` with inputs validated in
 `kansoku-core/src/Kansoku/Metrics/Query/Validate.hs` and bound as native ClickHouse
 parameters ([ADR 3](../adr/0003-api-key-authentication-and-account-scoped-analytics.md)).
-Exact user metrics read `analytics.events_resolved`, whose `canonical_user` is the resolved
-identity ([ADR 4](../adr/0004-queryable-event-properties-and-identity-resolved-projection.md),
+Exact HTTP metrics read the private bounded `analytics.events_resolved_http` source;
+`canonical_user` is the resolved identity, while the public `analytics.events_resolved`
+reader view retains its frozen projection ([ADR 4](../adr/0004-queryable-event-properties-and-identity-resolved-projection.md),
 [ADR 5](../adr/0005-evidence-based-multi-signal-identity-resolution.md)). The `filter`
-grammar `filter=<dimension>:<op>:<value>` and the dimension prefixes (`prop:`, and `user:`
-for traits) are defined by `docs/plans/31-metric-property-filters-and-dual-grouping.md` and
+grammar is a URL-decoded JSON object with `dimension`, `op` and `value`; prefixes
+`prop:` and `user:` select event properties and current traits. These dimensions are defined by `docs/plans/31-metric-property-filters-and-dual-grouping.md` and
 `docs/plans/40-person-properties-set-and-set-once-user-traits.md`; this plan adds the
-`cohort:` dimension. Bounded complete-or-error answers are
+`cohort` filter dimension and `cohort:<uuid>` grouping. Bounded complete-or-error answers are
 [ADR 9](../adr/0009-bounded-complete-aggregate-responses.md). PostgreSQL schema is an explicit
 plan in `kansoku-core/src/Kansoku/Migrations.hs` built from `sqlMigration` steps; credentials
 in `kansoku.api_keys` are the model for an account-scoped record. Service tokens
@@ -96,6 +156,15 @@ in `kansoku.api_keys` are the model for an account-scoped record. Service tokens
 portfolio follow `mori://shinzui/haskell-jitsurei/docs/api-relay-pagination` (cursor pages);
 MasterPlan 4 recorded that metric aggregates are the only exception, so `/cohorts` and
 `/cohorts/{id}/members` paginate.
+
+`kansoku-api/src/Kansoku/Cohort/Types.hs` owns the JSON payloads;
+`kansoku-api/src/Kansoku/Cohort/Api.hs` declares routes. Definition persistence is in
+`kansoku-core/src/Kansoku/Cohort/Store.hs`, membership compilation in
+`kansoku-core/src/Kansoku/Cohort/Query.hs`, native member queries in
+`kansoku-core/src/Kansoku/Cohort/Members.hs`, and management handlers in
+`kansoku-core/src/Kansoku/Cohort/Handler.hs`. Metrics load definitions through
+`withCohorts` in `kansoku-core/src/Kansoku/Metrics/Handler.hs` and carry compiled membership
+on `QueryRequest` before any historical/session scope changes.
 
 A "cohort" is a named set of users. "Behavioural" means defined by events; "static" means an
 explicit list. No cross-repository ADR applies beyond the pagination guide.
@@ -118,13 +187,14 @@ problem codes `cohort_not_found` (404) and `invalid_cohort` (400).
 
 ### M2: Behavioural membership in metrics
 
-Extend the filter and group-by compilers with the `cohort:` dimension. For `eq` and `neq`,
+Extend the filter compiler with dimension `cohort`, UUID operand and eq/neq, and the
+group-by compiler with the `cohort:<uuid>` dimension. For `eq` and `neq`,
 load the definition by id and account, verify it belongs to the caller, and compile a
-membership subquery over `analytics.events_resolved` bounded by the account and by
+membership subquery over `analytics.events_resolved_http` bounded by the account and by
 `[to - withinDays, to)` per condition: `canonical_user IN (SELECT canonical_user … GROUP BY
 canonical_user HAVING uniqExact(event_id) >= {n})`, `NOT IN` for `didNot`, intersected across
 conditions, with trait conditions joined through EP-40's `user_traits`. Bind every literal as a
-native parameter. `groupBy=cohort:<id>` emits `multiIf(member, 'in', 'out')` as the group key.
+native parameter. `groupBy=cohort:<id>` emits `if(member, 'in', 'out')` as the group key.
 A cohort reference on a rollup fast path forces the resolved path, like other filters.
 
 ### M3: Static cohorts and member listing
@@ -133,8 +203,9 @@ Add a ClickHouse migration creating `analytics.cohort_members`
 (`account_id, cohort_id, user_id, version DateTime64(3,'UTC'), present UInt8`) as
 `ReplacingMergeTree(version)` ordered by `(account_id, cohort_id, user_id)`, and
 `PUT /cohorts/{id}/members` accepting up to 50,000 user ids that replaces the list (absent
-ids are written with `present = 0`). Static membership compiles to
-`canonical_user IN (SELECT user_id … WHERE present = 1)` using `argMax(present, version)`.
+ids are written with `present = 0`). Static membership compares namespaced canonical users
+against uploaded explicit IDs using
+`argMax(present, version)`, without relying on background merges.
 Add `GET /cohorts/{id}/members?from&to` returning current members (behavioural computed for
 the window, static read) with Relay cursor pagination ordered by user id, and
 `GET /cohorts/{id}/size`.
@@ -148,10 +219,18 @@ split, the query-time semantics anchored on `to`, and the deferred criteria.
 
 ## Concrete Steps
 
+Run from the repository root inside `nix develop`. `just cohorts-acceptance` builds the
+components and runs the public proof in fresh owned databases. To repeat the packaged
+proof, set `KANSOKU_COHORT_SERVER`, `KANSOKU_COHORT_MIGRATE` and
+`KANSOKU_COHORT_ADMIN` to the corresponding executables from the output of
+`nix build .#kansoku-server --no-link --json`, then run the same Python script. The migration
+commands below apply to the configured development stores.
+
 ```bash
 cabal run kansoku-migrate -- up
 just ch-migrate
-cabal test kansoku-core --test-options='--match "Cohort"'
+cabal test kansoku-core:kansoku-core-test --test-options='--match Cohort'
+python3 scripts/cohorts_acceptance.py
 just openapi && just openapi-check
 ```
 
@@ -159,7 +238,7 @@ Example:
 
 ```bash
 curl -s -X POST http://localhost:8080/cohorts -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
-  -d '{"name":"power_users","kind":"behavioural","conditions":[{"did":"feature_used","atLeast":3,"withinDays":30,"filters":["prop:feature:eq:export"]},{"didNot":"subscription_cancelled","withinDays":90}]}'
+  -d '{"name":"power_users","kind":"behavioural","conditions":[{"did":"feature_used","atLeast":3,"withinDays":30,"filters":[{"dimension":"prop:feature","op":"eq","value":"export"}]},{"didNot":"subscription_cancelled","withinDays":90}]}'
 curl -s --get http://localhost:8080/metrics/retention -H "Authorization: Bearer $TOKEN" \
   --data-urlencode from=2026-07-01 --data-urlencode to=2026-08-01 --data-urlencode "filter=cohort:eq:$COHORT_ID"
 ```
@@ -196,3 +275,10 @@ and `docs/plans/31-metric-property-filters-and-dual-grouping.md` Complete. Soft:
 of membership subqueries). Claims the `/cohorts` routes, the `cohort:` dimension, the
 `kansoku.cohorts` and `analytics.cohort_members` objects, and the `cohort_not_found` and
 `invalid_cohort` codes.
+
+
+Implementation revision (2026-10-16): reconciled the shipped JSON grammar, private resolved
+source, identified-user member population and current-trait support; documented serialized
+static replacement and erasure integration. Acceptance remains the four milestones above,
+with native boundary, maximum-size and packaged-binary proofs added to verify the existing
+contract.
