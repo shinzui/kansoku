@@ -2,10 +2,10 @@
 type: Architecture Decision Record
 title: SDK-grade ingest contract boundaries
 description: Accept syntactically valid ingest batches partially, cap request size and count, and scope CORS to /v1/* so SDKs get stable retry semantics.
-timestamp: 2026-10-16T03:45:02Z
+timestamp: 2026-10-16T17:52:47Z
 generated:
   by: human:kansoku-maintainers
-  at: 2026-07-19T00:00:00Z
+  at: 2026-10-16T17:52:47Z
 docId: ADR-1
 status: Accepted
 date: 2026-07-19
@@ -158,3 +158,23 @@ Configured CORS origins reject simple POSTs before invoking ingest, not merely b
 response. The existing CORS failure response remains 400 outside the problem boundary.
 No-Origin nonbrowser requests remain permitted. Browser queueing is separate from a server
 202 acknowledgement; lost exit delivery must not determine session correctness.
+
+## Storage-compatible JSON admission
+
+Before a new immutable acceptance claim or queue publication, shared pure event validation
+checks both properties and context for duplicate flattened native JSON paths. Nested object
+keys join with dots; non-null scalar and array values occupy paths. Nulls and empty objects
+do not. Scalar/object prefixes may coexist. Objects inside each array element have independent
+scopes, recursively through nested or mixed arrays. Ordinary noncolliding dotted keys remain
+supported. For example, `{"a.b":1,"a":{"b":2}}` is rejected, while separate array elements
+containing those shapes are allowed. Raw JSON remains the source of truth for producer shape;
+native JSON exposes the flattened representation, which can differ from the original nesting.
+
+New incompatible events receive permanent single 400 or indexed batch/beacon 202 rejections.
+They create no ledger claim and can be corrected under the same ID. Equal already-accepted
+retries bypass validation and do not republish. At most one fixed error per affected field
+avoids echoing payload data, with finite telemetry reason `incompatible_json_paths`.
+Ingestion acquires no live ClickHouse dependency. The shared shape corpus is exercised by
+pure validation, real native inserts into both materialized columns, and public transport
+acceptance on fresh owned stores. Writer outage retry and acknowledgement remain unchanged.
+This is a first-release input contract; no historical queue migration is required.

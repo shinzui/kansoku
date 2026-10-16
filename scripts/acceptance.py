@@ -15,6 +15,8 @@ import urllib.parse
 import uuid
 
 from ingest_acceptance import verify_ingest
+from json_storage_acceptance import verify_json_storage
+from acceptance_fixture_isolation import verify_fixture_isolation
 from activity_acceptance import verify_activity
 from funnel_acceptance import verify_funnels
 from traits_acceptance import verify_traits
@@ -245,7 +247,7 @@ def main():
                     for name, kind, account in [('service_token', 'service', 'mp4_metrics'), ('write_token', 'write', 'mp4_metrics'),
                                                  ('highcard_token', 'service', 'mp4_highcard'), ('write_ingest_token', 'write', 'mp4_ingest'),
                                                  ('service_ingest_token', 'service', 'mp4_ingest'), ('other_token', 'service', 'mp4_other'),
-                                                 ('client_token', 'write', 'mp4_client'), ('enrichment_write', 'write', 'mp4_enrichment'), ('enrichment_service', 'service', 'mp4_enrichment')]:
+                                                 ('json_write', 'write', 'mp4_json'), ('json_other_write', 'write', 'mp4_json_other'), ('client_token', 'write', 'mp4_client'), ('enrichment_write', 'write', 'mp4_enrichment'), ('enrichment_service', 'service', 'mp4_enrichment')]:
                         result = subprocess.run([server, 'issue-key', '--kind', kind, '--account', account,
                                                  '--description', 'disposable acceptance'], env=env, capture_output=True, text=True, check=True, timeout=15)
                         token = result.stdout.splitlines()[-2]
@@ -281,6 +283,7 @@ def main():
                                 hurl(['health.hurl', 'openapi.hurl', 'schemas.hurl', 'metrics.hurl'], env, 'hurl-safe', variables)
                                 hurl(['ingest.hurl', 'perimeter/perimeter.hurl'], env, 'hurl-stateful', variables)
                                 verify_ingest(base, credentials['client_token'], env)
+                                verify_json_storage(base, credentials['json_write'], credentials['json_other_write'], env)
                                 live = dict(settings, KANSOKU_SERVER_URL=base, KANSOKU_API_KEY=credentials['client_token'])
                                 hspec([binary('kansoku-client:test:kansoku-client-test')], env=live, log=ROOT / 'client-tests.log')
                             verify_enrichment(base, credentials['enrichment_write'], credentials['enrichment_service'])
@@ -289,7 +292,7 @@ def main():
                             verify_traits(base, credentials['enrichment_write'], credentials['enrichment_service'])
                             verify_cohorts(base, credentials['enrichment_write'], credentials['enrichment_service'], credentials['other_token'])
                             if not mode:
-                                verify_custom_metrics(base, credentials['enrichment_write'], credentials['enrichment_service'], credentials['other_token'])
+                                verify_fixture_isolation(base, credentials['enrichment_write'], credentials['enrichment_service'], credentials['other_token'], env=env)
                             if sdk:
                                 # mori://shinzui/kansoku-ts (test/live/traits.test.ts; artifact-level URI pending).
                                 sdk_env = dict(settings, KANSOKU_TEST_NO_DOM='1', KANSOKU_REQUIRE_LIVE='1',

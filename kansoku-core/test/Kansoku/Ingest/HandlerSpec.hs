@@ -42,6 +42,12 @@ spec = describe "Kansoku.Ingest.Handler" $ do
                      }
                  ]
 
+  it "keeps a compatible sibling and rejects only the incompatible JSON index" $ do
+    let object = KeyMap.fromList [("a.b", Aeson.Number 1), ("a", Aeson.object ["b" Aeson..= (2 :: Int)])]
+        bad = event "bad" "custom-valid" & #properties .~ object
+        good = event "good" "custom-valid"
+    partitionBatch [good, bad] `shouldBe` ([good], [RejectedEvent 1 (Just "bad") [renderValidationError (IncompatibleJsonPaths "properties")]])
+
   it "handles all-invalid and empty batches" $ do
     partitionBatch [event "" "", event "" "custom-valid"]
       `shouldBe` ( [],

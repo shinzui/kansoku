@@ -10,6 +10,7 @@ import Data.Either (isRight)
 import Data.Generics.Labels ()
 import Data.IORef (newIORef, readIORef)
 import Data.Text.Encoding (encodeUtf8)
+import Data.UUID qualified as UUID
 import Hasql.Pool qualified as Pool
 import Hasql.Session qualified as S
 import Kansoku.Api.Response
@@ -20,7 +21,9 @@ import Kansoku.Config (loadConfig)
 import Kansoku.Event
 import Kansoku.Ingest.AdmissionSpec (count)
 import Kansoku.Ingest.Api
+import Kansoku.Ingest.Handler (ingestServer)
 import Kansoku.Ingest.Queue (eventsQueueName)
+import Kansoku.Ingest.RequestContext (emptyRequestContext)
 import Kansoku.Ingest.Service
 import Kansoku.Metrics.RoutingSpec ()
 import Kansoku.Observability (PipelineMetrics)
@@ -31,6 +34,7 @@ import Network.HTTP.Client qualified as H
 import Network.HTTP.Types
 import Network.Wai.Handler.Warp qualified as Warp
 import Pgmq qualified
+import Servant (runHandler)
 import Servant.API (JSON)
 import Servant.Client (client, mkClientEnv, parseBaseUrl, runClientM)
 import Servant.Client.Core.Auth (mkAuthenticatedRequest)
@@ -43,6 +47,21 @@ spec metrics = describe "Kansoku beacon perimeter" $ do
     let invalid = ["{", "[]", "{}", "{\"writeKey\":\"ksk_w_secret\",\"batch\":\"ksk_w_secret\"}", "{\"writeKey\":\"ksk_w_a\",\"write\\u004bey\":\"ksk_w_b\",\"batch\":[]}", "{\"writeKey\":\"ksk_w_a\",\"batch\":[],\"batch\":[]}", "{\"writeKey\":\"ksk_w_a\",\"batch\":[]} trailing"]
     mapM_ (\bytes -> case decodeBeaconEnvelope bytes of Left err -> err `shouldBe` "invalid beacon envelope"; Right _ -> expectationFailure "ambiguous envelope accepted") invalid
     isRight (decodeBeaconEnvelope "{\"writeKey\":\"ksk_w_a\",\"batch\":[]}\n") `shouldBe` True
+
+  it "permanently rejects incompatible beacon events without claims or queue work" $
+    withMigratedStore $ \_ _ pool -> do
+      cfg <- loadConfig >>= either (fail . show) pure
+      let queue = eventsQueueName "beacon_json_spec"
+          principal = AuthenticatedPrincipal (ApiKeyId UUID.nil) WriteKey (AccountId "beacon-json")
+          object = KM.fromList [("a.b", Aeson.Number 1), ("a", Aeson.object ["b" Aeson..= (2 :: Int)])]
+      Pool.use pool (Pgmq.createQueue queue) >>= either (fail . show) pure
+      service <- newIngestService cfg metrics pool queue
+      now <- getCurrentTime
+      let bad = ingestEvent (baseEvent (EventId "bad") (EventName "custom") Web now now & #context .~ object)
+      result <- runHandler (postBeacon (ingestServer service) (const (pure (IngestPrincipal principal emptyRequestContext))) (BeaconEnvelope "unused" [bad]))
+      result `shouldBe` Right (KansokuOk (BatchAck 0 [RejectedEvent 0 (Just "bad") [renderValidationError (IncompatibleJsonPaths "context")]]))
+      count pool "kansoku.accepted_events" `shouldReturn` 0
+      count pool "pgmq.q_beacon_json_spec" `shouldReturn` 0
 
   it "uses actual body authentication, shared admission, original-event quarantine and both generic client media types" $
     withMigratedStore $ \settings _ pool -> do

@@ -6,7 +6,7 @@ docId: DOC-11
 tags: ["ingestion", "events", "schemas", "identity"]
 generated:
   by: process:codex
-  at: "2026-10-16T03:45:04Z"
+  at: "2026-10-16T17:52:47Z"
 ---
 
 # Send events
@@ -79,6 +79,24 @@ range `[1970-01-01T00:00:00Z, 2100-01-01T00:00:00Z)`; persistence keeps millisec
 session identity, URL and campaign attribution, event causation, source-stream position, and
 schema version. Unknown JSON fields are currently ignored, but producers should not rely on
 them being stored.
+
+`properties` and `context` support nested objects, arrays (including nested and mixed-type
+arrays), scalars, nulls, empty objects, empty keys and dotted keys. Non-null values in one
+object scope must have distinct flattened paths: `{"a.b":1,"a":{"b":2}}` is rejected because
+both values occupy `a.b` in the native JSON storage representation. This rule also applies
+inside objects in arrays. Different array elements have separate scopes, so
+`{"items":[{"a.b":1},{"a":{"b":2}}]}` is supported. A noncolliding dotted key such as
+`{"a.b":1,"a":{"c":2}}` is supported too. Scalar/object prefixes such as `{"a":1,"a.b":2}`
+are insertable; the original raw JSON preserves the producer shape, while native JSON
+represents the flattened paths. Nulls and empty objects do not occupy a native path.
+
+An incompatible new event returns permanent HTTP 400 `validation_failed` on `/v1/events`.
+Batch and beacon ingestion return their usual HTTP 202 with an indexed rejection and accept
+compatible siblings. Rejection messages name the affected field without echoing payload keys
+or values; telemetry uses the fixed reason `incompatible_json_paths`. Rejected new events have
+no acceptance claim or queue message. Correct the JSON and submit it under the same event ID.
+Once accepted, equal retries keep the original acceptance and changed content conflicts.
+Validation is local and does not require ClickHouse to be available.
 
 This complete payload declares a known versioned event:
 

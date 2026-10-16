@@ -1,11 +1,13 @@
-module Kansoku.EventSpec (spec) where
+module Kansoku.EventSpec (spec, storageShapes) where
 
+import Control.Monad (filterM)
 import Data.Aeson (Value, decode, eitherDecode, encode)
 import Data.Aeson qualified as Aeson
 import Data.Aeson.KeyMap qualified as KeyMap
+import Data.Aeson.Types (parseEither, withObject, (.:))
 import Data.ByteString.Lazy.Char8 qualified as LBS8
 import Data.Either (isRight)
-import Data.Foldable (traverse_)
+import Data.Foldable (forM_, traverse_)
 import Data.Generics.Labels ()
 import Data.List (isInfixOf)
 import Data.Map.Strict qualified as Map
@@ -14,10 +16,29 @@ import Kansoku.ClickHouse.EventRow (eventRowFromEvent)
 import Kansoku.Event
 import Kansoku.Metrics.Query.Validate (mkSqlName)
 import Kansoku.Prelude
+import System.Directory (doesFileExist)
 import Test.Hspec
 
 spec :: Spec
 spec = describe "Kansoku.Event" $ do
+  describe "storage JSON shapes" $ do
+    shapes <- runIO storageShapes
+    forM_ shapes $ \(name, compatible, object) ->
+      it ("validates properties and context: " <> name) $ do
+        let event = expectedSample & #eventName .~ EventName "custom" & #properties .~ object & #context .~ object
+        if compatible
+          then validateEvent event `shouldBe` Right event
+          else validateEvent event `shouldBe` Left [IncompatibleJsonPaths "properties", IncompatibleJsonPaths "context"]
+    it "bounds errors without disclosing producer keys or values" $ do
+      let huge = Text.replicate 10000 "secret"
+          object = KeyMap.fromList [("a.b", Aeson.String huge), ("a", Aeson.object ["b" Aeson..= huge])]
+          event = expectedSample & #eventName .~ EventName "custom" & #properties .~ object
+      case validateEvent event of
+        Left errors -> do
+          fmap validationReason errors `shouldBe` ["incompatible_json_paths"]
+          length (show (fmap renderValidationError errors)) `shouldSatisfy` (< 200)
+          all (not . declaredSchemaError) errors `shouldBe` True
+        Right _ -> expectationFailure "incompatible JSON admitted"
   describe "AnalyticsEvent JSON codec" $ do
     it "round-trips the sample event (decode then encode equals original JSON)" $ do
       case eitherDecode sampleJson of
@@ -282,3 +303,15 @@ experimentEvent experiment variant =
     & #properties
     .~ KeyMap.fromList
       ([("experiment", experiment)] <> maybe [] (pure . ("variant",)) variant)
+
+-- Shared corpus: the pure validator and real materialized-column insert tests
+-- must agree on every case. Missing fixtures fail rather than skip coverage.
+storageShapes :: IO [(String, Bool, Aeson.Object)]
+storageShapes = do
+  candidates <- filterM doesFileExist ["test/fixtures/json-storage-shapes.json", "kansoku-core/test/fixtures/json-storage-shapes.json"]
+  path <- case candidates of
+    first : _ -> pure first
+    [] -> fail "JSON storage shape corpus missing"
+  bytes <- LBS8.readFile path
+  values <- either fail pure (Aeson.eitherDecode bytes)
+  traverse (either fail pure . parseEither (withObject "storage shape" $ \object -> (,,) <$> object .: "name" <*> object .: "compatible" <*> object .: "value")) values

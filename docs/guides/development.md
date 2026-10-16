@@ -6,7 +6,7 @@ docId: DOC-6
 tags: ["development", "testing", "contracts", "haskell"]
 generated:
   by: process:codex
-  at: "2026-10-15T05:27:55Z"
+  at: "2026-10-16T17:56:53Z"
 ---
 
 # Develop Kansoku
@@ -67,3 +67,19 @@ fresh processes and data rather than using development databases. See the
 [HTTP suite guide](../../kansoku-api/test/hurl/README.md) for fixture and private-log handling.
 `just hurl` runs the explicit safe subset against an already running loopback fixture server.
 CI runs both aggregate gates and Nix package/flake checks; it has no publishing step.
+
+## Saved-resource acceptance fixtures
+
+Run `nix develop -c just fixture-isolation-acceptance` to compose custom metrics and cohorts
+twice on fresh owned stores. The check compares complete saved-definition baselines in both
+accounts and injects failures after membership upload. It verifies explicit membership
+clearing, retention of the original failure, continued cleanup after a cleanup error, and
+survival of an unrelated resource. The packaged acceptance suite requires the same verifier.
+
+Register each successfully created saved definition with `OwnedResources` in
+`scripts/acceptance_resources.py`, using its returned ID and originating credential. Scope
+scenario work with the context manager so assertion failures still finalize resources. Delete
+saved metrics before clearing and deleting their cohorts. Only an already-absent owned 404
+is benign; other cleanup errors fail the run. Keep exact pagination assertions and release
+only the resources the scenario registered. Historical static-membership facts may remain
+in disposable stores after active membership is explicitly cleared.

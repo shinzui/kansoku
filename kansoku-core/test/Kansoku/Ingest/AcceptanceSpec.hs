@@ -34,6 +34,40 @@ import Test.Hspec
 
 spec :: PipelineMetrics -> Spec
 spec metrics = describe "Kansoku.Ingest.Acceptance" $ do
+  it "rejects incompatible JSON before claiming an ID and accepts corrected content" $ withMigratedPool $ \pool -> do
+    provision pool
+    let object = KM.fromList [("a.b", Aeson.Number 1), ("a", Aeson.object ["b" Aeson..= (2 :: Int)])]
+        bad = sample & #properties .~ object
+    accept pool [raw bad] `shouldReturn` [Rejected [IncompatibleJsonPaths "properties"]]
+    count pool "pgmq.q_acceptance_spec" `shouldReturn` 0
+    count pool "kansoku.accepted_events" `shouldReturn` 0
+    accept pool [raw sample] `shouldReturn` [NewEvent sample Nothing]
+    acceptBatch pool queue account (error "equal retry must not revalidate") [raw sample] `shouldReturn` Right [Replay]
+    count pool "pgmq.q_acceptance_spec" `shouldReturn` 1
+    count pool "kansoku.accepted_events" `shouldReturn` 1
+
+  it "returns permanent single rejection and indexed mixed batch JSON rejection" $ withMigratedPool $ \pool -> do
+    provision pool
+    cfg <- loadConfig >>= either (fail . show) pure
+    service <- newIngestService cfg metrics pool queue
+    let routes = ingestServer service
+        principal = IngestPrincipal (AuthenticatedPrincipal (ApiKeyId UUID.nil) WriteKey account) emptyRequestContext
+        object = KM.fromList [("a.b", Aeson.Number 1), ("a", Aeson.object ["b" Aeson..= (2 :: Int)])]
+        bad = raw (sample & #context .~ object)
+        good = raw (sample & #eventId .~ EventId "valid-sibling")
+    result <- runHandler (postEvent routes principal bad)
+    case result of
+      Right (KansokuBadRequest details) -> details ^. #code `shouldBe` "validation_failed"
+      other -> expectationFailure (show other)
+    batch <- runHandler (postBatch routes principal [bad, good])
+    case batch of
+      Right (KansokuOk ack) -> do
+        ack ^. #accepted `shouldBe` 1
+        fmap (view #index) (ack ^. #rejected) `shouldBe` [0]
+      other -> expectationFailure (show other)
+    count pool "pgmq.q_acceptance_spec" `shouldReturn` 1
+    count pool "kansoku.accepted_events" `shouldReturn` 1
+
   it "canonicalizes nested ordering and numbers while excluding delivery clocks/account" $ do
     let first = raw sample
         other = first {originalPayload = KM.insert "sentAt" (Aeson.String "new clock") (KM.insert "accountId" (Aeson.String "ignored") (originalPayload first))}

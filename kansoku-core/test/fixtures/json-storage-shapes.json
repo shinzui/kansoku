@@ -1,0 +1,246 @@
+[
+  {
+    "name": "duplicate",
+    "compatible": false,
+    "value": {
+      "a.b": 1,
+      "a": {
+        "b": 2
+      }
+    }
+  },
+  {
+    "name": "nested",
+    "compatible": false,
+    "value": {
+      "outer": {
+        "a.b": 1,
+        "a": {
+          "b": 2
+        }
+      }
+    }
+  },
+  {
+    "name": "array",
+    "compatible": false,
+    "value": {
+      "items": [
+        {
+          "a.b": 1,
+          "a": {
+            "b": 2
+          }
+        }
+      ]
+    }
+  },
+  {
+    "name": "nested_array",
+    "compatible": false,
+    "value": {
+      "items": [
+        [
+          {
+            "a.b": 1,
+            "a": {
+              "b": 2
+            }
+          }
+        ]
+      ]
+    }
+  },
+  {
+    "name": "mixed_array_collision",
+    "compatible": false,
+    "value": {
+      "items": [
+        1,
+        {
+          "a.b": 1,
+          "a": {
+            "b": 2
+          }
+        },
+        null
+      ]
+    }
+  },
+  {
+    "name": "empty_segment_collision",
+    "compatible": false,
+    "value": {
+      "a..b": 1,
+      "a": {
+        "": {
+          "b": 2
+        }
+      }
+    }
+  },
+  {
+    "name": "empty_leaf_collision",
+    "compatible": false,
+    "value": {
+      "a.": 1,
+      "a": {
+        "": 2
+      }
+    }
+  },
+  {
+    "name": "array_leaf_collision",
+    "compatible": false,
+    "value": {
+      "a.b": [],
+      "a": {
+        "b": [
+          null
+        ]
+      }
+    }
+  },
+  {
+    "name": "dotted",
+    "compatible": true,
+    "value": {
+      "a.b": 1,
+      "a": {
+        "c": 2
+      }
+    }
+  },
+  {
+    "name": "prefix",
+    "compatible": true,
+    "value": {
+      "a": 1,
+      "a.b": 2
+    }
+  },
+  {
+    "name": "array_prefix",
+    "compatible": true,
+    "value": {
+      "a": [],
+      "a.b": 2
+    }
+  },
+  {
+    "name": "empty",
+    "compatible": true,
+    "value": {}
+  },
+  {
+    "name": "empty_objects",
+    "compatible": true,
+    "value": {
+      "a.b": {},
+      "a": {
+        "b": {}
+      }
+    }
+  },
+  {
+    "name": "empty_key",
+    "compatible": true,
+    "value": {
+      "": 1,
+      "a": {
+        "": 2
+      }
+    }
+  },
+  {
+    "name": "empty_root_segment",
+    "compatible": true,
+    "value": {
+      "": {
+        "b": 1
+      },
+      "b": 2
+    }
+  },
+  {
+    "name": "null_dotted",
+    "compatible": true,
+    "value": {
+      "a.b": null,
+      "a": {
+        "b": 2
+      }
+    }
+  },
+  {
+    "name": "null_nested",
+    "compatible": true,
+    "value": {
+      "a.b": 2,
+      "a": {
+        "b": null
+      }
+    }
+  },
+  {
+    "name": "empty_nested",
+    "compatible": true,
+    "value": {
+      "a.b": 2,
+      "a": {
+        "b": {}
+      }
+    }
+  },
+  {
+    "name": "repeated_elements",
+    "compatible": true,
+    "value": {
+      "items": [
+        {
+          "a.b": 1
+        },
+        {
+          "a": {
+            "b": 2
+          }
+        }
+      ]
+    }
+  },
+  {
+    "name": "nested_mixed",
+    "compatible": true,
+    "value": {
+      "items": [
+        [
+          {
+            "x": 1
+          },
+          {
+            "x": 2
+          }
+        ],
+        2,
+        null,
+        {},
+        [],
+        {
+          "x": {
+            "a": false
+          }
+        }
+      ]
+    }
+  },
+  {
+    "name": "scalars",
+    "compatible": true,
+    "value": {
+      "text": "hello",
+      "number": 1.25,
+      "boolean": true,
+      "nothing": null
+    }
+  }
+]

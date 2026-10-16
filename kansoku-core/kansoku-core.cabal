@@ -19,6 +19,7 @@ extra-source-files:
   test/fixtures/geoip/GeoIP2-ISP-Test.mmdb
   test/fixtures/geoip/LICENSE-MIT
   test/fixtures/geoip/README.md
+  test/fixtures/json-storage-shapes.json
   test/fixtures/user-agents.json
 
 common common

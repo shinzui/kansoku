@@ -169,3 +169,11 @@ custom-metrics-acceptance: build-with-tests
 # Own disposable stores and verify organisation metrics, traits and membership.
 organizations-acceptance: build-with-tests
     python3 scripts/organizations_acceptance.py
+
+# Own disposable stores and verify pre-acceptance JSON/native storage parity.
+json-storage-acceptance: build-with-tests
+    python3 scripts/json_storage_acceptance.py
+
+# Prove saved acceptance fixtures release only resources they own.
+fixture-isolation-acceptance: build-with-tests
+    python3 scripts/acceptance_fixture_isolation.py

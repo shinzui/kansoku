@@ -2,6 +2,10 @@
 
 ## 2026-10-16
 
+* **Update**: DOC-6: document the fixture-isolation gate and scenario-owned saved-resource cleanup convention.
+
+* **Update**: DOC-11: document compatible JSON shapes, permanent storage-path rejections and correction under an unclaimed event ID.
+
 * **Migration**: Adopt the frozen v0.20.0 [user-documentation profile](mori://shinzui/okf-profiles/profiles/user-documentation), targeting OKF 0.2, for the 12 existing pages in `docs/guides/`. Allocate DOC-1 through DOC-12 in lexical filename order. Preserve every original page body, H1 and URL; classify by dominant reader intent without splitting mixed-purpose pages.
 * **Provenance**: Keep each page’s last meaningful Git content revision as `generated.at`, normalized to UTC. The inspected commits change content, not just formatting. Map the historical `codex-cli` implementation sessions in the linked ExecPlans to the repository’s established `process:codex` actor, also used by their companion ADRs. Git’s human author identity is not used as evidence of human prose authorship. The metadata migration does not restamp content or assert independent verification.
 * **Integration**: Generate the bundle index, declare the `guides` bundle and pinned publisher binding in `mori.dhall`, link the catalog from the documentation entry point, and include strict profile/log validation in `just check`.

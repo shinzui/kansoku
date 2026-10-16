@@ -16,6 +16,11 @@ provenance:
       at: 2026-10-16T17:46:01Z
       mode: "update"
       note: "Scope to first deployment: remove historical queue, compatibility and upgrade recovery requirements"
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-10-16T17:49:41Z
+      mode: "implement"
+      note: "Implement and validate pre-acceptance native JSON path compatibility"
 ---
 
 # Reject storage-incompatible JSON before acceptance
@@ -32,23 +37,29 @@ This plan has three implementation milestones. It does not change database-error
 ## Progress
 
 
-- [ ] M1: Shared storage-shape validation rejects incompatible properties/context before a new acceptance claim, with native compatibility and transport regressions passing.
-- [ ] M2: Fresh-stack HTTP/native regressions prove incompatible input never enters the queue, compatible payloads survive storage, and valid events across accounts continue processing.
+- [x] M1: (2026-10-16; deterministic core 406 examples, client 21 examples, probe kit 4 tests; native corpus 42 examples, all passing.) Shared storage-shape validation rejects incompatible properties/context before a new acceptance claim, with native compatibility and transport regressions passing.
+- [x] M2: (2026-10-16; `just json-storage-acceptance`, 42 native examples, 48 public permanent rejections and 154 canonical events; private evidence `.dev/acceptance/cohort-jqnf4tnc/`) Fresh-stack HTTP/native regressions prove incompatible input never enters the queue, compatible payloads survive storage, and valid events across accounts continue processing.
 - [ ] M3: Packaged regression and existing recovery checks pass, and the first-release ingest contract documents supported JSON shapes and permanent rejections.
 
 ## Surprises & Discoveries
 
 
-(None yet.)
+2026-10-16: Owned ClickHouse 26.8.2 probes established that exact non-null flattened leaf paths collide (code 117), but scalar/object prefixes coexist. Nulls and empty objects occupy no path; empty arrays do occupy paths. Objects inside nested or mixed arrays are validated independently for each element. The 21-case checked-in corpus preserves these distinctions for both materialized columns. Private probe evidence is under `.dev/acceptance/json-probe/`.
+
+2026-10-16: The documentation log tool rewrites away the guide bundle's historical adoption evidence table. Restored that table after invoking the required log command and retained the new update entry.
 
 ## Decision Log
 
 
 2026-10-16 (revised after deployment clarification): Reject structurally incompatible input before acceptance using local pure validation. Ingestion must not acquire a live ClickHouse dependency. The service has never been deployed or used, so historical-message isolation, old envelope compatibility, upgrade recovery and rollback procedures are outside this fix.
 
+2026-10-16: Implement the acceptance-only fixture cleanup prerequisite in [EP-48](48-clean-acceptance-fixtures-across-telemetry-modes.md) as part of reaching this plan's required final packaged gate. Production pagination and writer recovery remain unchanged.
+
+2026-10-16: Diagnostics return at most one fixed storage-shape error per affected field, with no producer paths or values. Traversal retains flattened paths internally; source locations are unnecessary in the public error and would expand diagnostic payloads. Exact path occupancy, rather than prefix collisions, follows native corpus evidence.
+
 2026-10-16: Keep the existing storage-outage recovery behavior. Prevent the demonstrated deterministic insert failure at ingestion rather than adding a new dead-letter or archive recovery workflow. Native insert tests must establish that the admitted shapes are compatible with the actual materialized columns.
 
-Revision note: Removed the assumed installed base and replaced the historical-queue milestone with fresh-stack transport and storage verification. No implementation work has begun.
+Revision note: Removed the assumed installed base and replaced the historical-queue milestone with fresh-stack transport and storage verification. The first-release scope remains unchanged.
 
 ## Outcomes & Retrospective
 

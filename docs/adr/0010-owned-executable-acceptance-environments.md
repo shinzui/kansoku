@@ -5,10 +5,10 @@ description: Gate service changes with deterministic checks and required integra
 docId: ADR-10
 status: Accepted
 date: 2026-10-15
-timestamp: 2026-10-16T03:24:40Z
+timestamp: 2026-10-16T17:56:53Z
 generated:
   by: process:codex
-  at: 2026-10-15T05:12:00Z
+  at: 2026-10-16T17:56:53Z
 originatingPlan: docs/plans/28-gate-service-releases-with-isolated-hurl-acceptance-and-ci.md
 ---
 
@@ -72,3 +72,17 @@ transaction rollback/concurrency, backend write draining, failed-job resume, ret
 payloads, old native-block replay, independent fingerprint cleanup and raw/rollup agreement.
 It records and stops CLI/server processes and keeps sensitive command evidence outside the
 sanitized log set. Required configured SDK helper cases run in each telemetry mode.
+
+## Scenario resource ownership
+
+Shared-store acceptance scenarios register every successfully created saved definition by
+returned ID and originating account credential. Context-managed finalization runs on success
+and failure, deleting dependent metric definitions before explicitly clearing static membership
+and deleting cohorts. Already-absent owned resources may return 404; other failures remain
+visible and cleanup continues for the remaining resources. A primary scenario exception stays
+primary, with cleanup failures attached as context. Unrelated resources are never inferred
+from list membership or name prefixes and never deleted. Strict full-list pagination remains
+unchanged. The packaged gate requires repeated same-store scenario composition, failure
+injection after membership upload, native verification of cleared active membership, and an
+unrelated sentinel. Physical historical membership facts may remain under
+[ADR-19](0019-saved-query-time-cohorts-and-static-membership.md).

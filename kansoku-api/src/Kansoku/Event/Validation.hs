@@ -17,6 +17,7 @@ import Data.Char (isAsciiLower, isDigit)
 import Data.Generics.Labels ()
 import Data.Map.Strict qualified as Map
 import Data.Scientific qualified as Scientific
+import Data.Set qualified as Set
 import Data.Text qualified as Text
 import Data.Time.Format (defaultTimeLocale, formatTime)
 import Kansoku.Event.Registry
@@ -39,6 +40,7 @@ data ValidationError
   | WrongPropertyType EventName Text PropertyType
   | InvalidPropertyValue EventName Text Text
   | InvalidIdentityBinding Text
+  | IncompatibleJsonPaths Text
   deriving stock (Generic, Eq, Show)
 
 -- | Validate against an explicit registry. Unknown event names are allowed; the
@@ -62,6 +64,10 @@ validateEventWith registry event =
         <> [ InvalidSchemaVersion version
            | Just version <- [event ^. #schemaVersion],
              not (validSchemaVersion version)
+           ]
+        <> [ IncompatibleJsonPaths field
+           | (field, object) <- [("properties", event ^. #properties), ("context", event ^. #context)],
+             incompatibleObject object
            ]
 
     identifierErrors =
@@ -132,6 +138,27 @@ governedTraitEligible event =
 validateEvent :: AnalyticsEvent -> Either [ValidationError] AnalyticsEvent
 validateEvent = validateEventWith defaultRegistry
 
+-- | Native JSON flattens object keys with dots. Only non-null leaves occupy
+-- paths (arrays, including empty arrays, are leaves). Prefixes may coexist.
+-- Each object inside an array starts an independent path scope, even in mixed
+-- or nested arrays. Do not merge paths across array elements.
+-- Keep diagnostics bounded: at most one fixed error per public object, with no
+-- producer-controlled keys or values copied into responses or telemetry.
+incompatibleObject :: KeyMap.KeyMap Value -> Bool
+incompatibleObject object = duplicate Set.empty (leaves Nothing (Object object))
+  where
+    duplicate _ [] = False
+    duplicate seen ((path, value) : rest) =
+      Set.member path seen || incompatibleArray value || duplicate (Set.insert path seen) rest
+    leaves prefix (Object fields) = concatMap (\(key, value) -> leaves (Just (maybe "" (<> ".") prefix <> Key.toText key)) value) (KeyMap.toList fields)
+    leaves _ Null = []
+    leaves (Just path) value = [(path, value)]
+    leaves Nothing _ = []
+    incompatibleArray (Array values) = any incompatibleValue values
+    incompatibleArray _ = False
+    incompatibleValue (Object fields) = incompatibleObject fields
+    incompatibleValue value = incompatibleArray value
+
 -- | Render a validation failure for logs and rejection responses. Callers may
 -- show this text to people, but must use a rejected event's index for machine
 -- correlation rather than parsing this prose.
@@ -141,6 +168,8 @@ renderValidationError = \case
     "eventId must not be empty"
   EventIdConflict ->
     "event_id_conflict: eventId already identifies different producer content"
+  IncompatibleJsonPaths field ->
+    field <> " contains incompatible JSON paths: non-null values must have distinct flattened paths"
   EmptyEventName ->
     "eventName must not be empty"
   ReceivedBeforeOccurred occurred received ->
@@ -271,6 +300,7 @@ validationReason :: ValidationError -> Text
 validationReason = \case
   EmptyEventId -> "empty_event_id"
   EventIdConflict -> "event_id_conflict"
+  IncompatibleJsonPaths {} -> "incompatible_json_paths"
   EmptyEventName -> "empty_event_name"
   ReceivedBeforeOccurred {} -> "future_timestamp"
   UnsupportedTimestamp {} -> "unsupported_timestamp"

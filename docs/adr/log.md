@@ -1,6 +1,9 @@
 # Bundle Update Log
 
 ## 2026-10-16
+* **Update**: Require scenario-owned saved-resource cleanup and shared-store repeatability/failure evidence without weakening pagination.
+* **Update**: Define the supported raw/native JSON shape boundary and require native corpus parity for both materialized columns.
+* **Update**: Reject duplicate flattened JSON paths locally before new acceptance claims; preserve immutable retries and transport rejection semantics.
 * **Update**: Align ADR-5, ADR-11 and ADR-18 with the additive eighth organisation column; retain the original analytical v1 reader projection.
 * **Update**: Record organisation aggregation, typed current traits, membership fallback and lifecycle boundaries.
 * **Update**: Link current organisation semantics to ADR-21.

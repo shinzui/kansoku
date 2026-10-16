@@ -16,6 +16,11 @@ provenance:
       at: 2026-10-16T17:46:01Z
       mode: "update"
       note: "Update EP-46 reference after first-release scope correction"
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-10-16T17:55:20Z
+      mode: "implement"
+      note: "Repair required fixture isolation prerequisite for EP-46 packaged acceptance"
 ---
 
 # Clean acceptance fixtures across telemetry modes
@@ -32,17 +37,19 @@ This plan has three milestones. [EP-46](46-reject-storage-incompatible-json-befo
 ## Progress
 
 
-- [ ] M1: Custom-metric fixtures clean up every owned definition and static membership on success and failure, across both accounts.
-- [ ] M2: A shared-store regression proves repeated scenarios preserve resource baselines and cohort pagination remains exact.
+- [x] M1: (2026-10-16; both scenario ownership wrappers pass repeated success and injected membership-failure cleanup in the focused composition proof.) Custom-metric fixtures clean up every owned definition and static membership on success and failure, across both accounts.
+- [x] M2: (2026-10-16; `just fixture-isolation-acceptance` passed twice per scenario, exact two-account baselines, native active-membership clearing, unrelated sentinel and continued cleanup after an injected cleanup failure; evidence `.dev/acceptance/cohort-ebdemk_y/`.) A shared-store regression proves repeated scenarios preserve resource baselines and cohort pagination remains exact.
 - [ ] M3: Full packaged acceptance passes all three telemetry modes and the later reader/administration families, with private evidence retained.
 
 ## Surprises & Discoveries
 
 
-(None yet.)
+2026-10-16: Complete ID baselines in both accounts reproduce the original leak without relaxing pagination. The registered-resource context manager releases the foreign metric as well as all local variants. Explicit static-member clearing is verified with native `argMax(present,version)` after injected failure. The standalone large-upload/erasure proof also passes (`just cohorts-acceptance`, evidence `.dev/acceptance/cohort-vizgc8qb/`).
 
 ## Decision Log
 
+
+2026-10-16: Implement this acceptance-only prerequisite while completing [EP-46](46-reject-storage-incompatible-json-before-acceptance.md), which requires the combined packaged gate. Its Intention ID is the same.
 
 2026-10-16: Use scenario-owned cleanup with resource IDs and originating credentials. Keep the existing shared-store mode loop so it continues to expose isolation problems; do not remove pagination assertions or filter unexpected leftovers out of their expected results.
 

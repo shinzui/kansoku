@@ -5,8 +5,11 @@ import Control.Concurrent.Async (AsyncCancelled (..))
 import Control.Exception (SomeException, fromException, throwIO, try)
 import Data.Aeson (Value)
 import Data.Aeson qualified as Aeson
+import Data.Foldable (forM_)
+import Data.Generics.Labels ()
 import Data.HashMap.Strict qualified as HashMap
 import Data.IORef (atomicModifyIORef', newIORef, readIORef)
+import Data.List (isInfixOf)
 import Effectful (IOE, runEff)
 import Kansoku.ClickHouse
   ( clickHouseConfigFromConfig,
@@ -22,6 +25,9 @@ import Kansoku.Event
     EventSource (..),
     baseEvent,
   )
+import Kansoku.EventSpec (storageShapes)
+import Kansoku.Ingest.QueuedEvent (enrichedQueuedEvent)
+import Kansoku.Ingest.RequestContext (emptyRequestContext)
 import Kansoku.Observability
   ( PipelineMetrics,
     lastWriterBeat,
@@ -43,6 +49,19 @@ import Test.Hspec
 
 spec :: PipelineMetrics -> Spec
 spec metrics = describe "Kansoku.Writer.Batch" $ do
+  describe "native JSON shapes" $ do
+    shapes <- runIO storageShapes
+    forM_ shapes $ \(name, compatible, object) ->
+      forM_ [False, True] $ \context ->
+        it (name <> if context then " in context" else " in properties") $
+          withClickHouse $ \conn -> do
+            let event = if context then sampleEvent & #context .~ object else sampleEvent & #properties .~ object
+            result <- try @SomeException (insertQueuedEvents conn [enrichedQueuedEvent emptyRequestContext event])
+            case (compatible, result) of
+              (True, Right ()) -> pure ()
+              (False, Left err) -> show err `shouldSatisfy` isInfixOf "117"
+              _ -> expectationFailure ("native JSON parity failed: " <> show result)
+
   it "decodes a pgmq payload and inserts it into ClickHouse" $
     withClickHouse $ \conn -> do
       command conn "TRUNCATE TABLE analytics.events_raw"
