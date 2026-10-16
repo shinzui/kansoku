@@ -24,3 +24,4 @@ __pycache__/
 
 # Private executable acceptance processes, credentials and diagnostics
 .dev/acceptance/
+.codex/
