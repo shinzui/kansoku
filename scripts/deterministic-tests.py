@@ -16,6 +16,7 @@ skips = [
     'Kansoku.Acquisition native',
     'Kansoku.Activity native',
     'Kansoku.Funnel native',
+    'Kansoku.Paths native',
     'Kansoku.Traits native',
     'Kansoku.Sessions native',
     'Kansoku.Writer.Batch/decodes a pgmq payload',

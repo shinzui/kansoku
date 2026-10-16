@@ -10,6 +10,12 @@ provenance:
     model: "claude-fable-5-1"
     harness: "claude-code"
     at: 2026-10-15T15:14:00Z
+  revisions:
+    - model: "gpt-6-astra"
+      harness: "codex-cli"
+      at: 2026-10-16T11:26:52Z
+      mode: "implement"
+      note: "Implement bounded canonical-user paths, page flows and reverse traversal with native acceptance"
 ---
 
 # Paths and flows
@@ -32,14 +38,20 @@ pricing page" view every web-analytics tool offers.
 
 ## Progress
 
-- [ ] M1: Start-anchored event paths return per-step transitions with user counts, top-K per step and an `(other)` fold, proven against fixtures.
-- [ ] M2: `by=route` page flows with `(end)` nodes and an entry mode when `start` is omitted.
-- [ ] M3: End-anchored paths (`end=`) and documentation, OpenAPI, client and the ordering rule recorded in ADR 9.
+- [x] M1 (2026-10-16): Start-anchored event paths return exact per-step user counts, deterministic top-K and an `(other)` fold. Native fixtures prove exclusions, filters, first-start ownership, replay handling, account isolation and 400 input faults.
+- [x] M2 (2026-10-16): Route flows, entry mode, consecutive-route collapse and `(end)` nodes pass native fixtures, including bot exclusion and UTF-8/quoted route parameters.
+- [x] M3 (2026-10-16): Last-end reverse paths pass millisecond/tie/window fixtures and the real HTTP route. OpenAPI is regenerated/current and lints with zero errors; typed client serialization passes. The guide and ADR 9 record ordering and flow semantics.
 
 
 ## Surprises & Discoveries
 
-(None yet.)
+The current funnel implementation already provides millisecond/event-ID sorting and
+canonical replay-safe input through `resolvedSource`; the plan's old `windowFunnel`
+reference is historical. Paths reuse that sorter and the identity query pool rather
+than querying the stable public view without its request-scoped identity bounds.
+
+The current development shell lacked libmaxminddb in pkg-config. Build and acceptance
+commands therefore run through `nix develop -c`.
 
 
 ## Decision Log
@@ -56,19 +68,55 @@ pricing page" view every web-analytics tool offers.
   Rationale: Matches PostHog's paths and keeps counts comparable with funnels.
   Date: 2026-10-15
 
+- Decision: Reverse traversal starts at the last physical anchor; route collapse follows
+  anchor/window selection in traversal order. Both directions emit `(end)` on observed
+  exhaustion, and event mode requires an anchor.
+  Rationale: Preserve first/last occurrence timestamps and give step 1 the immediate
+  successor/predecessor meaning with a single exhaustion marker.
+  Date: 2026-10-16
+- Decision: Each step retains K transitions, ties resolved by source/target names, plus
+  one remainder with both source and target `(other)`. Final ordering includes that
+  point by its summed count. CSV allowlists/denylists accept at most 100 event names;
+  route anchors accept at most 1024 UTF-8 bytes. Filters precede anchoring.
+  Rationale: A single folded edge can combine several origins, so a real source would
+  misrepresent it. One transition per user/step makes the sum an exact user count.
+  These input bounds retain the established bounded-query contract.
+  Date: 2026-10-16
+
 
 ## Outcomes & Retrospective
 
-(To be filled during and after implementation.)
+All three milestones are complete. `GET /metrics/paths` and the generated Haskell
+`pathsClient` support forward event paths, forward/entry page flows and reverse paths.
+No schema or dependency changes were required. The query reuses account-scoped identity
+preparation, native parameter binding, canonical replay handling, filter compilation,
+resource limits and the final complete-response guard.
+
+Acceptance on 2026-10-16: `nix develop -c cabal build all --enable-tests` passed;
+`nix develop -c python3 scripts/paths-acceptance.py` passed 8 examples with zero failures
+or pending cases against owned ClickHouse with two-row blocks. This includes the maximum
+210-point answer, numeric step order, count conservation and native memory-limit failure.
+`nix develop -c python3 scripts/deterministic-tests.py` passed 372 core examples, 20 client
+examples and 4 probe tests. OpenAPI regeneration/currentness passed and lint reported zero
+errors (existing-style documentation warnings remain). Formatting and strict ADR validation
+passed for all 19 records. ADR 9 now holds the durable semantics and closed ordering rule.
+
+The top-K fold necessarily loses individual edge connectivity for the omitted transitions;
+the synthetic source is explicit in the contract. `(end)` describes observed exhaustion
+inside the selected date/time window. Neither marker claims permanent user churn. Array
+construction remains subject to the existing native work limits rather than truncating
+raw timelines to produce partial successful answers.
 
 
 ## Context and Orientation
 
-Funnels already compute per-user ordered behaviour with `windowFunnel` in
-`buildFunnelSQLAggregate` (`kansoku-core/src/Kansoku/Metrics/Query.hs`), and
-`docs/plans/36-funnel-modes-and-experiment-exposure-diagnostics.md` adds an array-walk engine
-(`groupArray` of `(occurred_at, event_name)` per user, sorted) that this plan reuses as its
-starting shape. Routes, bounds and the closed ordering rules are in
+Funnels compute per-user ordered behaviour in `funnelAggregate`
+(`kansoku-core/src/Kansoku/Metrics/Query.hs`) with the array engine delivered by
+`docs/plans/36-funnel-modes-and-experiment-exposure-diagnostics.md`. Paths reuse
+`sortedTimelineSQL` in `kansoku-core/src/Kansoku/Metrics/Query/Funnel.hs`, sorting tuples
+of millisecond time, immutable event ID and label. [ADR 15](../adr/0015-deterministic-selected-funnel-chains-and-exclusive-exposure-diagnostics.md)
+explains deterministic ties and replay-safe input; paths deliberately select only the
+first start or last end rather than the funnel's best attempt. Routes, bounds and the closed ordering rules are in
 `kansoku-api/src/Kansoku/Metrics/Api.hs` and
 [ADR 9](../adr/0009-bounded-complete-aggregate-responses.md); result points carry `bucket`,
 `group` and `value`. The `route` dimension is `path(url)` ([ADR 4](../adr/0004-queryable-event-properties-and-identity-resolved-projection.md)
@@ -112,8 +160,10 @@ example, and add the paths ordering to ADR 9's closed list.
 ## Concrete Steps
 
 ```bash
-cabal test kansoku-core --test-options='--match "Paths"'
-just openapi && just openapi-check
+nix develop -c cabal build all --enable-tests
+nix develop -c python3 scripts/paths-acceptance.py
+nix develop -c just openapi
+nix develop -c just openapi-check
 ```
 
 Example:
@@ -134,7 +184,7 @@ curl -s --get http://localhost:8080/metrics/paths -H "Authorization: Bearer $TOK
 2. M2: page flows from `/pricing` list `/signup` and `(end)` with correct counts; identical
    consecutive routes collapse.
 3. M3: end-anchored paths into `payment_completed` list the preceding steps in reverse order.
-4. Point cap, account predicate test and problem codes hold.
+4. The shared 10001-row overflow witness remains in generated SQL; the stronger paths bounds are proved with a 210-point maximum fixture. Account isolation, native resource errors and problem codes hold.
 
 
 ## Idempotence and Recovery
@@ -149,3 +199,8 @@ Complete. Soft: `docs/plans/36-funnel-modes-and-experiment-exposure-diagnostics.
 array helpers), `docs/plans/31-metric-property-filters-and-dual-grouping.md` (filters),
 `docs/plans/32-time-aware-identity-bindings-and-bounded-resolution-cost.md` (cost). Claims
 `/metrics/paths` and the `(end)` and `(other)` node names.
+
+
+Revision note (2026-10-16): Grounded the implementation in the completed funnel engine,
+made reverse/collapse/folding behavior explicit, and added an owned native acceptance
+runner that rejects missing storage and zero/pending examples. No schema changes.

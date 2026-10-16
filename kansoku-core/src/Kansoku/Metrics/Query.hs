@@ -9,6 +9,10 @@ module Kansoku.Metrics.Query
     buildExperimentConversionSQL,
     buildExperimentExposuresSQL,
     buildExperimentFunnelSQL,
+    PathOptions (..),
+    validatePathOptions,
+    runPaths,
+    buildPathsSQL,
     buildFunnelSQL,
     buildRetentionSQL,
     buildRetentionMetricSQL,
@@ -65,9 +69,12 @@ import Control.Exception (fromException)
 import Data.Aeson qualified as Aeson
 import Data.Bifunctor (first)
 import Data.ByteString (ByteString)
+import Data.ByteString qualified
+import Data.Foldable (traverse_)
 import Data.Generics.Labels ()
 import Data.List qualified as List
 import Data.Map.Strict qualified as Map
+import Data.Maybe (catMaybes)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import Data.Time (Day, addDays, dayOfWeek, diffDays, fromGregorian, toGregorian, utctDay)
@@ -82,11 +89,11 @@ import Kansoku.Event
     defaultRegistry,
   )
 import Kansoku.Exception (trySynchronous)
-import Kansoku.Metrics.Api (AcquisitionMeasure (..), CohortMode (..), FunnelMeasure (..), FunnelMode (..), MetricPoint (..), MetricResult (..), RetentionMode (..), SessionMeasure (..), TimeGrain (..), UserWindow (..))
+import Kansoku.Metrics.Api (AcquisitionMeasure (..), CohortMode (..), FunnelMeasure (..), FunnelMode (..), MetricPoint (..), MetricResult (..), PathBy (..), RetentionMode (..), SessionMeasure (..), TimeGrain (..), UserWindow (..))
 import Kansoku.Metrics.Definition (Aggregation (..), MetricDefinition (..), RatioMetric (..))
 import Kansoku.Metrics.Filter (MetricFilter)
 import Kansoku.Metrics.Filter qualified as WireFilter
-import Kansoku.Metrics.Limits (maxMetricPoints, maxQueryDays)
+import Kansoku.Metrics.Limits (maxMetricPoints, maxPathEvents, maxPathSteps, maxPathTop, maxPathWindowSeconds, maxQueryDays)
 import Kansoku.Metrics.Query.Dimension
 import Kansoku.Metrics.Query.Filter qualified as Filters
 import Kansoku.Metrics.Query.Funnel qualified as Funnel
@@ -157,7 +164,7 @@ data QueryExecutionError
   deriving stock (Generic, Eq, Show)
 
 -- No caller-supplied SQL may select a result ordering.
-data ResultOrder = ExperimentUserOrder | FunnelDimensionsOrder | DiagnosticOrder | BucketDimensions | BucketDimensionsMeasure | RetentionDimensionsOrder | BucketGroup | ExperimentExposureOrder | ExperimentConversionOrder | RetentionOrder | FunnelOrder | ExperimentFunnelOrder
+data ResultOrder = PathsOrder | ExperimentUserOrder | FunnelDimensionsOrder | DiagnosticOrder | BucketDimensions | BucketDimensionsMeasure | RetentionDimensionsOrder | BucketGroup | ExperimentExposureOrder | ExperimentConversionOrder | RetentionOrder | FunnelOrder | ExperimentFunnelOrder
   deriving stock (Generic)
 
 buildSQL :: EventRegistry -> BuiltinMetric -> QueryRequest -> Either QueryCompileError Text
@@ -290,6 +297,105 @@ windowDays :: UserWindow -> Integer
 windowDays CalendarWindow = 1
 windowDays Rolling7 = 7
 windowDays Rolling30 = 30
+
+-- | One sequence per canonical subject; end anchoring reverses traversal.
+data PathOptions = PathOptions
+  { pathBy :: !PathBy,
+    pathStart :: !(Maybe Text),
+    pathEnd :: !(Maybe Text),
+    pathSteps :: !Int,
+    pathTop :: !Int,
+    pathWindow :: !Int,
+    pathEvents :: ![Text],
+    pathExclude :: ![Text]
+  }
+  deriving stock (Generic, Eq, Show)
+
+validatePathOptions :: PathOptions -> Either QueryLimitError ()
+validatePathOptions options = do
+  check (not (isJust (pathStart options) && isJust (pathEnd options))) "start and end are mutually exclusive"
+  check (pathBy options == PathRoute || isJust (pathStart options) || isJust (pathEnd options)) "event paths require start or end"
+  check (pathSteps options >= 1 && pathSteps options <= maxPathSteps) "steps must be in 1..10"
+  check (pathTop options >= 1 && pathTop options <= maxPathTop) "top must be in 1..20"
+  check (pathWindow options >= 1 && pathWindow options <= maxPathWindowSeconds) "window must be in 1..7776000 seconds"
+  traverse_ (\xs -> check (length xs <= maxPathEvents && all validName xs) "events and exclude accept at most 100 valid event names each") [pathEvents options, pathExclude options]
+  traverse_ (\anchor -> check (if pathBy options == PathEvent then validName anchor else Text.isPrefixOf "/" anchor && byteLength anchor <= 1024) "anchor must be an event name or a route beginning with / (at most 1024 UTF-8 bytes)") (catMaybes [pathStart options, pathEnd options])
+  where
+    check condition message = unless condition (Left (QueryLimitError "invalid_path_options" message))
+    validName = either (const False) (const True) . mkSqlName
+    byteLength = Data.ByteString.length . Text.encodeUtf8
+
+runPaths :: (IOE :> es) => EventRegistry -> QueryPool -> QueryRequest -> PathOptions -> Eff es (Either QueryExecutionError MetricResult)
+runPaths registry pool req options =
+  case first QueryLimitFailure (validateDateRange (req ^. #from) (req ^. #to) >> validatePathOptions options)
+    >> first QueryCompileFailure (compilePaths registry req options) of
+    Left failure -> pure (Left failure)
+    Right compiled ->
+      liftIO $
+        runSQL
+          pool
+          "paths"
+          ["step", "from", "to"]
+          (accountParameter req <> pathParameters options <> compiled ^. #filterParameters)
+          (boundedSQL PathsOrder (compiled ^. #sql))
+
+buildPathsSQL :: EventRegistry -> QueryRequest -> PathOptions -> Either QueryExecutionError Text
+buildPathsSQL registry req options = do
+  first QueryLimitFailure (validateDateRange (req ^. #from) (req ^. #to) >> validatePathOptions options)
+  compiled <- first QueryCompileFailure (compilePaths registry req options)
+  pure (boundedSQL PathsOrder (compiled ^. #sql))
+
+pathParameters :: PathOptions -> [QueryParameter]
+pathParameters options =
+  [("path_anchor", anchor) | anchor <- take 1 (catMaybes [pathStart options, pathEnd options])]
+    <> zipWith (\i name -> ("path_event_" <> show i, name)) [1 :: Int ..] (pathEvents options)
+    <> zipWith (\i name -> ("path_exclude_" <> show i, name)) [1 :: Int ..] (pathExclude options)
+
+compilePaths :: EventRegistry -> QueryRequest -> PathOptions -> Either QueryCompileError CompiledMetric
+compilePaths registry req options = do
+  unless (isNothing (req ^. #groupBy) && isNothing (req ^. #timeGrain)) (Left (QueryCompileFilterError "paths do not support groupBy or timeGrain"))
+  let declared = if pathBy options == PathRoute then [EventName "page_view"] else map EventName (pathEvents options)
+      scope = filter (\(EventName name) -> name `notElem` pathExclude options) (Filters.filteredEventScope declared (req ^. #filters))
+  filters <- first QueryCompileFilterError (requestFilters req "metric_filter" registry scope (req ^. #filters))
+  pure CompiledMetric {sql = buildPathsSQLAggregate req options (Filters.predicates filters), groupLabels = ["step", "from", "to"], filterParameters = Filters.parameters filters, ordering = PathsOrder}
+
+-- Filtering happens before anchor selection. Collapse only the windowed route
+-- suffix, preserving the first/last physical anchor's timestamp in its direction.
+buildPathsSQLAggregate :: QueryRequest -> PathOptions -> [Text] -> Text
+buildPathsSQLAggregate req options predicates =
+  let route = pathBy options == PathRoute
+      reverseWalk = isJust (pathEnd options)
+      label = if route then "path(url)" else "toString(event_name)"
+      timeline = Funnel.sortedTimelineSQL "groupArray(tuple(toInt64(toUnixTimestamp64Milli(occurred_at)),event_id,path_label))"
+      ordered = if reverseWalk then "arrayReverse(" <> timeline <> ")" else timeline
+      anchor = if isNothing (pathStart options) && isNothing (pathEnd options) then "1" else "arrayFirstIndex(e->e.3={path_anchor:String},timeline)"
+      elapsed = if reverseWalk then "timeline[anchor_index].1-e.1" else "e.1-timeline[anchor_index].1"
+      number :: (Show a) => a -> Text
+      number = Text.pack . show
+      steps = number (pathSteps options)
+      top = number (pathTop options)
+      window = number (toInteger (pathWindow options) * 1000)
+      namePredicate prefix names negated = if null names then [] else ["event_name " <> (if negated then "NOT IN" else "IN") <> " (" <> Text.intercalate "," [parameterPlaceholder prefix i | i <- [1 .. length names]] <> ")"]
+      conditions =
+        [accountPredicate, "canonical_user!=''", timestampPredicate req]
+          <> (if route then ["event_name='page_view'", "NOT is_bot", "path(url)!=''"] else [])
+          <> namePredicate "path_event" (pathEvents options) False
+          <> namePredicate "path_exclude" (pathExclude options) True
+          <> predicates
+      collapse = if route then "arrayFilter((e,i)->i=1 OR e.3!=windowed[i-1].3,windowed,arrayEnumerate(windowed))" else "windowed"
+   in Text.unlines
+        [ "WITH selected AS (SELECT canonical_user,occurred_at,event_id," <> label <> " AS path_label FROM " <> resolvedSource req <> " WHERE " <> Text.intercalate " AND " conditions <> "),",
+          "timelines AS (SELECT canonical_user," <> ordered <> " AS timeline FROM selected GROUP BY canonical_user),",
+          "anchored AS (SELECT *," <> anchor <> " AS anchor_index FROM timelines),",
+          "windows AS (SELECT canonical_user,arrayFilter(e->" <> elapsed <> "<=" <> window <> ",arraySlice(timeline,anchor_index)) AS windowed FROM anchored WHERE anchor_index>0),",
+          "collapsed AS (SELECT canonical_user,arrayMap(e->e.3," <> collapse <> ") AS labels FROM windows),",
+          "sequences AS (SELECT canonical_user,if(length(labels)<=" <> steps <> ",arrayPushBack(labels,'(end)'),arraySlice(labels,1," <> steps <> "+1)) AS nodes FROM collapsed),",
+          "edges AS (SELECT canonical_user,edge.1 AS step,edge.2 AS origin,edge.3 AS target FROM sequences ARRAY JOIN arrayZip(arrayEnumerate(arrayPopBack(nodes)),arrayPopBack(nodes),arrayPopFront(nodes)) AS edge),",
+          "counts AS (SELECT step,origin,target,uniqExact(canonical_user) AS users FROM edges GROUP BY step,origin,target),",
+          "ranked AS (SELECT *,row_number() OVER (PARTITION BY step ORDER BY users DESC,origin,target) AS rank FROM counts),",
+          "folded AS (SELECT step,if(rank<=" <> top <> ",origin,'(other)') AS folded_origin,if(rank<=" <> top <> ",target,'(other)') AS folded_target,sum(users) AS users FROM ranked GROUP BY step,folded_origin,folded_target)",
+          "SELECT '' AS bucket,toJSONString([toString(step),folded_origin,folded_target]) AS group_key,toFloat64(users) AS value,step AS sort_step,folded_origin AS sort_from,folded_target AS sort_to FROM folded"
+        ]
 
 data FunnelOptions = FunnelOptions
   { mode :: !FunnelMode,
@@ -468,6 +574,7 @@ boundedSQL order sql =
       sql,
       ")",
       "ORDER BY " <> case order of
+        PathsOrder -> "sort_step, value DESC, sort_from, sort_to"
         ExperimentUserOrder -> "bucket, sort_experiment NULLS FIRST, sort_group_1 NULLS FIRST, sort_group_2 NULLS FIRST, sort_measure, sort_variant NULLS FIRST"
         FunnelDimensionsOrder -> "sort_variant NULLS FIRST, sort_group_1 NULLS FIRST, sort_group_2 NULLS FIRST, sort_step, sort_measure"
         DiagnosticOrder -> "bucket, sort_experiment NULLS FIRST, sort_measure, sort_variant NULLS FIRST"

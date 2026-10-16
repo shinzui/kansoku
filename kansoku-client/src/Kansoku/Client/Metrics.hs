@@ -4,7 +4,8 @@
 
 -- | Typed servant-client access to Kansoku's experiment metrics.
 module Kansoku.Client.Metrics
-  ( experimentConversionClient,
+  ( pathsClient,
+    experimentConversionClient,
     experimentFunnelClient,
     experimentsClient,
     kansokuMetricsCredential,
@@ -17,8 +18,9 @@ import Data.Time (Day)
 import Kansoku.Api.Response (KansokuResult)
 import Kansoku.Auth.Api (MetricsAuth)
 import Kansoku.Cohort.Api (Cohorts)
-import Kansoku.Metrics.Api (MetricResult, MetricsRoutes, TimeGrain)
+import Kansoku.Metrics.Api (MetricResult, MetricsRoutes, PathBy, TimeGrain)
 import Kansoku.Metrics.Api qualified as Metrics
+import Kansoku.Metrics.Filter (MetricFilter)
 import Kansoku.Prelude
 import Servant.API (NamedRoutes)
 import Servant.API.Experimental.Auth (AuthProtect)
@@ -53,3 +55,7 @@ experimentFunnelClient credential experiment steps fromDay toDay window =
 -- | Management and member routes derived from the served cohort contract.
 cohortsClient :: Cohorts (AsClientT ClientM)
 cohortsClient = ServantClient.client (Proxy @(NamedRoutes Cohorts))
+
+-- | Paths and page flows, derived directly from the served route.
+pathsClient :: AuthenticatedRequest MetricsAuth -> Day -> Day -> Maybe Text -> Maybe Text -> Maybe Int -> Maybe Int -> Maybe Int -> Maybe Text -> Maybe Text -> Maybe PathBy -> [MetricFilter] -> ClientM (KansokuResult MetricResult)
+pathsClient = Metrics.paths metricsClient

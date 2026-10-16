@@ -245,6 +245,16 @@ spec = describe "Kansoku.Client" $ do
         Right (KansokuOk result) -> metric result `shouldBe` "experiment_funnel"
         other -> expectationFailure ("unexpected funnel client result: " <> show other)
 
+  it "derives authenticated paths clients with route anchors and CSV controls" $
+    Warp.testWithApplication (pure metricsRecorderApp) $ \port -> do
+      manager <- HTTP.newManager HTTP.defaultManagerSettings
+      base <- parseBaseUrl ("http://127.0.0.1:" <> show port)
+      result <-
+        runClientM
+          (pathsClient (kansokuMetricsCredential "test-service-token") (read "2026-07-01") (read "2026-07-03") (Just "/pricing") Nothing (Just 4) (Just 2) (Just 60) (Just "page_view") (Just "x,y") (Just Metrics.PathRoute) [])
+          (mkClientEnv manager base)
+      result `shouldBe` Right (KansokuOk MetricResult {metric = "paths", points = []})
+
   it "sends typed repeatable JSON filters and decodes nullable namespaced groups" $ do
     captured <- newTVarIO []
     let app request respond = do
@@ -382,6 +392,16 @@ metricsRecorderApp request respond =
   if lookup hAuthorization (requestHeaders request) /= Just "Bearer test-service-token"
     then respond (responseLBS status401 [("content-type", "application/json")] "{}")
     else case pathInfo request of
+      ["metrics", "paths"]
+        | queryValue "start" request == Just "/pricing",
+          queryValue "end" request == Nothing,
+          queryValue "by" request == Just "route",
+          queryValue "steps" request == Just "4",
+          queryValue "top" request == Just "2",
+          queryValue "window" request == Just "60",
+          queryValue "events" request == Just "page_view",
+          queryValue "exclude" request == Just "x,y" ->
+            ok "paths"
       ["metrics", "experiments"]
         | queryValue "experiment" request == Just "checkout_v2",
           queryValue "timeGrain" request == Just "day" ->

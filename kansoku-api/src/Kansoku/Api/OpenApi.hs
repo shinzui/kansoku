@@ -34,7 +34,7 @@ import Kansoku.Event
     VersionedEventSchema,
   )
 import Kansoku.Ingest.Api (BatchAck, BeaconEnvelope, IngestAck, IngestEvent, RejectedEvent)
-import Kansoku.Metrics.Api (AcquisitionMeasure, CohortMode, ExperimentMeasure, FunnelMeasure, FunnelMode, MetricPoint, MetricResult, RetentionMode, SessionMeasure, TimeGrain, UserWindow)
+import Kansoku.Metrics.Api (AcquisitionMeasure, CohortMode, ExperimentMeasure, FunnelMeasure, FunnelMode, MetricPoint, MetricResult, PathBy, RetentionMode, SessionMeasure, TimeGrain, UserWindow)
 import Kansoku.Metrics.Filter (FilterOp, MetricFilter)
 import Kansoku.Metrics.Limits (maxMetricPoints)
 import Kansoku.Prelude
@@ -190,6 +190,9 @@ instance O.ToParamSchema UserWindow where
 
 instance O.ToParamSchema RetentionMode where
   toParamSchema _ = O.toParamSchema (Proxy @Text) & O.enum_ ?~ ["on", "on_or_after"]
+
+instance O.ToParamSchema PathBy where
+  toParamSchema _ = O.toParamSchema (Proxy @Text) & O.enum_ ?~ ["event", "route"]
 
 instance O.ToParamSchema FunnelMode where
   toParamSchema _ = O.toParamSchema (Proxy @Text) & O.enum_ ?~ ["sequential", "strict"]

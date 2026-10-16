@@ -13,25 +13,27 @@ import Network.Wai (Request, queryString, rawPathInfo)
 
 validateMetricRequest :: Request -> Either (Text, Text) ()
 -- Servant consumes pathInfo while routing; rawPathInfo retains the full path.
-validateMetricRequest request = case allowedParameters (decodePathSegments (rawPathInfo request)) of
+validateMetricRequest request = case allowedParameters requestPath of
   Nothing -> Right ()
   Just allowed -> do
     names <- traverse (first (const ("invalid_query_parameter", "query parameter names must be UTF-8")) . Text.decodeUtf8' . fst) query
     case filter (`notElem` allowed) names of
       invalid : _ -> Left ("unsupported_query_parameter", "unsupported query parameter: " <> Text.take 128 invalid)
       [] -> pure ()
-    unless (length (filter (`notElem` ["filter", "exclude"]) names) == length (nub (filter (`notElem` ["filter", "exclude"]) names))) $
-      Left ("invalid_query_parameter", "only filter and exclude may be repeated")
+    let repeatable = if requestPath == ["metrics", "paths"] then ["filter"] else ["filter", "exclude"]
+    unless (length (filter (`notElem` repeatable) names) == length (nub (filter (`notElem` repeatable) names))) $
+      Left ("invalid_query_parameter", "only " <> Text.intercalate " and " repeatable <> " may be repeated")
     unless (all (\(name, operand) -> name == "filter" || isJust operand) query) $
       Left ("invalid_query_parameter", "query parameters require a value")
     let exclusions = [operand | ("exclude", operand) <- query]
-    unless (length (nub exclusions) <= 20 && all (maybe False (not . BS.null)) exclusions) (Left ("invalid_funnel_exclusion", "at most 20 distinct nonempty exclusions are supported"))
+    unless (requestPath == ["metrics", "paths"] || length (nub exclusions) <= 20 && all (maybe False (not . BS.null)) exclusions) (Left ("invalid_funnel_exclusion", "at most 20 distinct nonempty exclusions are supported"))
     let rawFilters = [operand | ("filter", operand) <- query]
     unless (length rawFilters <= maxFilters) (Left ("invalid_filter", "at most eight filters are supported"))
     unless (sum (map (maybe 0 BS.length) rawFilters) <= maxFilterBytes) (Left ("invalid_filter", "decoded filters are limited to 16384 UTF-8 bytes"))
     filters <- first ("invalid_filter",) $ traverse parseOne rawFilters
     void (first ("invalid_filter",) (validateMetricFilters filters))
   where
+    requestPath = decodePathSegments (rawPathInfo request)
     query = queryString request
     parseOne Nothing = Left "filter requires a JSON object"
     parseOne (Just bytes) = first (const "filter must be UTF-8") (Text.decodeUtf8' bytes) >>= parseMetricFilter
@@ -45,6 +47,7 @@ allowedParameters = \case
     | endpoint `elem` ["events", "feature-adoption", "conversion", "revenue", "organizations", "custom"] ->
         Just ["from", "to", "groupBy", "timeGrain", "filter"]
   ["metrics", "sessions"] -> Just ["from", "to", "groupBy", "timeGrain", "filter", "measure", "includeBots"]
+  ["metrics", "paths"] -> Just ["from", "to", "start", "end", "steps", "top", "window", "events", "exclude", "by", "filter"]
   ["metrics", "funnel"] -> Just ["from", "to", "steps", "window", "mode", "measure", "exclude", "groupBy", "filter"]
   ["metrics", "retention"] -> Just ["from", "to", "groupBy", "timeGrain", "filter", "days", "mode", "cohort", "includeBots"]
   ["metrics", "experiments"] -> Just ["from", "to", "experiment", "timeGrain", "measure", "groupBy", "filter"]

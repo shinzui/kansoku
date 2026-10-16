@@ -199,6 +199,7 @@ test-suite kansoku-core-test
     Kansoku.Metrics.FunnelReferenceSpec
     Kansoku.Metrics.HandlerSpec
     Kansoku.Metrics.LimitsSpec
+    Kansoku.Metrics.PathsSpec
     Kansoku.Metrics.RoutingSpec
     Kansoku.Metrics.SessionIntegrationSpec
     Kansoku.Metrics.TraitsSpec

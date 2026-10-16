@@ -208,6 +208,7 @@ problemCatalog =
     ("malformed_request", 400),
     ("validation_failed", 400),
     ("event_id_conflict", 400),
+    ("invalid_path_options", 400),
     ("invalid_funnel_steps", 400),
     ("invalid_funnel_step", 400),
     ("invalid_funnel_window", 400),

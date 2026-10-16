@@ -145,3 +145,7 @@ identity-bench:
 # Own disposable stores and verify public cohort management and metric selection.
 cohorts-acceptance: build-with-tests
     python3 scripts/cohorts_acceptance.py
+
+# Own a scratch ClickHouse and verify bounded paths, page flows and reverse traversal.
+paths-acceptance: build-with-tests
+    python3 scripts/paths-acceptance.py

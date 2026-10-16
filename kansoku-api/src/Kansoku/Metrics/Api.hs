@@ -7,6 +7,7 @@ module Kansoku.Metrics.Api
     UserWindow (..),
     RetentionMode (..),
     CohortMode (..),
+    PathBy (..),
     FunnelMode (..),
     FunnelMeasure (..),
     ExperimentMeasure (..),
@@ -151,6 +152,18 @@ instance ToHttpApiData CohortMode where
   toUrlPiece WindowCohort = "window"
   toUrlPiece LifetimeCohort = "lifetime"
 
+data PathBy = PathEvent | PathRoute
+  deriving stock (Generic, Eq, Show)
+
+instance FromHttpApiData PathBy where
+  parseUrlPiece "event" = Right PathEvent
+  parseUrlPiece "route" = Right PathRoute
+  parseUrlPiece _ = Left "by must be event or route"
+
+instance ToHttpApiData PathBy where
+  toUrlPiece PathEvent = "event"
+  toUrlPiece PathRoute = "route"
+
 data FunnelMode = FunnelSequential | FunnelStrict
   deriving stock (Generic, Eq, Show)
 
@@ -226,6 +239,24 @@ data MetricsRoutes mode = MetricsRoutes
   { events :: mode :- MetricsAuth :> "metrics" :> "events" :> MetricQuery,
     pageViews :: mode :- MetricsAuth :> "metrics" :> "page-views" :> WebMetricQuery,
     sessions :: mode :- MetricsAuth :> "metrics" :> "sessions" :> SessionQuery,
+    paths ::
+      mode
+        :- MetricsAuth
+          :> "metrics"
+          :> "paths"
+          :> Description "Exact canonical-user paths ordered by millisecond time then event ID. by=event (default) requires start or end; by=route selects nonbot page_view rows, collapses consecutive identical routes, and permits entry mode with neither anchor. start uses the first occurrence; end uses the last and walks backwards. Anchors are mutually exclusive. steps=1..10 (default 5) counts transitions; top=1..20 (default 10) retains K transitions per step and sums the remainder into one (other) to (other) transition. window=1..7776000 seconds (default range capped at 90 days) is inclusive from the anchor. events/exclude are comma-separated event names, at most 100 each; exclude wins. Filters select rows before anchoring. Exhausted sequences emit (end), including in reverse mode. group={step,from,to}, value=users, bucket=null; order step ascending, value descending, from then to. Positive half-open range at most 366 days; complete responses, native work budgets and global 10000-point cap."
+          :> QueryParam' '[Required] "from" Day
+          :> QueryParam' '[Required] "to" Day
+          :> QueryParam "start" Text
+          :> QueryParam "end" Text
+          :> QueryParam "steps" Int
+          :> QueryParam "top" Int
+          :> QueryParam "window" Int
+          :> QueryParam "events" Text
+          :> QueryParam "exclude" Text
+          :> QueryParam "by" PathBy
+          :> QueryParams "filter" MetricFilter
+          :> MetricResponse,
     funnel ::
       mode
         :- MetricsAuth

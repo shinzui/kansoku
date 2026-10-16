@@ -5,7 +5,7 @@ description: Bound metric inputs and final aggregate cardinality, returning a co
 docId: ADR-9
 status: Accepted
 date: 2026-10-15
-timestamp: 2026-10-15T20:56:24Z
+timestamp: 2026-10-16T11:28:35Z
 generated:
   by: process:codex
   at: 2026-10-15T04:44:00Z
@@ -47,7 +47,8 @@ not database scan cost or execution duration.
 Ordering is a closed service-owned choice. Ordinary series use bucket then typed dimensions; exposure series use bucket, experiment and
 variant; experiment conversion uses typed measure then variant; retention uses cohort then
 numeric offset, plain funnels
-use numeric step, and experiment funnels use variant then numeric step. Hidden typed
+use numeric step, and experiment funnels use variant then numeric step. Paths use numeric
+step, user count descending, source name and target name ascending, including folded points. Hidden typed
 sort columns pass through the aggregate subquery but stay out of the wire projection.
 The driver returns its block list in reverse arrival order; execution restores block
 order before concatenating, independently of its existing per-block field repairs.
@@ -94,3 +95,30 @@ cohorts with offsets 1, 2 and 10, ten-step plain and per-variant funnels, and re
 through the shared size-one pool. Large, small and tiny-block settings exercise block
 arrival order independently of field decoding. Required fixtures own disposable
 ClickHouse processes and fail missing prerequisites or zero/pending examples.
+
+
+## Paths and page flows
+
+`/metrics/paths` uses one account-scoped canonical-user sequence ordered by millisecond
+occurred_at then immutable event_id. Forward traversal uses the first matching start;
+reverse traversal uses the last matching end and emits anchor-to-predecessor edges.
+Event mode requires an anchor. Route mode selects nonbot page_view rows with nonempty
+path(url), allows unanchored entry mode, and collapses consecutive identical paths after
+anchor/window selection in traversal order. Filters and event allow/deny lists select
+rows before anchoring. These are user flows within the query interval, not session flows.
+
+At most ten transitions are emitted per user, with an inclusive window of at most 90 days
+from the physical anchor, clipped to the query date range. Exhaustion emits one `(end)`
+edge when a step remains, in either direction. It means no further observed event in the
+selected window, not permanent churn. Step truncation never invents an end edge.
+
+Aggregate exact unique users per step/source/target, then rank by users descending and
+source/target ascending. Keep the requested K (1..20) per step and fold the remaining
+transitions into one `(other)` source and target with summed users. Combining origins
+requires the synthetic source; assigning that sum to a retained real source would be
+misleading. Each subject has one transition per step, so the folded sum is exact within
+the step. Wire groups contain step/from/to, with no bucket. The public bounds imply at
+most 210 points, but the same final 10001-row overflow witness and resource-failure
+boundary still apply. No input-event truncation is permitted. Event lists are bounded to
+100 validated names each and route anchors to 1024 UTF-8 bytes; text values are native
+parameters. The `(end)` and `(other)` markers are reserved synthetic labels.

@@ -28,7 +28,7 @@ import Kansoku.Cohort.Store qualified as CohortStore
 import Kansoku.Event (AccountId, defaultRegistry)
 import Kansoku.Exception (trySynchronous)
 import Kansoku.Logging (logError, runLogStderr)
-import Kansoku.Metrics.Api (AcquisitionMeasure (..), CohortMode (..), ExperimentMeasure (..), FunnelMeasure (..), FunnelMode (..), MetricResult, MetricsRoutes (..), RetentionMode (..), SessionMeasure (..), TimeGrain (..), UserWindow (..))
+import Kansoku.Metrics.Api (AcquisitionMeasure (..), CohortMode (..), ExperimentMeasure (..), FunnelMeasure (..), FunnelMode (..), MetricResult, MetricsRoutes (..), PathBy (..), RetentionMode (..), SessionMeasure (..), TimeGrain (..), UserWindow (..))
 import Kansoku.Metrics.Filter (MetricFilter)
 import Kansoku.Metrics.Filter qualified as Filter
 import Kansoku.Metrics.Query qualified as Query
@@ -50,6 +50,7 @@ metricsServerUsing pg pool =
     { events = metricHandler "events",
       pageViews = webMetricHandler "page_views",
       sessions = sessionsHandler,
+      paths = pathsHandler,
       funnel = funnelHandler,
       retention = retentionHandler,
       acquisition = acquisitionHandler,
@@ -99,6 +100,23 @@ metricsServerUsing pg pool =
     sessionsHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> [MetricFilter] -> Maybe SessionMeasure -> Maybe Bool -> Handler (KansokuResult MetricResult)
     sessionsHandler (MetricsPrincipal principal) fromDay toDay groupBy timeGrain filters measure bots =
       effToHandler (withCohorts pg (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain filters) (\request -> Query.runSessionMetric pool (fromMaybe SessionCount measure) request {Query.includeBots = fromMaybe False bots}))
+
+    pathsHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe Text -> Maybe Int -> Maybe Int -> Maybe Int -> Maybe Text -> Maybe Text -> Maybe PathBy -> [MetricFilter] -> Handler (KansokuResult MetricResult)
+    pathsHandler (MetricsPrincipal principal) fromDay toDay start end steps top window events excludes by filters =
+      withDateRange fromDay toDay $
+        let options =
+              Query.PathOptions
+                (fromMaybe PathEvent by)
+                start
+                end
+                (fromMaybe 5 steps)
+                (fromMaybe 10 top)
+                (fromMaybe (fromInteger (min 7776000 (diffDays toDay fromDay * 86400))) window)
+                (maybe [] (map Text.strip . Text.splitOn ",") events)
+                (maybe [] (map Text.strip . Text.splitOn ",") excludes)
+         in case Query.validatePathOptions options of
+              Left (QueryLimitError code message) -> pure (KansokuBadRequest (badRequest code message))
+              Right () -> effToHandler (withCohorts pg (queryRequest (principal ^. #accountId) fromDay toDay Nothing Nothing filters) (\request -> Query.runPaths defaultRegistry pool request options))
 
     funnelHandler :: MetricsPrincipal -> Day -> Day -> Text -> Maybe Int -> Maybe FunnelMode -> Maybe FunnelMeasure -> [Text] -> Maybe Text -> [MetricFilter] -> Handler (KansokuResult MetricResult)
     funnelHandler (MetricsPrincipal principal) fromDay toDay stepsParam requestedWindow mode measure excludes groupBy filters =

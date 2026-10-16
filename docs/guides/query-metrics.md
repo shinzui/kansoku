@@ -15,6 +15,7 @@ The public limits are fixed:
 | Input or answer | Limit |
 | --- | --- |
 | Date range | Positive, at most 366 days |
+| Paths | 1..10 transitions; top 1..20 per step; window 1..7776000 seconds |
 | Ordered funnel | 1..20 non-empty steps; repeated names retain their meaning |
 | Retention offsets | At most 32 distinct values in 1..365, normalized to ascending unique order |
 | Complete metric answer | At most 10,000 points |
@@ -29,7 +30,7 @@ is still 90 days within the bounded query interval.
 
 All bounds fail with HTTP 400, `application/problem+json`, and `retryable: false`.
 Stable codes are `invalid_date_range`, `query_range_too_large`,
-`too_many_funnel_steps`, `invalid_retention_days`, `too_many_retention_days`, and
+`invalid_path_options`, `too_many_funnel_steps`, `invalid_retention_days`, `too_many_retention_days`, and
 `metric_result_too_large`. A result overflow returns no partial metric payload:
 
 ```json
@@ -103,6 +104,7 @@ Invalid JSON/filter grammar or incompatible filter types return `invalid_filter`
 | acquisition | `groupBy` (default channel), `timeGrain`, repeatable session-attribute `filter`, `measure` (sessions/users), `includeBots` (default false) |
 | sessions | `groupBy`, `timeGrain`, repeatable session-attribute `filter`, `measure` (count/bounce_rate/average_duration_seconds), `includeBots` (default false) |
 | conversion | `groupBy` (no prop), repeatable `filter`; timeGrain rejected |
+| paths | optional `start` or `end`, `by`, `steps`, `top`, `window`, CSV `events`, CSV `exclude`, repeatable `filter`; event mode requires an anchor |
 | funnel | required `steps`; optional `window`, `mode`, `measure`, repeatable `exclude`, `groupBy`, repeatable `filter` |
 | users | `groupBy`, `timeGrain`, repeatable `filter`, `window` (calendar/rolling7/rolling30), `includeBots` |
 | stickiness, lifecycle | `groupBy`, `timeGrain` (day only), repeatable `filter`, `includeBots` |
@@ -145,6 +147,7 @@ conversion returns a single zero when its denominator is zero.
 | `/metrics/page-views` | Distinct canonical `page_view` event IDs with the same filters and default row-level bot exclusion at every grain. |
 | `/metrics/acquisition` | Complete retained web sessions, first-touch attribution and exact primary-subject users; defaults to sessions grouped by channel, excluding any-bot sessions. |
 | `/metrics/sessions` | Whole retained web sessions, assigned to their earliest event bucket; count, bounce rate and observed duration, excluding any-bot sessions by default. |
+| `/metrics/paths` | Exact canonical-user event paths or page flows, forward or backward. |
 | `/metrics/funnel` | Exact identity-resolved users completing ordered event steps. |
 | `/metrics/retention` | Exact closed-day on/on-or-after retention for window or retained-history lifetime cohorts, omitting immature offsets. |
 | `/metrics/feature-adoption` | Exact identity-resolved users emitting `feature_used`, grouped by its `feature` property by default. |
@@ -196,6 +199,74 @@ curl --fail-with-body --get http://localhost:8080/metrics/revenue \
   --data-urlencode 'filter={"dimension":"prop:amount","op":"gt","value":0}' \
   --data-urlencode 'filter={"dimension":"prop:plan","op":"in","value":["pro","enterprise"]}' | jq .
 ```
+
+## Paths
+
+`GET /metrics/paths` returns the most common transitions after an event or before an
+end event. Each canonical user contributes one sequence, ordered by stored millisecond
+`occurred_at`, then immutable `event_id`; replayed events are counted once. `start`
+selects the first matching occurrence. `end` selects the last occurrence and walks
+backwards, so step 1 goes from the end event to its immediate predecessor. They are
+mutually exclusive. A missing anchor returns no points.
+
+```bash
+curl --fail-with-body --get http://localhost:8080/metrics/paths \
+  -H "Authorization: Bearer $TOKEN" \
+  --data-urlencode from=2026-07-01 --data-urlencode to=2026-08-01 \
+  --data-urlencode start=signup_completed --data-urlencode steps=4 \
+  --data-urlencode top=5 --data-urlencode exclude=page_view,page_leave
+```
+
+Use `end=payment_completed` instead of `start` for reverse paths. `steps` counts
+transitions away from the anchor, defaults to 5, and accepts 1..10. `window` is an
+inclusive elapsed-time bound in seconds from the anchor, defaults to the query
+range capped at 90 days, and accepts 1..7776000. Both directions stay inside the
+half-open date range. Exhaustion within that observed range/window emits one final
+transition to `(end)` if there is a remaining step; this means no further observed
+event, not proof that the user permanently left. Reverse paths use the same marker
+when no earlier observed event remains. Reaching the step limit does not emit it.
+
+`by=route` considers only nonbot `page_view` rows with nonempty `path(url)`. Anchors
+are paths beginning with `/` (at most 1024 UTF-8 bytes); query strings and fragments
+are not part of the path. Consecutive identical paths collapse after selecting the
+anchor and time window. Omit both anchors for entry mode: each user's first selected
+page view begins the sequence. This is a per-user flow over the requested interval,
+not a per-session flow.
+
+```bash
+curl --fail-with-body --get http://localhost:8080/metrics/paths \
+  -H "Authorization: Bearer $TOKEN" \
+  --data-urlencode from=2026-07-01 --data-urlencode to=2026-08-01 \
+  --data-urlencode by=route --data-urlencode start=/pricing \
+  --data-urlencode steps=3 --data-urlencode top=5
+```
+
+`by=event` is the default and requires `start` or `end`. `events` is an optional
+comma-separated allowlist of event names; `exclude` is a comma-separated denylist.
+Each accepts at most 100 names using the existing event-name grammar; blank names
+are invalid and exclusions win. Repeated names in a sequence remain separate steps
+in event mode. Repeated `filter` parameters use the normal bounded JSON grammar.
+All selection runs before anchoring, so a filter can remove the anchor or an
+intervening event. Property filters require a finite registered event scope from
+`events`, a positive event-name filter, or route mode's `page_view` scope.
+`groupBy`, `timeGrain` and `includeBots` are unsupported here.
+
+Points have `bucket: null`, `group: {"step":"1","from":"signup_completed",
+"to":"onboarding_started"}` and `value` equal to unique users. `top` defaults to
+10 and accepts 1..20. For each step, rank transitions by users descending, then
+source and target names ascending. Keep K transitions and sum the rest into one
+`from="(other)", to="(other)"` point: its source represents combined origins, not a
+real edge from a retained node. Because each user has one transition per step,
+this sum is still a unique-user count within that step. Synthetic `(end)` and
+`(other)` names cannot collide with valid event names or `/`-prefixed route anchors.
+Final ordering is numeric step ascending, value descending, then source and target
+names ascending, including the folded point. At most `steps * (top + 1)` points
+are possible (210 at public maxima); the shared 10000-point guard still applies.
+
+Invalid controls return permanent HTTP 400 `invalid_path_options`; malformed parsed
+values use the shared `malformed_request` problem. Date, filter, authentication,
+resource-limit and storage problems keep their normal codes. Haskell clients can
+use `pathsClient` or `Metrics.paths metricsClient`, both derived from the served API.
 
 ## Ordered funnels
 

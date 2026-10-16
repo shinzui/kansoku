@@ -88,7 +88,7 @@ type instance AuthClientData (AuthProtect "kansoku-beacon") = ()
 
 spec :: Spec
 spec = describe "Kansoku analytics route dispatch" $ do
-  it "routes all seventeen metrics, both ingest operations, and the public schema catalog" $
+  it "routes all eighteen metrics, both ingest operations, and the public schema catalog" $
     Warp.testWithApplication (pure sentinelApplication) $ \port -> do
       manager <- HTTP.newManager HTTP.defaultManagerSettings
       traverse_ (assertMetricRoute manager port) metricRoutes
@@ -138,6 +138,7 @@ metricRoutes =
     ("page-views", "page-views"),
     ("sessions", "sessions"),
     ("funnel", "funnel"),
+    ("paths", "paths"),
     ("retention", "retention"),
     ("acquisition", "acquisition"),
     ("feature-adoption", "feature-adoption"),
@@ -274,6 +275,7 @@ sentinelMetricsServer =
     { Metrics.events = standardSentinel "events",
       Metrics.pageViews = webSentinel "page-views",
       Metrics.sessions = \principal fromDay toDay groupBy grain filters _measure _bots -> standardSentinel "sessions" principal fromDay toDay groupBy grain filters,
+      Metrics.paths = \_ _ _ _ _ _ _ _ _ _ _ _ -> pure (Response.KansokuOk (sentinelResult "paths")),
       Metrics.funnel = funnelSentinel,
       Metrics.retention = retentionSentinel,
       Metrics.acquisition = \principal fromDay toDay groupBy grain filters _measure _bots -> standardSentinel "acquisition" principal fromDay toDay groupBy grain filters,

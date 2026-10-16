@@ -5,6 +5,10 @@ module Kansoku.Metrics.Limits
     maxRetentionDays,
     maxRetentionOffset,
     maxMetricPoints,
+    maxPathSteps,
+    maxPathTop,
+    maxPathWindowSeconds,
+    maxPathEvents,
   )
 where
 
@@ -16,3 +20,9 @@ maxFunnelSteps = 20
 maxRetentionDays = 32
 maxRetentionOffset = 365
 maxMetricPoints = 10000
+
+maxPathSteps, maxPathTop, maxPathWindowSeconds, maxPathEvents :: Int
+maxPathSteps = 10
+maxPathTop = 20
+maxPathWindowSeconds = 7776000
+maxPathEvents = 100
