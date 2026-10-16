@@ -5,7 +5,7 @@ description: Coordinate cross-store jobs with persisted fences, protect stale wr
 docId: ADR-17
 status: Accepted
 date: 2026-10-16
-timestamp: 2026-10-16T03:24:40Z
+timestamp: 2026-10-16T22:55:08Z
 generated:
   by: process:codex
   at: 2026-10-16T02:47:59Z
@@ -109,3 +109,20 @@ manual database restoration require operator policy, including retained tombston
 the tool cannot find unknown personal values embedded in arbitrary JSON. Owned source, packaged
 CLI and ordinary public workflow acceptance pass, including seven non-skipped administrative
 scenario families, backend-lifetime fencing and native old-block replay under retention.
+
+## Native schema administration
+
+[ADR-22](0022-explicit-clickhouse-migrations-and-persistent-administrative-sessions.md)
+extends the fence with a separate ClickHouse migration-session foreign key. New and resumed
+data jobs refuse that owner, while migration sessions refuse unfinished data jobs. Both share
+the existing administrator/traffic locks in the same order. PostgreSQL application migration
+0007 replaces transaction admission additively; applied 0004 bytes remain unchanged.
+
+Migration entries preserve target/server/ledger/session identities, predecessor counters,
+failed/interrupted outcomes and exact uncertain append receipts. Every mutating successor
+requires external client exclusion and complete native drain, even after clean prior entries;
+a backend lock release cannot prove that a native request cannot complete or arrive later.
+Ordinary up/finish cannot clear failed outcomes merely because history later looks current.
+Explicit receipt reconciliation and native repair retain the fence until resolved, current
+history and fresh external evidence permit completion. PostgreSQL-only job recovery cannot
+clear an unfinished migration session.

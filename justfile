@@ -11,11 +11,11 @@ create-database:
 
 # Build everything (library, server, tests).
 build:
-    cabal build all
+    clickhouse-migrate-embed-build --input kansoku-server migrations/clickhouse/manifest.json -- build all
 
 # Run the unit tests.
 test:
-    cabal test all
+    clickhouse-migrate-embed-build --input kansoku-server migrations/clickhouse/manifest.json -- test all
 
 # Regenerate the checked-in OpenAPI document from the served route types.
 openapi:
@@ -53,16 +53,19 @@ terminology-check:
 guides-check:
     okf validate docs/guides --strict --profile docs/guides/profile.dhall --profile-enforce --log-enforce
 
-# Apply unapplied ClickHouse migrations in filename order, recording each in
-# analytics.schema_migrations. Migration files are immutable once applied.
-ch-migrate:
-    ./db/clickhouse/migrate.sh
+# Forward native migration/audit/session arguments without changing their quoting.
+[positional-arguments]
+ch-migrate *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    clickhouse-migrate-embed-build --input kansoku-server migrations/clickhouse/manifest.json -- build kansoku-server:exe:kansoku-ch-migrate >&2
+    migration_binary="$(cabal list-bin kansoku-server:exe:kansoku-ch-migrate)"
+    exec "$migration_binary" "$@"
 
-# Drop the analytics database (including the migration ledger) and replay all
-# migrations from scratch. Dev-only; destroys all analytics data.
+# A separate current native ledger makes analytics-only reset unsafe.
 ch-reset:
-    clickhouse-client --port $CLICKHOUSE_TCP_PORT --query "DROP DATABASE IF EXISTS analytics"
-    ./db/clickhouse/migrate.sh
+    @echo 'ch-reset is retired. Create a fresh owned stack with new roots and identities; preserve existing data until its owner chooses disposal.' >&2
+    @exit 1
 
 # Load the EP-5 ClickHouse verification fixtures.
 ch-fixtures-ep5:
@@ -107,7 +110,7 @@ up:
 
 # Build every local component, including test executables.
 build-with-tests:
-    cabal build all --enable-tests
+    clickhouse-migrate-embed-build --input kansoku-server migrations/clickhouse/manifest.json -- build all --enable-tests
 
 # Non-mutating source formatting gate.
 format-check:
@@ -177,3 +180,17 @@ json-storage-acceptance: build-with-tests
 # Prove saved acceptance fixtures release only resources they own.
 fixture-isolation-acceptance: build-with-tests
     python3 scripts/acceptance_fixture_isolation.py
+
+# Public-library integration proof on a digest-qualified owned native server.
+ch-migrations-component:
+    python3 scripts/check_clickhouse_conversion.py
+    clickhouse-migrate-embed-build --input kansoku-server migrations/clickhouse/manifest.json -- test kansoku-server:clickhouse-migrations -fnative-migration-tests --test-show-details=direct
+
+# Required non-skipping acceptance of the actual packaged CLI/coordinator.
+ch-migrations-acceptance:
+    python3 scripts/clickhouse_migrations_acceptance.py --packaged
+
+# Independent archive packaging and content-qualified rebuild guarantees.
+ch-migrations-source:
+    python3 scripts/check_clickhouse_embedding.py
+    python3 scripts/check_clickhouse_sdist.py

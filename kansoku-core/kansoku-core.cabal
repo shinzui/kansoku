@@ -44,6 +44,7 @@ library
     Kansoku
     Kansoku.Admin
     Kansoku.Admin.ClickHouse
+    Kansoku.Admin.Coordination
     Kansoku.Admin.Jobs
     Kansoku.Admin.Keys
     Kansoku.Admin.Store

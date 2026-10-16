@@ -32,3 +32,27 @@ jobs:
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 7
+
+  clickhouse-macos-proof:
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
+      - name: Require qualified architecture
+        run: test "$(uname -m)" = arm64
+      - name: Source archive and embedding qualification
+        run: nix develop -c just ch-migrations-source
+      - name: Public migration component proof
+        run: nix develop -c just ch-migrations-component
+      - name: Packaged service acceptance
+        run: nix develop -c just acceptance
+      - name: Sanitized acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: acceptance-evidence-macos
+          path: .dev/acceptance/run-*/sanitized/*.log
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 7

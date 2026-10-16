@@ -5,7 +5,7 @@ description: Expose explicit versioned single-tenant projections through constra
 docId: ADR-18
 status: Accepted
 date: 2026-10-16
-timestamp: 2026-10-16T12:58:00Z
+timestamp: 2026-10-16T22:55:08Z
 generated:
   by: process:codex
   at: 2026-10-16T04:23:20Z
@@ -75,3 +75,12 @@ explicit matching population predicates. The actual constrained reader reproduce
 GrowthBook 5.1.0 passes four real adapter cases; Grafana 13.2.4/plugin 4.22.1 passes datasource
 health, saved panel import/readback and real panel query. These are local integration proofs,
 not claims of a deployed consumer service. Reproduction is in the consumer-conformance guide.
+
+## Native migration sessions
+
+Pause external reader schedules through the complete native migration session described in
+[ADR-22](0022-explicit-clickhouse-migrations-and-persistent-administrative-sessions.md),
+including diagnosis and repair. Resume only after deliberate current-history verification and
+session completion. The PostgreSQL fence cannot stop direct SQL readers. The native baseline
+retains the migration operator as SQL SECURITY DEFINER; that identity must retain underlying
+SELECT privileges, and the existing constrained reader role/grants remain operator-owned.

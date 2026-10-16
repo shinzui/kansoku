@@ -56,6 +56,7 @@ runJob config connection kind requestedScope confirm output = do
       withNative config $ \native -> previewJob native connection tables kind scope
     else do
       administrativeLock connection
+      requireNoMigrationSession connection
       pgScript connection "BEGIN"
       active <- query connection "SELECT to_jsonb(active_job) FROM kansoku.maintenance_fence WHERE singleton AND $1 IS NOT NULL FOR UPDATE" A.Null
       unless (active == A.Null) (fail "an unfinished maintenance job must be resumed")
@@ -72,6 +73,7 @@ resumeJob config connection parameters confirm output = do
     then pure (receipt job)
     else do
       administrativeLock connection
+      requireNoMigrationSession connection
       active <- query connection "SELECT to_jsonb(active_job) FROM kansoku.maintenance_fence WHERE singleton AND $1 IS NOT NULL" A.Null
       unless (active == field "id" job) (fail "maintenance fence ownership differs from resumed job")
       tables <- queueTables connection (config ^. #eventsQueueName)
@@ -214,3 +216,8 @@ reserveExpiredNative native connection scope = page "" ""
         saveDispositions connection [A.object ["account_id" A..= account, "event_id" A..= eventId, "delete_event" A..= True, "scrub_identity" A..= False, "scrub_traits" A..= False] | (account, eventId) <- identities]
         let (nextAccount, nextEvent) = last identities
         page nextAccount nextEvent
+
+requireNoMigrationSession :: PQ.Connection -> IO ()
+requireNoMigrationSession connection = do
+  ready <- query connection "SELECT to_jsonb(active_migration_session IS NULL) FROM kansoku.maintenance_fence WHERE singleton AND $1 IS NOT NULL" A.Null
+  unless (ready == A.Bool True) (fail "unfinished ClickHouse migration session owns the maintenance fence")

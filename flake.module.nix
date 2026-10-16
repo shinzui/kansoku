@@ -22,6 +22,7 @@
           sha256 = "0b95rhp3p0pzgdfvh6945mgrjg3b6nlyhlxvm96vry1r2ga8fp6a";
         };
       });
+      qualifiedClickhouse = import ./nix/clickhouse-qualified.nix { inherit pkgs system; };
       haskellPackages = pkgs.haskell.packages."ghc9124".override {
         overrides = self: super:
           let
@@ -204,6 +205,12 @@
             servant-health = callHackageNoCheck "servant-health" "0.1.0.0" "1g24jnnijpap99vkmmqmkinlw18pg0hd23arrijgss430y63iv4x";
             servant-openapi-hs = callHackageNoCheck "servant-openapi-hs" "5.1.0" "19mvvlzfk7ffh5gbmqhpy587rjjd0xcgydbkcy1b48wxx061h8im";
 
+            # Released mori://shinzui/clickhouse-migrate; preserve bounds and checks.
+            clickhouse-migrate = self.callHackageDirect { pkg = "clickhouse-migrate"; ver = "0.1.0.0"; sha256 = "0xdisgai66ljqn4w316d0w0gqbgmalaf0avqig1bajs5kbps59v9"; } { };
+            clickhouse-migrate-embed = self.callHackageDirect { pkg = "clickhouse-migrate-embed"; ver = "0.1.0.0"; sha256 = "0wrzsm783asvc8fqapg88p261mkn7dnkyv7sp0g95rj6pw864m8g"; } { };
+            clickhouse-migrate-cli = self.callHackageDirect { pkg = "clickhouse-migrate-cli"; ver = "0.1.0.0"; sha256 = "12m6pwdf1cn826ffjcklc30zbv203nkgn5lvnkvlyznzhmnfifpd"; } { };
+            clickhouse-migrate-test-support = self.callHackageDirect { pkg = "clickhouse-migrate-test-support"; ver = "0.1.0.0"; sha256 = "143pc7mh1rbzd9a958cx89s2a16zxy6j0m3xsgm3r6pn1sqmhrr3"; } { };
+
             pg-migrate = callHackageNoCheck "pg-migrate" "1.1.0.0" "103y2bddn50pvrjnlhnfcqznlfihp68bpm72xg8s9xv2x8kv3s2b";
             pg-migrate-cli = callHackageNoCheck "pg-migrate-cli" "1.1.0.0" "1mc2scspfr1p872lxxl8pcpgf3gm2kp2xhjfwad9xv2wcnz1dj6w";
             pg-migrate-embed = callHackageNoCheck "pg-migrate-embed" "1.1.0.0" "01gxqrcqf9l6q2b6g6f1cnxymwkqlwn9cq34n5dj5whgh08gh335";
@@ -241,6 +248,8 @@
     {
       haskellProject.extraDevPackages = [
         geoipReader
+        qualifiedClickhouse
+        haskellPackages.clickhouse-migrate-embed
         pkgs.hurl
         pkgs.vacuum-go
         pkgs.python3
@@ -249,6 +258,13 @@
           exec nix run github:shinzui/okf/b57510200f949a72d48cb009d932be1d1cc11888 -- "$@"
         '')
       ];
+      # Extend the managed shell through its existing named compiler shell.
+      # The default shell must put the qualified artifact before the template tool.
+      devShells.default = pkgs.lib.mkForce (config.devShells.ghc9124.overrideAttrs (old: {
+        shellHook = (old.shellHook or "") + ''
+          export PATH="${qualifiedClickhouse}/bin:$PATH"
+        '';
+      }));
       treefmt.settings.global.excludes = [ "vendor/**" ];
       packages = {
         default = kansokuServer;
@@ -256,11 +272,20 @@
         kansoku-client = kansokuClient;
         kansoku-core = kansokuCore;
         kansoku-server = kansokuServer;
+        kansoku-ch-migrate-upgrade-proof = pkgs.haskell.lib.compose.overrideCabal
+          (old: {
+            configureFlags = (old.configureFlags or [ ]) ++ [ "-fmigration-acceptance-probe" ];
+          })
+          kansokuServer;
+        kansoku-ch-migrate = kansokuServer // {
+          meta = kansokuServer.meta // { mainProgram = "kansoku-ch-migrate"; };
+        };
         kansoku-admin = kansokuServer // {
           meta = kansokuServer.meta // {
             mainProgram = "kansoku-admin";
           };
         };
+        clickhouse-qualified = qualifiedClickhouse;
         libmaxminddb = geoipReader;
       };
     };

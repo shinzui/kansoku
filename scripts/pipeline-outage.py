@@ -35,6 +35,8 @@ def main():
     root = Path(tempfile.mkdtemp(prefix='outage-', dir=parent))
     connection = os.environ['KANSOKU_OUTAGE_PG']
     clean = {key: value for key, value in os.environ.items() if not key.startswith(('PG', 'CLICKHOUSE', 'KANSOKU_', 'OTEL_'))}
+    if Path(args.server).parent.name == 'bin':
+        clean.update(KANSOKU_CH_MIGRATION_BINARY=str(Path(args.server).with_name('kansoku-ch-migrate')),KANSOKU_PG_MIGRATION_BINARY=str(Path(args.server).with_name('kansoku-migrate')))
     clean['PG_CONNECTION_STRING'] = connection
     processes = []
     account = 'outage_' + uuid.uuid4().hex

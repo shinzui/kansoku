@@ -5,8 +5,12 @@ packages:
   ./kansoku-client
   ./vendor/ClickHaskell
 
-index-state: 2026-10-14T22:38:45Z
+index-state: 2026-10-16T20:50:11Z
 constraints:
+  clickhouse-migrate ==0.1.0.0,
+  clickhouse-migrate-embed ==0.1.0.0,
+  clickhouse-migrate-cli ==0.1.0.0,
+  clickhouse-migrate-test-support ==0.1.0.0,
   hs-opentelemetry-instrumentation-wai ==1.0.0.0,
   hs-opentelemetry-exporter-in-memory ==1.0.0.0,
   servant-health ==0.1.0.0,

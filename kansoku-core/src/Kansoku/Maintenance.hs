@@ -48,7 +48,7 @@ withTraffic (MaintenancePool pool) action = mask $ \restore -> do
   result <- try $ restore $ do
     locked <- coordination $ timeout 500_000 (pg connection "SELECT to_jsonb(pg_try_advisory_lock_shared(726401,1)) WHERE $1 IS NOT NULL" A.Null)
     unless (locked == Just (A.Bool True)) (throwIO MaintenanceUnavailable)
-    ready <- coordination $ timeout 500_000 (pg connection "SELECT to_jsonb(active_job IS NULL) FROM kansoku.maintenance_fence WHERE singleton AND $1 IS NOT NULL" A.Null)
+    ready <- coordination $ timeout 500_000 (pg connection "SELECT to_jsonb(active_job IS NULL AND active_migration_session IS NULL) FROM kansoku.maintenance_fence WHERE singleton AND $1 IS NOT NULL" A.Null)
     unless (ready == Just (A.Bool True)) (throwIO MaintenanceUnavailable)
     action connection
   case result of

@@ -2,6 +2,8 @@
 
 ## 2026-10-16
 
+* **Update**: Document PostgreSQL-first native initialization, retained identities, explicit sessions/drain/repair and qualification limits; add DOC-13 migration runbook.
+
 * **Update**: Document current organization traits inside saved cohort event conditions, including nullable filters and fixed event attribution.
 
 * **Update**: DOC-6: document the fixture-isolation gate and scenario-owned saved-resource cleanup convention.

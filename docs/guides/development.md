@@ -6,13 +6,14 @@ docId: DOC-6
 tags: ["development", "testing", "contracts", "haskell"]
 generated:
   by: process:codex
-  at: "2026-10-16T17:56:53Z"
+  at: "2026-10-16T22:48:56Z"
 ---
 
 # Develop Kansoku
 
-Use `nix develop`, then `cabal build all --enable-tests` and `cabal test all` for
-local builds and tests. Storage/live-client tests report pending when their optional
+Use `nix develop`, then `just build-with-tests` and `just test` for
+local builds and tests. These use the content-qualified embedding build driver so a SQL change
+with preserved timestamps cannot leave the compiled migration plan stale. Storage/live-client tests report pending when their optional
 prerequisites are absent; a passing optional run does not establish executable or
 database acceptance. The dedicated isolated commands described in the plans require
 real native cases and fail missing prerequisites.
@@ -83,3 +84,29 @@ saved metrics before clearing and deleting their cohorts. Only an already-absent
 is benign; other cleanup errors fail the run. Keep exact pagination assertions and release
 only the resources the scenario registered. Historical static-membership facts may remain
 in disposable stores after active membership is explicitly cleared.
+
+## Native migration acceptance
+
+`just ch-migrations-component` verifies the package-owned conversion and executes the public
+runner on an owned digest-qualified fixture. `just ch-migrations-acceptance` runs the actual
+Nix CLI and a separately compiled test-only native suffix against owned stores. Required cases
+cover fresh/repeated execution, schema/raw/derived/reader parity, all four repair operations,
+retained receipts, interrupted initialization, stale definitions/identities and administrator/
+traffic exclusion across process/backend loss. Missing binaries or unqualified platforms fail;
+these required native cases never become pending tests. `just acceptance` includes this verifier.
+
+`just ch-migrations-source` qualifies independent archives and embedding rebuilds.
+`python3 scripts/check_clickhouse_sdist.py` builds the real production CLI using only five
+extracted workspace archives and inspects its plan with inputs withheld.
+`python3 scripts/check_clickhouse_embedding.py` compiles an extracted server archive, changes
+SQL while preserving its timestamp, then withholds source inputs and inspects the executable.
+Keep migration input files under `kansoku-server/migrations/clickhouse` and declare all of them
+in the server Cabal archive. Append migrations; preserve applied names, checksums and ordering.
+Use `clickhouse-migrate-embed-build --input kansoku-server migrations/clickhouse/manifest.json -- build all`
+for Cabal paths owning that manifest; select `test` or `haddock` for those operations. The default Nix shell selects the qualified native artifact;
+other shells must explicitly select that artifact before native execution.
+
+The [operational runbook](clickhouse-migrations.md) is also the developer workflow. Old development
+stacks are preserved rather than imported. The macOS proof job supplements existing Ubuntu
+acceptance; it does not qualify Linux or establish deployment readiness. Remote CI outcomes are
+recorded separately from local evidence.

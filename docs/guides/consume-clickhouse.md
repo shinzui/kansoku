@@ -6,7 +6,7 @@ docId: DOC-4
 tags: ["clickhouse", "sql", "consumers", "experiments"]
 generated:
   by: process:codex
-  at: "2026-10-16T13:03:13Z"
+  at: "2026-10-16T22:48:56Z"
 ---
 
 # Consume ClickHouse from a trusted analytics tool
@@ -18,8 +18,11 @@ credentials on the consumer server, and restrict network access to that server.
 
 ## Stable projections and reader setup
 
-Apply all numbered ClickHouse migrations with the writer stopped, as described in
-[operations](operations.md). Migration 0023 establishes the reader projections; migration 0025 appends organisation
+Apply the compiled native ClickHouse plan through a persistent session, with submitting clients
+stopped and explicit external drain, as described in the [migration runbook](clickhouse-migrations.md).
+Pause direct SQL schedules throughout the session; PostgreSQL traffic fencing does not cover them.
+The migration operator remains the SQL SECURITY DEFINER identity and must retain underlying
+SELECT privileges; retain the reader role and its existing constrained grants. Migration 0023 establishes the reader projections; migration 0025 appends organisation
 context to the two compatibility views while preserving the analytical v1 projection:
 
 | View | Ordered columns / purpose |

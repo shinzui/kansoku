@@ -1,0 +1,2 @@
+
+EXCHANGE TABLES analytics.page_views_by_route AND analytics.page_views_by_route_rebuild;

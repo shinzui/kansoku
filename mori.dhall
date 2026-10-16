@@ -56,6 +56,7 @@ in  Schema.Project::{
     , dependencies =
       [ "KovalevDima/ClickHaskell"
       , "shinzui/openapi-hs"
+      , "shinzui/clickhouse-migrate" -- mori://shinzui/clickhouse-migrate
       , "shinzui/pg-migrate"
       , "shinzui/pgmq-hs"
       , "shinzui/servant-openapi-hs"

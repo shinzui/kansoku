@@ -1,0 +1,2 @@
+
+DROP TABLE analytics.identity_signal_users_rebuild;

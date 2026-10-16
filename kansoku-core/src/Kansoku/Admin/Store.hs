@@ -45,7 +45,7 @@ admitMaintenanceTraffic :: PQ.Connection -> IO ()
 admitMaintenanceTraffic connection = do
   locked <- query connection "SELECT to_jsonb(pg_try_advisory_lock_shared(726401,1)) WHERE $1 IS NOT NULL" A.Null
   unless (locked == A.Bool True) (fail "maintenance fence active")
-  ready <- query connection "SELECT to_jsonb(active_job IS NULL) FROM kansoku.maintenance_fence WHERE $1 IS NOT NULL" A.Null
+  ready <- query connection "SELECT to_jsonb(active_job IS NULL AND active_migration_session IS NULL) FROM kansoku.maintenance_fence WHERE $1 IS NOT NULL" A.Null
   unless (ready == A.Bool True) (fail "maintenance fence active")
 
 queueTables :: PQ.Connection -> Text -> IO [Text]

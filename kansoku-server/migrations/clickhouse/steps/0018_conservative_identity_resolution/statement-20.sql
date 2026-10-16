@@ -1,0 +1,2 @@
+
+CREATE TABLE analytics.identity_session_users_rebuild AS analytics.identity_session_users;

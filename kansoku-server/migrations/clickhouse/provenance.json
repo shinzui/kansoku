@@ -1,0 +1,2057 @@
+{
+  "fixtureVersion": 1,
+  "sourceProject": "mori://shinzui/kansoku",
+  "sourceRevision": "138d9a316931bbf46781757a29ab6c7fdd90f870",
+  "artifactUris": "File-level URI pending; all source paths below are relative to sourceProject at sourceRevision.",
+  "evidenceLimit": "Fresh-install conversion evidence only; no filename-history import or legacy adoption is supported.",
+  "boundaryPolicy": "Reviewed complete statements; contiguous original byte ranges, concatenating exactly to each original file. No runtime SQL splitting.",
+  "files": [
+    {
+      "sourcePath": "db/clickhouse/migrations/0001_events_raw.sql",
+      "original": "original/0001_events_raw.sql",
+      "sha256": "27fd9656256fe707f368e9a8428a389d932ae3a5e4ec84d63f34273a3c1f4ff5",
+      "migration": "0001_events_raw",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0001_events_raw/statement-01.sql",
+          "byteStart": 0,
+          "byteEndExclusive": 40,
+          "sha256": "2200b1521d968e229dab8e8cb415fa555e87a91b83a3b1a2c115884f914368dd"
+        },
+        {
+          "name": "statement-02",
+          "file": "steps/0001_events_raw/statement-02.sql",
+          "byteStart": 40,
+          "byteEndExclusive": 1286,
+          "sha256": "515b45b027db0136eeb73dea220f422c892e88d32c534048a820636164f5b05b"
+        }
+      ]
+    },
+    {
+      "sourcePath": "db/clickhouse/migrations/0002_identity.sql",
+      "original": "original/0002_identity.sql",
+      "sha256": "1909ac790fe3b9e91ffb035070cdbf3e08100a6a8d0914b59f34458c153622ca",
+      "migration": "0002_identity",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0002_identity/statement-01.sql",
+          "byteStart": 0,
+          "byteEndExclusive": 40,
+          "sha256": "2200b1521d968e229dab8e8cb415fa555e87a91b83a3b1a2c115884f914368dd"
+        },
+        {
+          "name": "statement-02",
+          "file": "steps/0002_identity/statement-02.sql",
+          "byteStart": 40,
+          "byteEndExclusive": 391,
+          "sha256": "66da20e0ef3fe8a442f9783fc0fd1f736801b2666b897a7229017741d745570f"
+        },
+        {
+          "name": "statement-03",
+          "file": "steps/0002_identity/statement-03.sql",
+          "byteStart": 391,
+          "byteEndExclusive": 819,
+          "sha256": "f55eae735ae80c032bd12c890e110d6255602a867ccefd24ec092b48e938cfa8"
+        },
+        {
+          "name": "statement-04",
+          "file": "steps/0002_identity/statement-04.sql",
+          "byteStart": 819,
+          "byteEndExclusive": 1849,
+          "sha256": "fbf24c751a8b25ef92565677ef0bce550c3ef19172bbb098b48f30e8375b9596"
+        }
+      ]
+    },
+    {
+      "sourcePath": "db/clickhouse/migrations/0003_rollups.sql",
+      "original": "original/0003_rollups.sql",
+      "sha256": "bd7eea194dc1c9d1b5471254f5c38bbbe6f14aab71f5ee76942dbc0ade242d37",
+      "migration": "0003_rollups",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0003_rollups/statement-01.sql",
+          "byteStart": 0,
+          "byteEndExclusive": 40,
+          "sha256": "2200b1521d968e229dab8e8cb415fa555e87a91b83a3b1a2c115884f914368dd"
+        },
+        {
+          "name": "statement-02",
+          "file": "steps/0003_rollups/statement-02.sql",
+          "byteStart": 40,
+          "byteEndExclusive": 314,
+          "sha256": "0e42118dd75c726f1faeaf0967d52819874a24691b73eb50f33b39be475e8707"
+        },
+        {
+          "name": "statement-03",
+          "file": "steps/0003_rollups/statement-03.sql",
+          "byteStart": 314,
+          "byteEndExclusive": 591,
+          "sha256": "94580b6d5a28cb9d2d1eda365a9c3ba365f215cb6a4184d4c171f70f652cc10f"
+        },
+        {
+          "name": "statement-04",
+          "file": "steps/0003_rollups/statement-04.sql",
+          "byteStart": 591,
+          "byteEndExclusive": 1048,
+          "sha256": "a5c21e8a4e1d4b105d0539b54c861840f331b04881d421c74aa5dfaad6ce5bb3"
+        },
+        {
+          "name": "statement-05",
+          "file": "steps/0003_rollups/statement-05.sql",
+          "byteStart": 1048,
+          "byteEndExclusive": 1615,
+          "sha256": "35cd78a4d3fb0894df9973d0b72818de1678ac107ef7518bff4994da1431b3fc"
+        },
+        {
+          "name": "statement-06",
+          "file": "steps/0003_rollups/statement-06.sql",
+          "byteStart": 1615,
+          "byteEndExclusive": 1859,
+          "sha256": "d66684cead4205bfe810187dd21b73e7061689eeccadddb4fd3d4406a9ce6241"
+        },
+        {
+          "name": "statement-07",
+          "file": "steps/0003_rollups/statement-07.sql",
+          "byteStart": 1859,
+          "byteEndExclusive": 2430,
+          "sha256": "630c86c366e8531fef350a246d86f8e87820b0ecd2a777c578f43f40902f0b7b"
+        },
+        {
+          "name": "statement-08",
+          "file": "steps/0003_rollups/statement-08.sql",
+          "byteStart": 2430,
+          "byteEndExclusive": 2819,
+          "sha256": "464cb34015c26486256e33d2fd7091bb4c63f905adbe9539e741171851aea9c8"
+        },
+        {
+          "name": "statement-09",
+          "file": "steps/0003_rollups/statement-09.sql",
+          "byteStart": 2819,
+          "byteEndExclusive": 3132,
+          "sha256": "7bc25383a76daee9063cc03ef4573e9a929863d130e6105723d0a8389180e966"
+        }
+      ]
+    },
+    {
+      "sourcePath": "db/clickhouse/migrations/0004_events_raw_v2.sql",
+      "original": "original/0004_events_raw_v2.sql",
+      "sha256": "43728707a636a89ebb75331fa9209e195526ffe38aac986d311d8d83dde852f9",
+      "migration": "0004_events_raw_v2",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0004_events_raw_v2/statement-01.sql",
+          "byteStart": 0,
+          "byteEndExclusive": 488,
+          "sha256": "e925844c3c5307aa5a372b391371aa09e4511b23b0a2ac352db396244147d56f"
+        },
+        {
+          "name": "statement-02",
+          "file": "steps/0004_events_raw_v2/statement-02.sql",
+          "byteStart": 488,
+          "byteEndExclusive": 542,
+          "sha256": "6c88ccc4859d6acb07f8dc00983739ca7e01dd055a65fd4dca83a4d42b6d034f"
+        },
+        {
+          "name": "statement-03",
+          "file": "steps/0004_events_raw_v2/statement-03.sql",
+          "byteStart": 542,
+          "byteEndExclusive": 581,
+          "sha256": "44fb80ddb087677362f03695d3c224415c7c6ca438f11769fdb64fe4599d0fff"
+        },
+        {
+          "name": "statement-04",
+          "file": "steps/0004_events_raw_v2/statement-04.sql",
+          "byteStart": 581,
+          "byteEndExclusive": 620,
+          "sha256": "b0a09200b707ea3195cc1344ed7c7e69d5c2243dc72ae271908f0a147dc0a899"
+        },
+        {
+          "name": "statement-05",
+          "file": "steps/0004_events_raw_v2/statement-05.sql",
+          "byteStart": 620,
+          "byteEndExclusive": 675,
+          "sha256": "4f71e2f306d6183b80a458e7f489a96e413e60e881ca7a10ae9f5ac30fb9e20b"
+        },
+        {
+          "name": "statement-06",
+          "file": "steps/0004_events_raw_v2/statement-06.sql",
+          "byteStart": 675,
+          "byteEndExclusive": 722,
+          "sha256": "95cb7fd530ccc9acc2511af48a004778320575895175eb422e30f29de67e2db3"
+        },
+        {
+          "name": "statement-07",
+          "file": "steps/0004_events_raw_v2/statement-07.sql",
+          "byteStart": 722,
+          "byteEndExclusive": 768,
+          "sha256": "0c0ca6de649a412195e2bab5f4380037569cd59e97c510dee7d2e68011ee1758"
+        },
+        {
+          "name": "statement-08",
+          "file": "steps/0004_events_raw_v2/statement-08.sql",
+          "byteStart": 768,
+          "byteEndExclusive": 2055,
+          "sha256": "649cbf5bedcfadf01d82943e4b33759154b36d97c2aa2df57fd6cf8b7c15e11e"
+        },
+        {
+          "name": "statement-09",
+          "file": "steps/0004_events_raw_v2/statement-09.sql",
+          "byteStart": 2055,
+          "byteEndExclusive": 2986,
+          "sha256": "bf4e7b8126e26002bcbdca9c7ea1a7ae8e5c3c4ac328da7622f0425ee282f26d"
+        },
+        {
+          "name": "statement-10",
+          "file": "steps/0004_events_raw_v2/statement-10.sql",
+          "byteStart": 2986,
+          "byteEndExclusive": 3206,
+          "sha256": "65a0a5948a305b0072a055280b2e8d277bba94649b5848727fdcbb5f70bf1722"
+        },
+        {
+          "name": "statement-11",
+          "file": "steps/0004_events_raw_v2/statement-11.sql",
+          "byteStart": 3206,
+          "byteEndExclusive": 3546,
+          "sha256": "2711a6e187c4ad417213f6a36d9c59328c74374f8ce8a3ec9616f0e8685ad020"
+        },
+        {
+          "name": "statement-12",
+          "file": "steps/0004_events_raw_v2/statement-12.sql",
+          "byteStart": 3546,
+          "byteEndExclusive": 4081,
+          "sha256": "e558d86d0e053a7a3944a809c902b9f2e09abff8931f1ad269d04b244195262b"
+        },
+        {
+          "name": "statement-13",
+          "file": "steps/0004_events_raw_v2/statement-13.sql",
+          "byteStart": 4081,
+          "byteEndExclusive": 4344,
+          "sha256": "93e23240859bee8b51442adb4bf4dbfbbfc738865c38b73cee4b2a2faa9b558d"
+        },
+        {
+          "name": "statement-14",
+          "file": "steps/0004_events_raw_v2/statement-14.sql",
+          "byteStart": 4344,
+          "byteEndExclusive": 4966,
+          "sha256": "bed7b992766b36c7f6236224d7fa8066171edca436dd3b0819077d2fe737e796"
+        },
+        {
+          "name": "statement-15",
+          "file": "steps/0004_events_raw_v2/statement-15.sql",
+          "byteStart": 4966,
+          "byteEndExclusive": 5523,
+          "sha256": "97b8aa6fb8de8a6102db07953036606130b2b1e92bf0463520850930b382f143"
+        },
+        {
+          "name": "statement-16",
+          "file": "steps/0004_events_raw_v2/statement-16.sql",
+          "byteStart": 5523,
+          "byteEndExclusive": 5808,
+          "sha256": "fa0734a8d2385a70b6d82e7a99a309ac8a9299f2a2cb0eb86440e9626d903e11"
+        }
+      ]
+    },
+    {
+      "sourcePath": "db/clickhouse/migrations/0005_final_free_resolution.sql",
+      "original": "original/0005_final_free_resolution.sql",
+      "sha256": "7c98dcf31b841886d64ec66c8ff1bab7c0c574a2762131fa075e4fd8a7083638",
+      "migration": "0005_final_free_resolution",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0005_final_free_resolution/statement-01.sql",
+          "byteStart": 0,
+          "byteEndExclusive": 523,
+          "sha256": "e7c197abce3859612e25c48619633f4a7b68270bdc73e5487d1e4da999185614"
+        },
+        {
+          "name": "statement-02",
+          "file": "steps/0005_final_free_resolution/statement-02.sql",
+          "byteStart": 523,
+          "byteEndExclusive": 1014,
+          "sha256": "b581f371f8374595ad3c91032eaa4a513413161c8bc4552aa38e9e2dfe8db20b"
+        },
+        {
+          "name": "statement-03",
+          "file": "steps/0005_final_free_resolution/statement-03.sql",
+          "byteStart": 1014,
+          "byteEndExclusive": 1054,
+          "sha256": "443d5d63f067f954c1d2ce84fd22ee02db1844b6b9b13b02d432257593ed7347"
+        },
+        {
+          "name": "statement-04",
+          "file": "steps/0005_final_free_resolution/statement-04.sql",
+          "byteStart": 1054,
+          "byteEndExclusive": 1093,
+          "sha256": "b0a09200b707ea3195cc1344ed7c7e69d5c2243dc72ae271908f0a147dc0a899"
+        },
+        {
+          "name": "statement-05",
+          "file": "steps/0005_final_free_resolution/statement-05.sql",
+          "byteStart": 1093,
+          "byteEndExclusive": 1388,
+          "sha256": "9b8e1da0ec936f78afa1f716475403c6c0a9cf3072509327c782fc34b520a255"
+        },
+        {
+          "name": "statement-06",
+          "file": "steps/0005_final_free_resolution/statement-06.sql",
+          "byteStart": 1388,
+          "byteEndExclusive": 1418,
+          "sha256": "1099b4262d7fa05b8e723d4893b3ab764bc2431a27ee02c13cc43b44a576dd61"
+        },
+        {
+          "name": "statement-07",
+          "file": "steps/0005_final_free_resolution/statement-07.sql",
+          "byteStart": 1418,
+          "byteEndExclusive": 1649,
+          "sha256": "6e38915566d68fba72693f56fd064809701c0bd739977c99bd4f26ae5497b211"
+        },
+        {
+          "name": "statement-08",
+          "file": "steps/0005_final_free_resolution/statement-08.sql",
+          "byteStart": 1649,
+          "byteEndExclusive": 1885,
+          "sha256": "666dcb5054b7d256d53006287f11e15eaaccb24ba198f6adbac9859a38990a50"
+        },
+        {
+          "name": "statement-09",
+          "file": "steps/0005_final_free_resolution/statement-09.sql",
+          "byteStart": 1885,
+          "byteEndExclusive": 2139,
+          "sha256": "2d411849b7e67dad57c8d85e653ef1f8ad14ef6330fd5c92e6a05c2f63adec25"
+        },
+        {
+          "name": "statement-10",
+          "file": "steps/0005_final_free_resolution/statement-10.sql",
+          "byteStart": 2139,
+          "byteEndExclusive": 2398,
+          "sha256": "677b1c367a38fdc7ad7070759c2c9765033fd5974bf195955a768c852081153b"
+        }
+      ]
+    },
+    {
+      "sourcePath": "db/clickhouse/migrations/0006_rollups_v2.sql",
+      "original": "original/0006_rollups_v2.sql",
+      "sha256": "48fcfd193523c73dcef347c3ee0a947faa86e0bb24980ee385349d5450465336",
+      "migration": "0006_rollups_v2",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0006_rollups_v2/statement-01.sql",
+          "byteStart": 0,
+          "byteEndExclusive": 563,
+          "sha256": "f2979112e546e014527f78945d8a5119a44681071366a2542a725b8059ec0d29"
+        },
+        {
+          "name": "statement-02",
+          "file": "steps/0006_rollups_v2/statement-02.sql",
+          "byteStart": 563,
+          "byteEndExclusive": 602,
+          "sha256": "44fb80ddb087677362f03695d3c224415c7c6ca438f11769fdb64fe4599d0fff"
+        },
+        {
+          "name": "statement-03",
+          "file": "steps/0006_rollups_v2/statement-03.sql",
+          "byteStart": 602,
+          "byteEndExclusive": 641,
+          "sha256": "b0a09200b707ea3195cc1344ed7c7e69d5c2243dc72ae271908f0a147dc0a899"
+        },
+        {
+          "name": "statement-04",
+          "file": "steps/0006_rollups_v2/statement-04.sql",
+          "byteStart": 641,
+          "byteEndExclusive": 696,
+          "sha256": "4f71e2f306d6183b80a458e7f489a96e413e60e881ca7a10ae9f5ac30fb9e20b"
+        },
+        {
+          "name": "statement-05",
+          "file": "steps/0006_rollups_v2/statement-05.sql",
+          "byteStart": 696,
+          "byteEndExclusive": 747,
+          "sha256": "d95932232a2f6816ec4871f73ab6830131368bd42f0479ac78b6812161cf7bf4"
+        },
+        {
+          "name": "statement-06",
+          "file": "steps/0006_rollups_v2/statement-06.sql",
+          "byteStart": 747,
+          "byteEndExclusive": 783,
+          "sha256": "17a2615750a0f9028a7d611e71fa1976f1116c0ce19bdf5650af163eb646e7a8"
+        },
+        {
+          "name": "statement-07",
+          "file": "steps/0006_rollups_v2/statement-07.sql",
+          "byteStart": 783,
+          "byteEndExclusive": 819,
+          "sha256": "b421613250ac36c03b6f292706ce3cef7b5f0590bff588e41827de71d5b09add"
+        },
+        {
+          "name": "statement-08",
+          "file": "steps/0006_rollups_v2/statement-08.sql",
+          "byteStart": 819,
+          "byteEndExclusive": 871,
+          "sha256": "9d234a0a7f9e45e8a10a09d281f669b204b907a8b157ece6a306235377d34180"
+        },
+        {
+          "name": "statement-09",
+          "file": "steps/0006_rollups_v2/statement-09.sql",
+          "byteStart": 871,
+          "byteEndExclusive": 1060,
+          "sha256": "5914aa5a052b7a7db9b8abf13a311888e01397025a39a769fb99718681c38528"
+        },
+        {
+          "name": "statement-10",
+          "file": "steps/0006_rollups_v2/statement-10.sql",
+          "byteStart": 1060,
+          "byteEndExclusive": 1202,
+          "sha256": "410d21c8f39ad4cea79020ade2f0f214731b7e3176a65d64fffb028c08f8e9be"
+        },
+        {
+          "name": "statement-11",
+          "file": "steps/0006_rollups_v2/statement-11.sql",
+          "byteStart": 1202,
+          "byteEndExclusive": 1345,
+          "sha256": "a22ff9b0f8394e21c7972da45a87598548c4df558d6dcaf80f5be5765f1e1920"
+        },
+        {
+          "name": "statement-12",
+          "file": "steps/0006_rollups_v2/statement-12.sql",
+          "byteStart": 1345,
+          "byteEndExclusive": 1515,
+          "sha256": "5f44fd2950989d3044a86a58948d31451665aaa9fd91ec5e1cb59938fc4497ad"
+        },
+        {
+          "name": "statement-13",
+          "file": "steps/0006_rollups_v2/statement-13.sql",
+          "byteStart": 1515,
+          "byteEndExclusive": 1796,
+          "sha256": "4074174cb07bac34a7e6c6e7415dcc53558308f3970cb83d54ed97c560758179"
+        },
+        {
+          "name": "statement-14",
+          "file": "steps/0006_rollups_v2/statement-14.sql",
+          "byteStart": 1796,
+          "byteEndExclusive": 2030,
+          "sha256": "1318f014323c51c7b559d601acfd26b94d6c0d5cae0ebab1c3b839c15066adb8"
+        },
+        {
+          "name": "statement-15",
+          "file": "steps/0006_rollups_v2/statement-15.sql",
+          "byteStart": 2030,
+          "byteEndExclusive": 2269,
+          "sha256": "56d5d41fc997f9a5df66ac40242736ece8c79b4c8c7af83b0e606054a3e972a8"
+        },
+        {
+          "name": "statement-16",
+          "file": "steps/0006_rollups_v2/statement-16.sql",
+          "byteStart": 2269,
+          "byteEndExclusive": 2499,
+          "sha256": "da771222bd639789ecf25061a198b81928e40af485f8d85bf24f16f6301019a1"
+        },
+        {
+          "name": "statement-17",
+          "file": "steps/0006_rollups_v2/statement-17.sql",
+          "byteStart": 2499,
+          "byteEndExclusive": 2740,
+          "sha256": "d9744db60d418fa6322bab20e6d517c26b7b75a3a8bec21566f9fc852bd8f578"
+        },
+        {
+          "name": "statement-18",
+          "file": "steps/0006_rollups_v2/statement-18.sql",
+          "byteStart": 2740,
+          "byteEndExclusive": 2997,
+          "sha256": "5f6450e0d8a0c2c0682529b798e722318ad17abc9bbd36420997382536cbf17f"
+        },
+        {
+          "name": "statement-19",
+          "file": "steps/0006_rollups_v2/statement-19.sql",
+          "byteStart": 2997,
+          "byteEndExclusive": 3258,
+          "sha256": "de1abe08b446a70c8aea56a3683da0dbc8b2d26ab07087f6c1f4a589d5c2fc68"
+        },
+        {
+          "name": "statement-20",
+          "file": "steps/0006_rollups_v2/statement-20.sql",
+          "byteStart": 3258,
+          "byteEndExclusive": 3521,
+          "sha256": "49a454f9ed3da6c8f56c2a8a8f6371b00dd172c9c52ffffd85ba5973bff76098"
+        }
+      ]
+    },
+    {
+      "sourcePath": "db/clickhouse/migrations/0007_drop_events_raw_v1.sql",
+      "original": "original/0007_drop_events_raw_v1.sql",
+      "sha256": "d6a529078a02c3a4216c5fe2063d76624539f71e497cf96032771bebd9543758",
+      "migration": "0007_drop_events_raw_v1",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0007_drop_events_raw_v1/statement-01.sql",
+          "byteStart": 0,
+          "byteEndExclusive": 204,
+          "sha256": "d6a529078a02c3a4216c5fe2063d76624539f71e497cf96032771bebd9543758"
+        }
+      ]
+    },
+    {
+      "sourcePath": "db/clickhouse/migrations/0008_account_scoped_metrics.sql",
+      "original": "original/0008_account_scoped_metrics.sql",
+      "sha256": "67d301ca66c789fb837c6abf1d6515cc8a3b36e49e00add57aa170c71272b568",
+      "migration": "0008_account_scoped_metrics",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0008_account_scoped_metrics/statement-01.sql",
+          "byteStart": 0,
+          "byteEndExclusive": 200,
+          "sha256": "41259c6f0d556ee80b7ae443199487e1d1d7c1169d5c149fb29ee464f272e40e"
+        },
+        {
+          "name": "statement-02",
+          "file": "steps/0008_account_scoped_metrics/statement-02.sql",
+          "byteStart": 200,
+          "byteEndExclusive": 723,
+          "sha256": "1b8d830e3995c1cfea18f5fe8a8b239fb6411ce49dc6ebf70a999b5356fac444"
+        },
+        {
+          "name": "statement-03",
+          "file": "steps/0008_account_scoped_metrics/statement-03.sql",
+          "byteStart": 723,
+          "byteEndExclusive": 778,
+          "sha256": "679a5d3bc433f7e0267684ea99ce9019595e2a4de00aa172d2a4990c604e049b"
+        },
+        {
+          "name": "statement-04",
+          "file": "steps/0008_account_scoped_metrics/statement-04.sql",
+          "byteStart": 778,
+          "byteEndExclusive": 817,
+          "sha256": "44fb80ddb087677362f03695d3c224415c7c6ca438f11769fdb64fe4599d0fff"
+        },
+        {
+          "name": "statement-05",
+          "file": "steps/0008_account_scoped_metrics/statement-05.sql",
+          "byteStart": 817,
+          "byteEndExclusive": 856,
+          "sha256": "b0a09200b707ea3195cc1344ed7c7e69d5c2243dc72ae271908f0a147dc0a899"
+        },
+        {
+          "name": "statement-06",
+          "file": "steps/0008_account_scoped_metrics/statement-06.sql",
+          "byteStart": 856,
+          "byteEndExclusive": 911,
+          "sha256": "4f71e2f306d6183b80a458e7f489a96e413e60e881ca7a10ae9f5ac30fb9e20b"
+        },
+        {
+          "name": "statement-07",
+          "file": "steps/0008_account_scoped_metrics/statement-07.sql",
+          "byteStart": 911,
+          "byteEndExclusive": 962,
+          "sha256": "d95932232a2f6816ec4871f73ab6830131368bd42f0479ac78b6812161cf7bf4"
+        },
+        {
+          "name": "statement-08",
+          "file": "steps/0008_account_scoped_metrics/statement-08.sql",
+          "byteStart": 962,
+          "byteEndExclusive": 998,
+          "sha256": "17a2615750a0f9028a7d611e71fa1976f1116c0ce19bdf5650af163eb646e7a8"
+        },
+        {
+          "name": "statement-09",
+          "file": "steps/0008_account_scoped_metrics/statement-09.sql",
+          "byteStart": 998,
+          "byteEndExclusive": 1034,
+          "sha256": "b421613250ac36c03b6f292706ce3cef7b5f0590bff588e41827de71d5b09add"
+        },
+        {
+          "name": "statement-10",
+          "file": "steps/0008_account_scoped_metrics/statement-10.sql",
+          "byteStart": 1034,
+          "byteEndExclusive": 1086,
+          "sha256": "9d234a0a7f9e45e8a10a09d281f669b204b907a8b157ece6a306235377d34180"
+        },
+        {
+          "name": "statement-11",
+          "file": "steps/0008_account_scoped_metrics/statement-11.sql",
+          "byteStart": 1086,
+          "byteEndExclusive": 1310,
+          "sha256": "b1266d26814f40e444c0a5b0d28c10a0008966d0c549139e75ffc0547fbee0a9"
+        },
+        {
+          "name": "statement-12",
+          "file": "steps/0008_account_scoped_metrics/statement-12.sql",
+          "byteStart": 1310,
+          "byteEndExclusive": 1499,
+          "sha256": "f1134ede8135292a9538260d673ecc1d543162d76d8d6e5ce990b64d49070db7"
+        },
+        {
+          "name": "statement-13",
+          "file": "steps/0008_account_scoped_metrics/statement-13.sql",
+          "byteStart": 1499,
+          "byteEndExclusive": 1689,
+          "sha256": "11a4d8fa04ff63de5f50370fcd9a733e2a8654e64a6a033dd5c212ac7723f88a"
+        },
+        {
+          "name": "statement-14",
+          "file": "steps/0008_account_scoped_metrics/statement-14.sql",
+          "byteStart": 1689,
+          "byteEndExclusive": 1909,
+          "sha256": "1059e1b40e195e2f5ff6fd7a20d12495c89bd0a459ab29b80b96feb76abf9ca5"
+        },
+        {
+          "name": "statement-15",
+          "file": "steps/0008_account_scoped_metrics/statement-15.sql",
+          "byteStart": 1909,
+          "byteEndExclusive": 2165,
+          "sha256": "2168c08bafa7b7bb8f13af770346404ccfe46d7a4febc54dd6088623284cfa33"
+        },
+        {
+          "name": "statement-16",
+          "file": "steps/0008_account_scoped_metrics/statement-16.sql",
+          "byteStart": 2165,
+          "byteEndExclusive": 2439,
+          "sha256": "c3cd888beae99b31df1b5f74c3f93515ee06676b7a87febf396ce39d7aaa28bc"
+        },
+        {
+          "name": "statement-17",
+          "file": "steps/0008_account_scoped_metrics/statement-17.sql",
+          "byteStart": 2439,
+          "byteEndExclusive": 2718,
+          "sha256": "3a3e2ec23e7fe73ab59583a18abe27949eaafd9d00e4d480a00152978179427d"
+        },
+        {
+          "name": "statement-18",
+          "file": "steps/0008_account_scoped_metrics/statement-18.sql",
+          "byteStart": 2718,
+          "byteEndExclusive": 2988,
+          "sha256": "5b377539e9afa9172113b5bdb14ada1ba65dde6f41e96b003a56fc96ab29e0fd"
+        },
+        {
+          "name": "statement-19",
+          "file": "steps/0008_account_scoped_metrics/statement-19.sql",
+          "byteStart": 2988,
+          "byteEndExclusive": 3257,
+          "sha256": "1621e5d6e10d6c1c91160014e977ab197b1184abcf02eb80675d005379e468da"
+        },
+        {
+          "name": "statement-20",
+          "file": "steps/0008_account_scoped_metrics/statement-20.sql",
+          "byteStart": 3257,
+          "byteEndExclusive": 3542,
+          "sha256": "3c1822e7b0e61d9d6320067126587bb45699c95e36f96f12c8478dbf7a4ec194"
+        },
+        {
+          "name": "statement-21",
+          "file": "steps/0008_account_scoped_metrics/statement-21.sql",
+          "byteStart": 3542,
+          "byteEndExclusive": 3831,
+          "sha256": "2f143ada90b95dfb28248cc598d8f32c09a93abe77eebf37a0e0b30752886f98"
+        },
+        {
+          "name": "statement-22",
+          "file": "steps/0008_account_scoped_metrics/statement-22.sql",
+          "byteStart": 3831,
+          "byteEndExclusive": 4122,
+          "sha256": "e6705b25d769d9e4d22d760b8d6fa2fe72cea0b2d8efdaf347910f1ad05508bc"
+        }
+      ]
+    },
+    {
+      "sourcePath": "db/clickhouse/migrations/0009_typed_properties.sql",
+      "original": "original/0009_typed_properties.sql",
+      "sha256": "e800f9d12be889710debbc70e5eb7894d949269d2da7e3c2955e9709230a5604",
+      "migration": "0009_typed_properties",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0009_typed_properties/statement-01.sql",
+          "byteStart": 0,
+          "byteEndExclusive": 351,
+          "sha256": "140b8352562ce4210ce58f5bc52f2e9a16d2781e78b4a056821b28a1b7cd64a7"
+        },
+        {
+          "name": "statement-02",
+          "file": "steps/0009_typed_properties/statement-02.sql",
+          "byteStart": 351,
+          "byteEndExclusive": 422,
+          "sha256": "21b7acf530d6efddcb9a5a74bc1e3c19ff41bdbddc6d1cc628ea7c74e648d790"
+        }
+      ]
+    },
+    {
+      "sourcePath": "db/clickhouse/migrations/0010_resolved_event_properties.sql",
+      "original": "original/0010_resolved_event_properties.sql",
+      "sha256": "22a2f23981a3bded3d02742a30e653a644f28d8648a26e11b0c53601f7d05031",
+      "migration": "0010_resolved_event_properties",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0010_resolved_event_properties/statement-01.sql",
+          "byteStart": 0,
+          "byteEndExclusive": 196,
+          "sha256": "b0dd44d38d8169f5d7faacb8ee86d18015741ef5d2162a3b99da990411bcd25f"
+        },
+        {
+          "name": "statement-02",
+          "file": "steps/0010_resolved_event_properties/statement-02.sql",
+          "byteStart": 196,
+          "byteEndExclusive": 762,
+          "sha256": "fde5546f55d8282e52630d0e34b1a5f470b4824043bff403452a42949148fcf2"
+        }
+      ]
+    },
+    {
+      "sourcePath": "db/clickhouse/migrations/0011_events_raw_identifiers.sql",
+      "original": "original/0011_events_raw_identifiers.sql",
+      "sha256": "63bc883bc44628383f0149cf65b1a9c71d93ae6f5a51b6df1d36301e1f0b12c2",
+      "migration": "0011_events_raw_identifiers",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0011_events_raw_identifiers/statement-01.sql",
+          "byteStart": 0,
+          "byteEndExclusive": 331,
+          "sha256": "63bc883bc44628383f0149cf65b1a9c71d93ae6f5a51b6df1d36301e1f0b12c2"
+        }
+      ]
+    },
+    {
+      "sourcePath": "db/clickhouse/migrations/0012_identity_signals.sql",
+      "original": "original/0012_identity_signals.sql",
+      "sha256": "43d619f703a24d04513df3ea19067973b2914c11053e2ae257dc108e4e36d8ce",
+      "migration": "0012_identity_signals",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0012_identity_signals/statement-01.sql",
+          "byteStart": 0,
+          "byteEndExclusive": 588,
+          "sha256": "fe1f9b17e4a31a5a125fd614b0d4ccf686419d2ac064b700a3525ddbeaac3272"
+        },
+        {
+          "name": "statement-02",
+          "file": "steps/0012_identity_signals/statement-02.sql",
+          "byteStart": 588,
+          "byteEndExclusive": 1248,
+          "sha256": "026dfa2584db280e6da58de3e6be8ad7595d28c2a6aa89ad5425bb4ec26fabfb"
+        },
+        {
+          "name": "statement-03",
+          "file": "steps/0012_identity_signals/statement-03.sql",
+          "byteStart": 1248,
+          "byteEndExclusive": 1925,
+          "sha256": "8597ee15d041aa626b3cbf1781f18b3be295f47e34e7790bdbe1eef58130a474"
+        },
+        {
+          "name": "statement-04",
+          "file": "steps/0012_identity_signals/statement-04.sql",
+          "byteStart": 1925,
+          "byteEndExclusive": 2430,
+          "sha256": "8084c688e58f7d0dc82e3a9cfeb33e0b0912285b4983576a09ec878a86b9d36f"
+        },
+        {
+          "name": "statement-05",
+          "file": "steps/0012_identity_signals/statement-05.sql",
+          "byteStart": 2430,
+          "byteEndExclusive": 2895,
+          "sha256": "dee1d130a47f3cf92e106958823499b8a0f4152c5e1b02d33ed4e1304077d309"
+        },
+        {
+          "name": "statement-06",
+          "file": "steps/0012_identity_signals/statement-06.sql",
+          "byteStart": 2895,
+          "byteEndExclusive": 4487,
+          "sha256": "da3265228a38f95349f9188f0b2e0949ceac0cf224fa88b6d68afb52cbd24dd8"
+        },
+        {
+          "name": "statement-07",
+          "file": "steps/0012_identity_signals/statement-07.sql",
+          "byteStart": 4487,
+          "byteEndExclusive": 4535,
+          "sha256": "8e2fdcbe6573b942d6f82e1293cd5d1c7cd39fb2233394265e47966affdf85f8"
+        },
+        {
+          "name": "statement-08",
+          "file": "steps/0012_identity_signals/statement-08.sql",
+          "byteStart": 4535,
+          "byteEndExclusive": 4621,
+          "sha256": "c928db83dcf676f7da3506c5e49e14ce57157f838d78f8537ce2936e0a557b8e"
+        }
+      ]
+    },
+    {
+      "sourcePath": "db/clickhouse/migrations/0013_retire_identity_map.sql",
+      "original": "original/0013_retire_identity_map.sql",
+      "sha256": "743acdfd7eb87733ce7faccbe9268ea814234c42d5325a043bd6143db227461f",
+      "migration": "0013_retire_identity_map",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0013_retire_identity_map/statement-01.sql",
+          "byteStart": 0,
+          "byteEndExclusive": 276,
+          "sha256": "39752da99771bf42038077799fdc150df42bed7b6e9ae9c09c18f19cf550e0fb"
+        },
+        {
+          "name": "statement-02",
+          "file": "steps/0013_retire_identity_map/statement-02.sql",
+          "byteStart": 276,
+          "byteEndExclusive": 322,
+          "sha256": "708b7ef94e1b5b94250e89ad7f7eab3423942d41773f784f504c30202f8e0602"
+        }
+      ]
+    },
+    {
+      "sourcePath": "db/clickhouse/migrations/0014_experiment_exposures.sql",
+      "original": "original/0014_experiment_exposures.sql",
+      "sha256": "066db9c83cc844188ca73544a67054f6b63f0a1c36e2eeab98d438c4a94a35e6",
+      "migration": "0014_experiment_exposures",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0014_experiment_exposures/statement-01.sql",
+          "byteStart": 0,
+          "byteEndExclusive": 885,
+          "sha256": "695538e452c37b98b3369fd1ad489056f2c919fccb2cc071328252691ceed3d0"
+        },
+        {
+          "name": "statement-02",
+          "file": "steps/0014_experiment_exposures/statement-02.sql",
+          "byteStart": 885,
+          "byteEndExclusive": 1580,
+          "sha256": "547f8eed15e971d537db2d6bf05b2f03e52e5f1c2f639a68521e7278db3903c9"
+        },
+        {
+          "name": "statement-03",
+          "file": "steps/0014_experiment_exposures/statement-03.sql",
+          "byteStart": 1580,
+          "byteEndExclusive": 2508,
+          "sha256": "15f7b2d46fbbdb64d57cf76a36282e14b350aaff7bd1ff277464132a7b179f79"
+        }
+      ]
+    },
+    {
+      "sourcePath": "db/clickhouse/migrations/0015_experiment_exposure_string_casts.sql",
+      "original": "original/0015_experiment_exposure_string_casts.sql",
+      "sha256": "c9958643c9f018f68fd07fad1425e4dd94d890ec190b6787c1d134e127b11f74",
+      "migration": "0015_experiment_exposure_string_casts",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0015_experiment_exposure_string_casts/statement-01.sql",
+          "byteStart": 0,
+          "byteEndExclusive": 451,
+          "sha256": "8a3cba65e710d02ef987e3cbecacfa5a3822f8acf44ff113087ee942b13ddcb6"
+        },
+        {
+          "name": "statement-02",
+          "file": "steps/0015_experiment_exposure_string_casts/statement-02.sql",
+          "byteStart": 451,
+          "byteEndExclusive": 1218,
+          "sha256": "f3264ef53649d0d682f0a7a565ca60c7e1253a200061bdab2e7e23eb1c24d1d6"
+        }
+      ]
+    },
+    {
+      "sourcePath": "db/clickhouse/migrations/0016_events_raw_schema_version.sql",
+      "original": "original/0016_events_raw_schema_version.sql",
+      "sha256": "375f7a8fae2d4cf6bb53a579e93e4f5ebb15ffe91923759a436b2def2e1d2df3",
+      "migration": "0016_events_raw_schema_version",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0016_events_raw_schema_version/statement-01.sql",
+          "byteStart": 0,
+          "byteEndExclusive": 113,
+          "sha256": "375f7a8fae2d4cf6bb53a579e93e4f5ebb15ffe91923759a436b2def2e1d2df3"
+        }
+      ]
+    },
+    {
+      "sourcePath": "db/clickhouse/migrations/0017_replay_safe_sources.sql",
+      "original": "original/0017_replay_safe_sources.sql",
+      "sha256": "6986149ed18b17dd781ac5dbe1215c8c32a39c36f392dbe4573e556f8f31f1ba",
+      "migration": "0017_replay_safe_sources",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0017_replay_safe_sources/statement-01.sql",
+          "byteStart": 0,
+          "byteEndExclusive": 412,
+          "sha256": "822cbdccab6b4f31df20c0de0083606a051cc57ae22ca170c4e0d8b801dd3909"
+        },
+        {
+          "name": "statement-02",
+          "file": "steps/0017_replay_safe_sources/statement-02.sql",
+          "byteStart": 412,
+          "byteEndExclusive": 810,
+          "sha256": "b701f1c87c342fe46f5361410f22e3a8289e96de0aed589dece01f51fe38643b"
+        },
+        {
+          "name": "statement-03",
+          "file": "steps/0017_replay_safe_sources/statement-03.sql",
+          "byteStart": 810,
+          "byteEndExclusive": 1278,
+          "sha256": "426961a6ba43d5d6de7a94bbe88731a638930036ddce3bb5480013a3e37fff7c"
+        },
+        {
+          "name": "statement-04",
+          "file": "steps/0017_replay_safe_sources/statement-04.sql",
+          "byteStart": 1278,
+          "byteEndExclusive": 2659,
+          "sha256": "e627342c27a91249c94ca14970bf43740f40c35fd1ded53d8b86731908091530"
+        },
+        {
+          "name": "statement-05",
+          "file": "steps/0017_replay_safe_sources/statement-05.sql",
+          "byteStart": 2659,
+          "byteEndExclusive": 2715,
+          "sha256": "22545ab8b2268b8be3936f313948939b9a4e855d8b808d2cd4a684790f6490da"
+        },
+        {
+          "name": "statement-06",
+          "file": "steps/0017_replay_safe_sources/statement-06.sql",
+          "byteStart": 2715,
+          "byteEndExclusive": 2770,
+          "sha256": "4f71e2f306d6183b80a458e7f489a96e413e60e881ca7a10ae9f5ac30fb9e20b"
+        },
+        {
+          "name": "statement-07",
+          "file": "steps/0017_replay_safe_sources/statement-07.sql",
+          "byteStart": 2770,
+          "byteEndExclusive": 2829,
+          "sha256": "5471c547503e83cfd4729b206ac6d1966d83e1d065f15e2d1517e95706fb65b0"
+        },
+        {
+          "name": "statement-08",
+          "file": "steps/0017_replay_safe_sources/statement-08.sql",
+          "byteStart": 2829,
+          "byteEndExclusive": 2889,
+          "sha256": "9a9321fe6a0b194e67d3f12fcaa8391633896b30b3010b1f870b3edad69a41ab"
+        },
+        {
+          "name": "statement-09",
+          "file": "steps/0017_replay_safe_sources/statement-09.sql",
+          "byteStart": 2889,
+          "byteEndExclusive": 3122,
+          "sha256": "36eba8e1983624f4f3fa6046924c196dc417d283d6d2141e1a14bcdb65e2baeb"
+        },
+        {
+          "name": "statement-10",
+          "file": "steps/0017_replay_safe_sources/statement-10.sql",
+          "byteStart": 3122,
+          "byteEndExclusive": 3345,
+          "sha256": "1eff7df66f163846a62266e891ff8b2c55b855dc6a2e69a64c3128a1576b31e3"
+        },
+        {
+          "name": "statement-11",
+          "file": "steps/0017_replay_safe_sources/statement-11.sql",
+          "byteStart": 3345,
+          "byteEndExclusive": 3566,
+          "sha256": "290cd2ae6ebb6b076ab7f43d1f99bda23cc76a1ca006a6c28fc51651e259cffe"
+        },
+        {
+          "name": "statement-12",
+          "file": "steps/0017_replay_safe_sources/statement-12.sql",
+          "byteStart": 3566,
+          "byteEndExclusive": 3821,
+          "sha256": "bba8ce814eef1e9635af0cc5da9f4a32ee09215ab78f6ef75badd1801ea6d85a"
+        },
+        {
+          "name": "statement-13",
+          "file": "steps/0017_replay_safe_sources/statement-13.sql",
+          "byteStart": 3821,
+          "byteEndExclusive": 4413,
+          "sha256": "86a29561ca2b4537b06acdfebbee2f4c7140de5b25d19076f1200a06ca5fd7d2"
+        },
+        {
+          "name": "statement-14",
+          "file": "steps/0017_replay_safe_sources/statement-14.sql",
+          "byteStart": 4413,
+          "byteEndExclusive": 4956,
+          "sha256": "f46011bb58ae8532437f1619a01e50818644e77925d47711741b1d82af9e96fc"
+        },
+        {
+          "name": "statement-15",
+          "file": "steps/0017_replay_safe_sources/statement-15.sql",
+          "byteStart": 4956,
+          "byteEndExclusive": 5276,
+          "sha256": "6ce9de15254fc7517f4d750b9c560417bad7b1b5ffdb139556feb82018ff6baa"
+        },
+        {
+          "name": "statement-16",
+          "file": "steps/0017_replay_safe_sources/statement-16.sql",
+          "byteStart": 5276,
+          "byteEndExclusive": 5365,
+          "sha256": "72632740aa0c84d1ef1acf38eff9aff6ad3dfed642fe97d6a1cf606082160dc7"
+        },
+        {
+          "name": "statement-17",
+          "file": "steps/0017_replay_safe_sources/statement-17.sql",
+          "byteStart": 5365,
+          "byteEndExclusive": 5414,
+          "sha256": "06ba8a4f9f016d2ed1d1c2b518197ed3efed92759e747f5f93f09b44204eb15e"
+        },
+        {
+          "name": "statement-18",
+          "file": "steps/0017_replay_safe_sources/statement-18.sql",
+          "byteStart": 5414,
+          "byteEndExclusive": 5464,
+          "sha256": "283993b525fa5c927a3c6f908b5297996b891174310eab2c61129b470092004b"
+        },
+        {
+          "name": "statement-19",
+          "file": "steps/0017_replay_safe_sources/statement-19.sql",
+          "byteStart": 5464,
+          "byteEndExclusive": 5875,
+          "sha256": "3a4e2ac47f84d3116d232accc42926e52cac9b4c72ef58aecf2484a379c97006"
+        },
+        {
+          "name": "statement-20",
+          "file": "steps/0017_replay_safe_sources/statement-20.sql",
+          "byteStart": 5875,
+          "byteEndExclusive": 6169,
+          "sha256": "90d8007b4c23e990d3beeda8b7d1376073d9780d5c20e63c792779036179676e"
+        }
+      ]
+    },
+    {
+      "sourcePath": "db/clickhouse/migrations/0018_conservative_identity_resolution.sql",
+      "original": "original/0018_conservative_identity_resolution.sql",
+      "sha256": "c144311cda6d59dc08ba92e7384daea85f852742ac40cabbd90592f249a40bb6",
+      "migration": "0018_conservative_identity_resolution",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0018_conservative_identity_resolution/statement-01.sql",
+          "byteStart": 0,
+          "byteEndExclusive": 754,
+          "sha256": "ed98df17dc8bf29970b0c5f7bf7ff97c4ba4a8c9160910bfb70e99976010002a"
+        },
+        {
+          "name": "statement-02",
+          "file": "steps/0018_conservative_identity_resolution/statement-02.sql",
+          "byteStart": 754,
+          "byteEndExclusive": 854,
+          "sha256": "24c96eed70c96fcbc65a2ca6468819a80eb10a2580dbe893cff789248df76569"
+        },
+        {
+          "name": "statement-03",
+          "file": "steps/0018_conservative_identity_resolution/statement-03.sql",
+          "byteStart": 854,
+          "byteEndExclusive": 986,
+          "sha256": "b563a7ef286a459b3713eb8536f37a9df004a559cc3873e6ed38b7dccfdf8912"
+        },
+        {
+          "name": "statement-04",
+          "file": "steps/0018_conservative_identity_resolution/statement-04.sql",
+          "byteStart": 986,
+          "byteEndExclusive": 1044,
+          "sha256": "e32677f9bf3db048e79f2ebf3d99cc4eaf75bd0f3ef0cd46182a67433c9c10d7"
+        },
+        {
+          "name": "statement-05",
+          "file": "steps/0018_conservative_identity_resolution/statement-05.sql",
+          "byteStart": 1044,
+          "byteEndExclusive": 1102,
+          "sha256": "443907dcd239d6e4a3957da9f6f685057ab8ad852641f28c6f757d0677ba8cbd"
+        },
+        {
+          "name": "statement-06",
+          "file": "steps/0018_conservative_identity_resolution/statement-06.sql",
+          "byteStart": 1102,
+          "byteEndExclusive": 1154,
+          "sha256": "14fc59c2068b842ed9c2af4a115f41903d32091d33a4be00c722f9b03984df6e"
+        },
+        {
+          "name": "statement-07",
+          "file": "steps/0018_conservative_identity_resolution/statement-07.sql",
+          "byteStart": 1154,
+          "byteEndExclusive": 1211,
+          "sha256": "cbd692e2b85912df80ea1974aebf696d2676586cbee38b1011eede5cadd3629f"
+        },
+        {
+          "name": "statement-08",
+          "file": "steps/0018_conservative_identity_resolution/statement-08.sql",
+          "byteStart": 1211,
+          "byteEndExclusive": 1711,
+          "sha256": "c9de2bc0747012817955cfd54d6080ab0a478f9c1aefef57e99e9965eb69cd86"
+        },
+        {
+          "name": "statement-09",
+          "file": "steps/0018_conservative_identity_resolution/statement-09.sql",
+          "byteStart": 1711,
+          "byteEndExclusive": 2165,
+          "sha256": "a05d0013c180527c7a6801af88d66eb88323482e44ec6240edb04ba283ceb27a"
+        },
+        {
+          "name": "statement-10",
+          "file": "steps/0018_conservative_identity_resolution/statement-10.sql",
+          "byteStart": 2165,
+          "byteEndExclusive": 2248,
+          "sha256": "d9f8741b505699b90ea6fd84242aea8c90fdbab7ca4992a4840d63ab5b32ef18"
+        },
+        {
+          "name": "statement-11",
+          "file": "steps/0018_conservative_identity_resolution/statement-11.sql",
+          "byteStart": 2248,
+          "byteEndExclusive": 2295,
+          "sha256": "ecf93eb49ee58819e86e8c32760ebaf1a622e1ff78bc2609cbf69a7f77c042a2"
+        },
+        {
+          "name": "statement-12",
+          "file": "steps/0018_conservative_identity_resolution/statement-12.sql",
+          "byteStart": 2295,
+          "byteEndExclusive": 2837,
+          "sha256": "818eb0558d34ef841ee345a1fd42addc3ed258dcbda3fff7d43245e5fd0b08b9"
+        },
+        {
+          "name": "statement-13",
+          "file": "steps/0018_conservative_identity_resolution/statement-13.sql",
+          "byteStart": 2837,
+          "byteEndExclusive": 3058,
+          "sha256": "5f8870e835d49acca2e0461d8adf6a4cc23044e218781a474595e160cbfe1191"
+        },
+        {
+          "name": "statement-14",
+          "file": "steps/0018_conservative_identity_resolution/statement-14.sql",
+          "byteStart": 3058,
+          "byteEndExclusive": 3116,
+          "sha256": "443907dcd239d6e4a3957da9f6f685057ab8ad852641f28c6f757d0677ba8cbd"
+        },
+        {
+          "name": "statement-15",
+          "file": "steps/0018_conservative_identity_resolution/statement-15.sql",
+          "byteStart": 3116,
+          "byteEndExclusive": 3539,
+          "sha256": "d8baba86546a21d549518ee9e2294cc4966170ad82d83c92f1e59e0fc9a6ebff"
+        },
+        {
+          "name": "statement-16",
+          "file": "steps/0018_conservative_identity_resolution/statement-16.sql",
+          "byteStart": 3539,
+          "byteEndExclusive": 3876,
+          "sha256": "022646100dc0e0620cbb3a61e76eec97606b11ea1dfffbadbadad64c5944ce18"
+        },
+        {
+          "name": "statement-17",
+          "file": "steps/0018_conservative_identity_resolution/statement-17.sql",
+          "byteStart": 3876,
+          "byteEndExclusive": 3938,
+          "sha256": "b2c47359f4bcc7151c49df0704fdceb8a2fc2f4fe6746c77bfc1ccf5895d7f50"
+        },
+        {
+          "name": "statement-18",
+          "file": "steps/0018_conservative_identity_resolution/statement-18.sql",
+          "byteStart": 3938,
+          "byteEndExclusive": 4001,
+          "sha256": "b08d28b0efb788aeb4d7d96ab40ac3e0cf844177b8cda7fef499256ff5f1fe25"
+        },
+        {
+          "name": "statement-19",
+          "file": "steps/0018_conservative_identity_resolution/statement-19.sql",
+          "byteStart": 4001,
+          "byteEndExclusive": 4090,
+          "sha256": "aab26a36422d7050b5d4760d1af372593cbae19b68112bb4c8a01c014b8d7595"
+        },
+        {
+          "name": "statement-20",
+          "file": "steps/0018_conservative_identity_resolution/statement-20.sql",
+          "byteStart": 4090,
+          "byteEndExclusive": 4181,
+          "sha256": "01d40420c262550d8a7e87cdffe5fb65717db8cbd94b14dbdc14c252f7bad020"
+        },
+        {
+          "name": "statement-21",
+          "file": "steps/0018_conservative_identity_resolution/statement-21.sql",
+          "byteStart": 4181,
+          "byteEndExclusive": 4400,
+          "sha256": "6c160a107c4a57d3eafad42c5c5c50bf303a5088e2fd738cd9076daf5fb59a30"
+        },
+        {
+          "name": "statement-22",
+          "file": "steps/0018_conservative_identity_resolution/statement-22.sql",
+          "byteStart": 4400,
+          "byteEndExclusive": 4700,
+          "sha256": "9d2cf338807f22c9c22e0efc732629b4b561d3101aabc91bac56fbc95a328c5c"
+        },
+        {
+          "name": "statement-23",
+          "file": "steps/0018_conservative_identity_resolution/statement-23.sql",
+          "byteStart": 4700,
+          "byteEndExclusive": 4793,
+          "sha256": "65e41b39d5eec9ac866f3ecf4513555acf9a8ea174460d87c32d357981e2f292"
+        },
+        {
+          "name": "statement-24",
+          "file": "steps/0018_conservative_identity_resolution/statement-24.sql",
+          "byteStart": 4793,
+          "byteEndExclusive": 4888,
+          "sha256": "6b19772a4972d37a5d039daf7e270793610299d6b5a35e21bf4339865d620ab3"
+        },
+        {
+          "name": "statement-25",
+          "file": "steps/0018_conservative_identity_resolution/statement-25.sql",
+          "byteStart": 4888,
+          "byteEndExclusive": 4940,
+          "sha256": "3c5df9d4375a298787ff0a89913d6583abe5b95c120682f4dec3f2eaa69e63d1"
+        },
+        {
+          "name": "statement-26",
+          "file": "steps/0018_conservative_identity_resolution/statement-26.sql",
+          "byteStart": 4940,
+          "byteEndExclusive": 4993,
+          "sha256": "3fd2c6c57cc450c31c7ca4ed8e48e9eb0f42898981a7ac4cfe0a6094e567a32a"
+        },
+        {
+          "name": "statement-27",
+          "file": "steps/0018_conservative_identity_resolution/statement-27.sql",
+          "byteStart": 4993,
+          "byteEndExclusive": 5267,
+          "sha256": "0a7ce0fb9f5cff8ca053461b947bc0f27a837d7e21a617d69fedc694aa32b161"
+        },
+        {
+          "name": "statement-28",
+          "file": "steps/0018_conservative_identity_resolution/statement-28.sql",
+          "byteStart": 5267,
+          "byteEndExclusive": 5623,
+          "sha256": "ddc87d6f3aa8bb404534983bc28b891c3591e43a95ff16c84631be90d8045064"
+        },
+        {
+          "name": "statement-29",
+          "file": "steps/0018_conservative_identity_resolution/statement-29.sql",
+          "byteStart": 5623,
+          "byteEndExclusive": 5918,
+          "sha256": "ed9cba13eedba2f97061e234696ef8631a6ac2aaa49d778f4a9fcb0573e47cac"
+        },
+        {
+          "name": "statement-30",
+          "file": "steps/0018_conservative_identity_resolution/statement-30.sql",
+          "byteStart": 5918,
+          "byteEndExclusive": 6221,
+          "sha256": "7ff55958678db3153e47d13752730992ba69e02bd786fc78d9c0c1f95813bdb3"
+        },
+        {
+          "name": "statement-31",
+          "file": "steps/0018_conservative_identity_resolution/statement-31.sql",
+          "byteStart": 6221,
+          "byteEndExclusive": 6286,
+          "sha256": "77bd330c6692ff3b1931fd42c4e971c8fad598a6ed524471ecc29e56ddc553ef"
+        },
+        {
+          "name": "statement-32",
+          "file": "steps/0018_conservative_identity_resolution/statement-32.sql",
+          "byteStart": 6286,
+          "byteEndExclusive": 6381,
+          "sha256": "a5689563993c6c92cf88d634a2eb472b14ea6209f638307efbe981937cf80ca5"
+        },
+        {
+          "name": "statement-33",
+          "file": "steps/0018_conservative_identity_resolution/statement-33.sql",
+          "byteStart": 6381,
+          "byteEndExclusive": 6746,
+          "sha256": "5aa5d9fdf1cacd2955c94a0f266d62331b2a5f77499ef7b9324a156994bd724e"
+        },
+        {
+          "name": "statement-34",
+          "file": "steps/0018_conservative_identity_resolution/statement-34.sql",
+          "byteStart": 6746,
+          "byteEndExclusive": 6845,
+          "sha256": "57ca937b6999a38177df6149384ac43dc8ca6e4c6c8723c9471b53c2affd1686"
+        },
+        {
+          "name": "statement-35",
+          "file": "steps/0018_conservative_identity_resolution/statement-35.sql",
+          "byteStart": 6845,
+          "byteEndExclusive": 6900,
+          "sha256": "653fa3202bcf27f29ff99c74b1e958a818f6c6ca3db1856974c40c1018ef767b"
+        },
+        {
+          "name": "statement-36",
+          "file": "steps/0018_conservative_identity_resolution/statement-36.sql",
+          "byteStart": 6900,
+          "byteEndExclusive": 7369,
+          "sha256": "800a2df81d74b57b46155d8995dfa3fcbb37277d78e1aebd7331a352fcd489e3"
+        },
+        {
+          "name": "statement-37",
+          "file": "steps/0018_conservative_identity_resolution/statement-37.sql",
+          "byteStart": 7369,
+          "byteEndExclusive": 7823,
+          "sha256": "7c1839a3ef84d8d547c22fc1661c6ae5e5d864507b1b704802c9f5ea885bd1c6"
+        },
+        {
+          "name": "statement-38",
+          "file": "steps/0018_conservative_identity_resolution/statement-38.sql",
+          "byteStart": 7823,
+          "byteEndExclusive": 8183,
+          "sha256": "3bab2b00970d3d0dd38fb65709358f25d03c81afce738dfcd12ec428c6b8db46"
+        },
+        {
+          "name": "statement-39",
+          "file": "steps/0018_conservative_identity_resolution/statement-39.sql",
+          "byteStart": 8183,
+          "byteEndExclusive": 12202,
+          "sha256": "51c390bb5a1ebe4cd181c518e1dbd0404827c199ffa1db399cd1b9d0447318c9"
+        },
+        {
+          "name": "statement-40",
+          "file": "steps/0018_conservative_identity_resolution/statement-40.sql",
+          "byteStart": 12202,
+          "byteEndExclusive": 12536,
+          "sha256": "73ffdc3d709659e81a327eb53d0b94e130c97ec50ce94658f215f01c1affa32d"
+        },
+        {
+          "name": "statement-41",
+          "file": "steps/0018_conservative_identity_resolution/statement-41.sql",
+          "byteStart": 12536,
+          "byteEndExclusive": 12632,
+          "sha256": "6b8bcdfaff3b06e33fc0dd8ada9115a664e4c176786e97cee4f4e163f96d2633"
+        },
+        {
+          "name": "statement-42",
+          "file": "steps/0018_conservative_identity_resolution/statement-42.sql",
+          "byteStart": 12632,
+          "byteEndExclusive": 12672,
+          "sha256": "443d5d63f067f954c1d2ce84fd22ee02db1844b6b9b13b02d432257593ed7347"
+        },
+        {
+          "name": "statement-43",
+          "file": "steps/0018_conservative_identity_resolution/statement-43.sql",
+          "byteStart": 12672,
+          "byteEndExclusive": 12716,
+          "sha256": "423e43b9ab2442e6d60ec554befe02f11b60098ac2d4aa377fedf167f04c2680"
+        },
+        {
+          "name": "statement-44",
+          "file": "steps/0018_conservative_identity_resolution/statement-44.sql",
+          "byteStart": 12716,
+          "byteEndExclusive": 12769,
+          "sha256": "72349be7608bc0924b1124a2c515ceb8e832e4c499ca1d69061e8daccf32ef92"
+        },
+        {
+          "name": "statement-45",
+          "file": "steps/0018_conservative_identity_resolution/statement-45.sql",
+          "byteStart": 12769,
+          "byteEndExclusive": 13075,
+          "sha256": "7c867182dbd5dbd3956d3d6dff71ebec237f54f32fcac458f3b6cdb24cbd1e32"
+        },
+        {
+          "name": "statement-46",
+          "file": "steps/0018_conservative_identity_resolution/statement-46.sql",
+          "byteStart": 13075,
+          "byteEndExclusive": 13132,
+          "sha256": "2718142da482b111b5073e8c1c69f5931cf54ffcced94ef0f7cec9ee7823ece3"
+        },
+        {
+          "name": "statement-47",
+          "file": "steps/0018_conservative_identity_resolution/statement-47.sql",
+          "byteStart": 13132,
+          "byteEndExclusive": 13166,
+          "sha256": "4aeb5779bc2c94246fcb8a5cf49380e0729e41e4377179a06fa9d67812b1d919"
+        },
+        {
+          "name": "statement-48",
+          "file": "steps/0018_conservative_identity_resolution/statement-48.sql",
+          "byteStart": 13166,
+          "byteEndExclusive": 13471,
+          "sha256": "94d2adf2fd520aea72ba6d9ac31235d6c49c881c878e262870b4efb6421105f5"
+        },
+        {
+          "name": "statement-49",
+          "file": "steps/0018_conservative_identity_resolution/statement-49.sql",
+          "byteStart": 13471,
+          "byteEndExclusive": 13511,
+          "sha256": "1fd107ff3a23e8a4a4b5f5aaaf513dce511c61a2f2b86f73b0cc0260f1ba0021"
+        },
+        {
+          "name": "statement-50",
+          "file": "steps/0018_conservative_identity_resolution/statement-50.sql",
+          "byteStart": 13511,
+          "byteEndExclusive": 13555,
+          "sha256": "71943b13a12cfa88c67bd8c97fcbcd401f9d45b66b1792217e7cf4267592d7ce"
+        },
+        {
+          "name": "statement-51",
+          "file": "steps/0018_conservative_identity_resolution/statement-51.sql",
+          "byteStart": 13555,
+          "byteEndExclusive": 13608,
+          "sha256": "26c73ca127d7fcd55463fe78edd35a0cdf4036aa13ffa0a30942698c94588323"
+        },
+        {
+          "name": "statement-52",
+          "file": "steps/0018_conservative_identity_resolution/statement-52.sql",
+          "byteStart": 13608,
+          "byteEndExclusive": 13919,
+          "sha256": "847698ae0be9c5abb83b1671e64229cd1c190d5ca20dd88ffda8f205a2208225"
+        },
+        {
+          "name": "statement-53",
+          "file": "steps/0018_conservative_identity_resolution/statement-53.sql",
+          "byteStart": 13919,
+          "byteEndExclusive": 13976,
+          "sha256": "4cc8e95401b842ab7ef0206a0331f38eb1061ac3bf93229e5c56b7073a942c8f"
+        },
+        {
+          "name": "statement-54",
+          "file": "steps/0018_conservative_identity_resolution/statement-54.sql",
+          "byteStart": 13976,
+          "byteEndExclusive": 14010,
+          "sha256": "47d5b2a7739171280b6418d2e2c19f52ec6fea48ce031c59e53a5351b5dd695b"
+        },
+        {
+          "name": "statement-55",
+          "file": "steps/0018_conservative_identity_resolution/statement-55.sql",
+          "byteStart": 14010,
+          "byteEndExclusive": 14319,
+          "sha256": "b7ffb1ff83cbbe27bc09319782f8d9c5cb9b619eff2bd1cb26906e4012d4d0e1"
+        },
+        {
+          "name": "statement-56",
+          "file": "steps/0018_conservative_identity_resolution/statement-56.sql",
+          "byteStart": 14319,
+          "byteEndExclusive": 14376,
+          "sha256": "b1adb450cb134b370b5e29b8ac4c2a497685ea697c7c31ebe71b965b88797d21"
+        },
+        {
+          "name": "statement-57",
+          "file": "steps/0018_conservative_identity_resolution/statement-57.sql",
+          "byteStart": 14376,
+          "byteEndExclusive": 14437,
+          "sha256": "e2d1fd73b5ad3d3242c184e11cdbaecbde6d816030d11dd495c896ee03e50acd"
+        },
+        {
+          "name": "statement-58",
+          "file": "steps/0018_conservative_identity_resolution/statement-58.sql",
+          "byteStart": 14437,
+          "byteEndExclusive": 14524,
+          "sha256": "9c78716015c60a0d580175df68b147c4ce2135f9b7e7b83115111b0ccbe0c261"
+        },
+        {
+          "name": "statement-59",
+          "file": "steps/0018_conservative_identity_resolution/statement-59.sql",
+          "byteStart": 14524,
+          "byteEndExclusive": 15181,
+          "sha256": "a21fdc4cc13bef969c916ff475293a014b9664823a855b999d21406204fb9cba"
+        },
+        {
+          "name": "statement-60",
+          "file": "steps/0018_conservative_identity_resolution/statement-60.sql",
+          "byteStart": 15181,
+          "byteEndExclusive": 15272,
+          "sha256": "7e70f31dc37fb2d71ef73d0736c1653151fb2b63b81cda258b1871d7504486e6"
+        },
+        {
+          "name": "statement-61",
+          "file": "steps/0018_conservative_identity_resolution/statement-61.sql",
+          "byteStart": 15272,
+          "byteEndExclusive": 15323,
+          "sha256": "204bddededcb0b9326792495f2311b9fc62b567e9e945f62ed320041cfaeed27"
+        },
+        {
+          "name": "statement-62",
+          "file": "steps/0018_conservative_identity_resolution/statement-62.sql",
+          "byteStart": 15323,
+          "byteEndExclusive": 15977,
+          "sha256": "7cf838187300d708ba1ca7f82db39d6c59def839e83a54f4624af3ddaa35b922"
+        },
+        {
+          "name": "statement-63",
+          "file": "steps/0018_conservative_identity_resolution/statement-63.sql",
+          "byteStart": 15977,
+          "byteEndExclusive": 17922,
+          "sha256": "66446388e235450c2cddef01c3a8791271b8ebafe1d27774edf4a2d5400e2ac2"
+        },
+        {
+          "name": "statement-64",
+          "file": "steps/0018_conservative_identity_resolution/statement-64.sql",
+          "byteStart": 17922,
+          "byteEndExclusive": 18843,
+          "sha256": "27aac20101349d88dd700e2e549c38d73e0190f07a01f685c21abcb81abcdd5a"
+        }
+      ]
+    },
+    {
+      "sourcePath": "db/clickhouse/migrations/0019_web_enrichment.sql",
+      "original": "original/0019_web_enrichment.sql",
+      "sha256": "28f118103db1932769a286be7bca316ebaebeae9453660b51b71e5651f3b6b23",
+      "migration": "0019_web_enrichment",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0019_web_enrichment/statement-01.sql",
+          "byteStart": 0,
+          "byteEndExclusive": 976,
+          "sha256": "40e16ba91843cdb7c61a953a31ecb3d8ba58f7c8d30bafbe726590673d9ce12c"
+        },
+        {
+          "name": "statement-02",
+          "file": "steps/0019_web_enrichment/statement-02.sql",
+          "byteStart": 976,
+          "byteEndExclusive": 1122,
+          "sha256": "40fa8cb3264da8fa33ec187383080c5308b4a49cd68a93d97daf60a0ae2dc204"
+        },
+        {
+          "name": "statement-03",
+          "file": "steps/0019_web_enrichment/statement-03.sql",
+          "byteStart": 1122,
+          "byteEndExclusive": 4932,
+          "sha256": "0479cd227452539b803c9932dac31ae09c6389a5e47ba492f1e13e228416b8c1"
+        },
+        {
+          "name": "statement-04",
+          "file": "steps/0019_web_enrichment/statement-04.sql",
+          "byteStart": 4932,
+          "byteEndExclusive": 5266,
+          "sha256": "73ffdc3d709659e81a327eb53d0b94e130c97ec50ce94658f215f01c1affa32d"
+        },
+        {
+          "name": "statement-05",
+          "file": "steps/0019_web_enrichment/statement-05.sql",
+          "byteStart": 5266,
+          "byteEndExclusive": 5362,
+          "sha256": "6b8bcdfaff3b06e33fc0dd8ada9115a664e4c176786e97cee4f4e163f96d2633"
+        },
+        {
+          "name": "statement-06",
+          "file": "steps/0019_web_enrichment/statement-06.sql",
+          "byteStart": 5362,
+          "byteEndExclusive": 6135,
+          "sha256": "e4e83d2bbe22de75a44b26c520c7d4b8cfd893da401ba4733811ecf5d4b903c7"
+        }
+      ]
+    },
+    {
+      "sourcePath": "db/clickhouse/migrations/0020_replay_safe_sessions.sql",
+      "original": "original/0020_replay_safe_sessions.sql",
+      "sha256": "2520352091378f9bdee1af3be0d36340422c3b82c3d7fc6f6d5291386c4c354b",
+      "migration": "0020_replay_safe_sessions",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0020_replay_safe_sessions/statement-01.sql",
+          "byteStart": 0,
+          "byteEndExclusive": 282,
+          "sha256": "47ffe989ef67ba8e6aeab77deb5d5b295507cca9e90f6cb8f7f54c6d7b89ba97"
+        },
+        {
+          "name": "statement-02",
+          "file": "steps/0020_replay_safe_sessions/statement-02.sql",
+          "byteStart": 282,
+          "byteEndExclusive": 331,
+          "sha256": "1b0a43b0df3d05f023a3418b2312fddd02404455dc0b2c48f103aab9c4b71284"
+        },
+        {
+          "name": "statement-03",
+          "file": "steps/0020_replay_safe_sessions/statement-03.sql",
+          "byteStart": 331,
+          "byteEndExclusive": 1856,
+          "sha256": "2cb643e6c3f5a6ade3f7e227ccc970ac7e5958af1b5dff2c53fb5e32dda39699"
+        },
+        {
+          "name": "statement-04",
+          "file": "steps/0020_replay_safe_sessions/statement-04.sql",
+          "byteStart": 1856,
+          "byteEndExclusive": 3294,
+          "sha256": "6c7e0abd95806ac6133f6e9b06cb4f44b47dbc98b677f09189beedbfbe2f6243"
+        },
+        {
+          "name": "statement-05",
+          "file": "steps/0020_replay_safe_sessions/statement-05.sql",
+          "byteStart": 3294,
+          "byteEndExclusive": 3372,
+          "sha256": "9dc88926229e3cea7d8c4da45c830b2e34484466f33280d7ac255e72b5db0092"
+        },
+        {
+          "name": "statement-06",
+          "file": "steps/0020_replay_safe_sessions/statement-06.sql",
+          "byteStart": 3372,
+          "byteEndExclusive": 3439,
+          "sha256": "881333c358dc4110d39d2c378e2eb7a60b290377a407f398f2c1718a04559eba"
+        },
+        {
+          "name": "statement-07",
+          "file": "steps/0020_replay_safe_sessions/statement-07.sql",
+          "byteStart": 3439,
+          "byteEndExclusive": 3478,
+          "sha256": "8b856bb5c7a6d73a202a5902891b3b54460d4dfd89781682f992d35d60b998bd"
+        },
+        {
+          "name": "statement-08",
+          "file": "steps/0020_replay_safe_sessions/statement-08.sql",
+          "byteStart": 3478,
+          "byteEndExclusive": 4944,
+          "sha256": "e7d14097d26691cefb9a014bab9934ab5318cc5bbb4b816e982ed52ceca3ecf7"
+        }
+      ]
+    },
+    {
+      "sourcePath": "db/clickhouse/migrations/0021_governed_current_user_traits.sql",
+      "original": "original/0021_governed_current_user_traits.sql",
+      "sha256": "41f30678ff7d119c74e33f08186fe95de443be23787227dc00de8a54c466bd37",
+      "migration": "0021_governed_current_user_traits",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0021_governed_current_user_traits/statement-01.sql",
+          "byteStart": 0,
+          "byteEndExclusive": 503,
+          "sha256": "6ab6b1f0262a47a3d41d0278e588a3ac0dc7f22cd0b492444cb1e43599fe7859"
+        },
+        {
+          "name": "statement-02",
+          "file": "steps/0021_governed_current_user_traits/statement-02.sql",
+          "byteStart": 503,
+          "byteEndExclusive": 649,
+          "sha256": "40fa8cb3264da8fa33ec187383080c5308b4a49cd68a93d97daf60a0ae2dc204"
+        },
+        {
+          "name": "statement-03",
+          "file": "steps/0021_governed_current_user_traits/statement-03.sql",
+          "byteStart": 649,
+          "byteEndExclusive": 802,
+          "sha256": "ea0d33a822f1b26c57d6e77fa17e1ee1b66e61a18153288c1e1967597da1d9f0"
+        },
+        {
+          "name": "statement-04",
+          "file": "steps/0021_governed_current_user_traits/statement-04.sql",
+          "byteStart": 802,
+          "byteEndExclusive": 1084,
+          "sha256": "ca059120b30f584af967c712e43ee09eeb58b50b9264f056237128ebfb5adc71"
+        },
+        {
+          "name": "statement-05",
+          "file": "steps/0021_governed_current_user_traits/statement-05.sql",
+          "byteStart": 1084,
+          "byteEndExclusive": 1371,
+          "sha256": "0085e15acbfd384b429669f27159553dda7596f5d1e2ef9e1ceda2725c5fc302"
+        },
+        {
+          "name": "statement-06",
+          "file": "steps/0021_governed_current_user_traits/statement-06.sql",
+          "byteStart": 1371,
+          "byteEndExclusive": 3428,
+          "sha256": "c1b09457357fd41322c85aae2207786a29df0ef9df95850aa294a7ce1bfd726d"
+        },
+        {
+          "name": "statement-07",
+          "file": "steps/0021_governed_current_user_traits/statement-07.sql",
+          "byteStart": 3428,
+          "byteEndExclusive": 3480,
+          "sha256": "5d8e4a15ab1a37c15fd75519f4043e4a01a504450b620a6ba79c50aa6be873ed"
+        },
+        {
+          "name": "statement-08",
+          "file": "steps/0021_governed_current_user_traits/statement-08.sql",
+          "byteStart": 3480,
+          "byteEndExclusive": 5765,
+          "sha256": "2e843855eea13db66e07ad48c8c1306cf0fc82cc1549a2f9b087915b9271ed51"
+        },
+        {
+          "name": "statement-09",
+          "file": "steps/0021_governed_current_user_traits/statement-09.sql",
+          "byteStart": 5765,
+          "byteEndExclusive": 6050,
+          "sha256": "6dbe5ed0a4d6327617292bd579b6e439ec4d93999fa47cac34371f5685250219"
+        },
+        {
+          "name": "statement-10",
+          "file": "steps/0021_governed_current_user_traits/statement-10.sql",
+          "byteStart": 6050,
+          "byteEndExclusive": 6107,
+          "sha256": "68689bf69aab12437a8b267708220fdaea2ab2d257aca97c1ed91b13705ad5a9"
+        },
+        {
+          "name": "statement-11",
+          "file": "steps/0021_governed_current_user_traits/statement-11.sql",
+          "byteStart": 6107,
+          "byteEndExclusive": 8407,
+          "sha256": "fd948d50d1c9608397cc60839472c137bf3bfe580973bfffd406331500209e09"
+        },
+        {
+          "name": "statement-12",
+          "file": "steps/0021_governed_current_user_traits/statement-12.sql",
+          "byteStart": 8407,
+          "byteEndExclusive": 8702,
+          "sha256": "5b953b5597e4fc7343f09481367751e02c16ed4d36ea2e5c64354da384631aab"
+        },
+        {
+          "name": "statement-13",
+          "file": "steps/0021_governed_current_user_traits/statement-13.sql",
+          "byteStart": 8702,
+          "byteEndExclusive": 9323,
+          "sha256": "f1df13525a3a80e658b70bfe103d4539144c08a44944fb12087ec2e00a7d3030"
+        }
+      ]
+    },
+    {
+      "sourcePath": "db/clickhouse/migrations/0022_applied_retention_policy.sql",
+      "original": "original/0022_applied_retention_policy.sql",
+      "sha256": "8c594b02c0b8e15d8a9369a81db13e3501289c3f326b5d4b3554dc241bb48492",
+      "migration": "0022_applied_retention_policy",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0022_applied_retention_policy/statement-01.sql",
+          "byteStart": 0,
+          "byteEndExclusive": 343,
+          "sha256": "439c59e4a0fc73124be599936103ce84354f313f58d2e3f7bd1bbaf3a7c7bc78"
+        },
+        {
+          "name": "statement-02",
+          "file": "steps/0022_applied_retention_policy/statement-02.sql",
+          "byteStart": 343,
+          "byteEndExclusive": 418,
+          "sha256": "a8ef37c97783872b83129695847ae9bf1b7ef521cf6063954edc01530b7266cf"
+        },
+        {
+          "name": "statement-03",
+          "file": "steps/0022_applied_retention_policy/statement-03.sql",
+          "byteStart": 418,
+          "byteEndExclusive": 652,
+          "sha256": "683faeed379d8f12d5cac5fde691f112255d7ab2abc02e64bde8172264982cc0"
+        },
+        {
+          "name": "statement-04",
+          "file": "steps/0022_applied_retention_policy/statement-04.sql",
+          "byteStart": 652,
+          "byteEndExclusive": 878,
+          "sha256": "b15a030ea29a55d48eba51c2c4b1dcb407769a0b4c42ff7b3bbe96608ede6bfe"
+        },
+        {
+          "name": "statement-05",
+          "file": "steps/0022_applied_retention_policy/statement-05.sql",
+          "byteStart": 878,
+          "byteEndExclusive": 1290,
+          "sha256": "060ed9ea75de9aba3ab03d508653a6de75ede7a1ddb50729bf1ba1f4ffb9a924"
+        },
+        {
+          "name": "statement-06",
+          "file": "steps/0022_applied_retention_policy/statement-06.sql",
+          "byteStart": 1290,
+          "byteEndExclusive": 1346,
+          "sha256": "25d0d037df001c0523e4b7e06cc8abd93936c12bd9111655a74ac05c02a43697"
+        },
+        {
+          "name": "statement-07",
+          "file": "steps/0022_applied_retention_policy/statement-07.sql",
+          "byteStart": 1346,
+          "byteEndExclusive": 1793,
+          "sha256": "5fd7d817996ced9ce7abe3ffda9aec8aa9f4af54995d94dd3197ac83fc13b4b6"
+        },
+        {
+          "name": "statement-08",
+          "file": "steps/0022_applied_retention_policy/statement-08.sql",
+          "byteStart": 1793,
+          "byteEndExclusive": 1846,
+          "sha256": "f13f4ee4825e6c88ce7eeb3c7172fc3350586e107dd9cc410ea9d5935b56c95a"
+        },
+        {
+          "name": "statement-09",
+          "file": "steps/0022_applied_retention_policy/statement-09.sql",
+          "byteStart": 1846,
+          "byteEndExclusive": 2542,
+          "sha256": "db71bd5deb9aadc92fd1f6bcde5352f12874ad5e6062ec08ebea1fc1d0a76ec7"
+        },
+        {
+          "name": "statement-10",
+          "file": "steps/0022_applied_retention_policy/statement-10.sql",
+          "byteStart": 2542,
+          "byteEndExclusive": 2603,
+          "sha256": "fb3a5644c55700b8917d379e585c09f77571ddeee8da6f3272f84c033f55bf16"
+        },
+        {
+          "name": "statement-11",
+          "file": "steps/0022_applied_retention_policy/statement-11.sql",
+          "byteStart": 2603,
+          "byteEndExclusive": 3227,
+          "sha256": "db08f44aca7913cad7b85837adbd6a61fe601cbb3076679f362357d39dc554a7"
+        },
+        {
+          "name": "statement-12",
+          "file": "steps/0022_applied_retention_policy/statement-12.sql",
+          "byteStart": 3227,
+          "byteEndExclusive": 3267,
+          "sha256": "443d5d63f067f954c1d2ce84fd22ee02db1844b6b9b13b02d432257593ed7347"
+        },
+        {
+          "name": "statement-13",
+          "file": "steps/0022_applied_retention_policy/statement-13.sql",
+          "byteStart": 3267,
+          "byteEndExclusive": 3727,
+          "sha256": "bf57155c90270f36de7bb03e8c177ca658f05296b08d9c61c69e13e2d4d8d75d"
+        },
+        {
+          "name": "statement-14",
+          "file": "steps/0022_applied_retention_policy/statement-14.sql",
+          "byteStart": 3727,
+          "byteEndExclusive": 3767,
+          "sha256": "1fd107ff3a23e8a4a4b5f5aaaf513dce511c61a2f2b86f73b0cc0260f1ba0021"
+        },
+        {
+          "name": "statement-15",
+          "file": "steps/0022_applied_retention_policy/statement-15.sql",
+          "byteStart": 3767,
+          "byteEndExclusive": 4231,
+          "sha256": "31db10695085e15272ff3000152c199cee877ca157c1af6606a1d4e85e44b03c"
+        },
+        {
+          "name": "statement-16",
+          "file": "steps/0022_applied_retention_policy/statement-16.sql",
+          "byteStart": 4231,
+          "byteEndExclusive": 4288,
+          "sha256": "b1adb450cb134b370b5e29b8ac4c2a497685ea697c7c31ebe71b965b88797d21"
+        },
+        {
+          "name": "statement-17",
+          "file": "steps/0022_applied_retention_policy/statement-17.sql",
+          "byteStart": 4288,
+          "byteEndExclusive": 5097,
+          "sha256": "a04ace24afd85d2b0a8fecd316e12834f5353c14847557512fd1c415f7fe8991"
+        },
+        {
+          "name": "statement-18",
+          "file": "steps/0022_applied_retention_policy/statement-18.sql",
+          "byteStart": 5097,
+          "byteEndExclusive": 5142,
+          "sha256": "050286d1aa00612a94d7b5eb974415db9d6275fd9e2d5306a4466a24cc7a4f08"
+        },
+        {
+          "name": "statement-19",
+          "file": "steps/0022_applied_retention_policy/statement-19.sql",
+          "byteStart": 5142,
+          "byteEndExclusive": 6761,
+          "sha256": "650d2cccdec98854b5c022ab9f60caa163ea4e64d871c9eb4b1737b0a513598e"
+        },
+        {
+          "name": "statement-20",
+          "file": "steps/0022_applied_retention_policy/statement-20.sql",
+          "byteStart": 6761,
+          "byteEndExclusive": 6813,
+          "sha256": "5d8e4a15ab1a37c15fd75519f4043e4a01a504450b620a6ba79c50aa6be873ed"
+        },
+        {
+          "name": "statement-21",
+          "file": "steps/0022_applied_retention_policy/statement-21.sql",
+          "byteStart": 6813,
+          "byteEndExclusive": 9253,
+          "sha256": "f83d7d1c32b0decabac71f33edeee5621fba1a1ce84a9d0b1dd95b022bc1aad3"
+        },
+        {
+          "name": "statement-22",
+          "file": "steps/0022_applied_retention_policy/statement-22.sql",
+          "byteStart": 9253,
+          "byteEndExclusive": 9310,
+          "sha256": "68689bf69aab12437a8b267708220fdaea2ab2d257aca97c1ed91b13705ad5a9"
+        },
+        {
+          "name": "statement-23",
+          "file": "steps/0022_applied_retention_policy/statement-23.sql",
+          "byteStart": 9310,
+          "byteEndExclusive": 11766,
+          "sha256": "0bcbed90f0e94f79e9463ad8dd1ebe984fe489c492653e02319df6ef28bd3f30"
+        }
+      ]
+    },
+    {
+      "sourcePath": "db/clickhouse/migrations/0023_stable_reader_surface.sql",
+      "original": "original/0023_stable_reader_surface.sql",
+      "sha256": "d22c39530bc31bfac1cb60f4dd7dde9d57b74fd900a2b3e9e84fe65c16924bbd",
+      "migration": "0023_stable_reader_surface",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0023_stable_reader_surface/statement-01.sql",
+          "byteStart": 0,
+          "byteEndExclusive": 252,
+          "sha256": "23774b5f1a7fc28b23a692e2d4a89dc1200c5541a5f62952ea9ef48b329ee8a2"
+        },
+        {
+          "name": "statement-02",
+          "file": "steps/0023_stable_reader_surface/statement-02.sql",
+          "byteStart": 252,
+          "byteEndExclusive": 342,
+          "sha256": "b77660907711f64306a7bd6ddfb367695ad0c1c391b70b26594ae56eb86f267a"
+        },
+        {
+          "name": "statement-03",
+          "file": "steps/0023_stable_reader_surface/statement-03.sql",
+          "byteStart": 342,
+          "byteEndExclusive": 994,
+          "sha256": "c34aaa0d84e9606217d415cc109eb7ecc300d5e553c96e2eeadee3df3a8e8a97"
+        }
+      ]
+    },
+    {
+      "sourcePath": "db/clickhouse/migrations/0024_cohort_members.sql",
+      "original": "original/0024_cohort_members.sql",
+      "sha256": "c8effe8505363b52006b4b74eec7d552c6282837ab983b542901ee5564836911",
+      "migration": "0024_cohort_members",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0024_cohort_members/statement-01.sql",
+          "byteStart": 0,
+          "byteEndExclusive": 239,
+          "sha256": "c8effe8505363b52006b4b74eec7d552c6282837ab983b542901ee5564836911"
+        }
+      ]
+    },
+    {
+      "sourcePath": "db/clickhouse/migrations/0025_organization_analytics.sql",
+      "original": "original/0025_organization_analytics.sql",
+      "sha256": "4989c4d4fb49d546175935a2560968d8ba8a8406bd4be5b4cb74fbfcd2527a2b",
+      "migration": "0025_organization_analytics",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0025_organization_analytics/statement-01.sql",
+          "byteStart": 0,
+          "byteEndExclusive": 992,
+          "sha256": "92d4b445f5504a545489ae87933d40a4df7de614fd28e75e2653aa489b885655"
+        },
+        {
+          "name": "statement-02",
+          "file": "steps/0025_organization_analytics/statement-02.sql",
+          "byteStart": 992,
+          "byteEndExclusive": 1132,
+          "sha256": "de995d491eb69bbeb94aec0b1b751dd019ff274599937926c4ebb75733e829a1"
+        },
+        {
+          "name": "statement-03",
+          "file": "steps/0025_organization_analytics/statement-03.sql",
+          "byteStart": 1132,
+          "byteEndExclusive": 1438,
+          "sha256": "d10383c4984f4c7ffd187888dfa3d462b07513211b68dbfb7118dcb3327ba88e"
+        },
+        {
+          "name": "statement-04",
+          "file": "steps/0025_organization_analytics/statement-04.sql",
+          "byteStart": 1438,
+          "byteEndExclusive": 2916,
+          "sha256": "f447958c6d3c330e2e440828d1b41dd1b0423e20d3b54c33b6c5f5bed7eeac61"
+        },
+        {
+          "name": "statement-05",
+          "file": "steps/0025_organization_analytics/statement-05.sql",
+          "byteStart": 2916,
+          "byteEndExclusive": 4633,
+          "sha256": "5bb8b78303f5e6ccce88bf8fd7d65dbe8e3277d763074fbb0ef5b6bbd9545197"
+        },
+        {
+          "name": "statement-06",
+          "file": "steps/0025_organization_analytics/statement-06.sql",
+          "byteStart": 4633,
+          "byteEndExclusive": 4921,
+          "sha256": "0e9ee9c4e9913449d363256b800f2f641d9cf95b5decb7537bd9f82de826a01c"
+        },
+        {
+          "name": "statement-07",
+          "file": "steps/0025_organization_analytics/statement-07.sql",
+          "byteStart": 4921,
+          "byteEndExclusive": 5251,
+          "sha256": "a9a210b39318105e5e8993722563773b7dbfcace073f0c7a0b0970dfa40907d1"
+        },
+        {
+          "name": "statement-08",
+          "file": "steps/0025_organization_analytics/statement-08.sql",
+          "byteStart": 5251,
+          "byteEndExclusive": 5507,
+          "sha256": "30c46b6108d09b9aa9967f28ebb5c78386202673749bd514786365d07625bde9"
+        },
+        {
+          "name": "statement-09",
+          "file": "steps/0025_organization_analytics/statement-09.sql",
+          "byteStart": 5507,
+          "byteEndExclusive": 5954,
+          "sha256": "8a42ba765ea819c2a4a7190e3c51ee19c02085a78b9eabeef7ef06a60e785713"
+        },
+        {
+          "name": "statement-10",
+          "file": "steps/0025_organization_analytics/statement-10.sql",
+          "byteStart": 5954,
+          "byteEndExclusive": 6343,
+          "sha256": "dccb389d1e2e6063505ad371bc7d661c421bcada36f1ea1b2d87af6bf348b624"
+        }
+      ]
+    }
+  ],
+  "runner": {
+    "sourcePath": "db/clickhouse/migrate.sh",
+    "sha256": "dd43aac1d1ef1a10671a16371c046b2fc6c10bd83865fb006614690c424eede4",
+    "fixturePath": "original/migrate.sh"
+  },
+  "nativeAdaptations": [
+    {
+      "sourceStep": {
+        "name": "statement-13",
+        "file": "steps/0017_replay_safe_sources/statement-13.sql"
+      },
+      "sourceStepSha256": "86a29561ca2b4537b06acdfebbee2f4c7140de5b25d19076f1200a06ca5fd7d2",
+      "nativeSteps": [
+        {
+          "name": "statement-13-prepare",
+          "file": "native-assertions/statement-13-prepare.sql",
+          "sha256": "87d5c68cb9c66e9e00fbc9c277b3686ce3fb7b034a4d2fb6f2430212052d6586"
+        },
+        {
+          "name": "statement-13-check",
+          "file": "native-assertions/statement-13-check.sql",
+          "sha256": "10a5aa19258c8c0c3f475acb58e68cd5755941df3a8b172d428ede69b7579b46"
+        },
+        {
+          "name": "statement-13-cleanup",
+          "file": "native-assertions/statement-13-cleanup.sql",
+          "sha256": "f9a129a327b7adf94894d43c88a8cba22dc99c8c08f23c99851e9bb66f7bc356"
+        }
+      ],
+      "reason": "Standalone SELECT is outside v1. Preserve the exact throwIf query as INSERT SELECT into a named application Memory table, with explicit prepare and cleanup steps. A failure stops before cleanup and requires ordinary explicit recovery; there is no automatic SQL cleanup."
+    },
+    {
+      "sourceStep": {
+        "name": "statement-14",
+        "file": "steps/0017_replay_safe_sources/statement-14.sql"
+      },
+      "sourceStepSha256": "f46011bb58ae8532437f1619a01e50818644e77925d47711741b1d82af9e96fc",
+      "nativeSteps": [
+        {
+          "name": "statement-14-prepare",
+          "file": "native-assertions/statement-14-prepare.sql",
+          "sha256": "b6b9ca6e1a1e6c41eaa9e52279df2ba7a70b484fc7398f6fa9cdef3d9f3ee437"
+        },
+        {
+          "name": "statement-14-check",
+          "file": "native-assertions/statement-14-check.sql",
+          "sha256": "64ff25c9988722341dce0ecbaad87f1e3d907dadf5016744be031c00c5a813de"
+        },
+        {
+          "name": "statement-14-cleanup",
+          "file": "native-assertions/statement-14-cleanup.sql",
+          "sha256": "419e7def20782b0895b9bd6f0519371aff50eefa51157f9b0a572523ab0ddb98"
+        }
+      ],
+      "reason": "Standalone SELECT is outside v1. Preserve the exact throwIf query as INSERT SELECT into a named application Memory table, with explicit prepare and cleanup steps. A failure stops before cleanup and requires ordinary explicit recovery; there is no automatic SQL cleanup."
+    },
+    {
+      "sourceStep": {
+        "name": "statement-02",
+        "file": "steps/0018_conservative_identity_resolution/statement-02.sql"
+      },
+      "sourceStepSha256": "24c96eed70c96fcbc65a2ca6468819a80eb10a2580dbe893cff789248df76569",
+      "nativeSteps": [
+        {
+          "name": "statement-02",
+          "file": "native-assertions/local-materialize-policy.sql",
+          "sha256": "dba2fb505bee58a42b071bacd2b6ec61f432172eadc82ae1bd63580d9f810ca6"
+        }
+      ],
+      "reason": "Remove the query-level mutations_sync=2 override. The qualified native target is one non-replicated local server and v1 always supplies its immutable mutations_sync=1 policy. This makes no replica-completion claim."
+    }
+  ],
+  "nativeManifestPolicy": "Original source byte ranges remain exact. The native manifest references those chunks except the three explicitly recorded native adaptations. Current native hashes establish the accepted baseline onward, never historical source-checksum verification.",
+  "conversionSource": "mori://shinzui/clickhouse-migrate",
+  "conversionRevision": "6a795475fdbb441d1d42ac9b932ba2205d99a393",
+  "conversionArtifact": "clickhouse-migrate-test-support-0.1.0.0/test/fixtures/kansoku (artifact-level URI pending)"
+}

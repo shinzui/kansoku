@@ -6,12 +6,12 @@ docId: DOC-3
 tags: ["configuration", "deployment", "ingestion", "telemetry"]
 generated:
   by: process:codex
-  at: "2026-10-16T03:01:19Z"
+  at: "2026-10-16T22:48:56Z"
 ---
 
 # Configure Kansoku
 
-`kansoku-server`, `kansoku-migrate`, and credential issuance read environment variables. Invalid
+`kansoku-server`, `kansoku-migrate`, `kansoku-ch-migrate`, and credential issuance read environment variables. Invalid
 integer, Boolean, or positive-only values stop startup with a configuration error. There is no
 authentication-off mode.
 
@@ -32,6 +32,31 @@ authentication-off mode.
 The Nix development shell sets local database paths and ports automatically. Outside it, set the
 PostgreSQL and ClickHouse variables explicitly and apply both migration systems before server
 startup.
+
+## ClickHouse migration administration
+
+The native CLI loads these only for live commands; `plan` needs no database or credentials.
+There is no ambient/default target identity. The [runbook](clickhouse-migrations.md) describes
+first use, retained bindings and explicit recovery.
+
+| Variable | Requirement | Purpose |
+| --- | --- | --- |
+| `KANSOKU_CH_MIGRATION_TARGET` | Required | Stable application target key. |
+| `KANSOKU_CH_MIGRATION_ENDPOINT` | Required direct HTTP(S) origin, or explicit host/HTTP-port pair | Administrative endpoint; no proxy, Cloud or failover alias. |
+| `KANSOKU_CH_MIGRATION_SERVER_ID` | Required | Retained expected lowercase server UUID; never rediscover it on every run. |
+| `KANSOKU_CH_MIGRATION_LEDGER_ID` | Required | Operator-retained lowercase UUID, including interrupted initialization. |
+| `KANSOKU_CH_MIGRATION_SESSION` | Required for guarded/mutating native entries and finish | Persistent PostgreSQL session UUID returned by maintenance begin. |
+| `PG_CONNECTION_STRING` | Required for coordination | Same migrated PostgreSQL target used for traffic admission and existing administration. |
+| `KANSOKU_CLICKHOUSE_USER` | Defaults to `default` | Explicit migration operator; retain reader-view definer privileges. |
+| `KANSOKU_CLICKHOUSE_PASSWORD` | Must be set, may be empty for an owned local fixture | Never included in rendering or coordination state. |
+
+The endpoint fallback requires both `KANSOKU_CLICKHOUSE_HOST` and `CLICKHOUSE_HTTP_PORT`.
+The ledger namespace is fixed to `kansoku_migration_ledger`, separate from analytics. First use
+also requires `--initialize-ledger UUID`; recurring runs bind the existing ledger and refuse to
+create missing history. `--predecessor ENTRY`, `--quiescent` and audit/evidence arguments bind
+an entry to its retained session and external drain procedure. Environment settings alone grant
+neither initialization nor recovery authorization. `maintenance status` can find an active
+session from its retained target/server/ledger binding if begin lost its response.
 
 ## Queue and writer settings
 

@@ -6,7 +6,7 @@ docId: DOC-5
 tags: ["acceptance", "consumers", "sdk", "development"]
 generated:
   by: process:codex
-  at: "2026-10-16T05:34:46Z"
+  at: "2026-10-16T22:48:56Z"
 ---
 
 # Reproduce the external consumer gate
@@ -75,7 +75,9 @@ configuration, skipped tests, zero cases or a feature mismatch. See
 [the consumption guide](consume-clickhouse.md) for the supported data contracts and boundaries.
 
 The separate ordinary adoption/reuse/recovery proof uses clean local clones, the shipped
-`just up/migrate/ch-migrate/issue-key/run` commands and the previously accepted consumer at
+`just up/migrate/ch-migrate/issue-key/run` commands. It retains native identities, uses persistent
+sessions and actual owned-server drain, and deliberately completes each session. It runs the
+previously accepted consumer at
 `mori://shinzui/kansoku-ts/packages/kansoku-js`, commit
 `0a4eea715b5f34fad8593e3dfd123ce407976c95`. The SDK repository must contain that commit in its
 history. Its own Nix shell supplies Bun for installation, build and production-path capture.
@@ -87,3 +89,10 @@ python3 scripts/first_use_acceptance.py
 
 Use the repository root shown by `mori registry show shinzui/kansoku-ts --full` for
 `KANSOKU_SDK_PROJECT`, rather than the nested JavaScript package directory.
+
+The required native migration verifier runs the actual Nix CLI, including original/native schema
+and raw/derived/reader observations. It uses new owned roots and a separate ledger identity for
+each fixture. See [native operations](clickhouse-migrations.md) and the
+[adoption evidence](../evidence/clickhouse-migrate-adoption.md). The old shell runner and destructive
+reset are unavailable. Local Darwin/arm64 evidence does not close the existing Ubuntu
+qualification or deployment-target gates, and configured CI is not an observed passing run.

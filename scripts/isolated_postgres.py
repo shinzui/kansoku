@@ -14,7 +14,8 @@ def isolated_postgres(directory):
     root = Path(directory).resolve()
     root.mkdir(mode=0o700, parents=True, exist_ok=True)
     env = {key: value for key, value in os.environ.items()
-           if not key.startswith(('PG', 'CLICKHOUSE', 'KANSOKU_', 'OTEL_'))}
+           if not key.startswith(('PG', 'CLICKHOUSE', 'KANSOKU_', 'OTEL_'))
+           or key in ('KANSOKU_CH_MIGRATION_BINARY','KANSOKU_PG_MIGRATION_BINARY')}
     data = root / 'data'
     init = subprocess.run(['initdb', '-D', str(data), '-A', 'trust', '-U', 'postgres',
                            '--no-locale', '--encoding=UTF8'], env=env, capture_output=True, text=True)
@@ -23,7 +24,8 @@ def isolated_postgres(directory):
     with tempfile.TemporaryDirectory(prefix='ks-admin-pg-') as socket:
         port = free_port()
         env.update(PGHOST=socket, PGPORT=str(port), PGUSER='postgres', PGDATABASE='postgres',
-                   PG_CONNECTION_STRING=f'host={socket} port={port} user=postgres dbname=postgres')
+                   PG_CONNECTION_STRING=f'host={socket} port={port} user=postgres dbname=postgres',
+                   KANSOKU_OWNED_POSTGRES_ROOT=str(data.resolve()))
         with (root / 'server.private').open('w') as output:
             process = subprocess.Popen(['postgres', '-D', str(data), '-k', socket, '-p', str(port),
                                         '-h', '127.0.0.1'], env=env, stdout=output, stderr=output)

@@ -1,0 +1,2 @@
+
+CREATE TABLE analytics.experiment_exposures_rebuild AS analytics.experiment_exposures;

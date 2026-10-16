@@ -6,7 +6,7 @@ docId: DOC-7
 tags: ["getting-started", "installation", "ingestion", "metrics"]
 generated:
   by: process:codex
-  at: "2026-10-16T05:27:26Z"
+  at: "2026-10-16T22:48:56Z"
 ---
 
 # Run Kansoku locally
@@ -19,7 +19,10 @@ service.
 ## Prerequisites
 
 Install [Nix](https://nixos.org/download/) with flakes enabled. The development shell provides
-GHC 9.12, Cabal, PostgreSQL, ClickHouse, `just`, `jq`, and `process-compose`.
+GHC 9.12, Cabal, PostgreSQL, the qualified ClickHouse artifact, `just`, `jq`, and `process-compose`.
+Native migration integration currently requires arm64 macOS and exactly ClickHouse 26.8.28.14.
+Linux qualification and deployment readiness remain explicit gates in the
+[migration runbook](clickhouse-migrations.md).
 
 Clone the repository, enter it, and open three terminals in that directory. Run `nix develop`
 once in each terminal before using the commands below.
@@ -45,16 +48,20 @@ In terminal 2:
 ```bash
 nix develop
 just migrate
-just ch-migrate
+just ch-migrate plan --json
 ```
 
-`just migrate` applies the explicit PostgreSQL plan: the vendored PGMQ queue schema and
-Kansoku's API-key, immutable acceptance, quarantine and resumable maintenance tables. `just ch-migrate` applies forward-only ClickHouse migrations and records
-them in `analytics.schema_migrations`. Normal `kansoku-server` startup does not perform either
-schema migration.
+`just migrate` applies the explicit PostgreSQL plan, including persistent ClickHouse
+administration sessions. `just ch-migrate plan --json` inspects the compiled native baseline
+offline. Before proceeding, complete [fresh ClickHouse initialization](clickhouse-migrations.md#fresh-installation):
+retain target/server/ledger identities, begin a session, stop submitting clients and establish
+external drain, run explicit first-use up, verify currentness, then drain again and finish.
+The native ledger lives separately in `kansoku_migration_ledger`; normal server startup applies
+neither store's migrations.
 
-Both commands are safe to repeat after a successful run. Do not use `just ch-reset` for ordinary
-startup: it is a destructive development command that drops all ClickHouse analytics data.
+PostgreSQL up is repeatable. Every native mutation/repeat requires its session, current
+predecessor counter and fresh external quiescence evidence. `just ch-reset` refuses; create new
+owned roots for a disposable replay, preserving old data until its owner chooses disposal.
 
 This is the fresh-install path. If a reused checkout already has a PGMQ schema from a Kansoku
 version that predates the current pg-migrate ledger, preserve that database and follow the

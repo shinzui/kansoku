@@ -27,9 +27,9 @@ okf_version: "0.2"
 # Runbook
 
 - [Administrative operations](administration.md) - Issue and revoke credentials, inspect rejected events, and preview or resume fenced erasure, retention and archive maintenance.
+- [Initialize and upgrade ClickHouse](clickhouse-migrations.md) - Initialize a fresh owned ClickHouse target, retain native identities, coordinate maintenance and recover explicit migration attempts.
 - [Operate Kansoku](operations.md) - Operate migrations, credentials, probes and telemetry, diagnose pipeline failures, and coordinate recovery and data maintenance.
 
 # Tutorial
 
 - [Run Kansoku locally](getting-started.md) - Start Kansoku locally, migrate both stores, issue credentials, send an event, and query it before rehearsing reuse and recovery.
-

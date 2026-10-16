@@ -6,7 +6,7 @@ docId: DOC-1
 tags: ["administration", "credentials", "maintenance", "retention"]
 generated:
   by: process:codex
-  at: "2026-10-16T03:20:35Z"
+  at: "2026-10-16T22:48:56Z"
 ---
 
 # Administrative operations
@@ -21,6 +21,21 @@ Exit 0 means success or a requested preview; exit 1 means invalid arguments or a
 output failure. Destructive/data-maintenance commands preview without `--confirm`. Key issuance
 is an explicit creation command and displays its token once. Mutation journals cannot restore
 deleted payloads. Run commands against the intended database endpoints.
+
+## ClickHouse migration sessions
+
+`kansoku-ch-migrate maintenance begin/status/reconcile/finish` owns explicit native schema
+administration. Follow the [migration runbook](clickhouse-migrations.md) for exact arguments,
+retained target/server/ledger/session UUIDs, external drain and native repair. Migration sessions
+share exclusion with erasure/retention jobs and extend the persistent traffic fence. A new or
+resumed data job cannot bypass an active migration session. Neither PostgreSQL-only recovery,
+backend death nor a timeout clears an unfinished native session.
+
+Every native mutating entry retains its predecessor counter before submission. Failed or killed
+entries require explicit recovery; all exact pending receipts remain visible in maintenance
+status and must be supplied to reconciliation/repair. Inspection remains available while fenced.
+Only current native history, resolved outcomes and fresh external quiescence evidence permit
+completion. Stop external SQL schedules as well; they bypass PostgreSQL traffic admission.
 
 ## Credentials
 

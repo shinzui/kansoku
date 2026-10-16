@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 """Own an isolated ClickHouse instance and watchdog the required native cases."""
-from contextlib import contextmanager, nullcontext
+from contextlib import contextmanager
 import os
+import platform
+import shutil
 from pathlib import Path
 import socket
 import subprocess
 import tempfile
 import time
 
+
+_OWNED_STACKS = {}
 
 def free_port():
     with socket.socket() as sock:
@@ -16,9 +20,28 @@ def free_port():
 
 
 @contextmanager
-def isolated_clickhouse(block_size=65536, directory=None, query_logging=False, access_management=False):
+def owned_clickhouse_root(directory):
+    root = Path(directory).resolve() if directory is not None else Path(tempfile.mkdtemp(prefix='kansoku-native-')).resolve()
+    success = False
+    try:
+        yield root
+        success = True
+    finally:
+        if success and directory is None:
+            shutil.rmtree(root)
+        elif not success:
+            print('Failed owned ClickHouse evidence retained: ' + str(root), flush=True)
+
+
+@contextmanager
+def isolated_clickhouse(block_size=65536, directory=None, query_logging=False, access_management=False, controller=None):
+    if platform.system() != 'Darwin' or platform.machine() != 'arm64':
+        raise RuntimeError('Native execution is unqualified on this platform; Linux qualification is unresolved and required cases cannot skip')
+    version = subprocess.check_output(['clickhouse-server', '--version'], text=True)
+    if '26.8.28.14' not in version:
+        raise RuntimeError('Expected the qualified ClickHouse 26.8.28.14 artifact from the default Nix shell')
     tcp, http = free_port(), free_port()
-    with (tempfile.TemporaryDirectory(prefix='kansoku-native-') if directory is None else nullcontext(directory)) as directory:
+    with owned_clickhouse_root(directory) as directory:
         root = Path(directory)
         root.mkdir(mode=0o700, parents=True, exist_ok=True)
         config = root / 'config.xml'
@@ -40,29 +63,52 @@ def isolated_clickhouse(block_size=65536, directory=None, query_logging=False, a
 <quotas><default/></quotas>
 </clickhouse>''')
         with (root / 'console.log').open('w') as log:
-            server = subprocess.Popen(['clickhouse-server', f'--config-file={config}'], cwd=root, stdout=log, stderr=log)
-            (root / 'pid').write_text(str(server.pid))
+            client = ['clickhouse-client', '--host', '127.0.0.1', '--port', str(tcp)]
+            def start():
+                process = subprocess.Popen(['clickhouse-server', f'--config-file={config}'], cwd=root, stdout=log, stderr=log)
+                (root / 'pid').write_text(str(process.pid))
+                try:
+                    deadline = time.monotonic() + 60
+                    while time.monotonic() < deadline:
+                        if process.poll() is not None:
+                            raise RuntimeError('owned ClickHouse exited before readiness; private console retained')
+                        ready = subprocess.run(client + ['--query', "SELECT value FROM system.server_settings WHERE name = 'path'"], capture_output=True, text=True, timeout=3)
+                        if ready.returncode == 0 and ready.stdout.strip().rstrip('/') == str(root / 'data'):
+                            return process
+                        time.sleep(.1)
+                    raise RuntimeError('owned ClickHouse startup deadline exceeded')
+                except BaseException:
+                    stop(process)
+                    raise
+            def stop(process):
+                if process.poll() is None:
+                    process.terminate()
+                    try:
+                        process.wait(timeout=15)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        process.wait(timeout=10)
+            server = start()
+            def restart():
+                nonlocal server
+                stop(server)
+                server = start()
+            owner = {'restart': restart}
+            _OWNED_STACKS[str(root.resolve())] = owner
+            if controller is not None:
+                controller['restart'] = restart
             try:
-                client = ['clickhouse-client', '--host', '127.0.0.1', '--port', str(tcp)]
-                for _ in range(100):
-                    if server.poll() is not None:
-                        raise RuntimeError((root / 'console.log').read_text())
-                    ready = subprocess.run(client + ['--query', "SELECT value FROM system.server_settings WHERE name = 'path'"], capture_output=True, text=True, timeout=3)
-                    if ready.returncode == 0 and ready.stdout.strip().rstrip('/') == str(root / 'data'):
-                        break
-                    time.sleep(0.1)
-                else:
-                    raise RuntimeError('isolated ClickHouse startup exceeded ten seconds')
-                env = dict(os.environ, CLICKHOUSE_TCP_PORT=str(tcp), CLICKHOUSE_HTTP_PORT=str(http), KANSOKU_CLICKHOUSE_HOST='127.0.0.1', KANSOKU_CLICKHOUSE_DATABASE='analytics', KANSOKU_CLICKHOUSE_USER='default', KANSOKU_CLICKHOUSE_PASSWORD='', KANSOKU_REQUIRED_INTEGRATION='1')
+                clean = {key:value for key,value in os.environ.items() if not key.startswith("KANSOKU_CH_MIGRATION_") or key == "KANSOKU_CH_MIGRATION_BINARY"}
+                env = dict(clean, CLICKHOUSE_TCP_PORT=str(tcp), CLICKHOUSE_HTTP_PORT=str(http), KANSOKU_CLICKHOUSE_HOST='127.0.0.1', KANSOKU_CLICKHOUSE_DATABASE='analytics', KANSOKU_CLICKHOUSE_USER='default', KANSOKU_CLICKHOUSE_PASSWORD='', KANSOKU_REQUIRED_INTEGRATION='1', KANSOKU_OWNED_CLICKHOUSE_ROOT=str(root.resolve()))
                 yield env
             finally:
-                server.terminate()
-                try:
-                    server.wait(timeout=10)
-                except subprocess.TimeoutExpired:
-                    server.kill()
-                    server.wait()
+                _OWNED_STACKS.pop(str(root.resolve()), None)
+                stop(server)
 
 
 def apply_migrations(env):
-    subprocess.run(['bash', 'db/clickhouse/migrate.sh'], env=env, check=True, timeout=120)
+    root = env.get('KANSOKU_OWNED_CLICKHOUSE_ROOT')
+    if root not in _OWNED_STACKS:
+        raise RuntimeError('Migrations require a currently owned ClickHouse context; ambient endpoints are refused')
+    from native_clickhouse_migrations import initialize_owned
+    initialize_owned(env, _OWNED_STACKS[root])

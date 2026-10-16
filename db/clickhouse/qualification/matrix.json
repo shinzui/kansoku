@@ -1,0 +1,45 @@
+{
+  "matrixVersion": 1,
+  "checkedAt": "2026-10-16",
+  "policy": "Only exact qualified patches; no prereleases, Cloud, proxies, distributed or replicated execution",
+  "entries": [
+    {
+      "id": "lts-native",
+      "version": "26.8.28.14",
+      "tag": "v26.8.28.14-lts",
+      "commit": "3694fe07040369cef78c937311cbaac5f0555484",
+      "platform": "aarch64-darwin",
+      "url": "https://github.com/ClickHouse/ClickHouse/releases/download/v26.8.28.14-lts/clickhouse-macos-aarch64",
+      "sha256": "ab5a04de4a6b705e0f1f02e6a0e0a44feff8b4455b6dfcc4a03b7571f98fbb60",
+      "status": "native-qualified",
+      "tagObject": "cb8b2f96f32feb4203ab9edbf4f03b274bbb6952",
+      "qualification": {
+        "date": "2026-10-16",
+        "compiler": "ghc-9.12.4",
+        "host": "macOS 26.7 arm64",
+        "requiredGroups": 12,
+        "artifactVariants": [
+          "extracted sibling Cabal distributions",
+          "Nix public suite, private driver and example"
+        ],
+        "scope": "Native protocol qualification; no production OS, Linux, power-loss or uptime certification",
+        "startupCaveat": "A separate attempt exited SIGSEGV before readiness; cause unknown; preserved in docs/release-evidence.md"
+      }
+    }
+  ],
+  "unqualifiedReleases": [
+    {
+      "version": "26.8.29.10",
+      "tag": "v26.8.29.10-lts",
+      "tagObject": "0dd3d23efb25729261b3ef78b43cf5b872f79b04",
+      "commit": "7b8b36217c67c466bd4f903c15430b04e467b25a",
+      "reason": "Published during qualification; untested and rejected by exact runtime allowlist"
+    },
+    {
+      "version": "26.9.19.9",
+      "reason": "Current stable in official package index; untested and rejected"
+    }
+  ],
+  "sourceProject": "mori://shinzui/clickhouse-migrate",
+  "sourceRevision": "6a795475fdbb441d1d42ac9b932ba2205d99a393"
+}

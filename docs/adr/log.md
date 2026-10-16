@@ -1,6 +1,8 @@
 # Bundle Update Log
 
 ## 2026-10-16
+* **Update**: Connect ADR-10/17/18 to ADR-22 native artifact qualification, persistent migration sessions and external reader suspension.
+* **Update**: Add ADR-22 for explicit native migrations, qualified artifacts and persistent administrative sessions with exact uncertain receipts.
 * **Update**: Clarify ADR-19 condition-local organization trait joins and identified-user semantics under outer organization aggregation.
 * **Update**: Require scenario-owned saved-resource cleanup and shared-store repeatability/failure evidence without weakening pagination.
 * **Update**: Define the supported raw/native JSON shape boundary and require native corpus parity for both materialized columns.

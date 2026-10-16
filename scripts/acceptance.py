@@ -14,6 +14,7 @@ import urllib.request
 import urllib.parse
 import uuid
 
+from clickhouse_migrations_acceptance import verify as verify_clickhouse_migrations
 from ingest_acceptance import verify_ingest
 from json_storage_acceptance import verify_json_storage
 from acceptance_fixture_isolation import verify_fixture_isolation
@@ -210,6 +211,12 @@ def main():
     server = server_output + '/bin/kansoku-server'
     admin = server_output + '/bin/kansoku-admin'
     migrate = server_output + '/bin/kansoku-migrate'
+    native_migrate = server_output + '/bin/kansoku-ch-migrate'
+    proof_build = json.loads(run(['nix','build','.#kansoku-ch-migrate-upgrade-proof','--no-link','--json'],env,'nix-migration-proof-build',timeout=1200))
+    upgrade_migrate = proof_build[0]['outputs']['out'] + '/bin/kansoku-ch-migrate-upgrade-proof'
+    migration_cases = verify_clickhouse_migrations(ROOT / 'clickhouse-migrations',native_migrate,upgrade_migrate,migrate,admin,server)
+    (SAFE / 'clickhouse-migrations.log').write_text(f'{migration_cases} cases, 0 failures, 0 skipped\n')
+    env.update(KANSOKU_CH_MIGRATION_BINARY=native_migrate,KANSOKU_PG_MIGRATION_BINARY=migrate)
     env.update(NO_PROXY='127.0.0.1,localhost', no_proxy='127.0.0.1,localhost')
     pg = ROOT / 'postgres'
     run(['initdb', '-D', str(pg), '-A', 'trust', '-U', 'postgres', '--no-locale', '--encoding=UTF8'], env, 'postgres-init')
@@ -222,6 +229,7 @@ def main():
             wait_for(postgres, lambda: subprocess.run(['pg_isready'], env=env, capture_output=True).returncode == 0, 'PostgreSQL')
             actual_data = run(['psql', '-Atc', 'SHOW data_directory'], env, 'postgres-ownership').strip()
             assert actual_data == str(pg), 'refusing migrations against an unowned PostgreSQL listener'
+            env['KANSOKU_OWNED_POSTGRES_ROOT'] = str(pg)
             run([migrate, 'up'], env, 'postgres-migrations')
             # The shared native launcher uses the now-sanitized environment as its base.
             saved = dict(os.environ)

@@ -37,7 +37,8 @@ kansokuApplicationMigrations = do
   maintenance <- sqlMigration "0004-maintenance" maintenanceSql
   cohorts <- sqlMigration "0005-cohorts" cohortsSql
   definitions <- sqlMigration "0006-metric-definitions" metricDefinitionsSql
-  migrationComponent "kansoku" (Set.singleton "pgmq") (apiKeys :| [rejections, acceptance, maintenance, cohorts, definitions])
+  administration <- sqlMigration "0007-clickhouse-administration" clickhouseAdministrationSql
+  migrationComponent "kansoku" (Set.singleton "pgmq") (apiKeys :| [rejections, acceptance, maintenance, cohorts, definitions, administration])
 
 apiKeysSql :: ByteString
 apiKeysSql =
@@ -197,4 +198,32 @@ metricDefinitionsSql =
     UNIQUE(account_id,name)
   );
   CREATE INDEX metric_definitions_account_id ON kansoku.metric_definitions(account_id,id);
+  """
+
+-- Separate identity: a migration session is not a data-maintenance job.
+clickhouseAdministrationSql :: ByteString
+clickhouseAdministrationSql =
+  """
+  CREATE TABLE kansoku.clickhouse_migration_sessions (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    target_key text NOT NULL, server_id uuid NOT NULL, ledger_id uuid NOT NULL,
+    entry bigint NOT NULL DEFAULT 0, pending_entry text NOT NULL DEFAULT 'pre-session-drain',
+    audit jsonb NOT NULL, quiescence jsonb,
+    outcome text NOT NULL DEFAULT 'pre-session', pending_receipts jsonb NOT NULL DEFAULT '[]',
+    created_at timestamptz NOT NULL DEFAULT now(), completed_at timestamptz
+  );
+  CREATE UNIQUE INDEX clickhouse_single_active_session
+    ON kansoku.clickhouse_migration_sessions ((true)) WHERE completed_at IS NULL;
+  ALTER TABLE kansoku.maintenance_fence ADD COLUMN active_migration_session uuid
+    REFERENCES kansoku.clickhouse_migration_sessions(id);
+  ALTER TABLE kansoku.maintenance_fence ADD CONSTRAINT one_administrator_kind
+    CHECK (active_job IS NULL OR active_migration_session IS NULL);
+  CREATE OR REPLACE FUNCTION kansoku.require_traffic_lock() RETURNS void LANGUAGE plpgsql AS $$
+  BEGIN
+    IF NOT pg_try_advisory_xact_lock_shared(726401,1)
+       OR EXISTS(SELECT 1 FROM kansoku.maintenance_fence
+                 WHERE active_job IS NOT NULL OR active_migration_session IS NOT NULL) THEN
+      RAISE EXCEPTION 'analytics maintenance is active' USING ERRCODE='55000';
+    END IF;
+  END $$;
   """

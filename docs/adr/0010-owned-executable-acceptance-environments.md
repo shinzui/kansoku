@@ -5,7 +5,7 @@ description: Gate service changes with deterministic checks and required integra
 docId: ADR-10
 status: Accepted
 date: 2026-10-15
-timestamp: 2026-10-16T17:56:53Z
+timestamp: 2026-10-16T22:55:08Z
 generated:
   by: process:codex
   at: 2026-10-16T17:56:53Z
@@ -86,3 +86,13 @@ unchanged. The packaged gate requires repeated same-store scenario composition, 
 injection after membership upload, native verification of cleared active membership, and an
 unrelated sentinel. Physical historical membership facts may remain under
 [ADR-19](0019-saved-query-time-cohorts-and-static-membership.md).
+
+## Native migration qualification
+
+[ADR-22](0022-explicit-clickhouse-migrations-and-persistent-administrative-sessions.md)
+requires the actual Nix migration executable and an explicit test-only compiled suffix, both
+stores owned by the harness, and nonzero required fresh/upgrade/recovery/coordination cases.
+The initial native proof is restricted to the exact hash-qualified Darwin/arm64 artifact.
+The macOS job supplements Ubuntu acceptance; Linux remains a visible qualification blocker,
+not a skipped success or a decision to remove that platform. Configuration, local observations,
+remote CI results and deployment readiness are recorded separately.

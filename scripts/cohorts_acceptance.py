@@ -382,13 +382,18 @@ def main(verify=verify_cohorts, *, pass_environment=False):
     port=free_port()
     server=os.environ.get('KANSOKU_COHORT_SERVER') or binary('kansoku-server:exe:kansoku-server')
     migrate=os.environ.get('KANSOKU_COHORT_MIGRATE') or binary('kansoku-server:exe:kansoku-migrate')
+    if Path(server).parent.name == 'bin':
+        env.update(KANSOKU_CH_MIGRATION_BINARY=str(Path(server).with_name('kansoku-ch-migrate')),KANSOKU_PG_MIGRATION_BINARY=migrate)
     with tempfile.TemporaryDirectory(prefix='ks-cohort-pg-') as socket:
         env.update(PGHOST=socket,PGPORT=str(port),PGUSER='postgres',PGDATABASE='postgres',PG_CONNECTION_STRING=f'host={socket} port={port} user=postgres dbname=postgres')
         with child(['postgres','-D',str(pg),'-k',socket,'-p',str(port),'-h','127.0.0.1'],env,'cohort-postgres') as process:
             wait_for(process,lambda: subprocess.run(['pg_isready'],env=env,capture_output=True).returncode==0,'PostgreSQL')
+            actual = run(['psql','-XAtc','SHOW data_directory'],env,'cohort-pg-ownership').strip()
+            assert Path(actual).resolve() == pg.resolve(), 'refusing an unowned cohort coordinator'
+            env['KANSOKU_OWNED_POSTGRES_ROOT'] = str(pg.resolve())
             run([migrate,'up'],env,'cohort-pg-migrate')
             with isolated_clickhouse(directory=ROOT/'clickhouse') as native:
-                native = dict(env, **{k:v for k,v in native.items() if k.startswith(('CLICKHOUSE','KANSOKU_CLICKHOUSE','KANSOKU_REQUIRED_INTEGRATION'))})
+                native = dict(env, **{k:v for k,v in native.items() if k.startswith(('CLICKHOUSE','KANSOKU_CLICKHOUSE','KANSOKU_REQUIRED_INTEGRATION','KANSOKU_OWNED_CLICKHOUSE_'))})
                 # Preserve the isolated ClickHouse coordinates when overlaying PostgreSQL.
                 native.update(KANSOKU_QUEUE_NAME='cohort_acceptance',KANSOKU_WRITER_MAX_LATENCY_MS='100',KANSOKU_QUEUE_POLL_INTERVAL_SEC='1')
                 apply_migrations(native)

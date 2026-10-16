@@ -10,6 +10,12 @@ author: Nadeem Bitar
 maintainer: nadeem@gmail.com
 category: Web
 build-type: Simple
+extra-source-files:
+  migrations/clickhouse/*.json
+  migrations/clickhouse/native-assertions/*.sql
+  migrations/clickhouse/original/*.sql
+  migrations/clickhouse/original/migrate.sh
+  migrations/clickhouse/steps/**/*.sql
 
 common common
   ghc-options:
@@ -64,3 +70,93 @@ executable kansoku-admin
   build-depends:
     base >=4.21 && <5,
     kansoku-core,
+
+executable kansoku-ch-migrate
+  import: common
+  ghc-options: -threaded
+  hs-source-dirs:
+    app
+    src
+
+  main-is: ClickHouseMigrate.hs
+  other-modules:
+    Kansoku.ClickHouseMigration.Command
+    Kansoku.ClickHouseMigration.Config
+    Kansoku.ClickHouseMigration.Coordinator
+    Kansoku.ClickHouseMigrations
+
+  build-depends:
+    aeson,
+    base >=4.21 && <5,
+    bytestring,
+    clickhouse-migrate ==0.1.0.0,
+    clickhouse-migrate-cli ==0.1.0.0,
+    clickhouse-migrate-embed ==0.1.0.0,
+    http-client,
+    http-client-tls,
+    kansoku-core,
+    optparse-applicative,
+    text,
+
+flag migration-acceptance-probe
+  description: Compile a separate CLI with a test-only appended native migration
+  default: False
+  manual: True
+
+executable kansoku-ch-migrate-upgrade-proof
+  import: common
+  ghc-options: -threaded
+  hs-source-dirs:
+    app
+    src
+
+  main-is: ClickHouseMigrateProof.hs
+  other-modules:
+    Kansoku.ClickHouseMigration.Command
+    Kansoku.ClickHouseMigration.Config
+    Kansoku.ClickHouseMigration.Coordinator
+    Kansoku.ClickHouseMigration.UpgradeProof
+    Kansoku.ClickHouseMigrations
+
+  build-depends:
+    aeson,
+    base >=4.21 && <5,
+    bytestring,
+    clickhouse-migrate ==0.1.0.0,
+    clickhouse-migrate-cli ==0.1.0.0,
+    clickhouse-migrate-embed ==0.1.0.0,
+    containers,
+    http-client,
+    http-client-tls,
+    kansoku-core,
+    optparse-applicative,
+    text,
+
+  if !flag(migration-acceptance-probe)
+    buildable: False
+
+flag native-migration-tests
+  description: Run the owned native migration integration proof explicitly
+  default: False
+  manual: True
+
+test-suite clickhouse-migrations
+  import: common
+  type: exitcode-stdio-1.0
+  ghc-options: -threaded
+  hs-source-dirs:
+    test
+    src
+
+  main-is: ClickHouseMigrations.hs
+  other-modules: Kansoku.ClickHouseMigrations
+  build-depends:
+    aeson,
+    base >=4.21 && <5,
+    clickhouse-migrate ==0.1.0.0,
+    clickhouse-migrate-embed ==0.1.0.0,
+    clickhouse-migrate-test-support ==0.1.0.0,
+    text,
+
+  if !flag(native-migration-tests)
+    buildable: False

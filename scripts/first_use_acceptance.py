@@ -12,6 +12,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 
 from isolated_clickhouse import free_port
 from test_support import execute
@@ -94,11 +95,51 @@ def main():
         return urllib.request.urlopen(base+'/health/ready',timeout=2).status==200
     def databases_ready():
         pg=subprocess.run(['psql','-Atc','SELECT 1'],env=env,capture_output=True,timeout=3).returncode==0
-        ch=subprocess.run(['clickhouse-client','--port',env['CLICKHOUSE_TCP_PORT'],'--query','SELECT 1'],env=env,capture_output=True,timeout=3).returncode==0
+        ch=subprocess.run(['clickhouse-client','--host','127.0.0.1','--port',env['CLICKHOUSE_TCP_PORT'],'--query','SELECT 1'],env=env,capture_output=True,timeout=3).returncode==0
         return pg and ch
-    def migrate():
-        run(['just','migrate'],env=env,timeout=1200)
-        run(['just','ch-migrate'],env=env)
+    native_initialized = False
+    def migrate(native_only=False):
+        nonlocal native_initialized
+        if not native_only:
+            run(['just','migrate'],env=env,timeout=1200)
+        def ch(query):
+            return run(['clickhouse-client','--host','127.0.0.1','--port',env['CLICKHOUSE_TCP_PORT'],'--query',query],env=env).strip()
+        if 'KANSOKU_CH_MIGRATION_LEDGER_ID' not in env:
+            assert Path(ch("SELECT value FROM system.server_settings WHERE name='path'")).resolve() == Path(env['CLICKHOUSE_HOME']).resolve()
+            env.update(KANSOKU_CH_MIGRATION_TARGET='kansoku/first-use-' + uuid.uuid4().hex,
+                KANSOKU_CH_MIGRATION_ENDPOINT='http://127.0.0.1:' + env['CLICKHOUSE_HTTP_PORT'],
+                KANSOKU_CH_MIGRATION_SERVER_ID=ch('SELECT toString(serverUUID())'),
+                KANSOKU_CH_MIGRATION_LEDGER_ID=str(uuid.uuid4()),KANSOKU_CLICKHOUSE_HOST='127.0.0.1',
+                KANSOKU_CLICKHOUSE_USER='default',KANSOKU_CLICKHOUSE_PASSWORD='')
+            (evidence / 'native-target.private.json').write_text(json.dumps({key:value for key,value in env.items() if key.startswith('KANSOKU_CH_MIGRATION_')}))
+        audit=['--expect-target',env['KANSOKU_CH_MIGRATION_TARGET'],'--actor','ordinary first-use owner','--reason','owned clone initialization or native repeat']
+        def cli(*args):
+            return json.loads(run(['just','ch-migrate',*args],env=env,timeout=1200))
+        session=cli('maintenance','begin','--json',*audit)['result']
+        env['KANSOKU_CH_MIGRATION_SESSION']=session['id']
+        def drain():
+            # Every SDK producer subprocess has exited and no app server scope
+            # is running here. Restart the actually owned process-compose server
+            # with its retained data root before attesting the next entry.
+            run(['process-compose','--address',env['PC_ADDRESS'],'--port',env['PC_PORT_NUM'],'process','restart','clickhouse'],env=env)
+            wait(databases_ready,'same-root native restart')
+            assert ch('SELECT toString(serverUUID())')==env['KANSOKU_CH_MIGRATION_SERVER_ID']
+            status=cli('maintenance','status','--json')['result']
+            reference=evidence/f'native-drain-{sequence}.private.json'
+            reference.write_text(json.dumps(dict(session=session['id'],predecessor=status['entry'],server=env['KANSOKU_CH_MIGRATION_SERVER_ID'],ledger=env['KANSOKU_CH_MIGRATION_LEDGER_ID'],procedure='all owned clients stopped; process-compose restarted the same data root')))
+            return ['--predecessor',str(status['entry'])],['--quiescent','--evidence',str(reference)]
+        predecessor,quiet=drain()
+        up=['up','--json',*audit,*quiet]
+        if not native_initialized:
+            up+=['--initialize-ledger',env['KANSOKU_CH_MIGRATION_LEDGER_ID']]
+        report=cli(*predecessor,*up)['result']['report']
+        expected=0 if native_initialized else 257
+        assert len(report['observations'])==expected
+        native_initialized=True
+        cli('verify','--require-current','--guarded','--json')
+        predecessor,quiet=drain()
+        cli(*predecessor,'maintenance','finish','--json',*audit,*quiet)
+        return report
     def request(path,body=None):
         headers={'Authorization':'Bearer '+(keys[0] if body is not None else keys[1])}
         if body is not None:headers['Content-Type']='application/json'
@@ -125,8 +166,8 @@ client.track("page_view",{url:"https://ordinary.example.test/first-use"});await 
         actual=run(['psql','-Atc','SHOW data_directory'],env=env).strip()
         assert Path(actual).resolve()==Path(env['PGDATA']).resolve()
         migrate()
-        repeated=run(['just','ch-migrate'],env=env)
-        assert repeated.count('(already applied)')==23
+        repeated=migrate(native_only=True)
+        assert repeated['observations']==[]
         for kind in ('write','service'):
             output=run(['just','issue-key',kind,'ordinary-first-use','fresh clone'],env=env)
             keys.append(re.search(r'ksk_[ws]_[A-Za-z0-9_-]+',output)[0])
@@ -135,7 +176,7 @@ client.track("page_view",{url:"https://ordinary.example.test/first-use"});await 
             first=produce()
             wait(lambda:count()==1,'first consumer projection',server)
             assert request('/v1/batch',first)==dict(accepted=1,rejected=[])
-            run(['process-compose','process','stop','clickhouse'],env=env)
+            run(['process-compose','--address',env['PC_ADDRESS'],'--port',env['PC_PORT_NUM'],'process','stop','clickhouse'],env=env)
             second=produce()
             assert second[0]['eventId']!=first[0]['eventId']
             queued=int(run(['psql','-Atc',"SELECT count(*) FROM pgmq.q_kansoku_events"],env=env).strip())
@@ -152,7 +193,7 @@ client.track("page_view",{url:"https://ordinary.example.test/first-use"});await 
             time.sleep(1)
             assert count()==2
     report=dict(result='passed',cases=4,skipped=0,server_commit=run(['git','rev-parse','HEAD']).strip(),previous_sdk_commit=PREVIOUS_SDK,previous_sdk_source='mori://shinzui/kansoku-ts/packages/kansoku-js',
-        workflow='fresh clone, shipped shellHook, just up/migrate/ch-migrate/issue-key/run, old SDK ingest, duplicate retry, ClickHouse stop, durable queue, restart and repeat migrations',clone=str(clone))
+        workflow='fresh clone, qualified default shell, PostgreSQL-first setup, retained native identities and sessions, real same-root drain, explicit initialization/finish, zero-SQL native repeats, old SDK ingest, duplicate retry and queued outage recovery',clone=str(clone))
     (evidence/'summary.json').write_text(json.dumps(report,indent=2)+'\n')
     print('Ordinary fresh-clone adoption/reuse/recovery: 4 cases, 0 skipped, passed.',flush=True)
 

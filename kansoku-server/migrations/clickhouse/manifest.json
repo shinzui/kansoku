@@ -1,0 +1,1185 @@
+{
+  "manifestVersion": 1,
+  "component": "kansoku",
+  "dependencies": [],
+  "migrations": [
+    {
+      "name": "0001_events_raw",
+      "description": "Reviewed complete source file 0001_events_raw.sql",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0001_events_raw/statement-01.sql"
+        },
+        {
+          "name": "statement-02",
+          "file": "steps/0001_events_raw/statement-02.sql"
+        }
+      ]
+    },
+    {
+      "name": "0002_identity",
+      "description": "Reviewed complete source file 0002_identity.sql",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0002_identity/statement-01.sql"
+        },
+        {
+          "name": "statement-02",
+          "file": "steps/0002_identity/statement-02.sql"
+        },
+        {
+          "name": "statement-03",
+          "file": "steps/0002_identity/statement-03.sql"
+        },
+        {
+          "name": "statement-04",
+          "file": "steps/0002_identity/statement-04.sql"
+        }
+      ]
+    },
+    {
+      "name": "0003_rollups",
+      "description": "Reviewed complete source file 0003_rollups.sql",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0003_rollups/statement-01.sql"
+        },
+        {
+          "name": "statement-02",
+          "file": "steps/0003_rollups/statement-02.sql"
+        },
+        {
+          "name": "statement-03",
+          "file": "steps/0003_rollups/statement-03.sql"
+        },
+        {
+          "name": "statement-04",
+          "file": "steps/0003_rollups/statement-04.sql"
+        },
+        {
+          "name": "statement-05",
+          "file": "steps/0003_rollups/statement-05.sql"
+        },
+        {
+          "name": "statement-06",
+          "file": "steps/0003_rollups/statement-06.sql"
+        },
+        {
+          "name": "statement-07",
+          "file": "steps/0003_rollups/statement-07.sql"
+        },
+        {
+          "name": "statement-08",
+          "file": "steps/0003_rollups/statement-08.sql"
+        },
+        {
+          "name": "statement-09",
+          "file": "steps/0003_rollups/statement-09.sql"
+        }
+      ]
+    },
+    {
+      "name": "0004_events_raw_v2",
+      "description": "Reviewed complete source file 0004_events_raw_v2.sql",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0004_events_raw_v2/statement-01.sql"
+        },
+        {
+          "name": "statement-02",
+          "file": "steps/0004_events_raw_v2/statement-02.sql"
+        },
+        {
+          "name": "statement-03",
+          "file": "steps/0004_events_raw_v2/statement-03.sql"
+        },
+        {
+          "name": "statement-04",
+          "file": "steps/0004_events_raw_v2/statement-04.sql"
+        },
+        {
+          "name": "statement-05",
+          "file": "steps/0004_events_raw_v2/statement-05.sql"
+        },
+        {
+          "name": "statement-06",
+          "file": "steps/0004_events_raw_v2/statement-06.sql"
+        },
+        {
+          "name": "statement-07",
+          "file": "steps/0004_events_raw_v2/statement-07.sql"
+        },
+        {
+          "name": "statement-08",
+          "file": "steps/0004_events_raw_v2/statement-08.sql"
+        },
+        {
+          "name": "statement-09",
+          "file": "steps/0004_events_raw_v2/statement-09.sql"
+        },
+        {
+          "name": "statement-10",
+          "file": "steps/0004_events_raw_v2/statement-10.sql"
+        },
+        {
+          "name": "statement-11",
+          "file": "steps/0004_events_raw_v2/statement-11.sql"
+        },
+        {
+          "name": "statement-12",
+          "file": "steps/0004_events_raw_v2/statement-12.sql"
+        },
+        {
+          "name": "statement-13",
+          "file": "steps/0004_events_raw_v2/statement-13.sql"
+        },
+        {
+          "name": "statement-14",
+          "file": "steps/0004_events_raw_v2/statement-14.sql"
+        },
+        {
+          "name": "statement-15",
+          "file": "steps/0004_events_raw_v2/statement-15.sql"
+        },
+        {
+          "name": "statement-16",
+          "file": "steps/0004_events_raw_v2/statement-16.sql"
+        }
+      ]
+    },
+    {
+      "name": "0005_final_free_resolution",
+      "description": "Reviewed complete source file 0005_final_free_resolution.sql",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0005_final_free_resolution/statement-01.sql"
+        },
+        {
+          "name": "statement-02",
+          "file": "steps/0005_final_free_resolution/statement-02.sql"
+        },
+        {
+          "name": "statement-03",
+          "file": "steps/0005_final_free_resolution/statement-03.sql"
+        },
+        {
+          "name": "statement-04",
+          "file": "steps/0005_final_free_resolution/statement-04.sql"
+        },
+        {
+          "name": "statement-05",
+          "file": "steps/0005_final_free_resolution/statement-05.sql"
+        },
+        {
+          "name": "statement-06",
+          "file": "steps/0005_final_free_resolution/statement-06.sql"
+        },
+        {
+          "name": "statement-07",
+          "file": "steps/0005_final_free_resolution/statement-07.sql"
+        },
+        {
+          "name": "statement-08",
+          "file": "steps/0005_final_free_resolution/statement-08.sql"
+        },
+        {
+          "name": "statement-09",
+          "file": "steps/0005_final_free_resolution/statement-09.sql"
+        },
+        {
+          "name": "statement-10",
+          "file": "steps/0005_final_free_resolution/statement-10.sql"
+        }
+      ]
+    },
+    {
+      "name": "0006_rollups_v2",
+      "description": "Reviewed complete source file 0006_rollups_v2.sql",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0006_rollups_v2/statement-01.sql"
+        },
+        {
+          "name": "statement-02",
+          "file": "steps/0006_rollups_v2/statement-02.sql"
+        },
+        {
+          "name": "statement-03",
+          "file": "steps/0006_rollups_v2/statement-03.sql"
+        },
+        {
+          "name": "statement-04",
+          "file": "steps/0006_rollups_v2/statement-04.sql"
+        },
+        {
+          "name": "statement-05",
+          "file": "steps/0006_rollups_v2/statement-05.sql"
+        },
+        {
+          "name": "statement-06",
+          "file": "steps/0006_rollups_v2/statement-06.sql"
+        },
+        {
+          "name": "statement-07",
+          "file": "steps/0006_rollups_v2/statement-07.sql"
+        },
+        {
+          "name": "statement-08",
+          "file": "steps/0006_rollups_v2/statement-08.sql"
+        },
+        {
+          "name": "statement-09",
+          "file": "steps/0006_rollups_v2/statement-09.sql"
+        },
+        {
+          "name": "statement-10",
+          "file": "steps/0006_rollups_v2/statement-10.sql"
+        },
+        {
+          "name": "statement-11",
+          "file": "steps/0006_rollups_v2/statement-11.sql"
+        },
+        {
+          "name": "statement-12",
+          "file": "steps/0006_rollups_v2/statement-12.sql"
+        },
+        {
+          "name": "statement-13",
+          "file": "steps/0006_rollups_v2/statement-13.sql"
+        },
+        {
+          "name": "statement-14",
+          "file": "steps/0006_rollups_v2/statement-14.sql"
+        },
+        {
+          "name": "statement-15",
+          "file": "steps/0006_rollups_v2/statement-15.sql"
+        },
+        {
+          "name": "statement-16",
+          "file": "steps/0006_rollups_v2/statement-16.sql"
+        },
+        {
+          "name": "statement-17",
+          "file": "steps/0006_rollups_v2/statement-17.sql"
+        },
+        {
+          "name": "statement-18",
+          "file": "steps/0006_rollups_v2/statement-18.sql"
+        },
+        {
+          "name": "statement-19",
+          "file": "steps/0006_rollups_v2/statement-19.sql"
+        },
+        {
+          "name": "statement-20",
+          "file": "steps/0006_rollups_v2/statement-20.sql"
+        }
+      ]
+    },
+    {
+      "name": "0007_drop_events_raw_v1",
+      "description": "Reviewed complete source file 0007_drop_events_raw_v1.sql",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0007_drop_events_raw_v1/statement-01.sql"
+        }
+      ]
+    },
+    {
+      "name": "0008_account_scoped_metrics",
+      "description": "Reviewed complete source file 0008_account_scoped_metrics.sql",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0008_account_scoped_metrics/statement-01.sql"
+        },
+        {
+          "name": "statement-02",
+          "file": "steps/0008_account_scoped_metrics/statement-02.sql"
+        },
+        {
+          "name": "statement-03",
+          "file": "steps/0008_account_scoped_metrics/statement-03.sql"
+        },
+        {
+          "name": "statement-04",
+          "file": "steps/0008_account_scoped_metrics/statement-04.sql"
+        },
+        {
+          "name": "statement-05",
+          "file": "steps/0008_account_scoped_metrics/statement-05.sql"
+        },
+        {
+          "name": "statement-06",
+          "file": "steps/0008_account_scoped_metrics/statement-06.sql"
+        },
+        {
+          "name": "statement-07",
+          "file": "steps/0008_account_scoped_metrics/statement-07.sql"
+        },
+        {
+          "name": "statement-08",
+          "file": "steps/0008_account_scoped_metrics/statement-08.sql"
+        },
+        {
+          "name": "statement-09",
+          "file": "steps/0008_account_scoped_metrics/statement-09.sql"
+        },
+        {
+          "name": "statement-10",
+          "file": "steps/0008_account_scoped_metrics/statement-10.sql"
+        },
+        {
+          "name": "statement-11",
+          "file": "steps/0008_account_scoped_metrics/statement-11.sql"
+        },
+        {
+          "name": "statement-12",
+          "file": "steps/0008_account_scoped_metrics/statement-12.sql"
+        },
+        {
+          "name": "statement-13",
+          "file": "steps/0008_account_scoped_metrics/statement-13.sql"
+        },
+        {
+          "name": "statement-14",
+          "file": "steps/0008_account_scoped_metrics/statement-14.sql"
+        },
+        {
+          "name": "statement-15",
+          "file": "steps/0008_account_scoped_metrics/statement-15.sql"
+        },
+        {
+          "name": "statement-16",
+          "file": "steps/0008_account_scoped_metrics/statement-16.sql"
+        },
+        {
+          "name": "statement-17",
+          "file": "steps/0008_account_scoped_metrics/statement-17.sql"
+        },
+        {
+          "name": "statement-18",
+          "file": "steps/0008_account_scoped_metrics/statement-18.sql"
+        },
+        {
+          "name": "statement-19",
+          "file": "steps/0008_account_scoped_metrics/statement-19.sql"
+        },
+        {
+          "name": "statement-20",
+          "file": "steps/0008_account_scoped_metrics/statement-20.sql"
+        },
+        {
+          "name": "statement-21",
+          "file": "steps/0008_account_scoped_metrics/statement-21.sql"
+        },
+        {
+          "name": "statement-22",
+          "file": "steps/0008_account_scoped_metrics/statement-22.sql"
+        }
+      ]
+    },
+    {
+      "name": "0009_typed_properties",
+      "description": "Reviewed complete source file 0009_typed_properties.sql",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0009_typed_properties/statement-01.sql"
+        },
+        {
+          "name": "statement-02",
+          "file": "steps/0009_typed_properties/statement-02.sql"
+        }
+      ]
+    },
+    {
+      "name": "0010_resolved_event_properties",
+      "description": "Reviewed complete source file 0010_resolved_event_properties.sql",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0010_resolved_event_properties/statement-01.sql"
+        },
+        {
+          "name": "statement-02",
+          "file": "steps/0010_resolved_event_properties/statement-02.sql"
+        }
+      ]
+    },
+    {
+      "name": "0011_events_raw_identifiers",
+      "description": "Reviewed complete source file 0011_events_raw_identifiers.sql",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0011_events_raw_identifiers/statement-01.sql"
+        }
+      ]
+    },
+    {
+      "name": "0012_identity_signals",
+      "description": "Reviewed complete source file 0012_identity_signals.sql",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0012_identity_signals/statement-01.sql"
+        },
+        {
+          "name": "statement-02",
+          "file": "steps/0012_identity_signals/statement-02.sql"
+        },
+        {
+          "name": "statement-03",
+          "file": "steps/0012_identity_signals/statement-03.sql"
+        },
+        {
+          "name": "statement-04",
+          "file": "steps/0012_identity_signals/statement-04.sql"
+        },
+        {
+          "name": "statement-05",
+          "file": "steps/0012_identity_signals/statement-05.sql"
+        },
+        {
+          "name": "statement-06",
+          "file": "steps/0012_identity_signals/statement-06.sql"
+        },
+        {
+          "name": "statement-07",
+          "file": "steps/0012_identity_signals/statement-07.sql"
+        },
+        {
+          "name": "statement-08",
+          "file": "steps/0012_identity_signals/statement-08.sql"
+        }
+      ]
+    },
+    {
+      "name": "0013_retire_identity_map",
+      "description": "Reviewed complete source file 0013_retire_identity_map.sql",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0013_retire_identity_map/statement-01.sql"
+        },
+        {
+          "name": "statement-02",
+          "file": "steps/0013_retire_identity_map/statement-02.sql"
+        }
+      ]
+    },
+    {
+      "name": "0014_experiment_exposures",
+      "description": "Reviewed complete source file 0014_experiment_exposures.sql",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0014_experiment_exposures/statement-01.sql"
+        },
+        {
+          "name": "statement-02",
+          "file": "steps/0014_experiment_exposures/statement-02.sql"
+        },
+        {
+          "name": "statement-03",
+          "file": "steps/0014_experiment_exposures/statement-03.sql"
+        }
+      ]
+    },
+    {
+      "name": "0015_experiment_exposure_string_casts",
+      "description": "Reviewed complete source file 0015_experiment_exposure_string_casts.sql",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0015_experiment_exposure_string_casts/statement-01.sql"
+        },
+        {
+          "name": "statement-02",
+          "file": "steps/0015_experiment_exposure_string_casts/statement-02.sql"
+        }
+      ]
+    },
+    {
+      "name": "0016_events_raw_schema_version",
+      "description": "Reviewed complete source file 0016_events_raw_schema_version.sql",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0016_events_raw_schema_version/statement-01.sql"
+        }
+      ]
+    },
+    {
+      "name": "0017_replay_safe_sources",
+      "description": "Reviewed complete source file 0017_replay_safe_sources.sql",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0017_replay_safe_sources/statement-01.sql"
+        },
+        {
+          "name": "statement-02",
+          "file": "steps/0017_replay_safe_sources/statement-02.sql"
+        },
+        {
+          "name": "statement-03",
+          "file": "steps/0017_replay_safe_sources/statement-03.sql"
+        },
+        {
+          "name": "statement-04",
+          "file": "steps/0017_replay_safe_sources/statement-04.sql"
+        },
+        {
+          "name": "statement-05",
+          "file": "steps/0017_replay_safe_sources/statement-05.sql"
+        },
+        {
+          "name": "statement-06",
+          "file": "steps/0017_replay_safe_sources/statement-06.sql"
+        },
+        {
+          "name": "statement-07",
+          "file": "steps/0017_replay_safe_sources/statement-07.sql"
+        },
+        {
+          "name": "statement-08",
+          "file": "steps/0017_replay_safe_sources/statement-08.sql"
+        },
+        {
+          "name": "statement-09",
+          "file": "steps/0017_replay_safe_sources/statement-09.sql"
+        },
+        {
+          "name": "statement-10",
+          "file": "steps/0017_replay_safe_sources/statement-10.sql"
+        },
+        {
+          "name": "statement-11",
+          "file": "steps/0017_replay_safe_sources/statement-11.sql"
+        },
+        {
+          "name": "statement-12",
+          "file": "steps/0017_replay_safe_sources/statement-12.sql"
+        },
+        {
+          "name": "statement-13-prepare",
+          "file": "native-assertions/statement-13-prepare.sql"
+        },
+        {
+          "name": "statement-13-check",
+          "file": "native-assertions/statement-13-check.sql"
+        },
+        {
+          "name": "statement-13-cleanup",
+          "file": "native-assertions/statement-13-cleanup.sql"
+        },
+        {
+          "name": "statement-14-prepare",
+          "file": "native-assertions/statement-14-prepare.sql"
+        },
+        {
+          "name": "statement-14-check",
+          "file": "native-assertions/statement-14-check.sql"
+        },
+        {
+          "name": "statement-14-cleanup",
+          "file": "native-assertions/statement-14-cleanup.sql"
+        },
+        {
+          "name": "statement-15",
+          "file": "steps/0017_replay_safe_sources/statement-15.sql"
+        },
+        {
+          "name": "statement-16",
+          "file": "steps/0017_replay_safe_sources/statement-16.sql"
+        },
+        {
+          "name": "statement-17",
+          "file": "steps/0017_replay_safe_sources/statement-17.sql"
+        },
+        {
+          "name": "statement-18",
+          "file": "steps/0017_replay_safe_sources/statement-18.sql"
+        },
+        {
+          "name": "statement-19",
+          "file": "steps/0017_replay_safe_sources/statement-19.sql"
+        },
+        {
+          "name": "statement-20",
+          "file": "steps/0017_replay_safe_sources/statement-20.sql"
+        }
+      ]
+    },
+    {
+      "name": "0018_conservative_identity_resolution",
+      "description": "Reviewed complete source file 0018_conservative_identity_resolution.sql",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0018_conservative_identity_resolution/statement-01.sql"
+        },
+        {
+          "name": "statement-02",
+          "file": "native-assertions/local-materialize-policy.sql"
+        },
+        {
+          "name": "statement-03",
+          "file": "steps/0018_conservative_identity_resolution/statement-03.sql"
+        },
+        {
+          "name": "statement-04",
+          "file": "steps/0018_conservative_identity_resolution/statement-04.sql"
+        },
+        {
+          "name": "statement-05",
+          "file": "steps/0018_conservative_identity_resolution/statement-05.sql"
+        },
+        {
+          "name": "statement-06",
+          "file": "steps/0018_conservative_identity_resolution/statement-06.sql"
+        },
+        {
+          "name": "statement-07",
+          "file": "steps/0018_conservative_identity_resolution/statement-07.sql"
+        },
+        {
+          "name": "statement-08",
+          "file": "steps/0018_conservative_identity_resolution/statement-08.sql"
+        },
+        {
+          "name": "statement-09",
+          "file": "steps/0018_conservative_identity_resolution/statement-09.sql"
+        },
+        {
+          "name": "statement-10",
+          "file": "steps/0018_conservative_identity_resolution/statement-10.sql"
+        },
+        {
+          "name": "statement-11",
+          "file": "steps/0018_conservative_identity_resolution/statement-11.sql"
+        },
+        {
+          "name": "statement-12",
+          "file": "steps/0018_conservative_identity_resolution/statement-12.sql"
+        },
+        {
+          "name": "statement-13",
+          "file": "steps/0018_conservative_identity_resolution/statement-13.sql"
+        },
+        {
+          "name": "statement-14",
+          "file": "steps/0018_conservative_identity_resolution/statement-14.sql"
+        },
+        {
+          "name": "statement-15",
+          "file": "steps/0018_conservative_identity_resolution/statement-15.sql"
+        },
+        {
+          "name": "statement-16",
+          "file": "steps/0018_conservative_identity_resolution/statement-16.sql"
+        },
+        {
+          "name": "statement-17",
+          "file": "steps/0018_conservative_identity_resolution/statement-17.sql"
+        },
+        {
+          "name": "statement-18",
+          "file": "steps/0018_conservative_identity_resolution/statement-18.sql"
+        },
+        {
+          "name": "statement-19",
+          "file": "steps/0018_conservative_identity_resolution/statement-19.sql"
+        },
+        {
+          "name": "statement-20",
+          "file": "steps/0018_conservative_identity_resolution/statement-20.sql"
+        },
+        {
+          "name": "statement-21",
+          "file": "steps/0018_conservative_identity_resolution/statement-21.sql"
+        },
+        {
+          "name": "statement-22",
+          "file": "steps/0018_conservative_identity_resolution/statement-22.sql"
+        },
+        {
+          "name": "statement-23",
+          "file": "steps/0018_conservative_identity_resolution/statement-23.sql"
+        },
+        {
+          "name": "statement-24",
+          "file": "steps/0018_conservative_identity_resolution/statement-24.sql"
+        },
+        {
+          "name": "statement-25",
+          "file": "steps/0018_conservative_identity_resolution/statement-25.sql"
+        },
+        {
+          "name": "statement-26",
+          "file": "steps/0018_conservative_identity_resolution/statement-26.sql"
+        },
+        {
+          "name": "statement-27",
+          "file": "steps/0018_conservative_identity_resolution/statement-27.sql"
+        },
+        {
+          "name": "statement-28",
+          "file": "steps/0018_conservative_identity_resolution/statement-28.sql"
+        },
+        {
+          "name": "statement-29",
+          "file": "steps/0018_conservative_identity_resolution/statement-29.sql"
+        },
+        {
+          "name": "statement-30",
+          "file": "steps/0018_conservative_identity_resolution/statement-30.sql"
+        },
+        {
+          "name": "statement-31",
+          "file": "steps/0018_conservative_identity_resolution/statement-31.sql"
+        },
+        {
+          "name": "statement-32",
+          "file": "steps/0018_conservative_identity_resolution/statement-32.sql"
+        },
+        {
+          "name": "statement-33",
+          "file": "steps/0018_conservative_identity_resolution/statement-33.sql"
+        },
+        {
+          "name": "statement-34",
+          "file": "steps/0018_conservative_identity_resolution/statement-34.sql"
+        },
+        {
+          "name": "statement-35",
+          "file": "steps/0018_conservative_identity_resolution/statement-35.sql"
+        },
+        {
+          "name": "statement-36",
+          "file": "steps/0018_conservative_identity_resolution/statement-36.sql"
+        },
+        {
+          "name": "statement-37",
+          "file": "steps/0018_conservative_identity_resolution/statement-37.sql"
+        },
+        {
+          "name": "statement-38",
+          "file": "steps/0018_conservative_identity_resolution/statement-38.sql"
+        },
+        {
+          "name": "statement-39",
+          "file": "steps/0018_conservative_identity_resolution/statement-39.sql"
+        },
+        {
+          "name": "statement-40",
+          "file": "steps/0018_conservative_identity_resolution/statement-40.sql"
+        },
+        {
+          "name": "statement-41",
+          "file": "steps/0018_conservative_identity_resolution/statement-41.sql"
+        },
+        {
+          "name": "statement-42",
+          "file": "steps/0018_conservative_identity_resolution/statement-42.sql"
+        },
+        {
+          "name": "statement-43",
+          "file": "steps/0018_conservative_identity_resolution/statement-43.sql"
+        },
+        {
+          "name": "statement-44",
+          "file": "steps/0018_conservative_identity_resolution/statement-44.sql"
+        },
+        {
+          "name": "statement-45",
+          "file": "steps/0018_conservative_identity_resolution/statement-45.sql"
+        },
+        {
+          "name": "statement-46",
+          "file": "steps/0018_conservative_identity_resolution/statement-46.sql"
+        },
+        {
+          "name": "statement-47",
+          "file": "steps/0018_conservative_identity_resolution/statement-47.sql"
+        },
+        {
+          "name": "statement-48",
+          "file": "steps/0018_conservative_identity_resolution/statement-48.sql"
+        },
+        {
+          "name": "statement-49",
+          "file": "steps/0018_conservative_identity_resolution/statement-49.sql"
+        },
+        {
+          "name": "statement-50",
+          "file": "steps/0018_conservative_identity_resolution/statement-50.sql"
+        },
+        {
+          "name": "statement-51",
+          "file": "steps/0018_conservative_identity_resolution/statement-51.sql"
+        },
+        {
+          "name": "statement-52",
+          "file": "steps/0018_conservative_identity_resolution/statement-52.sql"
+        },
+        {
+          "name": "statement-53",
+          "file": "steps/0018_conservative_identity_resolution/statement-53.sql"
+        },
+        {
+          "name": "statement-54",
+          "file": "steps/0018_conservative_identity_resolution/statement-54.sql"
+        },
+        {
+          "name": "statement-55",
+          "file": "steps/0018_conservative_identity_resolution/statement-55.sql"
+        },
+        {
+          "name": "statement-56",
+          "file": "steps/0018_conservative_identity_resolution/statement-56.sql"
+        },
+        {
+          "name": "statement-57",
+          "file": "steps/0018_conservative_identity_resolution/statement-57.sql"
+        },
+        {
+          "name": "statement-58",
+          "file": "steps/0018_conservative_identity_resolution/statement-58.sql"
+        },
+        {
+          "name": "statement-59",
+          "file": "steps/0018_conservative_identity_resolution/statement-59.sql"
+        },
+        {
+          "name": "statement-60",
+          "file": "steps/0018_conservative_identity_resolution/statement-60.sql"
+        },
+        {
+          "name": "statement-61",
+          "file": "steps/0018_conservative_identity_resolution/statement-61.sql"
+        },
+        {
+          "name": "statement-62",
+          "file": "steps/0018_conservative_identity_resolution/statement-62.sql"
+        },
+        {
+          "name": "statement-63",
+          "file": "steps/0018_conservative_identity_resolution/statement-63.sql"
+        },
+        {
+          "name": "statement-64",
+          "file": "steps/0018_conservative_identity_resolution/statement-64.sql"
+        }
+      ]
+    },
+    {
+      "name": "0019_web_enrichment",
+      "description": "Reviewed complete source file 0019_web_enrichment.sql",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0019_web_enrichment/statement-01.sql"
+        },
+        {
+          "name": "statement-02",
+          "file": "steps/0019_web_enrichment/statement-02.sql"
+        },
+        {
+          "name": "statement-03",
+          "file": "steps/0019_web_enrichment/statement-03.sql"
+        },
+        {
+          "name": "statement-04",
+          "file": "steps/0019_web_enrichment/statement-04.sql"
+        },
+        {
+          "name": "statement-05",
+          "file": "steps/0019_web_enrichment/statement-05.sql"
+        },
+        {
+          "name": "statement-06",
+          "file": "steps/0019_web_enrichment/statement-06.sql"
+        }
+      ]
+    },
+    {
+      "name": "0020_replay_safe_sessions",
+      "description": "Reviewed complete source file 0020_replay_safe_sessions.sql",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0020_replay_safe_sessions/statement-01.sql"
+        },
+        {
+          "name": "statement-02",
+          "file": "steps/0020_replay_safe_sessions/statement-02.sql"
+        },
+        {
+          "name": "statement-03",
+          "file": "steps/0020_replay_safe_sessions/statement-03.sql"
+        },
+        {
+          "name": "statement-04",
+          "file": "steps/0020_replay_safe_sessions/statement-04.sql"
+        },
+        {
+          "name": "statement-05",
+          "file": "steps/0020_replay_safe_sessions/statement-05.sql"
+        },
+        {
+          "name": "statement-06",
+          "file": "steps/0020_replay_safe_sessions/statement-06.sql"
+        },
+        {
+          "name": "statement-07",
+          "file": "steps/0020_replay_safe_sessions/statement-07.sql"
+        },
+        {
+          "name": "statement-08",
+          "file": "steps/0020_replay_safe_sessions/statement-08.sql"
+        }
+      ]
+    },
+    {
+      "name": "0021_governed_current_user_traits",
+      "description": "Reviewed complete source file 0021_governed_current_user_traits.sql",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0021_governed_current_user_traits/statement-01.sql"
+        },
+        {
+          "name": "statement-02",
+          "file": "steps/0021_governed_current_user_traits/statement-02.sql"
+        },
+        {
+          "name": "statement-03",
+          "file": "steps/0021_governed_current_user_traits/statement-03.sql"
+        },
+        {
+          "name": "statement-04",
+          "file": "steps/0021_governed_current_user_traits/statement-04.sql"
+        },
+        {
+          "name": "statement-05",
+          "file": "steps/0021_governed_current_user_traits/statement-05.sql"
+        },
+        {
+          "name": "statement-06",
+          "file": "steps/0021_governed_current_user_traits/statement-06.sql"
+        },
+        {
+          "name": "statement-07",
+          "file": "steps/0021_governed_current_user_traits/statement-07.sql"
+        },
+        {
+          "name": "statement-08",
+          "file": "steps/0021_governed_current_user_traits/statement-08.sql"
+        },
+        {
+          "name": "statement-09",
+          "file": "steps/0021_governed_current_user_traits/statement-09.sql"
+        },
+        {
+          "name": "statement-10",
+          "file": "steps/0021_governed_current_user_traits/statement-10.sql"
+        },
+        {
+          "name": "statement-11",
+          "file": "steps/0021_governed_current_user_traits/statement-11.sql"
+        },
+        {
+          "name": "statement-12",
+          "file": "steps/0021_governed_current_user_traits/statement-12.sql"
+        },
+        {
+          "name": "statement-13",
+          "file": "steps/0021_governed_current_user_traits/statement-13.sql"
+        }
+      ]
+    },
+    {
+      "name": "0022_applied_retention_policy",
+      "description": "Reviewed complete source file 0022_applied_retention_policy.sql",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0022_applied_retention_policy/statement-01.sql"
+        },
+        {
+          "name": "statement-02",
+          "file": "steps/0022_applied_retention_policy/statement-02.sql"
+        },
+        {
+          "name": "statement-03",
+          "file": "steps/0022_applied_retention_policy/statement-03.sql"
+        },
+        {
+          "name": "statement-04",
+          "file": "steps/0022_applied_retention_policy/statement-04.sql"
+        },
+        {
+          "name": "statement-05",
+          "file": "steps/0022_applied_retention_policy/statement-05.sql"
+        },
+        {
+          "name": "statement-06",
+          "file": "steps/0022_applied_retention_policy/statement-06.sql"
+        },
+        {
+          "name": "statement-07",
+          "file": "steps/0022_applied_retention_policy/statement-07.sql"
+        },
+        {
+          "name": "statement-08",
+          "file": "steps/0022_applied_retention_policy/statement-08.sql"
+        },
+        {
+          "name": "statement-09",
+          "file": "steps/0022_applied_retention_policy/statement-09.sql"
+        },
+        {
+          "name": "statement-10",
+          "file": "steps/0022_applied_retention_policy/statement-10.sql"
+        },
+        {
+          "name": "statement-11",
+          "file": "steps/0022_applied_retention_policy/statement-11.sql"
+        },
+        {
+          "name": "statement-12",
+          "file": "steps/0022_applied_retention_policy/statement-12.sql"
+        },
+        {
+          "name": "statement-13",
+          "file": "steps/0022_applied_retention_policy/statement-13.sql"
+        },
+        {
+          "name": "statement-14",
+          "file": "steps/0022_applied_retention_policy/statement-14.sql"
+        },
+        {
+          "name": "statement-15",
+          "file": "steps/0022_applied_retention_policy/statement-15.sql"
+        },
+        {
+          "name": "statement-16",
+          "file": "steps/0022_applied_retention_policy/statement-16.sql"
+        },
+        {
+          "name": "statement-17",
+          "file": "steps/0022_applied_retention_policy/statement-17.sql"
+        },
+        {
+          "name": "statement-18",
+          "file": "steps/0022_applied_retention_policy/statement-18.sql"
+        },
+        {
+          "name": "statement-19",
+          "file": "steps/0022_applied_retention_policy/statement-19.sql"
+        },
+        {
+          "name": "statement-20",
+          "file": "steps/0022_applied_retention_policy/statement-20.sql"
+        },
+        {
+          "name": "statement-21",
+          "file": "steps/0022_applied_retention_policy/statement-21.sql"
+        },
+        {
+          "name": "statement-22",
+          "file": "steps/0022_applied_retention_policy/statement-22.sql"
+        },
+        {
+          "name": "statement-23",
+          "file": "steps/0022_applied_retention_policy/statement-23.sql"
+        }
+      ]
+    },
+    {
+      "name": "0023_stable_reader_surface",
+      "description": "Reviewed complete source file 0023_stable_reader_surface.sql",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0023_stable_reader_surface/statement-01.sql"
+        },
+        {
+          "name": "statement-02",
+          "file": "steps/0023_stable_reader_surface/statement-02.sql"
+        },
+        {
+          "name": "statement-03",
+          "file": "steps/0023_stable_reader_surface/statement-03.sql"
+        }
+      ]
+    },
+    {
+      "name": "0024_cohort_members",
+      "description": "Reviewed complete source file 0024_cohort_members.sql",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0024_cohort_members/statement-01.sql"
+        }
+      ]
+    },
+    {
+      "name": "0025_organization_analytics",
+      "description": "Reviewed complete source file 0025_organization_analytics.sql",
+      "steps": [
+        {
+          "name": "statement-01",
+          "file": "steps/0025_organization_analytics/statement-01.sql"
+        },
+        {
+          "name": "statement-02",
+          "file": "steps/0025_organization_analytics/statement-02.sql"
+        },
+        {
+          "name": "statement-03",
+          "file": "steps/0025_organization_analytics/statement-03.sql"
+        },
+        {
+          "name": "statement-04",
+          "file": "steps/0025_organization_analytics/statement-04.sql"
+        },
+        {
+          "name": "statement-05",
+          "file": "steps/0025_organization_analytics/statement-05.sql"
+        },
+        {
+          "name": "statement-06",
+          "file": "steps/0025_organization_analytics/statement-06.sql"
+        },
+        {
+          "name": "statement-07",
+          "file": "steps/0025_organization_analytics/statement-07.sql"
+        },
+        {
+          "name": "statement-08",
+          "file": "steps/0025_organization_analytics/statement-08.sql"
+        },
+        {
+          "name": "statement-09",
+          "file": "steps/0025_organization_analytics/statement-09.sql"
+        },
+        {
+          "name": "statement-10",
+          "file": "steps/0025_organization_analytics/statement-10.sql"
+        }
+      ]
+    }
+  ]
+}

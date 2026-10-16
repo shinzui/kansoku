@@ -6,7 +6,7 @@ docId: DOC-9
 tags: ["operations", "migrations", "observability", "recovery"]
 generated:
   by: process:codex
-  at: "2026-10-16T03:01:19Z"
+  at: "2026-10-16T22:48:56Z"
 ---
 
 # Operate Kansoku
@@ -22,8 +22,10 @@ Kansoku has two independent, forward-only migration systems:
 
 1. `just migrate` (or `cabal run kansoku-migrate -- up`) installs the vendored PGMQ schema and
    then the application credential, rejection and acceptance-ledger tables in PostgreSQL.
-2. `just ch-migrate` applies `db/clickhouse/migrations/*.sql` in filename order and records them
-   in `analytics.schema_migrations`.
+2. `kansoku-ch-migrate` executes its compiled native plan under a persistent maintenance
+   session and records immutable checksummed events in `kansoku_migration_ledger`. Follow the
+   [first-use and subsequent-upgrade runbook](clickhouse-migrations.md), including retained
+   identities, explicit initialization, external drain and deliberate repair.
 
 Apply both before starting a new release. Normal `kansoku-server` startup does not migrate a
 database; it only idempotently creates the configured PGMQ queue after the PGMQ schema exists.
@@ -40,8 +42,13 @@ Run `cabal run kansoku-migrate -- --help` for the authoritative command list for
 version. ClickHouse migration files are immutable after application. Back up durable data and
 test migrations against a restored copy before a production rollout.
 
-`just ch-reset` drops the entire `analytics` database and replays every ClickHouse migration. It
-is development-only and destroys all analytics data.
+`just ch-reset` refuses: dropping analytics alone would leave native history current and skip
+recreation. The old shell runner is retired. Replace disposable development stacks with new owned
+roots and identities; existing data is never imported or deleted automatically. Native upgrades
+require backup/rehearsal of both stores, stopped submitting clients/external reader schedules,
+fresh counter-bound drain evidence and current-history verification before session completion.
+Only the exact qualified Darwin/arm64 artifact is currently proved; Linux acceptance and the
+actual deployment target remain unresolved gates. See [adoption evidence](../evidence/clickhouse-migrate-adoption.md).
 
 ### Legacy PostgreSQL installations
 

@@ -1,0 +1,2 @@
+
+CREATE TABLE analytics.identity_context_signals_rebuild AS analytics.identity_context_signals;

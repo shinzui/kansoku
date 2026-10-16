@@ -21,6 +21,11 @@ provenance:
       at: 2026-10-16T21:51:05Z
       mode: "update"
       note: "Assess adoption readiness; verify published cohort and defer supported cutover pending platform fit, drain safety and legacy evidence"
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-10-16T22:15:10Z
+      mode: "implement"
+      note: "Implement released dependency wiring, reviewed embedded component and native administration integration"
   reviews:
     - model: "gpt-6-astra"
       harness: "codex-cli"
@@ -63,16 +68,20 @@ The safety work remains necessary for first-use failures and all future native m
 ## Progress
 
 
-- [ ] M1: The published release builds through both Cabal and Nix on the qualified integration platform; intended deployment-platform gaps and their prerequisites are explicit.
-- [ ] M2: An embedded Kansoku component exposes the complete reviewed plan and passes fresh replay plus a no-op repeat through a representative public-library consumer.
-- [ ] M3: A persistent administrative session fences traffic and other administrators, survives process loss, and requires explicit predecessor-quiescence evidence before mutation can continue.
-- [ ] M4: The packaged CLI supports inspection, fresh initialization, native upgrades and explicit repair with target identity, initialization and recovery evidence preserved.
+- [x] M1 (2026-10-16): The released 0.1.0.0 cohort built through Cabal and Nix without relaxing bounds or disabling its deterministic checks. The hash-verified Darwin/arm64 artifact executes as 26.8.28.14; owned probes reject unsupported versions and wrong server UUIDs. Deployment target selection, crash disposition, patch review and Linux qualification remain explicit gates in `docs/evidence/clickhouse-migrate-adoption.md`.
+- [x] M2 (2026-10-16): The package-owned 25-migration/257-step component passed fresh execution, assertion cleanup and an independently counted zero-application-SQL repeat after server restart and explicit evidence through the public runner. The same four-case run rejected wrong server UUID and unsupported version before application SQL. `just ch-migrations-component` passed; exact conversion verification also passed. `scripts/check_clickhouse_embedding.py` also passed extracted-archive compilation, a preserved-timestamp SQL change and inspection with all source inputs withheld (private evidence `.dev/acceptance/ch-embedding-eigw9fla`).
+- [x] M3 (2026-10-16): Separate-process proofs passed at `.dev/acceptance/ch-coordination-0d_jpe0k`: backend loss left a native INSERT able to submit later; ordinary migration entry stayed blocked until real external drain; HTTP and database-side traffic admission refused; new/resumed data jobs and competing migration processes were excluded; process death retained the marker and explicit recovery completed. The integrated Cabal suite subsequently passed all 16 cases with zero skipped at `.dev/acceptance/ch-migrations-amqxcbdy`.
+- [x] M4 (2026-10-16): The mounted Cabal and Nix CLI passed all 16 original boundary cases, including inspection, first use, suffix upgrade, initialization recovery, every repair operation and persisted exact receipts. The final expanded Cabal candidate passed 17 cases at `.dev/acceptance/ch-migrations-7iemkz0i`, adding an actual synchronous mutation surviving migration-client SIGKILL: ordinary up and false-attestation repair were refused, positive completion/drain then allowed zero-SQL acceptance/finalization. Final packaged aggregate gates remain required in M5.
 - [ ] M5: Every supported migration entry point uses the executable, and required owned acceptance proves fresh initialization, native upgrades, interruption recovery, coordination and application behavior.
 - [ ] M6: Operations guides, architecture decisions and release evidence describe first deployment, subsequent native migrations and actual support limits.
 
 
 ## Surprises & Discoveries
 
+
+2026-10-16 documentation validation: the invoked `okf log add` command rewrote parsed log entries and omitted the existing free-form guide-adoption provenance table. Restored the complete historical log from the clean starting revision and retained only the new entry, then revalidated. Preserve that table when using the log writer in this repository; no upstream tool change is part of this plan.
+
+2026-10-16 implementation: Cabal CLI acceptance passed 13 non-skipping cases at `.dev/acceptance/ch-migrations-w0oqza8g`, including native upgrade, exact pending-receipt handling, lost SQL/ledger response recovery, all four repair operations and original/native schema plus raw/derived/reader result parity. Separate-process coordination and the current 16-case Cabal suite subsequently passed. Current Nix CLI native acceptance remains in progress. Revalidated the four published archives against every tagged source member. Added exact Cabal constraints, unpacked Nix hashes, qualified binary wiring and package-owned conversion inputs. `python3 scripts/check_clickhouse_conversion.py` proves 25 original files, 253 exact byte ranges and 257 native steps with only the three reviewed adaptations. The initial Cabal/Nix boundary and public native proof passed; the complete application/coordinator acceptance is still in progress. The qualified Nix binary required expansion in the writable build directory because the official compressed download self-expands beside itself; immutable execution failed with `mkstemp: Permission denied`. Production target remains undecided and Linux qualification remains an upstream prerequisite. See `docs/evidence/clickhouse-migrate-adoption.md`.
 
 2026-10-16 readiness review: Hackage's preferred-version endpoints now report 0.1.0.0 for core, embed, CLI and test-support. Upstream tag `v0.1.0.0` has tag object `4414ed9cc39e5dbabb24ecb2f42f95eb98e953fd` and dereferences to `6a795475fdbb441d1d42ac9b932ba2205d99a393`. Downloaded archives contain respectively 66, 15, 18 and 314 files; every member and the currently served Cabal metadata match the clean tagged checkout. The archive SHA-256 values below identify the published bytes, rather than the earlier qualification archives:
 
@@ -95,6 +104,8 @@ clickhouse-migrate-test-support-0.1.0.0 917f7165f9792eae771a02db4ac80befb0d03fa8
 
 2026-10-16: Adopt the released core, embedding and CLI libraries in a separate administrative executable. Keep the native ClickHaskell driver for application queries and writes. Migration transport is independent HTTP owned by the toolkit; replacing the application driver would add unrelated scope.
 
+2026-10-16 implementation: Persist the preceding entry outcome and exact append receipts in the PostgreSQL session, in addition to its pre-submission marker. Explicit target/session/counter-bound reconciliation uses public exact-event observations after external drain. It cannot acknowledge unresolved or incompatible native history; that still requires explicit repair. This prevents a lost append response that later looks current from silently re-enabling ordinary up or session completion.
+
 2026-10-16: Use one directly addressed ClickHouse 26.8.28.14 server on Apple Silicon macOS for the initial disposable integration proof, with the exact official binary from the dependency's qualification matrix. Do not broaden its version allowlist locally. This is a proof environment, not a decision to drop Kansoku's existing Linux acceptance or adopt macOS for deployment. Qualification of each claimed platform is a prerequisite to its supported execution; Cloud, proxies, replication and distributed execution remain outside the current dependency contract.
 
 2026-10-16: Use explicit persistent maintenance sessions around ClickHouse migration commands. Reuse the PostgreSQL administrator and traffic locks, and extend persisted admission state. No process lock, advisory lock release, timeout or empty process list proves that ClickHouse has finished an earlier request. Preserve a pending-entry marker after each mutating entry and require external quiescence evidence before another entry or session completion.
@@ -106,6 +117,8 @@ clickhouse-migrate-test-support-0.1.0.0 917f7165f9792eae771a02db4ac80befb0d03fa8
 
 ## Outcomes & Retrospective
 
+
+2026-10-16 implementation checkpoint: M1–M4 integration proofs passed on the qualified development platform. The original runner/reset are now failing retirement entry points; owned fixtures route through the native CLI with owned PostgreSQL coordination and real drain. Operator guides and ADR-22, with ADR-10/17/18 updates, describe the workflow and qualification limits; strict ADR/guide checks passed. Final deterministic, packaged aggregate, clean-clone first-use and flake checks are still in progress. No deployment, external publication or persistent user-data mutation occurred.
 
 2026-10-16 review/update outcome: The original plan was authored and revised by gpt-6.1-sol and had no recorded review entry. This pass checked the current release, source/tag identity, relevant public contracts, upstream review/qualification evidence, captured SQL hashes, local coordination paths, build configuration and ADR-10/17/18. The initial recommendation deferred supported adoption; the user then clarified that Kansoku has not been deployed. The revised recommendation is pre-deployment adoption, omitting legacy import and retaining platform and runtime safety gates. No native suite, Kansoku build, migration or persistent database operation was run; M1–M6 remain unfinished. No accepted architecture decision changes in this review: platform and admission changes remain proposed work, and their ADR updates belong with implementation.
 

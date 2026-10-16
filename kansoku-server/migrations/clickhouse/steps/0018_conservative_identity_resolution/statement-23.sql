@@ -1,0 +1,2 @@
+
+EXCHANGE TABLES analytics.identity_signal_users AND analytics.identity_signal_users_rebuild;
