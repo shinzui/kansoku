@@ -2,7 +2,8 @@
 
 Plan: [49](../plans/49-adopt-clickhouse-migrate-for-explicit-clickhouse-migrations.md).
 External consumer reference: [Kansoku Plan 49](mori://shinzui/kansoku/plans/49-adopt-clickhouse-migrate-for-explicit-clickhouse-migrations).
-Implementation is in progress. No deployment or persistent database operation is recorded.
+Implementation source checkpoint: `11d3f63` on the existing `master` branch.
+Qualified local aggregate validation is complete. No deployment or persistent user-data operation is recorded.
 
 ## Release identity
 
@@ -81,7 +82,7 @@ INSERT remained able to submit after its cooperating PostgreSQL backend died. A 
 process retained its fence and recovered only after explicit drain and selected repair.
 
 These are local integration results. Final candidate packaged service acceptance and checks
-remain in progress; no remote run or deployment is claimed. Private raw diagnostics stay under
+passed as recorded below; no remote run or deployment is claimed. Private raw diagnostics stay under
 `.dev/acceptance`; only count/status summaries belong in sanitized uploads.
 
 The expanded final Cabal candidate passed 17 cases at
@@ -97,3 +98,68 @@ and retired-runner/reset refusal at `.dev/acceptance/ch-owned-helper-2ws3i4qg`.
 Strict validation passed for 22 ADRs and 13 guides, and `seihou diff` reported no managed drift.
 The canonical consumer Plan URI above is intentionally retained; the current Mori registry
 reported it unresolved, while the local plan/frontmatter and project identity exist.
+
+The final Nix candidate passed all 17 cases, zero failures and zero skipped, at
+`.dev/acceptance/ch-migrations-fjvm1lg4`. Production package identity is
+`xi6rcpslg0ddc4r34g1x7mjcfgzykias-kansoku-server-0.1.0.0`; the separate private
+proof package is `qayi24jm7najzxw9v3ap4d6aab0danva-kansoku-server-0.1.0.0`.
+`scripts/check_clickhouse_sdist.py` passed at `.dev/acceptance/ch-sdist-s7eeb5jv`: all
+six workspace/pinned source packages were archived, extracted and used to build
+the actual production CLI. Its offline 25/257 plan still worked after all migration
+inputs were withheld. The earlier preserved-time proof remains independently applicable.
+
+`just check` passed: 409 core examples, 21 API examples, four probe tests, all
+three seven-example HTTP semantic modes and four lifecycle modes. Local
+`nix flake check --builders ''` passed both checks on aarch64-darwin; it does not
+validate incompatible systems. Final full service/SDK and clean-clone workflow
+results are recorded below.
+
+An initial full SDK-required aggregate at `.dev/acceptance/run-jgv8fee5` failed
+the SDK's exact schema-catalog assertion: its checked-in catalog omitted the
+server's already-existing organization-traits v2. Native 17-case, 526-example
+core, replay, query limits, public metrics and fixture-isolation checks had passed.
+The shared SDK source checkout was not changed. An isolated clone of
+[mori://shinzui/kansoku-ts](mori://shinzui/kansoku-ts), revision
+`33d6ab8df99f7b4bb1eb5caca7df8a9c346966c6`, was prepared at
+`.dev/acceptance/sdk-contract-j9sgq4jh/sdk` using its documented `sync-contracts`
+command against Kansoku `11d3f63`, generated schema and normal package build.
+The subsequent SDK-required aggregate uses this explicit refreshed-contract
+fixture; it is not evidence that the SDK's unchanged shipped catalog is current.
+
+The documented clean-clone ordinary workflow passed all four cases with zero
+skips at `.dev/acceptance/first-use-uefk8qam`. It cloned Kansoku `11d3f63`, used
+the default qualified shell, explicitly migrated PostgreSQL, retained native
+identities/session counters, performed actual same-root drains, initialized
+257 steps and repeated with zero application SQL. It then used the previously
+accepted immutable SDK `0a4eea715b5f34fad8593e3dfd123ce407976c95` for ingestion,
+duplicate retry and recovery of accepted events queued during a ClickHouse outage.
+Owned stack shutdown checks passed. Its summary retains exact source identities.
+
+## Final aggregate outcome
+
+The SDK-required full gate passed at `.dev/acceptance/run-b1tboun9`, using the
+actual Nix production binary and the explicit refreshed-contract fixture above:
+
+```bash
+KANSOKU_SDK_PROJECT="$PWD/.dev/acceptance/sdk-contract-j9sgq4jh/sdk" \
+KANSOKU_REQUIRE_SDK=1 nix develop --builders '' -c just acceptance
+```
+
+It passed the 17-case native migration suite; 526 native core examples; four
+production probe tests; native recovery, query limits, replay and identity;
+Hurl and ingestion; all metric/trait/cohort/custom-metric and fixture-isolation
+families; 22 Haskell client examples; three telemetry/privacy modes; SDK trait
+tests in each mode; three SDK protocol cases; nine live SDK cases; two
+vanilla/React examples; eight Chromium identity/handoff/bot cases; six Chromium
+beacon cases; constrained reader privileges and all three SQL/HTTP parity recipes;
+metrics-disabled behavior; and all seven packaged administration families.
+Required scenarios reported no skips. Private evidence and sanitized summaries
+are separate under that run root. Optional GrowthBook/Grafana paths were not
+supplied; their real-consumer integrations were not rerun or claimed here.
+
+All six plan milestones are implemented and locally verified within the qualified
+development scope. The shared SDK source checkout remains clean. Existing Ubuntu
+acceptance remains required and unqualified, remote CI has not been observed,
+and no deployment target has been selected or deployed. Crash disposition and
+intervening patch/security review remain production gates. No producer repository
+was changed and no upstream initiative is declared complete.

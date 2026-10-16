@@ -6,7 +6,7 @@ docId: DOC-5
 tags: ["acceptance", "consumers", "sdk", "development"]
 generated:
   by: process:codex
-  at: "2026-10-16T22:48:56Z"
+  at: "2026-10-16T23:41:52Z"
 ---
 
 # Reproduce the external consumer gate
@@ -73,6 +73,12 @@ consumer paths. The full gate executes packaged server/admin binaries; the focus
 uses source-built executables. Required SDK live, protocol and Chromium cases fail on missing
 configuration, skipped tests, zero cases or a feature mismatch. See
 [the consumption guide](consume-clickhouse.md) for the supported data contracts and boundaries.
+
+The SDK live trait test compares its pinned event catalog exactly with the server. A stale
+snapshot can fail even when an older SDK still ingests correctly. Use the SDK's documented
+`sync-contracts --from <Kansoku-checkout> --ref <server-commit>`, schema generation and build
+workflow in an isolated clone when testing refreshed contracts. Record the SDK revision and
+server contract pin separately; that result does not certify the unchanged shipped snapshot.
 
 The separate ordinary adoption/reuse/recovery proof uses clean local clones, the shipped
 `just up/migrate/ch-migrate/issue-key/run` commands. It retains native identities, uses persistent

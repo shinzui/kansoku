@@ -58,6 +58,7 @@ evidence and limits; the [terminology catalog](docs/terminology/index.md) explai
 - [Use the Haskell SDK](docs/guides/haskell-sdk.md)
 - [Use the browser and React SDKs](mori://shinzui/kansoku-ts/docs/getting-started)
 - [Consume ClickHouse from Grafana or GrowthBook](docs/guides/consume-clickhouse.md)
+- [Initialize and upgrade ClickHouse](docs/guides/clickhouse-migrations.md)
 - [Configure Kansoku](docs/guides/configuration.md)
 - [Measure pipeline capacity and size an outage budget](docs/guides/capacity.md)
 - [Operate Kansoku](docs/guides/operations.md)
@@ -74,12 +75,20 @@ nix develop
 just up
 ```
 
-In another `nix develop` shell, apply both databases' migrations, issue credentials, and start
-the service:
+In another `nix develop` shell, apply PostgreSQL migrations and inspect the native plan:
 
 ```bash
 just migrate
-just ch-migrate
+just ch-migrate plan --json
+```
+
+Complete the [ClickHouse initialization runbook](docs/guides/clickhouse-migrations.md) with
+retained target/server/ledger identities, a persistent maintenance session and actual external
+drain. The qualified development target is ClickHouse 26.8.28.14 on arm64 macOS; Linux
+qualification and the deployment target remain release gates. After initialization and session
+completion, issue credentials and start the service:
+
+```bash
 just issue-key write dev "local writer"
 just issue-key service dev "local reader"
 just run
@@ -199,7 +208,9 @@ nix fmt
 
 `just openapi` and `just contracts` regenerate the committed machine-readable references. Do not
 hand-edit generated JSON. The local database processes and their state live inside the checkout;
-`just ch-reset` is development-only and destroys all local ClickHouse analytics data.
+`just ch-reset` refuses because dropping analytics alone would leave native history current.
+Create a new owned stack with fresh roots and identities; preserve existing data until its owner
+chooses disposal.
 
 Contributor gates run inside the locked Nix environment:
 
