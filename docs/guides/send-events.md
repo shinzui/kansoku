@@ -15,6 +15,38 @@ If both are present, `Authorization` takes precedence, including when it is malf
 unknown, or revoked credentials return HTTP 401. Credentials are account-scoped: Kansoku
 overwrites the event's optional `accountId` with the authenticated account.
 
+## Browser exit beacon
+
+`POST /v1/beacon` accepts UTF-8 JSON with either `text/plain` (optional UTF-8 charset)
+or `application/json`. The envelope is `{"writeKey":"ksk_w_…","batch":[…]}`.
+Only public write keys are permitted. Unknown/revoked keys return 401; a valid service token
+returns 403. Missing/invalid body keys, duplicate envelope keys (including escaped spellings),
+or any `Authorization`/`X-Api-Key` header return 400. Header credentials never replace the body key.
+The decoder bounds keys to 256 printable, non-space ASCII characters and reports generic errors.
+
+```javascript
+const body = JSON.stringify({ writeKey, batch: events });
+const queued = navigator.sendBeacon(
+  `${baseUrl}/v1/beacon`,
+  new Blob([body], { type: "text/plain;charset=UTF-8" }),
+);
+```
+
+No credential belongs in a URL. `text/plain` avoids a CORS preflight; configured origin
+allowlists still reject disallowed simple POSTs before any ingest side effect. Missing Origin
+is allowed for nonbrowser producers. Origin is forgeable and does not replace the public key.
+The same byte/count limits, per-key rate bucket, immutable acceptance ledger, normalization,
+enrichment, partial 202 acknowledgement and 429 `Retry-After` apply to all three ingest routes.
+Only individual invalid events enter quarantine; the credential envelope is discarded.
+
+`queued === true` means browser queue admission, with no readable HTTP result. It cannot tell
+you whether the server accepted, rejected, throttled or even received the events. Keep pending
+event IDs for an acknowledged retry; identical retries are safe. False or a missing API may
+fall back to keepalive fetch, subject to the browser's shared in-flight quota. Budget the
+complete serialized UTF-8 envelope conservatively below 60 KiB across outstanding exit calls;
+splitting cannot grant another independent allowance. A page-leave event is best effort and
+cannot guarantee a complete duration measurement.
+
 ## Event shape
 
 The machine-readable field reference is the `AnalyticsEvent` schema in

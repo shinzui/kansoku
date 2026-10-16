@@ -8,6 +8,7 @@ module Kansoku.Auth.Handler
     authContext,
     authContextWith,
     authenticateWith,
+    beaconAuthHandlerWithContext,
     ingestAuthHandler,
     ingestAuthHandlerWith,
     ingestAuthHandlerWithContext,
@@ -59,11 +60,17 @@ type instance AuthServerData (AuthProtect "kansoku-ingest") = IngestPrincipal
 
 type instance AuthServerData (AuthProtect "kansoku-metrics") = MetricsPrincipal
 
+type instance AuthServerData (AuthProtect "kansoku-beacon") = Text -> Handler IngestPrincipal
+
 type PrincipalLookup = Text -> IO (Either AuthStoreError (Maybe AuthenticatedPrincipal))
 
 authenticateWith :: PrincipalLookup -> Request -> Handler AuthenticatedPrincipal
 authenticateWith lookupPrincipal request = do
   rawToken <- either (const rejectUnauthorized) pure (presentedToken request)
+  authenticateTokenWith lookupPrincipal rawToken
+
+authenticateTokenWith :: PrincipalLookup -> Text -> Handler AuthenticatedPrincipal
+authenticateTokenWith lookupPrincipal rawToken = do
   when (isNothing (tokenKind rawToken)) rejectUnauthorized
   result <- liftIO (lookupPrincipal (hashToken (Token rawToken)))
   case result of
@@ -86,6 +93,18 @@ ingestAuthHandlerWithContext lookupPrincipal capture = mkAuthHandler $ \request 
   metadata <- liftIO (capture request)
   pure (IngestPrincipal principal metadata)
 
+-- | Reject competing headers before decoding or looking up the body key.
+beaconAuthHandlerWithContext :: PrincipalLookup -> (Request -> IO IngestRequestContext) -> AuthHandler Request (Text -> Handler IngestPrincipal)
+beaconAuthHandlerWithContext lookupPrincipal capture = mkAuthHandler $ \request -> do
+  when (any (\(name, _) -> name == hAuthorization || name == "X-Api-Key") (requestHeaders request)) $
+    throwEnvelope err400 (badRequest "ambiguous_credential" "beacon accepts only the envelope write key")
+  pure $ \key -> do
+    principal <- authenticateTokenWith lookupPrincipal key
+    unless (principal ^. #kind == WriteKey) $
+      throwEnvelope err403 (forbidden "forbidden" "beacon requires a public write key")
+    metadata <- liftIO (capture request)
+    pure (IngestPrincipal principal metadata)
+
 metricsAuthHandler :: Pool.Pool -> AuthHandler Request MetricsPrincipal
 metricsAuthHandler pool = metricsAuthHandlerWith (lookupApiKey pool)
 
@@ -102,13 +121,14 @@ metricsAuthHandlerWith lookupPrincipal =
         either (\(code, message) -> throwEnvelope err400 (badRequest code message)) pure (validateMetricRequest request)
         pure (MetricsPrincipal principal)
 
-authContext :: Pool.Pool -> Context '[AuthHandler Request IngestPrincipal, AuthHandler Request MetricsPrincipal]
+authContext :: Pool.Pool -> Context '[AuthHandler Request IngestPrincipal, AuthHandler Request MetricsPrincipal, AuthHandler Request (Text -> Handler IngestPrincipal)]
 authContext pool = authContextWith (lookupApiKey pool)
 
-authContextWith :: PrincipalLookup -> Context '[AuthHandler Request IngestPrincipal, AuthHandler Request MetricsPrincipal]
+authContextWith :: PrincipalLookup -> Context '[AuthHandler Request IngestPrincipal, AuthHandler Request MetricsPrincipal, AuthHandler Request (Text -> Handler IngestPrincipal)]
 authContextWith lookupPrincipal =
   ingestAuthHandlerWith lookupPrincipal
     :. metricsAuthHandlerWith lookupPrincipal
+    :. beaconAuthHandlerWithContext lookupPrincipal (captureRequestContext (const (pure Nothing)))
     :. EmptyContext
 
 presentedToken :: Request -> Either () Text

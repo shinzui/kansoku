@@ -32,7 +32,7 @@ import Kansoku.Event
     UserId,
     VersionedEventSchema,
   )
-import Kansoku.Ingest.Api (BatchAck, IngestAck, IngestEvent, RejectedEvent)
+import Kansoku.Ingest.Api (BatchAck, BeaconEnvelope, IngestAck, IngestEvent, RejectedEvent)
 import Kansoku.Metrics.Api (AcquisitionMeasure, CohortMode, ExperimentMeasure, FunnelMeasure, FunnelMode, MetricPoint, MetricResult, RetentionMode, SessionMeasure, TimeGrain, UserWindow)
 import Kansoku.Metrics.Filter (MetricFilter)
 import Kansoku.Metrics.Limits (maxMetricPoints)
@@ -55,6 +55,16 @@ instance (HasOpenApi sub) => HasOpenApi (AuthProtect "kansoku-metrics" :> sub) w
           (403, "A valid credential lacks metrics-read permission"),
           (503, "Storage or credential store unavailable")
         ]
+
+instance (HasOpenApi sub) => HasOpenApi (AuthProtect "kansoku-beacon" :> sub) where
+  toOpenApi _ =
+    toOpenApi (Proxy @sub)
+      & addProblemResponses [(401, "Unknown or revoked body write key"), (403, "Service credentials cannot use beacon"), (503, "Storage or credential store unavailable")]
+      & O.allOperations
+      . O.description
+      ?~ "Body-authenticated public write key only. Rejects competing Authorization or X-Api-Key headers and duplicate envelope keys. text/plain supports browser sendBeacon without preflight; queueing is not server acknowledgement."
+
+instance O.ToSchema BeaconEnvelope
 
 instance O.ToSchema AccountId where
   declareNamedSchema =

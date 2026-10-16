@@ -19,6 +19,7 @@ module Kansoku.Client
     identifyWithVersion,
     identifyOnce,
     identifyOnceWithVersion,
+    kansokuBeaconContext,
     kansokuCredential,
     newClient,
     track,
@@ -45,7 +46,7 @@ import Data.UUID qualified as UUID
 import Data.UUID.V4 qualified as UUID
 import Kansoku.Api (SchemaAPI)
 import Kansoku.Api.Response (KansokuResult (..), ProblemDetails)
-import Kansoku.Auth.Api (IngestAuth)
+import Kansoku.Auth.Api (BeaconContext, IngestAuth)
 import Kansoku.Event (AccountId (..), AnalyticsEvent (..), AnonymousId (..), EventId (..), EventName (..), EventSource (..), OrganizationId (..), SessionId (..), UserId (..), baseEvent)
 import Kansoku.Event.Contract (SchemaCatalog)
 import Kansoku.Ingest.Api (BatchAck, IngestRoutes)
@@ -128,6 +129,11 @@ data ClientError
 -- NamedRoutes fields are type-family applications, so record-dot syntax cannot
 -- see them. Use qualified selector application at call sites.
 type instance AuthClientData (AuthProtect "kansoku-ingest") = Text
+
+type instance AuthClientData (AuthProtect "kansoku-beacon") = ()
+
+kansokuBeaconContext :: AuthenticatedRequest BeaconContext
+kansokuBeaconContext = mkAuthenticatedRequest () (const id)
 
 kansokuCredential :: Text -> AuthenticatedRequest IngestAuth
 kansokuCredential token =

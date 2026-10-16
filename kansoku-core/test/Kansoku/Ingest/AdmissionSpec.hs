@@ -1,4 +1,4 @@
-module Kansoku.Ingest.AdmissionSpec (spec) where
+module Kansoku.Ingest.AdmissionSpec (spec, count) where
 
 import Control.Concurrent.Async (mapConcurrently)
 import Data.Aeson qualified as Aeson

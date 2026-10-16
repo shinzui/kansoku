@@ -37,9 +37,9 @@ encodes them as unpadded base64url, prints the credential once, and stores only 
 SHA-256 hash in `kansoku.api_keys`. PostgreSQL DDL is an application-owned component in the
 explicit pg-migrate plan. Normal server startup never applies migrations.
 
-Authentication is always enabled on each protected leaf operation and is declared in the Servant route type with two distinct
+Authentication is always enabled on each protected leaf operation and is declared in the Servant route type with distinct
 `AuthProtect` tags and principal newtypes. Distinct result types make selecting the wrong auth
-handler a type error. Both route families accept `Authorization: Bearer <token>` and
+handler a type error. The event/batch and metrics route families accept `Authorization: Bearer <token>` and
 `X-Api-Key: <token>`; `Authorization` takes precedence when both are present, including when it
 is malformed. The OpenAPI document declares matching schemes and operation-level requirements.
 The Haskell ingest client requires a credential in `ClientConfig` and sends Bearer auth.
@@ -98,3 +98,19 @@ server/client migration and the distinction between typed handler results and pr
 The shipped administrative key issue/list/revoke commands and immediate revocation proof are
 recorded in [ADR-17](0017-fenced-resumable-administration-and-applied-retention.md). The server
 issue-key alias shares the same issuance implementation; listings expose metadata without hashes.
+
+## Beacon credential boundary
+
+The beacon AuthProtect context supplies request metadata and deferred body authentication;
+it never authenticates a header. Exactly one bounded envelope writeKey is verified through
+the same indexed hashed lookup, then its stored kind must be WriteKey. Unknown/revoked keys
+return 401, valid service tokens 403, and key-store failures retryable 503. Any competing
+Authorization/X-Api-Key header, including an empty one, is 400 before lookup. Missing, invalid
+or duplicate body keys are 400. The body credential has no OpenAPI header-security requirement;
+its request schema and operation description document this separate transport.
+
+This narrow public-key exception supports browser sendBeacon without placing credentials in
+URLs or attempting to send headers the API cannot carry. Operator origin admission precedes
+side effects but is not authentication. Actual socket/request context is captured only after
+credential verification and reaches the same enrichment service; forwarded addresses and
+credentials are absent from exported spans, access records and credential-envelope quarantine.

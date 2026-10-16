@@ -23,6 +23,11 @@ provenance:
       at: 2026-10-15T15:43:16Z
       mode: "update"
       note: "Reconcile first-release APIs, domain semantics, dependencies and acceptance with the source-validated MP-5 review."
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-10-16T03:27:17Z
+      mode: "implement"
+      note: "Implement write-key-only beacon body authentication and shared fenced ingest, then prove media/origin/quota behavior with the pinned browser consumer after EP-37 acceptance."
 ---
 
 # Beacon ingest route for page-exit delivery
@@ -38,11 +43,16 @@ Session semantics cannot depend on a page-leave event always arriving.
 ## Progress
 
 
-- [ ] M1: Both media types use shared authenticated ingest validation, rate limits and counters.
+- [x] M1: Both media types use shared authenticated ingest validation, rate limits and counters.
 - [ ] M2: OpenAPI/client and the SDK browser test prove envelope, origin and quota behavior.
 
 ## Surprises & Discoveries
 
+
+Released dependency source verification: Mori indexed Aeson 2.3.1.0 while Hackage and
+upstream tags already publish 2.3.2.0. This change adds no latest-version pin; the public token
+decoder was checked in the resolved 2.2.4.1 source (Cabal uses 2.2.5.1) and the API lower
+bound is explicit. wai-cors 0.2.7 rejects unsupported origins before invoking the application.
 
 The beacon standard permits preflight for non-safelisted content types; it does not categorically
 forbid it. text/plain avoids that dependency. The 64 KiB keepalive budget is shared in flight,
@@ -59,7 +69,13 @@ before side effects, including simple requests; do not rely on the browser readi
 ## Outcomes & Retrospective
 
 
-Planning reviewed; browser and runtime evidence pending.
+M1 is implemented. Source `just check` passes 364 core, 18 client and four probe cases;
+seven HTTP telemetry cases pass in each semantic mode and four exporter lifecycle checks pass.
+The new native PostgreSQL perimeter test exercises both generated Haskell client media types,
+unknown/revoked/service credentials, competing headers, no-Origin and disallowed-Origin requests,
+byte/count limits, partial invalid batches, durable deduplication, shared rate limiting and
+credential-free diagnostic payloads. OpenAPI route/status/security conformance has 16 passing
+cases. Packaged browser delivery and final acceptance remain pending.
 
 ## Context and Orientation
 

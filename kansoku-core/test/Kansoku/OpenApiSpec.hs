@@ -53,7 +53,7 @@ spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
     lookupText ["components", "securitySchemes", "serviceToken", "scheme"] documentValue `shouldBe` Just "bearer"
     traverse_ assertSecurity operationValues
 
-  it "documents exactly the twenty analytics paths with stable operation IDs" $ do
+  it "documents exactly the twenty-one analytics paths with stable operation IDs" $ do
     documentedPaths `shouldBe` expectedServedPaths
     fmap operationIdentity operationValues `shouldMatchList` expectedOperationIds
 
@@ -114,6 +114,7 @@ spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
   it "keeps every wire DTO's ToJSON representation within its ToSchema" $ do
     conforms "AnalyticsEvent" sampleEvent
     conforms "IngestAck" Ingest.IngestAck {Ingest.accepted = 1, Ingest.eventId = "evt_openapi"}
+    conforms "BeaconEnvelope" (Ingest.BeaconEnvelope "ksk_w_fixture" [Ingest.ingestEvent sampleEvent])
     conforms "BatchAck" Ingest.BatchAck {Ingest.accepted = 1, Ingest.rejected = []}
     conforms
       "RejectedEvent"
@@ -224,6 +225,7 @@ expectedServedPaths =
       "/metrics/stickiness",
       "/metrics/users",
       "/v1/batch",
+      "/v1/beacon",
       "/v1/events",
       "/v1/schemas"
     ]
@@ -251,6 +253,7 @@ expectedOperationIds =
     ("/metrics/stickiness", "get", "getMetricsStickiness"),
     ("/metrics/users", "get", "getMetricsUsers"),
     ("/v1/batch", "post", "postV1Batch"),
+    ("/v1/beacon", "post", "postV1Beacon"),
     ("/v1/events", "post", "postV1Events"),
     ("/v1/schemas", "get", "getV1Schemas")
   ]
@@ -283,7 +286,7 @@ assertStatuses (path, method, operation) = do
   let actual = List.sort (Key.toText <$> KeyMap.keys (objectAt ["responses"] operation))
       success = if method == "post" then "202" else "200"
       authStatuses
-        | "/metrics/" `Text.isPrefixOf` path = ["401", "403"]
+        | "/metrics/" `Text.isPrefixOf` path || path == "/v1/beacon" = ["401", "403"]
         | otherwise = ["401"]
       expected
         | path == "/v1/schemas" = ["200", "405", "406", "413", "500"]
@@ -303,6 +306,7 @@ assertStatuses (path, method, operation) = do
 assertSecurity :: OperationValue -> Expectation
 assertSecurity (path, _method, operation) =
   case (path, valueAt ["security"] operation) of
+    ("/v1/beacon", Nothing) -> pure ()
     ("/v1/schemas", Nothing) -> pure ()
     ("/v1/schemas", Just (Aeson.Array requirements))
       | null requirements -> pure ()
@@ -373,13 +377,14 @@ assertRouted manager port path = do
 
 expectedStatus :: Text -> Status
 expectedStatus path
-  | path `elem` ["/v1/events", "/v1/batch"] = status202
+  | path `elem` ["/v1/events", "/v1/batch", "/v1/beacon"] = status202
   | path `elem` ["/metrics/organizations", "/metrics/custom"] = status404
   | otherwise = status200
 
 requestForPath :: HTTP.Manager -> Warp.Port -> Text -> IO (HTTP.Response BSL.ByteString)
 requestForPath manager port path
   | path == "/v1/events" = post manager port path (Aeson.encode sampleEvent)
+  | path == "/v1/beacon" = post manager port path (Aeson.encode (Ingest.BeaconEnvelope "ksk_w_fixture" [Ingest.ingestEvent sampleEvent]))
   | path == "/v1/batch" = post manager port path (Aeson.encode [sampleEvent])
   | otherwise = get manager port (path <> metricQuery path)
 

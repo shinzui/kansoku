@@ -1,6 +1,7 @@
 # Bundle Update Log
 
 ## 2026-10-16
+* **Update**: Document the public-write-key beacon body boundary, duplicate-safe media decoding and shared ingest/CORS ownership.
 * **Update**: Accept fenced administration after final packaged CLI/public/SDK acceptance and connect credential, identity and owned-gate records.
 * **Update**: Refine administrative fencing to cover backend payload transactions and surviving native INSERTs before discovery.
 * **Update**: Record the proposed persisted administrative fence, event dispositions, transactional archive replay and applied event/fingerprint retention decision.

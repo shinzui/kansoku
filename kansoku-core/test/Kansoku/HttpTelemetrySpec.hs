@@ -131,6 +131,23 @@ spec = describe "Kansoku.HttpTelemetry" $ do
     records <- readIORef logs
     mapM_ (\secret -> (show snapshots <> show records) `shouldSatisfy` (not . isInfixOf secret)) ["query-secret", "header-secret", "body-secret"]
 
+  it "does not export beacon envelope credentials or forwarded addresses" $ withCapture $ \middleware exported logs -> do
+    chunks <- newIORef ["{\"writeKey\":\"ksk_w_beacon-secret\",\"batch\":[]}"]
+    let request =
+          defaultRequest
+            { requestMethod = "POST",
+              rawPathInfo = "/v1/beacon",
+              pathInfo = ["v1", "beacon"],
+              requestHeaders = [(hContentType, "text/plain;charset=UTF-8"), ("X-Forwarded-For", "198.51.100.77")],
+              requestBody = atomicModifyIORef' chunks (\case [] -> ([], ""); value : rest -> (rest, value))
+            }
+        app original respond = strictRequestBody original >> respond (responseLBS status202 [] "")
+    _ <- middleware app request (const (pure ResponseReceived))
+    snapshots <- readIORef exported >>= mapM (readIORef . OTel.spanHot)
+    records <- readIORef logs
+    length snapshots `shouldBe` 1
+    mapM_ (\secret -> (show snapshots <> show records) `shouldSatisfy` (not . isInfixOf secret)) ["ksk_w_beacon-secret", "writeKey", "198.51.100.77"]
+
   it "serves without exporters and honors SDK_DISABLED over configured export" $ do
     originalProvider <- OTel.getGlobalTracerProvider
     originalPropagator <- getGlobalTextMapPropagator

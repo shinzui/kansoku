@@ -42,13 +42,12 @@ try {
   assert.equal(attempts.length, 3)
   assert.deepEqual(attempts.map((batch) => batch.length), [1, 1, 1])
   assert.equal(new Set(attempts.flat().map((event) => event.eventId)).size, 1)
-  // This SDK uses its existing exponential jitter policy for 429; unlike the
-  // Haskell client it does not currently consume Retry-After as a minimum.
-  assert.deepEqual(scheduled, [100, 200])
+  // The response minimum takes precedence over shorter exponential jitter.
+  assert.deepEqual(scheduled, [1000, 1000])
   assert.equal(client.stats.accepted, 1)
   assert.equal(client.stats.dropped, 0)
   assert.equal(client.stats.queued, 0)
-  console.log("Browser SDK: two 429 retries, stable event ID, exponential scheduling and eventual acceptance passed.")
+  console.log("Browser SDK: two 429 retries, stable event ID, Retry-After scheduling and eventual acceptance passed.")
 } finally {
   Math.random = originalRandom
   await client.shutdown()

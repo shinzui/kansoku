@@ -2,7 +2,7 @@
 type: Architecture Decision Record
 title: SDK-grade ingest contract boundaries
 description: Accept syntactically valid ingest batches partially, cap request size and count, and scope CORS to /v1/* so SDKs get stable retry semantics.
-timestamp: 2026-10-15T22:09:28Z
+timestamp: 2026-10-16T03:45:02Z
 generated:
   by: human:kansoku-maintainers
   at: 2026-07-19T00:00:00Z
@@ -143,3 +143,18 @@ CORS. No event outcomes, normalization or persistence occur for a denied request
 response algebra, generated OpenAPI and Haskell client include this header-bearing alternative.
 Native HTTP tests prove concurrent atomic admission, independent keys on one account and absence
 of persistence/normalization side effects. Public beacon endpoint acceptance belongs to EP-39.
+
+## Body-authenticated exit adaptation
+
+`POST /v1/beacon` accepts JSON envelopes over text/plain or application/json and delegates
+to the same post-auth service as event and batch ingestion. Body bytes are bounded before
+decoding, batch length before admission, and all transports share the credential bucket,
+acceptance ledger, enrichment, rejection counters and individual-event quarantine. The
+credential envelope is never passed to event persistence or diagnostics. Duplicate root keys
+are rejected before JSON object construction; both media decoders suppress producer parser
+details. Generic Haskell clients exercise both declared media types.
+
+Configured CORS origins reject simple POSTs before invoking ingest, not merely by hiding the
+response. The existing CORS failure response remains 400 outside the problem boundary.
+No-Origin nonbrowser requests remain permitted. Browser queueing is separate from a server
+202 acknowledgement; lost exit delivery must not determine session correctness.

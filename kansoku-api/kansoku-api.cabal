@@ -47,7 +47,7 @@ library
     Kansoku.Prelude
 
   build-depends:
-    aeson,
+    aeson >=2.2.1,
     base >=4.21 && <5,
     bytestring,
     containers,

@@ -13,6 +13,7 @@ import Kansoku.HttpTelemetrySpec qualified
 import Kansoku.Identity.CacheSpec qualified
 import Kansoku.Ingest.AcceptanceSpec qualified
 import Kansoku.Ingest.AdmissionSpec qualified
+import Kansoku.Ingest.BeaconSpec qualified
 import Kansoku.Ingest.EnrichmentIntegrationSpec qualified
 import Kansoku.Ingest.EnrichmentSpec qualified
 import Kansoku.Ingest.GeoIPSpec qualified
@@ -76,6 +77,7 @@ normalTests = hspec $ do
   Kansoku.EventSpec.spec
   Kansoku.HealthSpec.spec
   Kansoku.Identity.CacheSpec.spec
+  Kansoku.Ingest.BeaconSpec.spec metrics
   Kansoku.Ingest.AcceptanceSpec.spec metrics
   Kansoku.Ingest.HandlerSpec.spec
   Kansoku.Ingest.GeoIPSpec.spec

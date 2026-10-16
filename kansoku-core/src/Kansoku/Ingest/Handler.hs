@@ -27,6 +27,7 @@ import Kansoku.Event
 import Kansoku.Ingest.Acceptance (Acceptance (..))
 import Kansoku.Ingest.Api
   ( BatchAck (..),
+    BeaconEnvelope (..),
     IngestAck (..),
     IngestEvent (..),
     IngestRoutes (..),
@@ -46,16 +47,19 @@ ingestServer service =
         pure $ case result of
           KansokuOk [Rejected errs] -> validationFailure errs
           _ -> (\_ -> IngestAck {accepted = 1, eventId = unEventId (parsedEvent raw ^. #eventId)}) <$> result,
-      postBatch = \(IngestPrincipal principal request) raw -> do
-        result <- Service.submitIngest service Service.Batch principal request raw
-        pure $
-          ( \outcomes ->
-              BatchAck
-                { accepted = length [() | outcome <- outcomes, case outcome of Rejected _ -> False; _ -> True],
-                  rejected = [rejection i (parsedEvent input) errs | (i, input, Rejected errs) <- zip3 [0 ..] raw outcomes]
-                }
-          )
-            <$> result
+      postBatch = \(IngestPrincipal principal request) raw ->
+        batchResult raw <$> Service.submitIngest service Service.Batch principal request raw,
+      postBeacon = \authenticate envelope -> do
+        IngestPrincipal principal request <- authenticate (writeKey envelope)
+        let raw = batch envelope
+        batchResult raw <$> Service.submitIngest service Service.Beacon principal request raw
+    }
+
+batchResult :: [IngestEvent] -> KansokuResult [Acceptance] -> KansokuResult BatchAck
+batchResult raw = fmap $ \outcomes ->
+  BatchAck
+    { accepted = length [() | outcome <- outcomes, case outcome of Rejected _ -> False; _ -> True],
+      rejected = [rejection i (parsedEvent input) errs | (i, input, Rejected errs) <- zip3 [0 ..] raw outcomes]
     }
 
 rejection :: Int -> AnalyticsEvent -> [ValidationError] -> RejectedEvent

@@ -19,6 +19,7 @@ from activity_acceptance import verify_activity
 from funnel_acceptance import verify_funnels
 from traits_acceptance import verify_traits
 from admin_acceptance import verify_admin
+from beacon_acceptance import verify_beacon_browser
 from enrichment_acceptance import ADDRESSES, verify_enrichment, verify_country_disabled
 from isolated_clickhouse import isolated_clickhouse, apply_migrations, free_port
 from test_support import binary, execute, hspec, probes
@@ -190,6 +191,8 @@ def main():
     sdk = Path(sdk_path).resolve() if sdk_path else None
     if sdk and not (sdk / 'test/live/traits.test.ts').is_file():
         raise RuntimeError('Configured SDK lacks required governed trait acceptance')
+    if sdk and not (sdk / 'scripts/beacon-browser.ts').is_file():
+        raise RuntimeError('Configured SDK lacks required beacon browser acceptance')
     env = clean_environment()
     builds = json.loads(run(['nix', 'build', '.#kansoku-server', '.#kansoku-client', '--no-link', '--json'], env, 'nix-build', timeout=1200))
     server_output = next(item['outputs']['out'] for item in builds if 'kansoku-server' in item['drvPath'])
@@ -297,6 +300,9 @@ def main():
                         privacy(name, credentials['service_token'], sentinel)
                         output = (ROOT / (name + '.log')).read_text(errors='replace')
                         assert all(address not in output for address in ADDRESSES), 'request country address leaked into logs/spans'
+                    if sdk:
+                        verify_beacon_browser(server, admin, env, ROOT / 'beacon-browser', sdk, TOKENS)
+                        (SAFE / 'beacon-summary.log').write_text('Required Chromium beacon acceptance: 6 cases, 0 skipped, passed.\n')
                     port = free_port()
                     disabled = dict(env, KANSOKU_SERVER_PORT=str(port), KANSOKU_INTERNAL_METRICS_ENABLED='false')
                     with child([server], disabled, 'server-metrics-disabled') as process:

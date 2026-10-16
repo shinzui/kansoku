@@ -36,7 +36,7 @@ import Kansoku.Api (KansokuAPI (..), kansokuAPI)
 import Kansoku.Api.OpenApi (kansokuOpenApi)
 import Kansoku.Api.Response (ProblemDetails, badRequest, tooLarge)
 import Kansoku.Api.Response qualified as Response
-import Kansoku.Auth.Handler (ingestAuthHandlerWithContext, metricsAuthHandler)
+import Kansoku.Auth.Handler (beaconAuthHandlerWithContext, ingestAuthHandlerWithContext, metricsAuthHandler)
 import Kansoku.Auth.Store (lookupApiKey)
 import Kansoku.ClickHouse (QueryPool)
 import Kansoku.Config (Config)
@@ -146,6 +146,7 @@ appWithGate maintenanceGate liveCheck readyCheck _pipelineMetrics config probe p
                           kansokuAPI
                           ( envelopeFormatters
                               :. ingestAuthHandlerWithContext (lookupApiKey pool) (ingestRequestContext service)
+                              :. beaconAuthHandlerWithContext (lookupApiKey pool) (ingestRequestContext service)
                               :. metricsAuthHandler pool
                               :. EmptyContext
                           )
@@ -420,5 +421,5 @@ pgmqReady pool queueName = do
 startServer :: (IOE :> es, Reader Config :> es, Log :> es) => Application -> Eff es ()
 startServer app = do
   port <- asks @Config (^. #serverPort)
-  logInfo ("kansoku-server listening on port " <> Text.pack (show port) <> " (GET /health, GET /ready, GET /internal/metrics, GET /openapi.json, GET /v1/schemas, POST /v1/events, POST /v1/batch, GET /metrics/*)")
+  logInfo ("kansoku-server listening on port " <> Text.pack (show port) <> " (GET /health, GET /ready, GET /internal/metrics, GET /openapi.json, GET /v1/schemas, POST /v1/events, POST /v1/batch, POST /v1/beacon, GET /metrics/*)")
   liftIO (Warp.run port app)

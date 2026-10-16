@@ -81,6 +81,8 @@ type instance AuthClientData (AuthProtect "kansoku-ingest") = ()
 
 type instance AuthClientData (AuthProtect "kansoku-metrics") = ()
 
+type instance AuthClientData (AuthProtect "kansoku-beacon") = ()
+
 spec :: Spec
 spec = describe "Kansoku analytics route dispatch" $ do
   it "routes all seventeen metrics, both ingest operations, and the public schema catalog" $
@@ -230,11 +232,12 @@ sentinelApplication =
     sentinelContext
     sentinelKansokuServer
 
-sentinelContext :: Context '[ErrorFormatters, AuthHandler Request IngestPrincipal, AuthHandler Request MetricsPrincipal]
+sentinelContext :: Context '[ErrorFormatters, AuthHandler Request IngestPrincipal, AuthHandler Request MetricsPrincipal, AuthHandler Request (Text -> Handler IngestPrincipal)]
 sentinelContext =
   envelopeFormatters
     :. mkAuthHandler (const (pure (IngestPrincipal sentinelPrincipal emptyRequestContext)))
     :. mkAuthHandler (const (pure (MetricsPrincipal sentinelPrincipal)))
+    :. mkAuthHandler (const (pure (const (pure (IngestPrincipal sentinelPrincipal emptyRequestContext)))))
     :. EmptyContext
 
 sentinelPrincipal :: AuthenticatedPrincipal
@@ -257,7 +260,8 @@ sentinelIngestServer :: Ingest.IngestRoutes (AsServerT Handler)
 sentinelIngestServer =
   Ingest.IngestRoutes
     { Ingest.postEvent = \_principal _event -> pure (Response.KansokuOk Ingest.IngestAck {Ingest.accepted = 1, Ingest.eventId = "events"}),
-      Ingest.postBatch = \_principal _events -> pure (Response.KansokuOk Ingest.BatchAck {Ingest.accepted = 2, Ingest.rejected = []})
+      Ingest.postBatch = \_principal _events -> pure (Response.KansokuOk Ingest.BatchAck {Ingest.accepted = 2, Ingest.rejected = []}),
+      Ingest.postBeacon = \_context _envelope -> pure (Response.KansokuOk Ingest.BatchAck {Ingest.accepted = 3, Ingest.rejected = []})
     }
 
 sentinelMetricsServer :: Metrics.MetricsRoutes (AsServerT Handler)

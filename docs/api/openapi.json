@@ -130,6 +130,24 @@
         ],
         "type": "object"
       },
+      "BeaconEnvelope": {
+        "properties": {
+          "batch": {
+            "items": {
+              "$ref": "#/components/schemas/AnalyticsEvent"
+            },
+            "type": "array"
+          },
+          "writeKey": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "writeKey",
+          "batch"
+        ],
+        "type": "object"
+      },
       "CausationId": {
         "type": "string"
       },
@@ -4320,6 +4338,178 @@
             "writeKey": []
           }
         ],
+        "tags": [
+          "ingestion",
+          "metrics",
+          "schemas"
+        ]
+      }
+    },
+    "/v1/beacon": {
+      "post": {
+        "description": "Body-authenticated public write key only. Rejects competing Authorization or X-Api-Key headers and duplicate envelope keys. text/plain supports browser sendBeacon without preflight; queueing is not server acknowledgement.",
+        "operationId": "postV1Beacon",
+        "requestBody": {
+          "content": {
+            "application/json;charset=utf-8": {
+              "schema": {
+                "$ref": "#/components/schemas/BeaconEnvelope"
+              }
+            },
+            "text/plain;charset=utf-8": {
+              "schema": {
+                "$ref": "#/components/schemas/BeaconEnvelope"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchAck"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchAck"
+                }
+              }
+            },
+            "description": "Batch accepted"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Malformed request or `body`"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unknown or revoked body write key",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer authentication challenge",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service credentials cannot use beacon"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "405": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Method not allowed"
+          },
+          "406": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not acceptable"
+          },
+          "413": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Payload too large"
+          },
+          "415": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unsupported media type"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Rate limited",
+            "headers": {
+              "Retry-After": {
+                "description": "Positive whole seconds before retrying",
+                "required": true,
+                "schema": {
+                  "maximum": 9223372036854775807,
+                  "minimum": -9223372036854775808,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Storage or credential store unavailable"
+          }
+        },
         "tags": [
           "ingestion",
           "metrics",

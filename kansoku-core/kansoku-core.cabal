@@ -172,6 +172,7 @@ test-suite kansoku-core-test
     Kansoku.Identity.CacheSpec
     Kansoku.Ingest.AcceptanceSpec
     Kansoku.Ingest.AdmissionSpec
+    Kansoku.Ingest.BeaconSpec
     Kansoku.Ingest.EnrichmentIntegrationSpec
     Kansoku.Ingest.EnrichmentSpec
     Kansoku.Ingest.GeoIPSpec
