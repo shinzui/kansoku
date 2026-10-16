@@ -4,6 +4,7 @@
 queue configuration. Apply both migration systems first; [operations](operations.md) describes
 them. Normal startup applies neither migrations nor retention policy. Build the packaged CLI
 with `nix build .#kansoku-admin`, then use `./result/bin/kansoku-admin --help`.
+`nix run .#kansoku-admin -- --help` selects the same administrative executable.
 
 Exit 0 means success or a requested preview; exit 1 means invalid arguments or an operation/
 output failure. Destructive/data-maintenance commands preview without `--confirm`. Key issuance

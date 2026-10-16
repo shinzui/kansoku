@@ -104,7 +104,8 @@ is still completing its payload write. Try-lock admission avoids deadlock behind
 exclusive job. Maintenance also drains native raw INSERTs before discovery; the native sample-
 block handshake registers any write capable of committing rows, and writers explicitly disable
 asynchronous insertion. A held native input stream now proves this ordering in the owned fixture.
-The CLI accepts --user=VALUE for valid selectors beginning with --; explicit deletion tests that
+The dedicated Nix entry point selects kansoku-admin as mainProgram; both metadata evaluation
+and nix run --help pass. The CLI accepts --user=VALUE for valid selectors beginning with --; explicit deletion tests that
 case. The first packaged gate passes 423 core, 19 client, four probe and seven administrative
 families plus required SDK cases, but the final-candidate repeat includes these later fixes.
 
