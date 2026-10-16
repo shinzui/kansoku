@@ -19,6 +19,8 @@ Start with the quickstart, then use the guides for the part of Kansoku you are i
 6. [Operate Kansoku](guides/operations.md) — use health, readiness, Prometheus metrics,
    traces, migration commands, credential revocation, and recovery procedures.
 
+- [Consume ClickHouse](guides/consume-clickhouse.md) documents the constrained SQL reader, exact recipes and verified Grafana/GrowthBook integrations.
+
 - [Web enrichment and acquisition](guides/web-enrichment.md) documents first-touch sessions, device/bot rules and optional trusted country lookup.
 
 ## Contract references

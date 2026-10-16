@@ -20,6 +20,8 @@ from funnel_acceptance import verify_funnels
 from traits_acceptance import verify_traits
 from admin_acceptance import verify_admin
 from beacon_acceptance import verify_beacon_browser
+from identity_browser_acceptance import verify_identity_browser
+from sdk_protocol_acceptance import verify_sdk_protocol
 from enrichment_acceptance import ADDRESSES, verify_enrichment, verify_country_disabled
 from isolated_clickhouse import isolated_clickhouse, apply_migrations, free_port
 from test_support import binary, execute, hspec, probes
@@ -193,6 +195,10 @@ def main():
         raise RuntimeError('Configured SDK lacks required governed trait acceptance')
     if sdk and not (sdk / 'scripts/beacon-browser.ts').is_file():
         raise RuntimeError('Configured SDK lacks required beacon browser acceptance')
+    consumer_keys=('KANSOKU_GROWTHBOOK_SOURCE','KANSOKU_GRAFANA_HOME','KANSOKU_GRAFANA_PLUGINS')
+    consumers={key:os.environ[key] for key in consumer_keys if key in os.environ}
+    if os.environ.get('KANSOKU_REQUIRE_CONSUMERS')=='1' and len(consumers)!=len(consumer_keys):
+        raise RuntimeError('Required consumer gate needs pinned GrowthBook source, Grafana home and plugin paths')
     env = clean_environment()
     builds = json.loads(run(['nix', 'build', '.#kansoku-server', '.#kansoku-client', '--no-link', '--json'], env, 'nix-build', timeout=1200))
     server_output = next(item['outputs']['out'] for item in builds if 'kansoku-server' in item['drvPath'])
@@ -301,8 +307,14 @@ def main():
                         output = (ROOT / (name + '.log')).read_text(errors='replace')
                         assert all(address not in output for address in ADDRESSES), 'request country address leaked into logs/spans'
                     if sdk:
+                        verify_sdk_protocol(server,admin,env,ROOT / 'sdk-protocol',sdk,TOKENS)
+                        verify_identity_browser(server,admin,env,ROOT / 'identity-browser',sdk,TOKENS)
+                        (SAFE / 'identity-summary.log').write_text('Required SDK live: 9 cases; Chromium identity/handoff/bots: 8 cases; 0 skipped, passed.\n')
                         verify_beacon_browser(server, admin, env, ROOT / 'beacon-browser', sdk, TOKENS)
                         (SAFE / 'beacon-summary.log').write_text('Required Chromium beacon acceptance: 6 cases, 0 skipped, passed.\n')
+                    reader_env=dict(env,**consumers,KANSOKU_READER_SERVER=server,KANSOKU_READER_ADMIN=admin,KANSOKU_READER_MIGRATE=migrate)
+                    run(['python3','scripts/reader_acceptance.py'],reader_env,'reader-consumers',timeout=600)
+                    (SAFE / 'reader-summary.log').write_text('Required constrained reader SQL/HTTP parity and supplied real consumers passed.\n')
                     port = free_port()
                     disabled = dict(env, KANSOKU_SERVER_PORT=str(port), KANSOKU_INTERNAL_METRICS_ENABLED='false')
                     with child([server], disabled, 'server-metrics-disabled') as process:

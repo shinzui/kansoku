@@ -78,7 +78,7 @@ def main():
         raise AssertionError(label + ' exceeded its deadline')
 
     def request(base, path, body=None, credential=None):
-        headers = {}
+        headers = {'User-Agent':'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'}
         if credential:
             headers['Authorization'] = 'Bearer ' + credential
         if body is not None:
@@ -107,11 +107,20 @@ def main():
                     written=metric(base, 'kansoku_writer_events_written_total'))
 
     def event(prefix, number):
-        value = dict(eventId=prefix + str(number), eventName='native_outage', source='web',
-                     sourceService='owned-outage-proof', occurredAt=stamp, receivedAt=stamp,
-                     userId='synthetic-user', properties={}, context={})
-        # Fixed representative producer size, including JSON syntax.
-        value['properties']['padding'] = 'x' * max(0, 512 - len(json.dumps(value)) - 13)
+        kind = number % 20
+        name = 'identify' if kind == 0 else 'identify_once' if kind == 1 else 'payment_completed' if kind == 19 else 'page_view'
+        properties = ({'plan':'pro','company_size':10} if kind == 0 else {'signup_source':'capacity'} if kind == 1 else
+                      {'amount':12.5,'plan':'pro'} if kind == 19 else {'url':'https://capacity.example.test/checkout?utm_source=owned&utm_medium=email','title':'Capacity proof'})
+        value = dict(eventId=prefix + str(number), eventName=name, source='web',
+                     schemaVersion=2 if kind == 0 else 1,
+                     sourceService='owned-outage-proof', occurredAt=stamp, receivedAt=stamp, sentAt=stamp,
+                     userId='synthetic-' + str(number // 20), anonymousId='cookie-' + str(number // 20),
+                     sessionId=prefix + 'session-' + str(number // 20),
+                     identifiers={'device':'device-' + str(number // 20)},
+                     properties=properties, context={})
+        # A mixed production-path workload exercises private queue v2, governed
+        # traits, shared identity, nonempty sessions and HTTP UA/URL enrichment.
+        value['properties']['padding'] = 'x' * max(0, 768 - len(json.dumps(value)) - 13)
         return value
 
     report = dict(requested_outage_seconds=args.seconds, events_per_second=200,
@@ -119,7 +128,7 @@ def main():
                   settings=dict(writer_batch=5000, adapter_batch=1000, inbox=1, visibility_seconds=60,
                                 probe_seconds=5, insert_deadline_seconds=30, source_prefetch=False,
                                 ready_batch_capacity=1, retained_delivery_bound_per_process=11003),
-                  packaged_server=args.server, samples=[])
+                  packaged_server=args.server, workload='queue-v2 mixed identify-v2/identify_once/page_view/payment; nonempty source-scoped sessions; UA and URL enrichment; 768-byte target', samples=[])
     if platform.system() == 'Darwin':
         report['hardware'].update(cpu=subprocess.check_output(['sysctl', '-n', 'machdep.cpu.brand_string'], text=True).strip(),
                                   memory_bytes=int(subprocess.check_output(['sysctl', '-n', 'hw.memsize'])))
@@ -181,7 +190,7 @@ def main():
                     return int(pg("SELECT coalesce(sum(read_ct),0) FROM pgmq.q_outage_events"))
 
                 def valid_archive():
-                    return int(pg("SELECT count(*) FROM pgmq.a_outage_events WHERE message->>'eventId' LIKE 'outage_%'"))
+                    return int(pg("SELECT count(*) FROM pgmq.a_outage_events WHERE coalesce(message->'event'->>'eventId',message->>'eventId') LIKE 'outage_%'"))
 
                 server, base = start_server(1)
                 post(base, [event('warm_', 0)])
@@ -264,6 +273,7 @@ def main():
                 assert int(pg(f"SELECT count(*) FROM kansoku.accepted_events WHERE account_id='{account}' AND event_id LIKE 'outage_%'")) == total
                 database_after = int(pg('SELECT pg_database_size(current_database())'))
                 wal_generated = int(float(pg(f"SELECT pg_wal_lsn_diff(pg_current_wal_lsn(),'{wal_before}')")))
+                assert int(pg("SELECT count(*) FROM pgmq.q_outage_events WHERE (message->>'queueVersion')::int=2 AND message->'event'->>'sessionId' != ''")) == total
                 oldest_age = float(pg("SELECT coalesce(extract(epoch FROM (now() - min(enqueued_at))),0) FROM pgmq.q_outage_events"))
                 recovered = time.monotonic()
                 sentinel.unlink()

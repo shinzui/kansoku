@@ -23,6 +23,11 @@ provenance:
       at: 2026-10-15T15:43:16Z
       mode: "update"
       note: "Reconcile first-release APIs, domain semantics, dependencies and acceptance with the source-validated MP-5 review."
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-10-16T04:03:34Z
+      mode: "implement"
+      note: "Finalize stable reader SQL, real dashboard/experiment consumer checks, remaining SDK browser contracts and measured first-release adoption/recovery acceptance after all eleven prerequisite children passed."
 ---
 
 # Single-tenant consumption guide for dashboards and experiments
@@ -38,8 +43,8 @@ consumers; the first release has no dashboard or experiment statistics engine.
 ## Progress
 
 
-- [ ] M1: A versioned stable SQL surface and working read-only role reproduce HTTP fixtures.
-- [ ] M2: GrowthBook assignment/fact queries pass a real consumer check.
+- [x] M1: A versioned stable SQL surface and working read-only role reproduce HTTP fixtures.
+- [x] M2: GrowthBook assignment/fact queries pass a real consumer check.
 - [ ] M3: Final API documentation and cross-repository release conformance pass without skips.
 
 ## Surprises & Discoveries
@@ -48,6 +53,12 @@ consumers; the first release has no dashboard or experiment statistics engine.
 The original guide granted stable views but queried internal events_raw, and froze raw sketches
 while other children changed identity/bot semantics. EP-26 and ADR-9 are already Complete/Accepted.
 Documentation cannot finalize before the metric and retention contracts it promises.
+
+Real-consumer execution caught two integration errors that SQL inspection missed: native JSON
+properties require guarded Dynamic subcolumns, and Grafana's Go driver derives a server timeout
+from its context deadline plus five seconds. The accepted recipe uses a 25-second deadline
+inside the unchanged 30-second reader ceiling. GrowthBook runs with its upstream Node/tsconfig
+semantics; Bun class-field initialization would clear constructor-populated adapter params.
 
 ## Decision Log
 
@@ -59,7 +70,16 @@ query are not an access-control mechanism for an untrusted dashboard viewer.
 ## Outcomes & Retrospective
 
 
-Planning reviewed; external-consumer and release evidence pending.
+M1/M2 accepted on 2026-10-16: `.dev/acceptance/reader-smoke-sizfm0g4/reader`
+executes the constrained role, denies excluded reads/writes and disabled limits, matches all
+three SQL recipes to HTTP before/after applied retention, and verifies the actual GrowthBook
+5.1.0 adapter (four cases) and Grafana 13.2.4/plugin 4.22.1 (three cases), all with zero skips.
+The strengthened fixture with incompatible historical JSON also passes in
+`.dev/acceptance/identity-validation/ep38-reader-r14-basic.log`. Native result caps are checked
+at block boundaries, while HTTP retains its strict complete-or-error point cap. Required SDK
+source evidence passes nine live cases, three real beacon/rate-limit protocol cases and eight
+multi-origin Chromium identity/bot cases. Final packaged acceptance, consumer pin, ordinary
+fresh-clone reuse/recovery and refreshed performance/capacity evidence remain pending.
 
 ## Context and Orientation
 

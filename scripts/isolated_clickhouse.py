@@ -16,16 +16,18 @@ def free_port():
 
 
 @contextmanager
-def isolated_clickhouse(block_size=65536, directory=None, query_logging=False):
+def isolated_clickhouse(block_size=65536, directory=None, query_logging=False, access_management=False):
     tcp, http = free_port(), free_port()
     with (tempfile.TemporaryDirectory(prefix='kansoku-native-') if directory is None else nullcontext(directory)) as directory:
         root = Path(directory)
         root.mkdir(mode=0o700, parents=True, exist_ok=True)
         config = root / 'config.xml'
+        access = '<access_management>1</access_management>' if access_management else ''
+        access_storage = f'<access_control_path>{root}/access/</access_control_path>' if access_management else ''
         query_log = '<query_log><database>system</database><table>query_log</table><flush_interval_milliseconds>100</flush_interval_milliseconds></query_log>' if query_logging else ''
         config.write_text(f'''<clickhouse>
 {query_log}
-<path>{root}/data/</path><tmp_path>{root}/tmp/</tmp_path>
+<path>{root}/data/</path>{access_storage}<tmp_path>{root}/tmp/</tmp_path>
 <tcp_port>{tcp}</tcp_port><http_port>{http}</http_port><listen_host>127.0.0.1</listen_host>
 <logger><level>warning</level><log>{root}/server.log</log><errorlog>{root}/error.log</errorlog></logger>
 <max_thread_pool_size>256</max_thread_pool_size>
@@ -34,7 +36,7 @@ def isolated_clickhouse(block_size=65536, directory=None, query_logging=False):
 <background_message_broker_schedule_pool_size>4</background_message_broker_schedule_pool_size>
 <background_distributed_schedule_pool_size>4</background_distributed_schedule_pool_size>
 <profiles><default><max_threads>4</max_threads><max_block_size>{block_size}</max_block_size></default></profiles>
-<users><default><password></password><networks><ip>127.0.0.1</ip></networks><profile>default</profile><quota>default</quota></default></users>
+<users><default>{access}<password></password><networks><ip>127.0.0.1</ip></networks><profile>default</profile><quota>default</quota></default></users>
 <quotas><default/></quotas>
 </clickhouse>''')
         with (root / 'console.log').open('w') as log:

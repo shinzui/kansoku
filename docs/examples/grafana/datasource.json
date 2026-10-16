@@ -1,0 +1,25 @@
+{
+  "name": "Kansoku reader",
+  "uid": "kansoku-reader",
+  "type": "grafana-clickhouse-datasource",
+  "access": "proxy",
+  "jsonData": {
+    "host": "127.0.0.1",
+    "port": 8123,
+    "protocol": "http",
+    "username": "kansoku_dashboard",
+    "defaultDatabase": "analytics",
+    "dialTimeout": "10",
+    "queryTimeout": "25",
+    "enableRowLimit": false,
+    "customSettings": [
+      {
+        "setting": "max_execution_time",
+        "value": "30"
+      }
+    ]
+  },
+  "secureJsonData": {
+    "password": "REPLACE_WITH_READER_PASSWORD"
+  }
+}

@@ -1,6 +1,8 @@
 # Bundle Update Log
 
 ## 2026-10-16
+* **Update**: Accept ADR-18 after constrained reader parity and pinned real GrowthBook/Grafana consumer execution.
+* **Update**: Propose versioned bounded reader projections, explicit definer privilege ownership and actual dashboard/experiment consumer conformance.
 * **Update**: Document the public-write-key beacon body boundary, duplicate-safe media decoding and shared ingest/CORS ownership.
 * **Update**: Accept fenced administration after final packaged CLI/public/SDK acceptance and connect credential, identity and owned-gate records.
 * **Update**: Refine administrative fencing to cover backend payload transactions and surviving native INSERTs before discovery.

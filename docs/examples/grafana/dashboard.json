@@ -1,0 +1,17 @@
+{
+  "dashboard": {
+    "uid": "kansoku-daily-users",
+    "title": "Kansoku daily users",
+    "schemaVersion": 42,
+    "version": 0,
+    "panels": [{
+      "id": 1,
+      "type": "table",
+      "title": "Exact daily users (UTC)",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "datasource": {"type": "grafana-clickhouse-datasource", "uid": "kansoku-reader"},
+      "targets": [{"refId": "A", "format": 1, "rawSql": "REPLACE_WITH_RENDERED_DAILY_USERS_SQL"}]
+    }]
+  },
+  "overwrite": true
+}

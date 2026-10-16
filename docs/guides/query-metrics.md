@@ -482,3 +482,11 @@ trusted business reporting. Current-trait session selection uses complete retain
 scope and may cost more than the materialized session fast path; the shared query budgets and
 complete-result cap still apply. Fenced deletion/rebuild primitives reserve erased source IDs;
 administrative queue/archive/acceptance cleanup is coordinated by the maintenance executable.
+
+## External consumers and analytical units
+
+[Consume ClickHouse](consume-clickhouse.md) defines the trusted SQL reader and verified
+Grafana/GrowthBook recipes. Revenue is a Float64 analytical sum in one producer-normalized
+account currency/unit; it does not convert currencies, account for refunds/net revenue or
+provide an exact monetary ledger. Feature adoption is a distinct-user count, not a percentage
+without a defined eligible denominator.
