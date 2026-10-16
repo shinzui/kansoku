@@ -163,3 +163,12 @@ are configured. Missing/invalid paired configuration or a corrupt/unsupported co
 file fails startup. The locked Nix environment supplies the reader automatically.
 [Web enrichment](web-enrichment.md) describes the trust chain, missing-country behavior,
 versioned classifications and request-address privacy boundary.
+
+## Administrative retention
+
+`KANSOKU_EVENTS_RETENTION_DAYS` is read by `kansoku-admin apply-retention`; 0/unset means
+unlimited event retention. Values must be nonnegative and at most 36500. Setting it does not
+run maintenance at startup. Preview and explicitly confirm the applied cutoff; schedule the
+command for periodic advancement. Each confirmed run also applies the separate 180-day
+fingerprint cleanup. [Administration](administration.md) describes profiles, source payloads,
+permanent identities, failure fences and the diagnostic-retention boundary.

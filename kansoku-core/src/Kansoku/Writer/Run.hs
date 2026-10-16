@@ -23,6 +23,7 @@ import Kansoku.ClickHouse
     newWriterConnection,
     openClickHouse,
   )
+import Kansoku.Maintenance (MaintenancePool, rewriteQueuedEvents, withTraffic)
 import Kansoku.Observability (PipelineMetrics, WriterHeartbeat)
 import Kansoku.Prelude
 import Kansoku.Writer.Batch (writerBatchHandler)
@@ -54,6 +55,7 @@ import Shibuya.Telemetry.Effect (runTracing)
 import Text.Read (readMaybe)
 
 runWriter ::
+  MaintenancePool ->
   PipelineMetrics ->
   WriterHeartbeat ->
   Pool.Pool ->
@@ -66,9 +68,12 @@ runWriter ::
   Int ->
   IO () ->
   IO ()
-runWriter metrics heartbeat pool tracer clickHouseConfig queueName visibilityTimeoutSec adapterBatchSize maxBatchSize maxLatencyMs waitForShutdown = do
+runWriter maintenance metrics heartbeat pool tracer clickHouseConfig queueName visibilityTimeoutSec adapterBatchSize maxBatchSize maxLatencyMs waitForShutdown = do
   clickHouse <- newWriterConnection clickHouseConfig
-  recovery <- newWriterRecovery defaultRecoveryPolicy metrics (bracket (openClickHouse clickHouseConfig) closeConnection ping)
+  recovery <- newWriterRecovery defaultRecoveryPolicy metrics (withTraffic maintenance (\_ -> bracket (openClickHouse clickHouseConfig) closeConnection ping))
+  let insertCurrent events = withTraffic maintenance $ \connection -> do
+        current <- rewriteQueuedEvents connection events
+        unless (null current) (insertWriterEvents clickHouse current)
   result <-
     runEff $
       Concurrent.runConcurrent $
@@ -95,7 +100,7 @@ runWriter metrics heartbeat pool tracer clickHouseConfig queueName visibilityTim
               let processor =
                     mkBatchProcessor
                       (gateAdapter recovery adapter)
-                      (\info messages -> writerBatchHandler metrics heartbeat (recoverInsert recovery (renewBatch messages) (insertWriterEvents clickHouse)) info messages)
+                      (\info messages -> writerBatchHandler metrics heartbeat (recoverInsert recovery (renewBatch messages) insertCurrent) info messages)
                       ( defaultBatchConfig
                           { batchSize = maxBatchSize,
                             batchTimeout = latencySeconds,

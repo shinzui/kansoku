@@ -24,6 +24,7 @@ import Kansoku.ClickHouseTestSupport
 import Kansoku.Config (Config (..))
 import Kansoku.Event
 import Kansoku.Ingest.Queue qualified as Queue
+import Kansoku.Maintenance (closeMaintenancePool, newMaintenancePool)
 import Kansoku.Metrics.Api (MetricResult)
 import Kansoku.Migrations (kansokuMigrationPlan)
 import Kansoku.Postgres (createPool)
@@ -48,7 +49,7 @@ spec = describe "Kansoku property metrics HTTP integration" $ do
       migrated <-
         withMigratedDatabase plan $ \connection -> do
           connectionString <- requireConnectionString connection
-          bracket (createPool connectionString) Pool.release $ \pool -> do
+          bracket ((,) <$> createPool connectionString <*> newMaintenancePool connectionString) (\(pool, maintenance) -> Pool.release pool >> closeMaintenancePool maintenance) $ \(pool, maintenance) -> do
             token <- requireServiceToken pool
             config <- requireConfig
             queryPool <- newQueryPool (clickHouseConfigFromConfig config) 2
@@ -65,7 +66,7 @@ spec = describe "Kansoku property metrics HTTP integration" $ do
                       clickhouseReachable = pure True,
                       pipelineReady = pure []
                     }
-            app <- kansokuApp (error "unused ingest metrics") appConfig readyProbe pool (Queue.eventsQueueName "ep17_http_unused") queryPool
+            app <- kansokuApp maintenance (error "unused ingest metrics") appConfig readyProbe pool (Queue.eventsQueueName "ep17_http_unused") queryPool
             Warp.testWithApplication (pure app) $ \port -> do
               manager <- Http.newManager Http.defaultManagerSettings
 

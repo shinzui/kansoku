@@ -41,6 +41,11 @@ library
   hs-source-dirs: src
   exposed-modules:
     Kansoku
+    Kansoku.Admin
+    Kansoku.Admin.ClickHouse
+    Kansoku.Admin.Jobs
+    Kansoku.Admin.Keys
+    Kansoku.Admin.Store
     Kansoku.Auth.Handler
     Kansoku.Auth.Issue
     Kansoku.Auth.Store
@@ -67,6 +72,7 @@ library
     Kansoku.Ingest.Timestamp
     Kansoku.Ingest.UserAgent
     Kansoku.Logging
+    Kansoku.Maintenance
     Kansoku.Metrics.Definition
     Kansoku.Metrics.Handler
     Kansoku.Metrics.Query
@@ -83,6 +89,7 @@ library
     Kansoku.Observability
     Kansoku.PersonProperties
     Kansoku.Postgres
+    Kansoku.Postgres.Direct
     Kansoku.Readiness
     Kansoku.RequestLog
     Kansoku.Runtime
@@ -136,6 +143,7 @@ library
     streamly-core,
     text,
     time,
+    unix,
     unordered-containers,
     uuid,
     wai,

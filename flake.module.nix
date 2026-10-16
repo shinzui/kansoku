@@ -239,6 +239,7 @@
         kansoku-client = kansokuClient;
         kansoku-core = kansokuCore;
         kansoku-server = kansokuServer;
+        kansoku-admin = kansokuServer;
         libmaxminddb = geoipReader;
       };
     };

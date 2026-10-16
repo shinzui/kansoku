@@ -279,3 +279,11 @@ expiry also triggers rebuilding even without storage changes; an engine-clock gu
 closed if a deadline crosses during request preparation. Pool disposal, idle expiry and
 shutdown remove the temporary snapshots. Complete erasure must scrub all three indexes and
 raw/replayable inputs as described in the identity deletion runbook.
+
+## Administrative lifecycle
+
+Use [kansoku-admin](administration.md) for key metadata/revocation, resumable identity unlinking
+or explicit-fact deletion, applied event/fingerprint retention, transactional archive replay,
+bounded purges and rejection inspection. Normal startup applies no maintenance policy. Confirmed
+jobs persist a global fence and keep it on failure; inspect and resume instead of replaying old
+migration files or manually clearing state.

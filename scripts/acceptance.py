@@ -18,6 +18,7 @@ from ingest_acceptance import verify_ingest
 from activity_acceptance import verify_activity
 from funnel_acceptance import verify_funnels
 from traits_acceptance import verify_traits
+from admin_acceptance import verify_admin
 from enrichment_acceptance import ADDRESSES, verify_enrichment, verify_country_disabled
 from isolated_clickhouse import isolated_clickhouse, apply_migrations, free_port
 from test_support import binary, execute, hspec, probes
@@ -194,6 +195,7 @@ def main():
     server_output = next(item['outputs']['out'] for item in builds if 'kansoku-server' in item['drvPath'])
     # Execute resolved outputs directly; never inspect the store directory.
     server = server_output + '/bin/kansoku-server'
+    admin = server_output + '/bin/kansoku-admin'
     migrate = server_output + '/bin/kansoku-migrate'
     env.update(NO_PROXY='127.0.0.1,localhost', no_proxy='127.0.0.1,localhost')
     pg = ROOT / 'postgres'
@@ -302,10 +304,13 @@ def main():
                         wait_for(process, lambda: request(base, '/health/ready')['status'] == 'ok', 'metrics-disabled')
                         hurl(['perimeter/metrics-disabled.hurl'], env, 'hurl-metrics-disabled', [f'base_url={base}'])
                         verify_country_disabled(base, credentials['enrichment_write'], credentials['enrichment_service'])
+                    families = verify_admin(server, admin, env, ROOT / 'admin', TOKENS)
+                    assert families == 7, 'required packaged administrative scenario families missing'
+                    (ROOT / 'admin-summary.log').write_text('Required packaged kansoku-admin: 7 non-skipped scenario families passed.\n')
             finally:
                 os.environ.clear()
                 os.environ.update(saved)
-    print('Acceptance passed: required native/live tests, Hurl, packaged startup and three telemetry modes.', flush=True)
+    print('Acceptance passed: required native/live tests, Hurl, packaged administration/startup and three telemetry modes.', flush=True)
 
 
 try:

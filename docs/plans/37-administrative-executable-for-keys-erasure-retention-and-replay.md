@@ -22,6 +22,11 @@ provenance:
       at: 2026-10-15T15:43:16Z
       mode: "update"
       note: "Reconcile first-release APIs, domain semantics, dependencies and acceptance with the source-validated MP-5 review."
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-10-16T01:49:19Z
+      mode: "implement"
+      note: "Begin packaged administration, persisted maintenance fencing, resumable cross-store erasure/retention and transactional replay after EP-40 acceptance."
   reviews:
     - model: "gpt-6-astra"
       harness: "codex-cli"
@@ -56,6 +61,14 @@ The current runbook scrubs identifiers but retains user_id and arbitrary propert
 it is identity unlinking, not complete personal-data deletion. Raw TTL/mutations do not retract
 materialized views. A local replay output file cannot atomically record a PostgreSQL resend.
 
+The source fixture found that raw and archive discovery can contain the same event ID in
+one upsert page. Group those rows and OR their dispositions before ON CONFLICT. Diagnostic
+payloads must not enter discovery or dispositions: rejected IDs can later be validly reused by
+another user. Detect private queue wrappers by their server envelope marker and explicitly
+wrap diagnostic originals when inspecting them, so unknown producer fields cannot impersonate
+that envelope. Read raw mapped values too: expired fingerprint evidence may have left the index
+while its original raw value still needs erasure.
+
 ## Decision Log
 
 
@@ -64,10 +77,45 @@ single-tenant deployment. Preserve preview/confirm and resumable job state; do n
 transactions across PostgreSQL and ClickHouse. Retention must not leave fast/slow metric paths
 returning different populations.
 
+On 2026-10-16 implement a persisted global fence plus PostgreSQL shared session locks around
+whole protected HTTP operations and native writer insert attempts. Confirmation persists a job
+before taking the exclusive lock and waiting for admitted operations. A bounded pool of
+nonblocking libpq sessions makes coordination fail closed without adding the released Hasql
+blocking-cleanup issue discovered in EP-29. Persist account/event dispositions containing only
+delete/scrub flags, and re-evaluate them on every writer retry; a retained pre-fence in-memory
+batch must never restore old identity or trait fields. Existing accepted hashes remain; a
+disposition also reserves a legacy ID that had no acceptance-ledger row.
+
+Retention is an explicitly applied snapshot cutoff, advanced by each apply-retention run;
+operators schedule that command when they need periodic advancement. Canonical queries exclude
+older facts immediately, source payloads expire under the same fence, all derived states rebuild,
+and physical TTL is only cleanup for the applied cutoff. Profiles use the same event cutoff;
+minimal acceptance/disposition/trait-erasure/replay identities remain indefinitely. Setting
+0/unset removes the future cutoff but cannot restore already-deleted payloads.
+
+Rebuilds read each current installed materialized view's as_select and target columns, replacing
+raw sources with the canonical source, then clear/replay dependency-ordered targets under the
+global fence. Historical migrations must not overwrite later rich views. Journal stages live
+in PostgreSQL; exclusively created 0600 random local receipts preserve redacted discovery counts and the job ID; full unfinished discovery is PostgreSQL-owned.
+
 ## Outcomes & Retrospective
 
 
-Planning reviewed; all administrative behavior remains unimplemented.
+Implementation now provides all five command families, the shared server issue-key alias,
+persisted global fencing, staged resume, current-definition projection rebuilds, permanent
+account/event dispositions and legacy-ID reservation. The owned source-executable proof passes
+seven non-skipped scenario families: metadata/preview/revocation; replay rollback/concurrency/
+committed-before-output recovery; bounded rejection inspection/purge; admitted-read fencing,
+retained writer payload and failed-rebuild resume; explicit deletion/account isolation/logical
+retries; unlimited-event fingerprint cleanup; and retained canonical/rollup/filtered agreement,
+whole sessions, old native-block replay, expired sources and irreversible unlimited-policy reset.
+Evidence: `.dev/acceptance/admin-smoke-4fjlityp` and subsequent source reruns under
+`.dev/acceptance/identity-validation/ep37-admin-smoke-*.log`. New fingerprint and reader/CORS
+cases pass in the latest source rerun. The final source gate passes 361 core examples,
+18 client examples, four probes, generated contract/format checks, strict validation of all
+17 ADRs, three telemetry modes and four lifecycle cases. Packaged executable acceptance
+remains pending; milestones and whole-child status stay open. ADR-17 is Proposed.
+
 
 ## Context and Orientation
 

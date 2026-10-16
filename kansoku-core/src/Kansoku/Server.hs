@@ -19,6 +19,7 @@ module Kansoku.Server
   )
 where
 
+import Control.Exception (fromException, throwIO)
 import Data.Aeson qualified as Aeson
 import Data.ByteString.Builder (toLazyByteString)
 import Data.ByteString.Lazy qualified as LBS
@@ -46,6 +47,7 @@ import Kansoku.Health (probeApplication)
 import Kansoku.Ingest.Handler (ingestServer)
 import Kansoku.Ingest.Service (IngestService, ingestRequestContext, newIngestService)
 import Kansoku.Logging (Log, logError, logInfo, runLogStderr)
+import Kansoku.Maintenance (MaintenancePool, MaintenanceUnavailable (..), withTraffic)
 import Kansoku.Metrics.Handler (metricsServer)
 import Kansoku.Observability (PipelineMetrics)
 import Kansoku.Prelude
@@ -100,16 +102,35 @@ kansokuServer service queryPool =
       schemas = pure (schemaCatalog defaultRegistry)
     }
 
-kansokuApp :: PipelineMetrics -> Config -> ReadyProbe -> Pool.Pool -> QueueName -> QueryPool -> IO Application
-kansokuApp pipelineMetrics config probe pool queueName queryPool = do
+kansokuApp :: MaintenancePool -> PipelineMetrics -> Config -> ReadyProbe -> Pool.Pool -> QueueName -> QueryPool -> IO Application
+kansokuApp maintenance pipelineMetrics config probe pool queueName queryPool = do
   service <- newIngestService config pipelineMetrics pool queueName
   (liveCheck, readyCheck) <- newProbeChecks probe
-  pure (kansokuAppWithChecks liveCheck readyCheck pipelineMetrics config probe pool service queryPool)
+  pure (appWithGate (maintenanceTraffic maintenance) liveCheck readyCheck pipelineMetrics config probe pool service queryPool)
+
+maintenanceTraffic :: MaintenancePool -> Middleware
+maintenanceTraffic pool app request respond
+  | protected = do
+      admitted <- trySynchronous (withTraffic pool (\_ -> app request respond))
+      case admitted of
+        Right result -> pure result
+        Left err -> case fromException err of
+          Just MaintenanceUnavailable -> respond (responseLBS status503 [(hContentType, "application/problem+json")] (Aeson.encode (Response.unavailable "maintenance_unavailable" "analytics maintenance is active or its coordination store is unavailable")))
+          Nothing -> throwIO err
+  | otherwise = app request respond
+  where
+    protected = case pathInfo request of
+      "v1" : name : _ -> name `elem` ["events", "batch", "beacon"]
+      "metrics" : _ : _ -> True
+      _ -> False
 
 -- | Production assembly with independently injectable checks. The conformance kit
 -- uses this same builder; analytics dependencies stay unevaluated for probes.
 kansokuAppWithChecks :: ProbeCheck -> ProbeCheck -> PipelineMetrics -> Config -> ReadyProbe -> Pool.Pool -> IngestService -> QueryPool -> Application
-kansokuAppWithChecks liveCheck readyCheck _pipelineMetrics config probe pool service queryPool =
+kansokuAppWithChecks = appWithGate id
+
+appWithGate :: Middleware -> ProbeCheck -> ProbeCheck -> PipelineMetrics -> Config -> ReadyProbe -> Pool.Pool -> IngestService -> QueryPool -> Application
+appWithGate maintenanceGate liveCheck readyCheck _pipelineMetrics config probe pool service queryPool =
   operational liveCheck readyCheck $
     waiWrapper
       probe
@@ -118,17 +139,18 @@ kansokuAppWithChecks liveCheck readyCheck _pipelineMetrics config probe pool ser
           ( ingestCors
               (config ^. #corsAllowedOrigins)
               ( problemBoundary $
-                  bodySizeLimit
-                    (config ^. #ingestMaxBodyBytes)
-                    ( serveWithContext
-                        kansokuAPI
-                        ( envelopeFormatters
-                            :. ingestAuthHandlerWithContext (lookupApiKey pool) (ingestRequestContext service)
-                            :. metricsAuthHandler pool
-                            :. EmptyContext
-                        )
-                        (kansokuServer service queryPool)
-                    )
+                  maintenanceGate $
+                    bodySizeLimit
+                      (config ^. #ingestMaxBodyBytes)
+                      ( serveWithContext
+                          kansokuAPI
+                          ( envelopeFormatters
+                              :. ingestAuthHandlerWithContext (lookupApiKey pool) (ingestRequestContext service)
+                              :. metricsAuthHandler pool
+                              :. EmptyContext
+                          )
+                          (kansokuServer service queryPool)
+                      )
               )
           )
       )

@@ -21,7 +21,7 @@ jobs:
         run: nix develop -c just acceptance
       - name: Nix packages and flake checks
         run: |
-          nix build .#kansoku-server .#kansoku-client
+          nix build .#kansoku-server .#kansoku-admin .#kansoku-client
           nix flake check
       - name: Sanitized acceptance evidence
         if: always()

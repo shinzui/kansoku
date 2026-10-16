@@ -103,7 +103,7 @@ acceptQueuedBatch pool queue account validate inputs =
 lookupHash :: Statement.Statement (Text, Text) (Maybe Text)
 lookupHash =
   Statement.preparable
-    "SELECT producer_payload_hash FROM kansoku.accepted_events WHERE account_id = $1 AND event_id = $2"
+    "SELECT producer_payload_hash FROM kansoku.accepted_events WHERE account_id = $1 AND event_id = $2 UNION ALL SELECT '' FROM kansoku.event_dispositions WHERE account_id=$1 AND event_id=$2 AND NOT EXISTS (SELECT 1 FROM kansoku.accepted_events WHERE account_id=$1 AND event_id=$2) LIMIT 1"
     ((fst >$< textParam) <> (snd >$< textParam))
     (D.rowMaybe (D.column (D.nonNullable D.text)))
 
