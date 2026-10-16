@@ -5,10 +5,10 @@ description: Keep account-scoped definitions in PostgreSQL and compute identifie
 docId: ADR-19
 status: Accepted
 date: 2026-10-16
-timestamp: 2026-10-16T10:49:03Z
+timestamp: 2026-10-16T18:24:00Z
 generated:
   by: process:codex
-  at: 2026-10-16T10:49:03Z
+  at: 2026-10-16T18:24:00Z
 ---
 
 # Saved query-time cohorts and static membership
@@ -32,6 +32,15 @@ retention, lifecycle or whole sessions. Count distinct immutable event IDs. `did
 complements the complete frequency condition; upper-bound-only conditions include zero
 occurrences. Unknown event names are queryable, while property types remain governed.
 Sequences, first-ever occurrence and stopped-doing criteria are deferred.
+
+Event-condition filters accept governed current organization traits, including numeric
+seats and traits referenced only inside OR alternatives. Attach the typed nullable trait
+source separately to each condition that needs it, joining by account and that resolved
+event's stamped organization ID, as defined by [ADR-21](0021-organization-aggregation-and-current-membership.md).
+Missing traits fail comparisons; set/unset test presence. Current retained trait updates
+can reclassify old events. Outer organization aggregation or current-membership fallback
+must not change the saved condition's event attribution or identified-user population.
+Governed user traits remain in the separate cohort-level traits field.
 
 Cohorts target identified users. Resolved pre-login events contribute to their user's
 behaviour. Anonymous-only subjects remain outside, so the member API and explicit static

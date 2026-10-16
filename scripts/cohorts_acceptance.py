@@ -17,7 +17,7 @@ from traits_acceptance import report
 def verify_cohorts(base, write_key, token, other_token, erase_user=None, large_upload=False, after_membership=None):
     prefix = 'cohort_' + uuid.uuid4().hex
     def api(path, body=None, method='GET', credential=token, expected=200, **params):
-        url = base + path + ('?' + urllib.parse.urlencode(params) if params else '')
+        url = base + path + ('?' + urllib.parse.urlencode(params, doseq=True) if params else '')
         req = urllib.request.Request(url, data=None if body is None else json.dumps(body).encode(), method=method,
                                     headers={'Authorization': 'Bearer ' + credential, 'Content-Type': 'application/json'})
         try:
@@ -170,7 +170,173 @@ def verify_cohorts(base, write_key, token, other_token, erase_user=None, large_u
         assert api('/cohorts/'+sid+'/members',dict(userIds=[]),'PUT')=={'size':0}
         api('/cohorts/'+sid,method='DELETE')
         api('/cohorts/'+traits['id'],method='DELETE')
+        verify_organization_conditions(base, write_key, token, other_token, api, prefix+'org_')
         print('Cohorts: CRUD, validation, account isolation, all metric families, negative/trait membership, replay, static replacement, bidirectional pagination passed.',flush=True)
+
+
+def verify_organization_conditions(base, write_key, token, other_token, api, prefix):
+    """Exact person populations, including joins private to each event condition."""
+    def term(dimension, value=None, op='eq'):
+        return dict(dimension=dimension, op=op, **({} if op in ('set', 'unset') else {'value': value}))
+
+    def row(key, user, name, organization=None, stamp='2026-07-01T00:00:00Z', properties=None, version=None):
+        value = event(prefix+key, prefix+user, name=name, timestamp=stamp)
+        value.update(userId=prefix+user, anonymousId=prefix+user+'cookie', sourceService=prefix, properties=properties or {})
+        if organization:
+            value['organizationId'] = prefix+organization
+        if version:
+            value['schemaVersion'] = version
+        if user == 'anonymous':
+            value.pop('userId')
+        return value
+
+    rows = []
+    for user, organization, count in [('A', 'One', 2), ('B', 'One', 1), ('C', 'Two', 1), ('D', None, 1), ('E', None, 0), ('anonymous', 'One', 1)]:
+        rows.append(row(user+'observed', user, prefix+'observed', organization if user != 'anonymous' else None))
+        for n in range(count):
+            rows.append(row(user+str(n), user, 'feature_used', organization,
+                            stamp=f'2026-07-01T00:00:0{n+1}Z', properties={'feature': prefix}))
+    groups = [row('groupOne', 'A', 'group', 'One', '2026-07-01T00:00:10Z', {'plan': 'pro', 'seats': 10}, 2),
+              row('groupTwo', 'C', 'group', 'Two', '2026-07-01T00:00:11Z', {'plan': 'enterprise', 'seats': 2}, 2)]
+    rows += groups
+    rows.append(row('DunknownOrg', 'D', 'feature_used', 'NoTraits', properties={'feature': prefix}))
+    rows.append(row('identifyA', 'A', 'identify', stamp='2026-07-01T00:00:12Z', properties={'plan': prefix}, version=2))
+    # D's current membership must not fill its unstamped feature condition.
+    rows.append(row('membershipD', 'D', 'group', 'One', '2026-07-04T00:00:00Z', version=2))
+    # B's same session has later matching events. A widened session source must
+    # not move the saved cohort's original exclusive upper bound.
+    for n in range(2):
+        rows.append(row('Bfuture'+str(n), 'B', 'feature_used', 'One', '2026-07-03T00:00:0'+str(n)+'Z', {'feature': prefix}))
+    for start in range(0, len(rows), 3):
+        send(base, write_key, rows[start:start+3])
+    foreign = [dict(value, properties=dict(value['properties'])) for value in rows]
+    for value in foreign:
+        if value['eventName'] == 'group' and value['eventId'] == prefix+'groupOne':
+            value['properties'] = {'plan': 'free', 'seats': 2}
+        elif value['eventName'] == 'group' and value['eventId'] == prefix+'groupTwo':
+            value['properties'] = {'plan': 'pro', 'seats': 10}
+    for start in range(0, len(foreign), 3):
+        send(base, other_token, foreign[start:start+3])
+
+    dates = {'from': '2026-07-01', 'to': '2026-07-03'}
+    # Bound negative/zero-count populations to this fixture's observed users.
+    guard = dict(did=prefix+'observed', withinDays=30)
+    pro = term('org:plan', 'pro')
+    seats = term('org:seats', 5, 'gt')
+
+    def condition(*terms, **extra):
+        return dict(did='feature_used', withinDays=30, filters=[term('prop:feature', prefix), *terms], **extra)
+
+    def definition(name, rule, **extra):
+        return dict(name=prefix+name, kind='behavioural', conditions=[guard, rule], **extra)
+
+    def create(name, rule, credential=token, **extra):
+        return api('/cohorts', definition(name, rule, **extra), 'POST', credential=credential)['id']
+
+    def members(ident, credential=token, **page):
+        return api('/cohorts/'+ident+'/members', credential=credential, **dates, **page)
+
+    def ids(ident, credential=token):
+        return [edge['node'] for edge in members(ident, credential)['edges']]
+
+    def exact(ident, users, credential=token):
+        expected = [prefix+user for user in users]
+        assert ids(ident, credential) == expected, (ident, ids(ident, credential), expected)
+        assert api('/cohorts/'+ident+'/size', credential=credential, **dates) == {'size': len(users)}
+        for backwards in (False, True):
+            result, cursor = [], None
+            while True:
+                page = members(ident, credential, **({'last': 1} if backwards else {'first': 1}),
+                               **({('before' if backwards else 'after'): cursor} if cursor else {}))
+                part = [edge['node'] for edge in page['edges']]
+                result = part+result if backwards else result+part
+                info = page['pageInfo']
+                if not info['hasPreviousPage' if backwards else 'hasNextPage']:
+                    break
+                cursor = info['startCursor' if backwards else 'endCursor']
+            assert result == expected, (backwards, result, expected)
+
+    ident = create('pro', condition(pro))
+    # This is also the early native reproduction: creation followed by size and
+    # exact member execution, rather than a string-only SQL assertion.
+    eventually(lambda: ids(ident) == [prefix+'A', prefix+'B'])
+    exact(ident, 'AB')
+    foreign_id = create('foreign', condition(pro), credential=other_token)
+    eventually(lambda: ids(foreign_id, other_token) == [prefix+'C'])
+    exact(foreign_id, 'C', other_token)
+    numeric = create('seats', condition(seats))
+    exact(numeric, 'AB')
+    api('/cohorts/'+numeric, definition('seats', condition(term('org:seats', 5, 'lt'))), 'PUT')
+    exact(numeric, 'C')
+    api('/cohorts/'+numeric, definition('seats', condition(seats)), 'PUT')
+    exact(numeric, 'AB')
+    foreign_numeric = create('foreignSeats', condition(seats), credential=other_token)
+    exact(foreign_numeric, 'C', other_token)
+    # Updating a newly created definition exercises the same supported compiler.
+    updated = definition('pro', condition({'or': [term('prop:feature', prefix+'absent'), pro]}))
+    api('/cohorts/'+ident, updated, 'PUT')
+    exact(ident, 'AB')
+    either_plan = create('either', condition({'or': [pro, term('org:plan', 'enterprise')]}))
+    exact(either_plan, 'ABC')
+    mixed = create('mixed', condition({'or': [term('org:plan', 'enterprise'), term('org:seats', 5, 'gt')]}))
+    exact(mixed, 'ABC')
+    for label, predicate, expected in [('set', term('org:plan', op='set'), 'ABC'),
+                                        ('unset', term('org:plan', op='unset'), 'D'),
+                                        ('notPro', term('org:plan', 'pro', 'neq'), 'C')]:
+        exact(create(label, condition(predicate)), expected)
+        # Direct user metrics also count the anonymous-only pro subject; saved
+        # cohorts deliberately contain identified users only.
+        points = report(base, token, 'users', filter=['source_service:eq:'+prefix, 'event_name:eq:feature_used', json.dumps(predicate)])
+        assert sum(p['value'] for p in points) == len(expected)+(label == 'set'), (label, points)
+    negative = condition(pro)
+    negative['didNot'] = negative.pop('did')
+    exact(create('negative', negative), 'CDE')
+    exact(create('upper', condition(pro, atMost=1)), 'BCDE')
+    exact(create('zero', condition(pro, atMost=0)), 'CDE')
+    exact(create('userTrait', condition(pro), traits=[term('user:plan', prefix)]), 'A')
+    frequent = create('frequent', condition(pro, atLeast=2))
+    exact(frequent, 'A')
+
+    def total(endpoint='users', cohort=ident, op='eq', **extra):
+        points = report(base, token, endpoint, filter=['source_service:eq:'+prefix, 'event_name:eq:'+prefix+'observed',
+                                                     json.dumps(term('cohort', cohort, op))], **extra)
+        return sum(p['value'] for p in points)
+
+    assert total() == 2
+    # Anonymous-only subjects remain outside the cohort and inside its complement.
+    assert total(op='neq') == 4
+    assert total(aggregate='organizations') == 1
+    assert total(aggregate='organizations', attribution='user_organization') == 1
+    assert total(op='neq', aggregate='organizations') == 1
+    assert total(op='neq', aggregate='organizations', attribution='user_organization') == 2
+    session_points = report(base, token, 'sessions', filter=['source_service:eq:'+prefix, json.dumps(term('cohort', frequent))])
+    assert sum(p['value'] for p in session_points) == 1, session_points
+    saved = dict(name=prefix+'metric', description='organization-filtered people', eventNames=[prefix+'observed'],
+                 aggregation='unique_count', filters=['cohort:eq:'+ident], groupBy=[], timeGrain='day')
+    api('/metric-definitions', saved, 'POST')
+    assert sum(p['value'] for p in report(base, token, 'custom', metric=saved['name'])) == 2
+
+    for bad in [term('org:unknown', 'x'), term('org:seats', '5', 'contains'), term('user:plan', 'pro')]:
+        invalid = definition('invalid', condition(bad))
+        assert api('/cohorts', invalid, 'POST', expected=400)['code'] == 'invalid_cohort'
+        assert api('/cohorts/'+ident, invalid, 'PUT', expected=400)['code'] == 'invalid_cohort'
+    exact(ident, 'AB')
+    later = row('groupLater', 'A', 'group', 'One', '2026-07-05T00:00:00Z', {'plan': 'free', 'seats': 1}, 2)
+    send(base, write_key, [later])
+    eventually(lambda: ids(ident) == [] and ids(numeric) == [])
+    send(base, write_key, groups)
+    # Wait for an ordinary marker after the replay so the final read proves the
+    # replay has passed through the asynchronous writer.
+    marker = row('replayed', 'E', prefix+'replayed')
+    send(base, write_key, [marker])
+    eventually(lambda: sum(p['value'] for p in report(base, token, 'events', filter=['event_name:eq:'+prefix+'replayed'])) == 1)
+    exact(ident, '')
+    exact(numeric, '')
+    exact(either_plan, 'C')
+    exact(foreign_id, 'C', other_token)
+    assert total() == 0
+    assert sum(p['value'] for p in report(base, token, 'custom', metric=saved['name'])) == 0
+    print('Organization cohort conditions: exact members/pages, numeric/OR/null filters, complements, current traits/replay, account isolation, metrics and session bounds passed.', flush=True)
 
 
 def main(verify=verify_cohorts, *, pass_environment=False):

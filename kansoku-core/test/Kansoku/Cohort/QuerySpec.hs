@@ -2,6 +2,7 @@ module Kansoku.Cohort.QuerySpec (spec) where
 
 import Data.Aeson qualified as A
 import Data.Either (isLeft)
+import Data.Foldable (for_)
 import Data.Text qualified as T
 import Data.Time (fromGregorian)
 import Kansoku.Cohort.Query
@@ -11,7 +12,6 @@ import Kansoku.Metrics.Api (SessionMeasure (..))
 import Kansoku.Metrics.Filter qualified as F
 import Kansoku.Metrics.Query qualified as Q
 import Kansoku.Metrics.Registry qualified as Registry
-import Kansoku.Prelude
 import Test.Hspec
 
 spec :: Spec
@@ -29,6 +29,28 @@ spec = describe "Cohort compiler" $ do
     map snd (parameters membership) `shouldContain` ["private_event"]
     map snd (parameters membership) `shouldContain` ["2026-06-03"]
     map snd (parameters membership) `shouldContain` ["2026-07-03"]
+    predicate membership `shouldSatisfy` (not . T.isInfixOf "analytics.organization_traits")
+  it "attaches typed account-scoped organization traits and binds operands once per condition" $ do
+    plan <- either (fail . T.unpack) pure (F.mkMetricFilter "org:plan" F.FilterEq (Just (A.String "private_plan")))
+    seats <- either (fail . T.unpack) pure (F.mkMetricFilter "org:seats" F.FilterGt (Just (A.Number 5)))
+    membership <- either (fail . T.unpack) pure (compileMembership ident end definition {conditions = [condition {filters = [plan, seats]}, condition]})
+    let sql = predicate membership
+    T.count "FROM analytics.organization_traits WHERE account_id={account_id:String}" sql `shouldBe` 1
+    sql `shouldSatisfy` T.isInfixOf "e.account_id=traits.account_id AND e.organization_id=traits.organization_id"
+    sql `shouldSatisfy` T.isInfixOf "Nullable(Float64)"
+    sql `shouldSatisfy` T.isInfixOf "Nullable(String)"
+    sql `shouldSatisfy` (not . T.isInfixOf "private_plan")
+    map snd (parameters membership) `shouldContain` ["private_plan", "5"]
+  it "discovers organization traits used only in the second OR alternative" $ do
+    alternative <- either (fail . T.unpack) pure (F.parseMetricFilter "source_service:eq:ordinary|org:plan:eq:pro")
+    membership <- either (fail . T.unpack) pure (compileMembership ident end definition {conditions = [condition {filters = [alternative]}]})
+    predicate membership `shouldSatisfy` T.isInfixOf "AS org_trait_plan"
+    predicate membership `shouldSatisfy` T.isInfixOf " OR "
+    map snd (parameters membership) `shouldContain` ["ordinary", "pro"]
+  it "keeps unsupported organization traits/operators and event-level user traits invalid" $ do
+    for_ [("org:unknown", F.FilterEq, A.String "x"), ("org:seats", F.FilterContains, A.String "5"), ("user:plan", F.FilterEq, A.String "pro")] $ \(dimension, operator, operand) -> do
+      term <- either (fail . T.unpack) pure (F.mkMetricFilter dimension operator (Just operand))
+      validateCohort definition {conditions = [condition {filters = [term]}]} `shouldSatisfy` isLeft
   it "scopes static and current-trait relations as well as every behavioural source" $ do
     static <- either (fail . T.unpack) pure (compileMembership ident end (CohortDefinition "list" "static" [] []))
     predicate static `shouldSatisfy` T.isInfixOf "analytics.cohort_members WHERE account_id={account_id:String}"

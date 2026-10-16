@@ -2,6 +2,8 @@
 
 ## 2026-10-16
 
+* **Update**: Document current organization traits inside saved cohort event conditions, including nullable filters and fixed event attribution.
+
 * **Update**: DOC-6: document the fixture-isolation gate and scenario-owned saved-resource cleanup convention.
 
 * **Update**: DOC-11: document compatible JSON shapes, permanent storage-path rejections and correction under an unclaimed event ID.

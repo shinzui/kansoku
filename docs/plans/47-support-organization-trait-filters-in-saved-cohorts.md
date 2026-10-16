@@ -16,6 +16,11 @@ provenance:
       at: 2026-10-16T17:46:01Z
       mode: "update"
       note: "Remove assumed deployed definitions and verify fresh first-release creation and execution"
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-10-16T18:23:21Z
+      mode: "implement"
+      note: "Attach condition-local organization traits and prove exact public populations and metric composition"
 ---
 
 # Support organization trait filters in saved cohorts
@@ -32,14 +37,14 @@ This plan has three milestones. [EP-48](48-clean-acceptance-fixtures-across-tele
 ## Progress
 
 
-- [ ] M1: Cohort condition sources attach the required typed organization traits, including those referenced only inside OR alternatives.
-- [ ] M2: Native/public checks prove exact members, updates, complement semantics, and account isolation for organization-filtered cohorts.
+- [x] M1: (2026-10-16) Condition-local typed organization sources include OR-only references; eight deterministic compiler examples pass. Public creation, size and both member-page directions select exactly A/B on the owned native stack before the expanded scenario proceeds.
+- [x] M2: (2026-10-16) `nix develop -c just cohorts-acceptance` exits zero; private evidence `.dev/acceptance/cohort-hpu9muhb/`. Exact size and forward/backward member walks prove pro/seats A/B, OR A/B/C, set/unset, negative C/D/E, upper-bound B/C/D/E, user-trait A, foreign-account C, and current updates/replay. Existing cohorts, 50,000-member replacement and erasure remain green.
 - [ ] M3: Metric composition and packaged gates pass, and the cohort contract documents organization trait conditions.
 
 ## Surprises & Discoveries
 
 
-(None yet.)
+2026-10-16: Direct user metrics include anonymous subjects, while behavioural cohorts intentionally retain only identified users. The regression includes an anonymous feature subject and asserts this distinction explicitly. Fixture-specific observed-event conditions keep negative and zero-occurrence member assertions exact even on the packaged suite's shared account.
 
 ## Decision Log
 
@@ -53,7 +58,11 @@ Revision note (2026-10-16): Removed pre-fix persisted-definition and upgrade exp
 ## Outcomes & Retrospective
 
 
-(To be filled during implementation.)
+The focused native/public scenario passes on fresh stores, including saved custom metrics,
+positive/negative organization aggregation, fixed event attribution under current-membership
+fallback, and a whole-session consumer whose widened source includes B's out-of-window
+feature events while the original cohort still selects only A. The final packaged gate
+and remaining required checks are pending; M3 remains open until their results are recorded.
 
 ## Context and Orientation
 

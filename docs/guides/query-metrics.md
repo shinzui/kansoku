@@ -6,7 +6,7 @@ docId: DOC-10
 tags: ["metrics", "queries", "identity", "cohorts"]
 generated:
   by: process:codex
-  at: "2026-10-16T13:03:13Z"
+  at: "2026-10-16T18:24:00Z"
 ---
 
 # Query metrics
@@ -677,7 +677,13 @@ and optional `filters` in the existing JSON metric-filter grammar. Without occur
 bounds the minimum is one; an upper bound alone includes zero occurrences. `didNot`
 negates the complete occurrence test. Duplicate event IDs count once. Event names need not
 be registered, but event property filters must be declared for that event. `traits` accepts
-only governed `user:` filters. Nested cohort references are unsupported.
+only governed `user:` filters. Event-condition filters also support governed `org:`
+traits, including numeric `org:seats` and OR alternatives. They use current retained
+trait values joined by account and each resolved event's stamped organization ID.
+Missing traits do not satisfy comparisons; `set` and `unset` test their presence.
+These conditions select identified users. An outer metric's organization aggregation
+or `user_organization` attribution does not change the cohort's event attribution.
+Nested cohort references are unsupported.
 
 ```json
 {

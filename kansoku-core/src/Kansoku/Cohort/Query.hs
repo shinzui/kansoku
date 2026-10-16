@@ -56,7 +56,8 @@ compileCondition prefix toDay (index, c) = do
       param suffix = "{" <> T.pack (key suffix) <> ":String}"
       bindings = [(key "_event", name), (key "_from", T.pack (show (addDays (negate (fromIntegral (withinDays c))) toDay))), (key "_to", T.pack (show toDay)), (key "_min", T.pack (show (fromMaybe (if isJust (atMost c) then 0 else 1) (atLeast c)))), (key "_max", T.pack (show (fromMaybe (maxBound :: Int) (atMost c))))]
   compiled <- Filters.compileMetricFiltersWithPrefix (key "_filter") defaultRegistry [EventName name] (filters c)
-  let population = source (param "_from") (param "_to")
+  let organizationTraits = Traits.referencedOrganizationTraits (map F.dimension (concatMap F.filterTerms (filters c)))
+      population = Traits.organizationSource organizationTraits (source (param "_from") (param "_to"))
       -- Include zero-count users when atLeast=0 or atMost alone is specified.
       counts = "SELECT canonical_user,uniqExact(event_id) AS n FROM " <> population <> " WHERE account_id={account_id:String} AND canonical_user!='' AND event_name=" <> param "_event" <> concatPredicates (Filters.predicates compiled) <> " GROUP BY canonical_user"
       positive = "canonical_user IN (SELECT canonical_user FROM (" <> counts <> ") WHERE n>=toUInt64(" <> param "_min" <> ") AND n<=toUInt64(" <> param "_max" <> "))"

@@ -1,6 +1,7 @@
 # Bundle Update Log
 
 ## 2026-10-16
+* **Update**: Clarify ADR-19 condition-local organization trait joins and identified-user semantics under outer organization aggregation.
 * **Update**: Require scenario-owned saved-resource cleanup and shared-store repeatability/failure evidence without weakening pagination.
 * **Update**: Define the supported raw/native JSON shape boundary and require native corpus parity for both materialized columns.
 * **Update**: Reject duplicate flattened JSON paths locally before new acceptance claims; preserve immutable retries and transport rejection semantics.
