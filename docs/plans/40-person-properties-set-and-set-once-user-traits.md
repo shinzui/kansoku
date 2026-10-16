@@ -45,7 +45,7 @@ not trusted authorization facts, since public write-key clients may report them.
 
 - [x] M1: Declared typed traits have deterministic set/set-once state under replay and late delivery.
 - [x] M2: Supported routes apply user dimensions with correct identity and population semantics.
-- [ ] M3: Haskell helper, SDK contract, catalog and trait deletion/rebuild fixtures agree.
+- [x] M3: Haskell helper, SDK contract, catalog and trait deletion/rebuild fixtures agree.
 
 ## Surprises & Discoveries
 
@@ -110,8 +110,27 @@ preserved. Logs: `.dev/acceptance/identity-validation/ep40-native.log`.
 Haskell helper/default/version-override coverage and generated catalog v4 are implemented.
 The full source gate passes 361 core examples, 18 client examples, four probes, generated
 contracts, strict 16-ADR validation, three telemetry modes and four lifecycle cases. Packaged
-ordinary public workflow, pinned browser/helper consumer and expanded performance acceptance
-remain pending; M3 and whole-child completion stay open.
+acceptance passes 423 core examples, 19 live-configured Haskell client examples, four probes,
+60 executed Hurl requests (43 safe, 16 stateful including retries, one disabled), native
+recovery/limits/replay/identity, public EP-33/34/35/36/40 workflows in all three telemetry modes,
+geography-off/default behavior, invalid startup and span/access privacy. Required SDK live
+helper acceptance passes one real, non-skipped case in each mode with 23 assertions, proving
+accepted versions, set/once precedence and identify_once stitching of earlier anonymous page
+activity. Evidence: `.dev/acceptance/run-ebygpp0i/sanitized`.
+
+The pinned consumer is `mori://shinzui/kansoku-ts/packages/kansoku-js`, SDK commit
+6adee63714a631985cb9be1ec0e5f9fec7a4ecb6 with contract pin 6517962. Its 69 unit cases and
+two explicit no-DOM SSR cases pass; eight unconfigured live cases are skipped in the ordinary
+unit run and are not claimed as live evidence. Post-commit package checks pass. Generated
+trait validation and helper/hook APIs fit the JavaScript 9140/10240 and React 1812/3072 gzip
+budgets. SDK plan 8 M4 is complete; its remaining transport/browser/release work stays with
+EP-38. The expanded performance repeat passes all 28 five-run median comparisons on 10M
+facts, with 3M recent facts followed by 7M older facts. Resolved/baseline ratios are
+0.9568–1.3449, all below 2; maximum resolved median is 462ms, maximum cold native time 941ms,
+warm peak 449830240 bytes and cold peak 446459463 bytes, both below 512MiB. Evidence:
+`.dev/acceptance/identity-bench-jhqtnm6d/report.json`. All milestones and required acceptance
+are complete. EP-37 consumes the fenced erasure primitives next; EP-38 repeats the final
+capacity/performance and full browser release gate after the remaining children.
 
 The first packaged run reached every public trait metric successfully, then exposed a missing
 NonNegativeIntegerPattern error-description case: rejected fractional values raised HTTP 500

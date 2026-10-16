@@ -2,7 +2,7 @@
 type: Architecture Decision Record
 title: Versioned event schema governance and publication
 description: Govern event schemas as immutable, contiguous versions authored in the Haskell registry, with accepted events recording the schema version they matched.
-timestamp: 2026-10-15T16:24:04Z
+timestamp: 2026-10-16T01:41:00Z
 generated:
   by: human:kansoku-maintainers
   at: 2026-07-19T00:00:00Z
@@ -95,3 +95,12 @@ earlier eight version-1 schemas.
 Catalog version 2 adds optional string minLength and numeric minimum constraints. Pattern
 continues to mean a regular expression, rather than being overloaded with numeric predicates.
 The generated contract and OpenAPI documents move with this document-shape change.
+
+## Governed trait schemas
+
+Identify v1 remains identity-only. Identify v2 and identify_once v1 declare the shared optional
+scalar trait catalog and require top-level userId; helpers select their versions explicitly.
+Catalog v4 adds numeric multipleOf, with company_size minimum 0 and multipleOf 1. Exact decimal
+validation and immutable first-acceptance eligibility precede native Float64 storage, as
+[ADR-16](0016-governed-current-user-traits-and-replay-safe-erasure.md) defines. Older raw rows and
+private queue versions never acquire trait eligibility from a later catalog declaration.

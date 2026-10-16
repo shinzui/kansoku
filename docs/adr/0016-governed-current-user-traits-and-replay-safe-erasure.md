@@ -3,9 +3,9 @@ type: Architecture Decision Record
 title: Governed current user traits and replay-safe erasure
 description: Persist first-acceptance schema eligibility for typed current traits, join only resolved users, attribute whole sessions before segmentation, and reserve erased source IDs before rebuilding state.
 docId: ADR-16
-status: Proposed
+status: Accepted
 date: 2026-10-16
-timestamp: 2026-10-16T01:01:59Z
+timestamp: 2026-10-16T01:48:30Z
 generated:
   by: process:codex
   at: 2026-10-16T01:01:59Z
@@ -88,4 +88,6 @@ Current trait and identity changes can alter historical answers. Large retained-
 trait populations can exhaust query budgets and return complete errors. Public write keys may
 report traits: role and other business attributes are analytics observations, never authorization
 facts. Trusted business reporting requires service-owned producers. Native, public packaged,
-pinned SDK/helper and lifecycle acceptance remain required before Accepted.
+pinned SDK/helper and lifecycle acceptance pass. The expanded 28-case, 10M-fact cost gate
+also remains below 2× and the shared memory budget. EP-37 must establish the persisted fence
+and coordinate cross-store lifecycle cleanup before exposing these primitives administratively.

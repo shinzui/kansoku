@@ -2,7 +2,7 @@
 type: Architecture Decision Record
 title: Queryable event properties and identity-resolved projection
 description: Store event properties as native ClickHouse JSON and expose them for metric grouping only after registry declaration.
-timestamp: 2026-10-15T20:56:24Z
+timestamp: 2026-10-16T01:41:00Z
 generated:
   by: human:kansoku-maintainers
   at: 2026-07-19T00:00:00Z
@@ -118,3 +118,10 @@ bounds and server-owned temporary evidence snapshots. The public seven columns r
 new filter/session/enrichment fields belong to the rich private relation. Cached and direct
 native relations must agree for every identity fixture. Raw approximate user/exposure sketches
 now prefix user/anonymous namespaces too; they still do not promise query-time stitching.
+
+Current person attributes use the separate governed `user:` namespace described in
+[ADR-16](0016-governed-current-user-traits-and-replay-safe-erasure.md). Their eligibility is
+preserved from first acceptance and their current values join only resolved user subjects.
+The generic `prop:` declaration mechanism does not establish governed trait eligibility.
+Whole-session current-trait selection joins after retained session assembly; account/user text
+without the resolved user kind must never match a trait row.

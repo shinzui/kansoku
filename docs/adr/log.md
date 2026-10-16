@@ -1,6 +1,8 @@
 # Bundle Update Log
 
 ## 2026-10-16
+* **Update**: Accept governed current traits after native, packaged public, required SDK helper and 10M-fact performance acceptance.
+* **Update**: Connect schema governance and query projection records to governed current user traits.
 * **Update**: Add ADR-16 governed current traits, immutable validation eligibility and fenced replay-safe lifecycle (Proposed)
 * **Update**: Accept ADR-15 after native selected-chain parity, packaged three-mode workflows, pinned SDK and ten-million-event cost acceptance
 * **Update**: Align ADR-6 exposure semantics with ADR-15 deterministic funnels and explicit diagnostics

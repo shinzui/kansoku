@@ -104,12 +104,31 @@ DELETE WHERE account_id = 'ACCOUNT'
 
 If no saved cookies/mapped values exist, omit their respective predicates rather than inventing
 placeholders. Mutation does not feed materialized views. After all raw and evidence mutations finish, rebuild all identity projections from canonical,
-already-scrubbed facts with migration 0018 while the writer stays stopped. This restores the
+already-scrubbed facts while the writer stays stopped, using the complete current projection
+definitions. Do not rerun historical migration 0017 or 0018 alone: later migrations add rich
+private fields, enrichment, whole-session state and governed traits. This restores the
 contexts for remaining anonymous identities as well as removing erased values; deleting old
 context rows alone cannot reconstruct the scrubbed context. The migration also materializes
 the raw context key. It must run only after the raw mutations finish. HTTP's physical
 query connections detect completed index mutations or replacement by part/table identity and
 refresh their private snapshots. Deleting only identity_signals leaves cached/indexed links.
+
+## Governed current traits
+
+Both unlinking and explicit-fact deletion must also remove current person traits.
+`Kansoku.PersonProperties.eraseUserTraits` accepts account/user values through native parameters
+and either `ScrubTraitEvents` or `DeleteTraitEvents`. It first reserves account/event IDs in
+`trait_event_erasures`, then scrubs governed source properties or deletes those source events,
+waits for the raw mutation, clears both `user_properties` and `user_properties_once`, and
+rebuilds from eligible canonical facts. `rebuildUserTraits` observes the permanent reservations.
+An old raw replay cannot restore erased traits; a genuinely new event ID can initialize them.
+
+These primitives require fenced ingest, writer/replay and metric readers. They do not by
+themselves scrub PostgreSQL queue/archive/acceptance envelopes or establish that fence. The
+administrative workflow must clean those replayable sources and retain minimal event identity
+tombstones before releasing the fence. Unlinking scrubs governed trait properties but may leave
+other historical payload fields, including arbitrary user text. Full-event deletion only
+removes explicit-user facts, never another user's anonymous facts inferred from shared signals.
 
 All preceding `ALTER` statements are asynchronous by default. Watch them until no
 matching work remains and investigate any non-empty failure reason. In a controlled test
