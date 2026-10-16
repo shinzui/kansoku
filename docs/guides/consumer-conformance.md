@@ -1,3 +1,14 @@
+---
+type: Guide
+title: "Reproduce the external consumer gate"
+description: "Reproduce the pinned external-consumer release gate and ordinary SDK adoption and recovery proof in owned environments."
+docId: DOC-5
+tags: ["acceptance", "consumers", "sdk", "development"]
+generated:
+  by: process:codex
+  at: "2026-10-16T05:34:46Z"
+---
+
 # Reproduce the external consumer gate
 
 Run inside the repository's Nix development shell. Evidence and credentials stay under ignored

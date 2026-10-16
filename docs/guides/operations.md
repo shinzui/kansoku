@@ -1,3 +1,14 @@
+---
+type: Runbook
+title: "Operate Kansoku"
+description: "Operate migrations, credentials, probes and telemetry, diagnose pipeline failures, and coordinate recovery and data maintenance."
+docId: DOC-9
+tags: ["operations", "migrations", "observability", "recovery"]
+generated:
+  by: process:codex
+  at: "2026-10-16T03:01:19Z"
+---
+
 # Operate Kansoku
 
 Kansoku runs the HTTP server, PostgreSQL queue producer, Shibuya batch writer, ClickHouse query

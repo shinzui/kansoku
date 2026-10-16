@@ -1,3 +1,14 @@
+---
+type: Reference
+title: "Query metrics"
+description: "Look up metric populations, query bounds, filters, grouping, analytical semantics, cohorts and saved definitions."
+docId: DOC-10
+tags: ["metrics", "queries", "identity", "cohorts"]
+generated:
+  by: process:codex
+  at: "2026-10-16T13:03:13Z"
+---
+
 # Query metrics
 
 Kansoku exposes account-scoped analytics at `GET /metrics/*`. Every request requires a service

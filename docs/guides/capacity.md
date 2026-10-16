@@ -1,3 +1,14 @@
+---
+type: Guide
+title: "Measure pipeline capacity"
+description: "Measure pipeline outage and recovery capacity, size a finite storage budget, and set alerts from the recorded workload."
+docId: DOC-2
+tags: ["capacity", "backpressure", "recovery", "operations"]
+generated:
+  by: process:codex
+  at: "2026-10-16T05:27:26Z"
+---
+
 # Measure pipeline capacity
 
 Run `nix develop -c just outage-acceptance` on the intended deployment hardware before choosing

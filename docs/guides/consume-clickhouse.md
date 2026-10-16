@@ -1,3 +1,14 @@
+---
+type: Guide
+title: "Consume ClickHouse from a trusted analytics tool"
+description: "Configure a trusted ClickHouse reader and use supported projections and recipes with dashboard and experiment consumers."
+docId: DOC-4
+tags: ["clickhouse", "sql", "consumers", "experiments"]
+generated:
+  by: process:codex
+  at: "2026-10-16T13:03:13Z"
+---
+
 # Consume ClickHouse from a trusted analytics tool
 
 Use the [HTTP metrics API](query-metrics.md) for account-authorized application traffic.

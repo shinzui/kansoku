@@ -6,6 +6,10 @@ Start with the quickstart, then use the guides for the part of Kansoku you are i
 
 ## Adopt Kansoku
 
+The [guide catalog](guides/index.md) groups these pages by reader intent under the shared
+OKF documentation profile, with stable `DOC-N` handles. Run `just guides-check` to validate
+the bundle and its migration log.
+
 1. [Run Kansoku locally](guides/getting-started.md) — start the dependencies, migrate both
    databases, issue credentials, send an event, and query it.
 2. [Send events](guides/send-events.md) — use the HTTP contract, versioned event schemas,

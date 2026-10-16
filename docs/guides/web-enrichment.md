@@ -1,3 +1,14 @@
+---
+type: Explanation
+title: "Web enrichment and acquisition"
+description: "Understand preserved web enrichment, first-touch acquisition, versioned device and bot classifications, and trusted optional country lookup."
+docId: DOC-12
+tags: ["web-analytics", "enrichment", "acquisition", "privacy"]
+generated:
+  by: process:codex
+  at: "2026-10-15T22:32:50Z"
+---
+
 # Web enrichment and acquisition
 
 Existing web producers keep sending the public event schema. The server classifies each newly

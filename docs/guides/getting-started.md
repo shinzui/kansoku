@@ -1,3 +1,14 @@
+---
+type: Tutorial
+title: "Run Kansoku locally"
+description: "Start Kansoku locally, migrate both stores, issue credentials, send an event, and query it before rehearsing reuse and recovery."
+docId: DOC-7
+tags: ["getting-started", "installation", "ingestion", "metrics"]
+generated:
+  by: process:codex
+  at: "2026-10-16T05:27:26Z"
+---
+
 # Run Kansoku locally
 
 This guide starts a development instance, creates one account's credentials, sends a valid

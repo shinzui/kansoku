@@ -1,3 +1,14 @@
+---
+type: Guide
+title: "Develop Kansoku"
+description: "Build and test Kansoku, follow source conventions, regenerate contracts, and run isolated acceptance gates."
+docId: DOC-6
+tags: ["development", "testing", "contracts", "haskell"]
+generated:
+  by: process:codex
+  at: "2026-10-15T05:27:55Z"
+---
+
 # Develop Kansoku
 
 Use `nix develop`, then `cabal build all --enable-tests` and `cabal test all` for

@@ -1,3 +1,14 @@
+---
+type: Guide
+title: "Send events"
+description: "Send authenticated single, batch or beacon events with governed schemas, identity signals, immutable event IDs and correct retry handling."
+docId: DOC-11
+tags: ["ingestion", "events", "schemas", "identity"]
+generated:
+  by: process:codex
+  at: "2026-10-16T03:45:04Z"
+---
+
 # Send events
 
 Kansoku accepts one event at `POST /v1/events` or an array at `POST /v1/batch`. Both routes

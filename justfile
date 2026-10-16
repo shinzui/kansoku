@@ -49,6 +49,10 @@ capabilities-check:
 terminology-check:
     okf validate docs/terminology --strict --profile docs/terminology/profile.dhall --profile-enforce --log-enforce
 
+# Enforce reader-intent metadata, stable document handles and guide log freshness.
+guides-check:
+    okf validate docs/guides --strict --profile docs/guides/profile.dhall --profile-enforce --log-enforce
+
 # Apply unapplied ClickHouse migrations in filename order, recording each in
 # analytics.schema_migrations. Migration files are immutable once applied.
 ch-migrate:
@@ -118,7 +122,7 @@ openapi-lint:
     vacuum lint --no-update-check --fail-severity error docs/api/openapi.json
 
 # Developer/CI gate without ambient database dependencies.
-check: build-with-tests format-check deterministic-test openapi-check contracts-check openapi-lint capabilities-check terminology-check
+check: build-with-tests format-check deterministic-test openapi-check contracts-check openapi-lint capabilities-check terminology-check guides-check
     okf validate docs/adr --strict --profile docs/adr/profile.dhall --profile-enforce --log-enforce
     python3 scripts/http-telemetry.py
 

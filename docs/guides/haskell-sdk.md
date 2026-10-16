@@ -1,3 +1,14 @@
+---
+type: Guide
+title: "Use the Haskell SDK"
+description: "Integrate the buffered Haskell producer SDK and typed clients with explicit schema versions, retries, identity helpers and trait writes."
+docId: DOC-8
+tags: ["sdk", "haskell", "ingestion", "clients"]
+generated:
+  by: process:codex
+  at: "2026-10-16T01:18:47Z"
+---
+
 # Use the Haskell SDK
 
 `kansoku-client` is the currently supported producer SDK. It derives its HTTP routes and wire

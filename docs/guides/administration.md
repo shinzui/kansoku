@@ -1,3 +1,14 @@
+---
+type: Runbook
+title: "Administrative operations"
+description: "Issue and revoke credentials, inspect rejected events, and preview or resume fenced erasure, retention and archive maintenance."
+docId: DOC-1
+tags: ["administration", "credentials", "maintenance", "retention"]
+generated:
+  by: process:codex
+  at: "2026-10-16T03:20:35Z"
+---
+
 # Administrative operations
 
 `kansoku-admin` ships with the server and migration executables and uses their database and

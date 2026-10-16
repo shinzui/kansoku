@@ -1,3 +1,14 @@
+---
+type: Reference
+title: "Configure Kansoku"
+description: "Look up database, server, writer, ingestion, readiness, telemetry, query-budget and retention configuration."
+docId: DOC-3
+tags: ["configuration", "deployment", "ingestion", "telemetry"]
+generated:
+  by: process:codex
+  at: "2026-10-16T03:01:19Z"
+---
+
 # Configure Kansoku
 
 `kansoku-server`, `kansoku-migrate`, and credential issuance read environment variables. Invalid

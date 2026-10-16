@@ -91,5 +91,24 @@ in  Schema.Project::{
         , okfVersion = "0.2"
         , description = Some "Controlled Kansoku vocabulary with stable TERM handles and evidence anchors"
         }
+      , Schema.OkfBundle::{
+        , name = "guides"
+        , path = "docs/guides"
+        , profile = Some "docs/guides/profile.dhall"
+        , profileBinding = Some
+            ( Schema.ProfileBinding.Published
+                Schema.PinnedImport::{
+                , publisher = "shinzui/okf-profiles"
+                , publisherRef = Some
+                    Schema.MoriRef::{ namespace = "shinzui", name = "okf-profiles" }
+                , export = Some "documentation.userDocumentation"
+                , version = Some "v0.20.0"
+                , pin = Some
+                    "sha256:079a5b3679dccafd2070535b3d59a0ffdf28e20bf9cacfe095dca96c8012879a"
+                }
+            )
+        , okfVersion = "0.2"
+        , description = Some "Reader-facing guides, tutorials, explanations, reference material and operational runbooks with stable DOC handles"
+        }
       ]
     }
