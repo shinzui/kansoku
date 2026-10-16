@@ -7,12 +7,14 @@ module Kansoku.Admin.ClickHouse
     explicitSubject,
     rebuildDerived,
     verifyMutations,
+    quiesceRawWrites,
     scopeText,
     quoteName,
   )
 where
 
 import ClickHaskell (ChString, ClickHaskell, Column, Connection, Select, ToChType (toChType), addParameter, command, passParameters, select, unsafeMkSelect)
+import Control.Concurrent (threadDelay)
 import Control.Monad (forM, forM_)
 import Data.Aeson qualified as A
 import Data.Aeson.Types qualified as A
@@ -22,6 +24,7 @@ import Data.String (fromString)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import Kansoku.Prelude
+import System.Timeout (timeout)
 
 newtype JsonRow = JsonRow {value :: BS.ByteString}
   deriving stock (Generic)
@@ -119,3 +122,16 @@ verifyMutations connection = do
 
 quoteName :: Text -> Text
 quoteName name = "`" <> Text.replace "`" "``" name <> "`"
+
+-- A cancelled native client can leave its server insert completing. Native
+-- INSERT negotiates a sample block before sending rows, so any write that can
+-- still commit data is already registered in system.processes. Async inserts
+-- are explicitly disabled on the writer's physical connections.
+quiesceRawWrites :: Connection -> IO ()
+quiesceRawWrites connection = do
+  result <- timeout 60_000_000 loop
+  unless (result == Just ()) (fail "native raw writes did not quiesce; maintenance fence retained")
+  where
+    loop = do
+      active <- chJSON connection A.Null "SELECT toJSONString(count()) AS value FROM system.processes WHERE lower(query_kind)='insert' AND position(query,'events_raw')>0 AND (current_database='analytics' OR position(query,'analytics.events_raw')>0 OR position(query,'`analytics`.`events_raw`')>0)"
+      unless (active == [A.Number 0]) (threadDelay 100_000 >> loop)

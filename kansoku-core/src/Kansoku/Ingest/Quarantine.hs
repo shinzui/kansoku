@@ -66,11 +66,13 @@ captureRejections cfg metrics transport account received rejected =
 insertRejections :: ByteString
 insertRejections =
   """
+  WITH gate AS MATERIALIZED (SELECT kansoku.require_traffic_lock())
   INSERT INTO kansoku.ingest_rejections
     (account_id,received_at,event_name,schema_version,reason_codes,payload,transport,payload_truncated,original_payload_bytes)
   SELECT account_id,received_at,event_name,schema_version,reason_codes,payload,transport,payload_truncated,original_payload_bytes
   FROM jsonb_to_recordset($1) AS r(account_id text,received_at timestamptz,event_name text,schema_version bigint,
     reason_codes jsonb,payload jsonb,transport text,payload_truncated boolean,original_payload_bytes bigint)
+  CROSS JOIN gate
   """
 
 -- | Cleanup on startup and hourly thereafter. Lag is refreshed once a minute,

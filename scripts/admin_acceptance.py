@@ -254,9 +254,17 @@ def _verify_lifecycle(admin, cli, pg, ch, request, metric, total, event, archive
         blocker = children.enter_context(owned_process(['psql', '-XAt', '-v', 'ON_ERROR_STOP=1'],
                                    dict(env, PGAPPNAME='admin-admitted-read'), root, 'admitted-read', stdin=subprocess.PIPE,
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True))
-        blocker.stdin.write('BEGIN; SELECT pg_advisory_xact_lock_shared(726401,1);\n')
+        blocker.stdin.write('BEGIN; SELECT kansoku.require_traffic_lock(); LOCK TABLE kansoku.ingest_rejections IN ACCESS EXCLUSIVE MODE;\n')
         blocker.stdin.flush()
         eventually(lambda: pg("SELECT count(*) FROM pg_locks l JOIN pg_stat_activity a USING(pid) WHERE a.application_name='admin-admitted-read' AND l.locktype='advisory' AND l.classid=726401 AND l.objid=1 AND l.granted;") == '1', 'admitted read lock')
+        assert post(event('cancelled-diagnostic', 'identify', version=2, props={'company_size': -1}))['accepted'] == 0
+        native_id = 'admin_inflight_' + uuid.uuid4().hex
+        native = children.enter_context(owned_process(['clickhouse-client', '--host', '127.0.0.1', '--port', env['CLICKHOUSE_TCP_PORT'],
+                '--query_id', native_id, '--query', 'INSERT INTO analytics.events_raw (event_id,event_name,account_id,source,source_service,occurred_at,received_at,anonymous_id,user_id,session_id,properties,context,identifiers) FORMAT JSONEachRow'], env, root, 'inflight-native-insert',
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True))
+        native.stdin.write('\n')
+        native.stdin.flush()
+        eventually(lambda: ch("SELECT count() FROM system.processes WHERE query_id=" + literal(native_id)) == '1', 'native insert sample-block handshake')
         erase = children.enter_context(owned_process([admin, 'erase-user', '--account', account, '--user', user,
                                   '--out', str(occupied), '--confirm'], env, root, 'erase-waiting',
                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True))
@@ -267,6 +275,15 @@ def _verify_lifecycle(admin, cli, pg, ch, request, metric, total, event, archive
         blocker.stdin.write('COMMIT;\n')
         blocker.stdin.close()
         blocker.wait(timeout=10)
+        eventually(lambda: pg("SELECT count(*) FROM pg_locks WHERE locktype='advisory' AND classid=726401 AND objid=1 AND mode='ExclusiveLock' AND granted;") == '1', 'exclusive fence after backend transaction')
+        assert json.loads(cli('list-jobs', '--limit', '1'))[0]['stage'] == 'created'
+        late = dict(event_id='admin-late-native', event_name='identify', account_id=account, source='web', source_service='admin-web',
+                    occurred_at='2026-07-01 12:00:00.000', received_at='2026-07-01 12:00:01.000', anonymous_id='late-cookie',
+                    user_id=user, session_id='late-session', properties='{}', context='{}', identifiers='{"device":"late-device"}')
+        native.stdin.write(json.dumps(late, ensure_ascii=False) + '\n')
+        native.stdin.close()
+        native.wait(timeout=10)
+        assert native.returncode == 0
         erase_stdout, erase_stderr = erase.communicate(timeout=30)
         (root / 'admitted-read-erase.private').write_text(erase_stdout + erase_stderr)
         assert blocker.returncode == 0 and erase.returncode == 1
@@ -297,6 +314,7 @@ def _verify_lifecycle(admin, cli, pg, ch, request, metric, total, event, archive
     assert json.loads(cli('resume-job', '--id', job['id'], '--confirm'))['stage'] == 'complete'
     eventually(lambda: pg('SELECT count(*) FROM ' + qtable + ';') == '0', 'rewritten retained batch drain')
     assert ch("SELECT count() FROM analytics.events_canonical WHERE event_id='admin-held-batch' AND anonymous_id='' AND session_id='' AND identifiers='{}' AND properties='{}'") == '1'
+    assert ch("SELECT count() FROM analytics.events_canonical WHERE event_id='admin-late-native' AND anonymous_id='' AND session_id='' AND identifiers='{}'") == '1'
     assert ch('SELECT count() FROM analytics.user_traits WHERE account_id=' + account_sql + ' AND user_id=' + user_sql) == '0'
     assert ch('SELECT count() FROM analytics.identity_signals FINAL WHERE account_id=' + account_sql + ' AND user_id=' + user_sql) == '0'
     assert total('revenue') == before[1]
@@ -313,19 +331,19 @@ def _verify_lifecycle(admin, cli, pg, ch, request, metric, total, event, archive
     assert other_before == ch("SELECT toJSONString(tuple(count(),sum(cityHash64(tuple(event_id,event_name,anonymous_id,user_id,session_id,identifiers,properties))))) FROM analytics.events_canonical WHERE account_id=" + literal(other))
     print('Admin unlinking: persisted fence, refused traffic, retained writer payload, failed rebuild/resume, redacted 0600 receipt, archive replay and legacy-ID reservation passed.', flush=True)
 
-    deleted_user = 'explicit-delete'
+    deleted_user = '--explicit-delete'
     deletion_rows = [event('delete-profile', 'identify', subject=deleted_user, cookie='delete-cookie', session='delete-session', version=2, props={'plan': 'delete-plan'}),
                      event('delete-page', subject=deleted_user, cookie='delete-cookie', session='delete-session')]
     for row in deletion_rows:
         post(row)
-    eventually(lambda: ch("SELECT count() FROM analytics.events_canonical WHERE account_id=" + account_sql + " AND user_id='explicit-delete'") == '2', 'explicit deletion facts')
+    eventually(lambda: ch("SELECT count() FROM analytics.events_canonical WHERE account_id=" + account_sql + " AND user_id='--explicit-delete'") == '2', 'explicit deletion facts')
     for row in deletion_rows:
         archive(row)
     ledger_before = int(pg('SELECT count(*) FROM kansoku.accepted_events;'))
-    assert json.loads(cli('erase-user', '--account', account, '--user', deleted_user, '--delete-events', '--out', str(root / 'delete.json'), '--confirm'))['stage'] == 'complete'
+    assert json.loads(cli('erase-user', '--account', account, '--user=' + deleted_user, '--delete-events', '--out', str(root / 'delete.json'), '--confirm'))['stage'] == 'complete'
     assert post(deletion_rows[0])['accepted'] == 1  # Logical retry, never re-publication.
     assert json.loads(cli('replay-archive', '--confirm'))['replayed'] == 0
-    assert ch("SELECT count() FROM analytics.events_canonical WHERE account_id=" + account_sql + " AND user_id='explicit-delete'") == '0'
+    assert ch("SELECT count() FROM analytics.events_canonical WHERE account_id=" + account_sql + " AND user_id='--explicit-delete'") == '0'
     assert int(pg('SELECT count(*) FROM kansoku.accepted_events;')) == ledger_before
     assert other_before == ch("SELECT toJSONString(tuple(count(),sum(cityHash64(tuple(event_id,event_name,anonymous_id,user_id,session_id,identifiers,properties))))) FROM analytics.events_canonical WHERE account_id=" + literal(other))
     print('Admin explicit deletion: account isolation, both trait states, archive inputs and permanent logical retries passed.', flush=True)

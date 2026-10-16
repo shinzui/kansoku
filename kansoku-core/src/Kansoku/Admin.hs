@@ -73,13 +73,17 @@ parseOptions command = go Map.empty
       | null allowed = Left "unknown administrative command; run kansoku-admin --help"
       | otherwise = Right found
     go found (raw : rest) = do
-      name <- maybe (Left "expected an administrative option") Right (Text.stripPrefix "--" (Text.pack raw))
+      argument <- maybe (Left "expected an administrative option") Right (Text.stripPrefix "--" (Text.pack raw))
+      let (name, assigned) = Text.breakOn "=" argument
       unless (name `elem` allowed && not (Map.member name found)) (Left "unknown or repeated administrative option")
       if name `elem` switches
-        then go (Map.insert name "true" found) rest
-        else case rest of
-          value : remaining | not ("--" `Text.isPrefixOf` Text.pack value) -> go (Map.insert name (Text.pack value) found) remaining
-          _ -> Left "missing administrative option value"
+        then if Text.null assigned then go (Map.insert name "true" found) rest else Left "switches do not take values"
+        else
+          if not (Text.null assigned)
+            then go (Map.insert name (Text.drop 1 assigned) found) rest
+            else case rest of
+              value : remaining | not ("--" `Text.isPrefixOf` Text.pack value) -> go (Map.insert name (Text.pack value) found) remaining
+              _ -> Left "missing administrative option value"
 
 commandParameters :: Config -> String -> AdminOptions -> IO A.Value
 commandParameters config command options = do

@@ -90,6 +90,7 @@ executeJob config connection tables initial output = do
   -- requests/inserts/replays to finish before touching either store.
   pgScript connection "SELECT to_jsonb(pg_advisory_lock(726401,1))"
   withNative config $ \native -> do
+    quiesceRawWrites native
     let kind = field "kind" initial
         original = field "scope" initial
     discovered <-

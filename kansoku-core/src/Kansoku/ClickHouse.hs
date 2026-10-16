@@ -48,7 +48,7 @@ import ClickHaskell
     unsafeMkSelect,
   )
 import Control.Concurrent.MVar (MVar, modifyMVar, newMVar)
-import Control.Exception (SomeException, throwIO, try)
+import Control.Exception (SomeException, onException, throwIO, try)
 import Data.Generics.Labels ()
 import Data.IORef (IORef, newIORef)
 import Data.Int (Int64)
@@ -95,13 +95,18 @@ insertWriterEvents (WriterConnection config connectionCell) events = do
   result <-
     modifyMVar connectionCell $ \cachedConnection -> do
       attempted <- try @SomeException $ do
-        connection <- maybe (openClickHouse config) pure cachedConnection
+        connection <- maybe openWriter pure cachedConnection
         insertQueuedEvents connection events
         pure connection
       pure $ case attempted of
         Left exception -> (Nothing, Left exception)
         Right connection -> (Just connection, Right ())
   either throwIO pure result
+  where
+    openWriter = do
+      connection <- openClickHouse config
+      command connection "SET async_insert=0" `onException` closeConnection connection
+      pure connection
 
 -- | A fixed-size pool of ClickHouse connections for the metrics query path.
 -- The writer never uses this; it owns its own dedicated connection.

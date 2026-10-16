@@ -71,7 +71,8 @@ acceptQueuedBatch _ _ _ _ [] = pure (Right [])
 acceptQueuedBatch pool queue account validate inputs =
   fmap (fmap (fmap snd . sortOn fst)) $
     Pool.use pool $
-      T.transaction T.ReadCommitted T.Write $
+      T.transaction T.ReadCommitted T.Write $ do
+        void (T.statement () trafficLock)
         traverse accept (sortOn (identity . snd) (zip [0 :: Int ..] inputs))
   where
     identity input = (unAccountId account, unEventId (parsedEvent input ^. #eventId))
@@ -99,6 +100,13 @@ acceptQueuedBatch pool queue account validate inputs =
                 stored <- T.statement key lookupHash
                 pure (maybe (Rejected [EventIdConflict]) replay stored)
       pure (eventIndex, result)
+
+trafficLock :: Statement.Statement () Bool
+trafficLock =
+  Statement.preparable
+    "SELECT kansoku.require_traffic_lock() IS NULL"
+    E.noParams
+    (D.singleRow (D.column (D.nonNullable D.bool)))
 
 lookupHash :: Statement.Statement (Text, Text) (Maybe Text)
 lookupHash =

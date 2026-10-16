@@ -33,6 +33,8 @@ kansoku-admin erase-user --account account_123 --user user_42 --delete-events
 kansoku-admin erase-user --account account_123 --user user_42 --delete-events --confirm
 ```
 
+Use the standard `--user=VALUE` form for user IDs beginning with `--`.
+
 Preview reports scope and counts for raw facts and replayable sources without printing SQL or
 discovered identifiers. Live ingest can change counts before confirmation. Default **identity
 unlinking** removes matching cookies, mapped identifiers, session links and current traits;
@@ -46,7 +48,9 @@ equal retries acknowledge the existing logical event without publishing it again
 IDs without a hash conflict. New IDs can establish new observations; this is not a permanent
 user ban or a search for unknown personal text embedded in arbitrary JSON.
 
-Confirmation persists a job and global fence, then waits for admitted reads/inserts/replays.
+Confirmation persists a job and global fence, then waits for admitted reads/inserts/replays,
+including backend work surviving a cancelled caller. A native-write drain exceeding sixty
+seconds fails with the fence retained before discovery or mutation.
 Ingest and metric routes return retryable 503 `maintenance_unavailable`, preserving ingest CORS.
 Operational routes and the schema catalog remain available; readiness may report the paused
 pipeline. The global window is intentional for the initial single-tenant deployment.

@@ -113,6 +113,13 @@ maintenanceSql =
     active_job uuid REFERENCES kansoku.maintenance_jobs(id)
   );
   INSERT INTO kansoku.maintenance_fence VALUES(true,NULL);
+  CREATE FUNCTION kansoku.require_traffic_lock() RETURNS void LANGUAGE plpgsql AS $$
+  BEGIN
+    IF NOT pg_try_advisory_xact_lock_shared(726401,1)
+       OR EXISTS(SELECT 1 FROM kansoku.maintenance_fence WHERE active_job IS NOT NULL) THEN
+      RAISE EXCEPTION 'analytics maintenance is active' USING ERRCODE='55000';
+    END IF;
+  END $$;
   CREATE TABLE kansoku.retention_policy (
     singleton boolean PRIMARY KEY DEFAULT true CHECK(singleton),
     days integer NOT NULL DEFAULT 0 CHECK(days>=0), cutoff timestamptz, fingerprint_cutoff timestamptz, revision bigint NOT NULL DEFAULT 0

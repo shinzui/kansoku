@@ -5,7 +5,7 @@ description: Coordinate cross-store jobs with persisted fences, protect stale wr
 docId: ADR-17
 status: Proposed
 date: 2026-10-16
-timestamp: 2026-10-16T02:47:59Z
+timestamp: 2026-10-16T03:15:08Z
 generated:
   by: process:codex
   at: 2026-10-16T02:47:59Z
@@ -36,6 +36,14 @@ job owns an administrator advisory lock, persists its identity/fence, then takes
 traffic lock and waits for admitted operations. Whole protected HTTP operations and each native
 writer insert attempt hold shared session locks. New traffic fails with retryable
 `maintenance_unavailable`; ingest CORS and operational/public-schema routes remain functional.
+Payload acceptance and diagnostic INSERTs also take shared transaction locks on their own
+PostgreSQL backend sessions. A caller's cancellation cannot release those locks while its SQL
+is still completing; try-lock admission avoids deadlock behind a waiting exclusive job. After
+exclusive admission, maintenance waits for native raw INSERTs in system.processes to finish,
+including work surviving a disconnected client. Native insertion negotiates a sample block
+before sending rows, and writer connections explicitly disable asynchronous inserts. A failed
+sixty-second drain retains the fence before discovery or mutation.
+
 A bounded twenty-session nonblocking libpq pool admits without waiting, bounds connection
 initialization to three seconds, and bounds lock/status/unlock exchanges to 500ms. Failed or
 cancelled sessions are disposed. Cleanup must not emit a second HTTP response after success.
