@@ -1,6 +1,7 @@
 # Bundle Update Log
 
 ## 2026-10-16
+* **Update**: Add ADR-20: custom metric definitions compiled under builtin safety rules and bounded AND-of-OR filter groups.
 * **Update**: Clarify ADR-4 with the explicit funnel attribution declaration scope and missing-value other grouping exception from ADR-15.
 * **Update**: Extend ADR-6 and ADR-15 with any-order earliest windows, nonoverlapping attempt totals and per-step property attribution.
 * **Update**: ADR-9: record bounded deterministic paths, reverse traversal, route collapse and exact top-K folding.

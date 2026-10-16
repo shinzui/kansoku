@@ -1,6 +1,6 @@
 module Kansoku.Metrics.FilterIntegrationSpec (spec) where
 
-import ClickHaskell (ChString, ClickHaskell, Column, Connection, Select, closeConnection, command, select, unsafeMkSelect)
+import ClickHaskell (ChString, ClickHaskell, Column, Connection, Float64, Select, closeConnection, command, select, unsafeMkSelect)
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (cancel, waitCatch, withAsync)
 import Control.Exception (bracket, bracket_)
@@ -56,11 +56,30 @@ spec = describe "Kansoku.Metrics filters native" $ do
             total pool countMetric request {Query.filters = [input]} `shouldReturn` expected
         )
         cases
+      -- Independent SQL resolves the fixture's known cookie->U binding and
+      -- counts the union of two event names, without using the metric compiler.
+      let reference :: Select '[Column "value" Float64] ReferenceUnique
+          reference = unsafeMkSelect (const "SELECT toFloat64(uniqExactIf(if(user_id!='',user_id,'U'),user_id!='' OR anonymous_id='filter-cookie')) AS value FROM analytics.events_canonical WHERE account_id='metrics-filter-native' AND event_name IN ('metric_probe','identify') AND occurred_at>=toDateTime64('2026-07-01',3,'UTC') AND occurred_at<toDateTime64('2026-07-02',3,'UTC')")
+          twoEvents = Registry.Simple (Registry.events & #name .~ "custom" & #eventNames .~ ["metric_probe", "identify"] & #aggregation .~ Definition.UniqueCount)
+      expected <- concat <$> select reference connection pure
+      case expected of
+        [ReferenceUnique value] -> total pool twoEvents request `shouldReturn` value
+        _ -> expectationFailure "reference unique-count query must return one value"
       total pool countMetric request `shouldReturn` 9
       total pool sumMetric request `shouldReturn` 13.5
       total pool averageMetric request `shouldReturn` 2.7
       plan <- filterValue "prop:plan" "in" (Just (Aeson.toJSON (["pro", "enterprise"] :: [Text])))
       total pool sumMetric request {Query.filters = [plan]} `shouldReturn` 12
+      alternatives <- either (fail . Text.unpack) pure (Filter.parseMetricFilter "prop:plan:eq:pro|prop:plan:eq:enterprise")
+      total pool countMetric request {Query.filters = [alternatives]} `shouldReturn` 2
+      total pool sumMetric request {Query.filters = [alternatives]} `shouldReturn` 12
+      let component aggregation property = Registry.events & #name .~ "custom" & #eventNames .~ ["metric_probe"] & #aggregation .~ aggregation & #aggregationProperty .~ property
+          ratio numerator denominator = Registry.Ratioed (Definition.RatioMetric "custom_ratio" Nothing numerator denominator)
+          ratioReq = request {Query.timeGrain = Nothing}
+      total pool (ratio (component Definition.Sum (Just "amount")) (component Definition.Count Nothing)) ratioReq `shouldReturn` 1.5
+      total pool (ratio (component Definition.Average (Just "amount")) (component Definition.Count Nothing)) ratioReq >>= (`shouldSatisfy` (\actual -> abs (actual - 0.3) < 1e-12))
+      let selectedDef = component Definition.Count Nothing & #filters .~ ["prop:plan:eq:pro|prop:plan:eq:enterprise"]
+      total pool (ratio selectedDef (component Definition.Count Nothing)) ratioReq `shouldReturn` (2 / 9)
       let users = Registry.Simple Registry.activeUsers
       total pool users request `shouldReturn` 8
       present <- filterValue "source" "set" Nothing
@@ -146,6 +165,10 @@ spec = describe "Kansoku.Metrics filters native" $ do
       populate "metrics-budget-preparation" "identify" "concat('budget-cookie-',toString(number))"
       runEff (Query.run registry pool (Registry.Simple Registry.activeUsers) request {Query.accountId = AccountId "metrics-budget-preparation"}) `shouldReturn` Left Query.QueryResourceLimit
       total pool countMetric request `shouldReturn` 9
+
+newtype ReferenceUnique = ReferenceUnique {value :: Double}
+  deriving stock (Generic)
+  deriving anyclass (ClickHaskell '[Column "value" Float64])
 
 newtype CreateRow = CreateRow {statement :: ByteString}
   deriving stock (Generic)

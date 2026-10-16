@@ -20,11 +20,11 @@ validateCohort def = do
   validateDefinition def
   mapM_
     ( \c -> do
-        unless (all (not . T.isPrefixOf "user:" . F.dimension) (filters c)) (Left "user: conditions belong in traits")
+        unless (all (not . T.isPrefixOf "user:" . F.dimension) (concatMap F.filterTerms (filters c))) (Left "user: conditions belong in traits")
         void (Filters.compileMetricFilters defaultRegistry [EventName (fromMaybe "" (did c <|> didNot c))] (filters c))
     )
     (conditions def)
-  unless (all (T.isPrefixOf "user:" . F.dimension) (traits def)) (Left "traits require governed user: dimensions")
+  unless (all (T.isPrefixOf "user:" . F.dimension) (concatMap F.filterTerms (traits def))) (Left "traits require governed user: dimensions")
   void (Filters.compileMetricFilters defaultRegistry [] (traits def))
 
 compileMembership :: Text -> Day -> CohortDefinition -> Either Text Membership
@@ -42,7 +42,7 @@ compileMembership ident toDay def = do
     else do
       compiled <- traverse (compileCondition prefix toDay) (zip [1 :: Int ..] (conditions def))
       traitFilters <- Filters.compileMetricFiltersWithPrefix (key "_trait") defaultRegistry [] (traits def)
-      let traitSource = Traits.eventSource (Traits.referencedTraits (map F.dimension (traits def))) (source (param "_universe_from") (param "_to"))
+      let traitSource = Traits.eventSource (Traits.referencedTraits (map F.dimension (concatMap F.filterTerms (traits def)))) (source (param "_universe_from") (param "_to"))
           traitPredicate = ["canonical_user IN (SELECT canonical_user FROM " <> traitSource <> " WHERE account_id={account_id:String} AND canonical_user!='' AND " <> T.intercalate " AND " (Filters.predicates traitFilters) <> ")" | not (null (traits def))]
       pure (Membership ("(startsWith(canonical_user,'user:') AND " <> T.intercalate " AND " (map fst compiled <> traitPredicate) <> ")") (concatMap snd compiled <> Filters.parameters traitFilters <> [bind "_universe_from" "1970-01-01", bind "_to" (T.pack (show toDay))]) cohortSince)
 

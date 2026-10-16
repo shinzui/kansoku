@@ -220,7 +220,7 @@ compileAcquisition registry measure req = do
       source = if resolved then rawResolvedSource (retainedScope req) else "analytics.events_canonical"
       aggregate = if measure == AcquisitionUsers then "uniqExactIf(primary_subject,primary_subject!='')" else "count()"
       predicates = [timestampPredicate req] <> ["NOT is_bot" | not (req ^. #includeBots)] <> Filters.predicates filters
-      sessions = if resolved || any isPropertyDimension grouping || any (Text.isPrefixOf "prop:" . WireFilter.dimension) (req ^. #filters) then sessionProjection source resolved else materializedSessionProjection
+      sessions = if resolved || any isPropertyDimension grouping || any (Text.isPrefixOf "prop:" . WireFilter.dimension) (concatMap WireFilter.filterTerms (req ^. #filters)) then sessionProjection source resolved else materializedSessionProjection
       sql =
         Text.unlines
           [ "SELECT " <> bucketExpr (req ^. #timeGrain) <> " AS bucket," <> groupProjection grouping <> ",toFloat64(" <> aggregate <> ") AS value",
@@ -444,7 +444,7 @@ attributionLimits _ _ = Right ()
 experimentSelection :: QueryRequest -> Either QueryCompileError ([GroupDimension], Filters.CompiledFilters)
 experimentSelection req = do
   unless
-    (all (\d -> Text.isPrefixOf "user:" d || d == "cohort" || Text.isPrefixOf "cohort:" d) (fromMaybe [] (req ^. #groupBy) <> map WireFilter.dimension (req ^. #filters)))
+    (all (\d -> Text.isPrefixOf "user:" d || d == "cohort" || Text.isPrefixOf "cohort:" d) (fromMaybe [] (req ^. #groupBy) <> map WireFilter.dimension (concatMap WireFilter.filterTerms (req ^. #filters))))
     (Left (QueryCompileFilterError "experiment selection supports only governed user: dimensions"))
   grouping <- requestGrouping req defaultRegistry [] (req ^. #groupBy) []
   predicates <- first QueryCompileFilterError (requestFilters req "metric_filter" defaultRegistry [] (req ^. #filters))
@@ -703,9 +703,11 @@ compileMetric registry metric req = case metric of
     common <- first QueryCompileFilterError (requestFilters req "metric_filter" registry scope (req ^. #filters))
     numeratorInputs <- definitionFilters (ratio ^. #numerator)
     denominatorInputs <- definitionFilters (ratio ^. #denominator)
-    numeratorFilters <- first QueryCompileFilterError (Filters.compileMetricFiltersWithPrefix "numerator_filter" registry (definitionEvents (ratio ^. #numerator)) numeratorInputs)
-    denominatorFilters <- first QueryCompileFilterError (Filters.compileMetricFiltersWithPrefix "denominator_filter" registry (definitionEvents (ratio ^. #denominator)) denominatorInputs)
-    pure CompiledMetric {sql = buildRatioSQL ratio grouping (Filters.predicates common) (Filters.predicates numeratorFilters) (Filters.predicates denominatorFilters) req, groupLabels = map dimensionLabel grouping, filterParameters = Filters.parameters common <> Filters.parameters numeratorFilters <> Filters.parameters denominatorFilters, ordering = BucketDimensions}
+    numeratorFilters <- first QueryCompileFilterError (requestFilters req "numerator_filter" registry (definitionEvents (ratio ^. #numerator)) numeratorInputs)
+    denominatorFilters <- first QueryCompileFilterError (requestFilters req "denominator_filter" registry (definitionEvents (ratio ^. #denominator)) denominatorInputs)
+    numeratorAggregate <- ratioAggregate registry (ratio ^. #numerator) "numerator_event_name" (Filters.predicates numeratorFilters)
+    denominatorAggregate <- ratioAggregate registry (ratio ^. #denominator) "denominator_event_name" (Filters.predicates denominatorFilters)
+    pure CompiledMetric {sql = buildRatioSQL numeratorAggregate denominatorAggregate ratio grouping (Filters.predicates common) (req & #filters .~ (req ^. #filters <> numeratorInputs <> denominatorInputs)), groupLabels = map dimensionLabel grouping, filterParameters = Filters.parameters common <> Filters.parameters numeratorFilters <> Filters.parameters denominatorFilters, ordering = BucketDimensions}
 
 -- Two-step conversion shares the selected-chain count contract. Group ownership
 -- is fixed at the earliest eligible signup_started, even when a later attempt wins.
@@ -723,13 +725,13 @@ compileSimpleMetric registry def req = do
   defaults <- definitionFilters def
   let inputs = defaults <> req ^. #filters
       scope = Filters.filteredEventScope (definitionEvents def) (req ^. #filters)
-  grouping <- requestGrouping req registry scope (req ^. #groupBy) (map ("prop:" <>) (def ^. #groupBy))
+  grouping <- requestGrouping req registry scope (req ^. #groupBy) (def ^. #groupBy)
   compiled <- first QueryCompileFilterError (requestFilters req "metric_filter" registry scope inputs)
   compiledSQL <- buildSimpleSQL registry grouping (Filters.predicates compiled) def req
   pure CompiledMetric {sql = compiledSQL, groupLabels = map dimensionLabel grouping, filterParameters = Filters.parameters compiled, ordering = BucketDimensions}
 
 definitionFilters :: MetricDefinition -> Either QueryCompileError [MetricFilter]
-definitionFilters def = first QueryCompileFilterError (traverse (\(name, operand) -> WireFilter.mkMetricFilter ("prop:" <> name) WireFilter.FilterEq (Just operand)) (Map.toList (def ^. #filters)))
+definitionFilters def = first QueryCompileFilterError (traverse WireFilter.parseMetricFilter (def ^. #filters))
 
 buildSimpleSQL :: EventRegistry -> [GroupDimension] -> [Text] -> MetricDefinition -> QueryRequest -> Either QueryCompileError Text
 buildSimpleSQL registry grouping predicates def req
@@ -750,7 +752,7 @@ buildSimpleSQL registry grouping predicates def req
 -- | The private relation bounds canonical candidate facts before expansion;
 -- evidence remains available across all retained history for this account.
 queryTraits :: QueryRequest -> [Text]
-queryTraits req = Traits.referencedTraits (fromMaybe [] (req ^. #groupBy) <> map WireFilter.dimension (req ^. #filters))
+queryTraits req = Traits.referencedTraits (fromMaybe [] (req ^. #groupBy) <> map WireFilter.dimension (concatMap WireFilter.filterTerms (req ^. #filters)))
 
 hasUserTraits :: QueryRequest -> Bool
 hasUserTraits req = not (null (queryTraits req)) || not (null (cohorts req))
@@ -766,20 +768,35 @@ rawResolvedSource req =
     <> sqlString (renderDay (req ^. #to) <> " 00:00:00")
     <> ",3,'UTC'))"
 
-buildRatioSQL :: RatioMetric -> [GroupDimension] -> [Text] -> [Text] -> [Text] -> QueryRequest -> Text
-buildRatioSQL RatioMetric {numerator, denominator} grouping predicates numeratorFilters denominatorFilters req =
+ratioAggregate :: EventRegistry -> MetricDefinition -> Text -> [Text] -> Either QueryCompileError Text
+ratioAggregate registry def prefix filters = do
+  let predicate = Text.intercalate " AND " (eventNamePredicate prefix (validatedEventNames def) : filters)
+  case aggregation def of
+    Count -> pure ("uniqExactIf(event_id," <> predicate <> ")")
+    UniqueCount -> pure ("uniqExactIf(canonical_user,(canonical_user != '') AND " <> predicate <> ")")
+    Sum -> numeric "sumIf" predicate
+    Average -> numeric "avgIf" predicate
+    Ratio -> Left (QueryCompileFilterError "nested ratios are unsupported")
+  where
+    numeric function predicate = do
+      name <- maybe (Left (QueryCompileMissingAggregationProperty (def ^. #name))) Right (def ^. #aggregationProperty)
+      property <- first QueryCompilePropertyError (resolveNumericProperty registry (definitionEvents def) name)
+      let expression = propertyFloatExpr property
+          condition = "isNotNull(" <> expression <> ") AND (" <> predicate <> ")"
+      pure ("if(countIf(" <> condition <> ")=0,0.," <> function <> "(" <> expression <> "," <> condition <> "))")
+
+buildRatioSQL :: Text -> Text -> RatioMetric -> [GroupDimension] -> [Text] -> QueryRequest -> Text
+buildRatioSQL numeratorAggregate denominatorAggregate RatioMetric {numerator, denominator} grouping predicates req =
   let numeratorPredicate = eventNamePredicate "numerator_event_name" (validatedEventNames numerator)
       denominatorPredicate = eventNamePredicate "denominator_event_name" (validatedEventNames denominator)
-      conditional base extra = Text.intercalate " AND " (base : extra)
       bucket = maybe "''" (bucketExpr . Just) (req ^. #timeGrain)
    in Text.unlines
         [ "SELECT bucket,group_key,sort_group_1,sort_group_2,if(denominator = 0, 0, numerator / denominator) AS value",
           "FROM ( SELECT " <> bucket <> " AS bucket, " <> groupProjection grouping <> ",",
-          "      toFloat64(uniqExactIf(canonical_user, " <> conditional numeratorPredicate numeratorFilters <> ")) AS numerator,",
-          "      toFloat64(uniqExactIf(canonical_user, " <> conditional denominatorPredicate denominatorFilters <> ")) AS denominator",
+          "      toFloat64(" <> numeratorAggregate <> ") AS numerator,",
+          "      toFloat64(" <> denominatorAggregate <> ") AS denominator",
           "    FROM " <> resolvedSource req,
           "    WHERE " <> accountPredicate,
-          "      AND canonical_user != ''",
           "      AND (" <> numeratorPredicate <> " OR " <> denominatorPredicate <> ")",
           "      AND " <> timestampPredicate req <> propertyFilterClause predicates,
           if null grouping && isNothing (req ^. #timeGrain) then "" else "GROUP BY bucket,sort_group_1,sort_group_2",
@@ -835,7 +852,7 @@ compileSessions measure req = do
   let days = diffDays (req ^. #to) (req ^. #from)
   unless (days > 0 && days <= maxQueryDays) (Left (QueryCompileFilterError "session calendar requires a positive range of at most 366 days"))
   when
-    (any (Text.isPrefixOf "prop:" . WireFilter.dimension) (req ^. #filters))
+    (any (Text.isPrefixOf "prop:" . WireFilter.dimension) (concatMap WireFilter.filterTerms (req ^. #filters)))
     (Left (QueryCompileFilterError "arbitrary property filters are unsupported on sessions; select session attributes"))
   when
     (any (Text.isPrefixOf "prop:") (fromMaybe [] (req ^. #groupBy)))
@@ -1014,7 +1031,7 @@ funnelPrefix Just {} = "experiment_funnel_step"
 compileFunnel :: EventRegistry -> QueryRequest -> Maybe SqlName -> FunnelOptions -> Int -> [SqlName] -> Either QueryCompileError CompiledMetric
 compileFunnel registry req experiment options window steps = do
   unless (isNothing (req ^. #timeGrain)) (Left (QueryCompileFilterError "timeGrain is unsupported for funnels"))
-  when (options ^. #mode == FunnelStrict && any (\f -> not (Text.isPrefixOf "user:" (WireFilter.dimension f) || WireFilter.dimension f == "cohort")) (req ^. #filters)) (Left (QueryCompileFilterError "strict funnels do not support event filters; interruptions must remain visible"))
+  when (options ^. #mode == FunnelStrict && any (\f -> not (Text.isPrefixOf "user:" (WireFilter.dimension f) || WireFilter.dimension f == "cohort")) (concatMap WireFilter.filterTerms (req ^. #filters))) (Left (QueryCompileFilterError "strict funnels do not support event filters; interruptions must remain visible"))
   case attributionLimits steps (options ^. #attribution) of
     Left (QueryLimitError _ detail) -> Left (QueryCompileFilterError detail)
     Right () -> pure ()
@@ -1376,7 +1393,7 @@ requestFilters :: QueryRequest -> String -> EventRegistry -> [EventName] -> [Met
 requestFilters req prefix registry scope = Filters.compileFiltersWith prefix (cohortDimension req "canonical_user" (resolveDimension registry scope)) . normalizeCohortFilters
 
 normalizeCohortFilters :: [MetricFilter] -> [MetricFilter]
-normalizeCohortFilters = map normalize
+normalizeCohortFilters = map (WireFilter.mapFilterTerms normalize)
   where
     normalize input
       | WireFilter.dimension input == "cohort",

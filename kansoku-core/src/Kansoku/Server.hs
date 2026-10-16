@@ -49,6 +49,7 @@ import Kansoku.Ingest.Handler (ingestServer)
 import Kansoku.Ingest.Service (IngestService, ingestRequestContext, newIngestService)
 import Kansoku.Logging (Log, logError, logInfo, runLogStderr)
 import Kansoku.Maintenance (MaintenancePool, MaintenanceUnavailable (..), withTraffic)
+import Kansoku.Metrics.DefinitionHandler (definitionsServer)
 import Kansoku.Metrics.Handler (metricsServerWithCohorts)
 import Kansoku.Observability (PipelineMetrics)
 import Kansoku.Prelude
@@ -100,6 +101,7 @@ kansokuServer pgPool settings service queryPool =
   KansokuAPI
     { ingest = ingestServer service,
       metrics = metricsServerWithCohorts pgPool queryPool,
+      metricDefinitions = definitionsServer pgPool,
       cohorts = cohortsServer settings pgPool queryPool,
       schemas = pure (schemaCatalog defaultRegistry)
     }
@@ -125,6 +127,7 @@ maintenanceTraffic pool app request respond
       "v1" : name : _ -> name `elem` ["events", "batch", "beacon"]
       "metrics" : _ : _ -> True
       "cohorts" : _ -> True
+      "metric-definitions" : _ -> True
       _ -> False
 
 -- | Production assembly with independently injectable checks. The conformance kit

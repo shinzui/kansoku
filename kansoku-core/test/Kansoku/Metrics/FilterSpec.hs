@@ -21,6 +21,21 @@ import Web.HttpApiData (toUrlPiece)
 
 spec :: Spec
 spec = describe "Kansoku.Metrics filters" $ do
+  it "compiles bounded OR groups with independent bindings and preserves safe event scope" $ do
+    input <- validFilter "prop:plan:eq:pro|prop:plan:eq:enterprise"
+    Filter.parseMetricFilter (toUrlPiece input) `shouldBe` Right input
+    compiled <- either (fail . Text.unpack) pure (Compile.compileMetricFilters defaultRegistry [EventName "payment_completed"] [input])
+    map snd (Compile.parameters compiled) `shouldBe` ["pro", "enterprise"]
+    length (Compile.predicates compiled) `shouldBe` 1
+    Text.unlines (Compile.predicates compiled) `shouldSatisfy` Text.isInfixOf " OR "
+    let groups n = Text.intercalate "|" (replicate n "source:eq:web")
+    Filter.parseMetricFilter (groups 8) `shouldSatisfy` isRight
+    traverse_ (\raw -> Filter.parseMetricFilter raw `shouldSatisfy` isLeft) [groups 9, "source:eq:web|", "source:eq:a|b", "{\"or\":[{\"or\":[{\"dimension\":\"source\",\"op\":\"set\"}]}]}"]
+    restricted <- validFilter "event_name:eq:payment_completed|event_name:eq:feature_used"
+    Compile.filteredEventScope [] [restricted] `shouldBe` [EventName "payment_completed", EventName "feature_used"]
+    mixed <- validFilter "event_name:eq:payment_completed|source:eq:web"
+    Compile.filteredEventScope [] [mixed] `shouldBe` []
+
   it "roundtrips every operator and arbitrary scalar text through URL JSON" $ do
     let inputs =
           [ "{\"dimension\":\"source\",\"op\":\"eq\",\"value\":\"web\"}",
@@ -103,6 +118,9 @@ spec = describe "Kansoku.Metrics filters" $ do
     let req endpoint query = defaultRequest {pathInfo = [], rawPathInfo = Text.encodeUtf8 ("/metrics/" <> endpoint), queryString = query}
         encoded = Just (Text.encodeUtf8 (toUrlPiece input))
     validateMetricRequest (req "events" [("filter", encoded), ("filter", encoded)]) `shouldBe` Right ()
+    validateMetricRequest (req "custom" [("events", Just "payment_completed"), ("aggregation", Just "count")]) `shouldBe` Right ()
+    validateMetricRequest (req "custom" [("filter", Just "source:eq:a|b")]) `shouldSatisfy` isLeft
+    validateMetricRequest (req "custom" [("typo", Just "a")]) `shouldSatisfy` isLeft
     validateMetricRequest (req "funnel" [("groupBy", Just "source"), ("exclude", Just "a"), ("exclude", Just "a")]) `shouldBe` Right ()
     traverse_
       (\candidate -> validateMetricRequest candidate `shouldSatisfy` isLeft)

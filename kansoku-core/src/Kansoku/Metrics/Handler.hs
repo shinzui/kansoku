@@ -29,6 +29,9 @@ import Kansoku.Event (AccountId, defaultRegistry)
 import Kansoku.Exception (trySynchronous)
 import Kansoku.Logging (logError, runLogStderr)
 import Kansoku.Metrics.Api (AcquisitionMeasure (..), CohortMode (..), ExperimentMeasure (..), FunnelAttribution (..), FunnelCounting (..), FunnelMeasure (..), FunnelMode (..), MetricResult, MetricsRoutes (..), PathBy (..), RetentionMode (..), SessionMeasure (..), TimeGrain (..), UserWindow (..))
+import Kansoku.Metrics.Custom
+import Kansoku.Metrics.Definition
+import Kansoku.Metrics.DefinitionStore qualified as DefinitionStore
 import Kansoku.Metrics.Filter (MetricFilter)
 import Kansoku.Metrics.Filter qualified as Filter
 import Kansoku.Metrics.Query qualified as Query
@@ -61,7 +64,7 @@ metricsServerUsing pg pool =
       lifecycle = lifecycleHandler,
       revenue = metricHandler "revenue",
       organizations = notImplemented "organizations",
-      custom = notImplemented "custom",
+      custom = customHandler,
       experiments = experimentsHandler,
       experimentConversion = experimentConversionHandler,
       experimentFunnel = experimentFunnelHandler
@@ -74,6 +77,38 @@ metricsServerUsing pg pool =
         Just metric ->
           metricEffToHandler
             (withCohorts pg (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain filters) (\request -> Query.run defaultRegistry pool metric request))
+
+    customHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> [MetricFilter] -> Maybe Text -> Maybe Text -> Maybe Text -> Maybe Text -> Maybe Text -> Maybe Text -> Handler (KansokuResult MetricResult)
+    customHandler (MetricsPrincipal principal) fromDay toDay group grain filters savedName events aggregation property denominatorEvents denominatorAggregation =
+      withDateRange fromDay toDay $ case savedName of
+        Nothing -> either invalid execute (adHocDefinition events aggregation property denominatorEvents denominatorAggregation)
+        Just name
+          | any isJust [events, aggregation, property, denominatorEvents, denominatorAggregation] -> invalid "metric cannot be combined with ad-hoc definition parameters"
+          | otherwise -> case pg of
+              Nothing -> pure (KansokuUnavailable (unavailable "metric_store_unavailable" "metric definition store unavailable"))
+              Just store -> do
+                loaded <- liftIO (DefinitionStore.loadByName store (principal ^. #accountId) name)
+                case loaded of
+                  Left _ -> pure (KansokuUnavailable (unavailable "metric_store_unavailable" "metric definition store unavailable"))
+                  Right Nothing -> pure (KansokuNotFound (notFound "metric_not_found" "metric does not exist in this account"))
+                  Right (Just value) -> execute (value ^. #definition)
+      where
+        invalid message = pure (KansokuBadRequest (badRequest "invalid_metric" message))
+        execute definition = case validateCustom defaultRegistry definition >> customRequest definition (queryRequest (principal ^. #accountId) fromDay toDay group grain filters) of
+          Left message | any (`Text.isPrefixOf` message) ["at most eight filters", "decoded filters"] -> pure (KansokuBadRequest (badRequest "invalid_filter" message))
+          Left message -> invalid message
+          Right request -> do
+            let extras = case definition of
+                  CustomSimple _ -> Right []
+                  CustomRatio ratio -> traverse Filter.parseMetricFilter ((ratio ^. #numerator . #filters) <> (ratio ^. #denominator . #filters))
+            case extras of
+              Left message -> invalid message
+              Right componentFilters -> effToHandler $
+                withCohorts pg request {Query.filters = Query.filters request <> componentFilters} $ \loaded -> do
+                  result <- Query.run defaultRegistry pool (customBuiltin definition) loaded {Query.filters = Query.filters request}
+                  pure $ case result of
+                    Left (Query.QueryCompileFailure failure) | Query.queryCompileErrorCode failure /= "invalid_filter" -> Left (Query.QueryLimitFailure (QueryLimitError "invalid_metric" (Query.queryCompileErrorMessage failure)))
+                    _ -> fmap (\value -> value & #metric .~ customName definition) result
 
     webMetricHandler :: Text -> MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> [MetricFilter] -> Maybe Bool -> Handler (KansokuResult MetricResult)
     webMetricHandler key (MetricsPrincipal principal) fromDay toDay groupBy timeGrain filters bots =
@@ -342,7 +377,7 @@ withExclusions raw action = case traverse mkSqlName raw of
 
 withCohorts :: Maybe Pool.Pool -> Query.QueryRequest -> (Query.QueryRequest -> Eff '[IOE] (Either Query.QueryExecutionError MetricResult)) -> Eff '[IOE] (Either Query.QueryExecutionError MetricResult)
 withCohorts pg request action = do
-  let references = nub ([ident | input <- Query.filters request, Filter.dimension input == "cohort", Just (Aeson.String ident) <- [Filter.value input]] <> [ident | label <- fromMaybe [] (Query.groupBy request), Just ident <- [Text.stripPrefix "cohort:" label]])
+  let references = nub ([ident | input <- concatMap Filter.filterTerms (Query.filters request), Filter.dimension input == "cohort", Just (Aeson.String ident) <- [Filter.value input]] <> [ident | label <- fromMaybe [] (Query.groupBy request), Just ident <- [Text.stripPrefix "cohort:" label]])
       load ident = case (pg, UUID.fromText ident) of
         (_, Nothing) -> pure (Left (Query.QueryCompileFailure (Query.QueryCompileFilterError "invalid cohort id")))
         (Nothing, _) -> pure (Left (Query.QueryStorageFailure "cohort store unavailable"))

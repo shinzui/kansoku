@@ -3,13 +3,17 @@ module Kansoku.Metrics.Definition
   ( Aggregation (..),
     MetricDefinition (..),
     RatioMetric (..),
+    CustomDefinition (..),
+    SavedMetric (..),
+    parseAggregationText,
+    customName,
   )
 where
 
-import Data.Aeson (Value)
 import Data.Aeson qualified as Aeson
-import Data.Map.Strict (Map)
+import Data.Aeson.KeyMap qualified as KeyMap
 import Data.Text qualified as Text
+import Data.UUID (UUID)
 import Kansoku.Metrics.Api (TimeGrain)
 import Kansoku.Prelude
 
@@ -47,7 +51,7 @@ data MetricDefinition = MetricDefinition
     eventNames :: ![Text],
     aggregation :: !Aggregation,
     aggregationProperty :: !(Maybe Text),
-    filters :: !(Map Text Value),
+    filters :: ![Text],
     groupBy :: ![Text],
     timeGrain :: !(Maybe TimeGrain)
   }
@@ -60,5 +64,33 @@ data RatioMetric = RatioMetric
     numerator :: !MetricDefinition,
     denominator :: !MetricDefinition
   }
+  deriving stock (Generic, Eq, Show)
+  deriving anyclass (FromJSON, ToJSON)
+
+-- | Untagged wire union: a simple definition, or numerator/denominator definitions.
+data CustomDefinition = CustomSimple !MetricDefinition | CustomRatio !RatioMetric
+  deriving stock (Generic, Eq, Show)
+
+instance ToJSON CustomDefinition where
+  toJSON (CustomSimple x) = toJSON x
+  toJSON (CustomRatio x) = toJSON x
+
+instance FromJSON CustomDefinition where
+  parseJSON value =
+    Aeson.withObject
+      "metric definition"
+      ( \o -> do
+          let ratio = KeyMap.member "numerator" o || KeyMap.member "denominator" o
+              allowed = if ratio then ["name", "description", "numerator", "denominator"] else ["name", "description", "eventNames", "aggregation", "aggregationProperty", "filters", "groupBy", "timeGrain"]
+          unless (all (`elem` allowed) (KeyMap.keys o)) (fail "unexpected or mixed metric definition fields")
+          if ratio then CustomRatio <$> Aeson.parseJSON value else CustomSimple <$> Aeson.parseJSON value
+      )
+      value
+
+customName :: CustomDefinition -> Text
+customName (CustomSimple MetricDefinition {name}) = name
+customName (CustomRatio RatioMetric {name}) = name
+
+data SavedMetric = SavedMetric {id :: !UUID, definition :: !CustomDefinition, createdAt :: !UTCTime, updatedAt :: !UTCTime}
   deriving stock (Generic, Eq, Show)
   deriving anyclass (FromJSON, ToJSON)

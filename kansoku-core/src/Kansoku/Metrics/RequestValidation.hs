@@ -40,11 +40,12 @@ validateMetricRequest request = case allowedParameters requestPath of
 
 allowedParameters :: [Text] -> Maybe [Text]
 allowedParameters = \case
+  ["metrics", "custom"] -> Just ["from", "to", "groupBy", "timeGrain", "filter", "metric", "events", "aggregation", "property", "denominatorEvents", "denominatorAggregation"]
   ["metrics", "acquisition"] -> Just ["from", "to", "groupBy", "timeGrain", "filter", "measure", "includeBots"]
   ["metrics", "users"] -> Just ["from", "to", "groupBy", "timeGrain", "filter", "window", "includeBots"]
   ["metrics", endpoint] | endpoint `elem` ["page-views", "stickiness", "lifecycle"] -> Just ["from", "to", "groupBy", "timeGrain", "filter", "includeBots"]
   ["metrics", endpoint]
-    | endpoint `elem` ["events", "feature-adoption", "conversion", "revenue", "organizations", "custom"] ->
+    | endpoint `elem` ["events", "feature-adoption", "conversion", "revenue", "organizations"] ->
         Just ["from", "to", "groupBy", "timeGrain", "filter"]
   ["metrics", "sessions"] -> Just ["from", "to", "groupBy", "timeGrain", "filter", "measure", "includeBots"]
   ["metrics", "paths"] -> Just ["from", "to", "start", "end", "steps", "top", "window", "events", "exclude", "by", "filter"]

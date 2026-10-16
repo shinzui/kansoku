@@ -36,10 +36,13 @@ compileMetricFiltersWithPrefix prefix registry scope = compileFiltersWith prefix
 compileFiltersWith :: String -> (Text -> Either DimensionError GroupDimension) -> [Wire.MetricFilter] -> Either Text CompiledFilters
 compileFiltersWith prefix resolve inputs = do
   filters <- Wire.validateMetricFilters inputs
-  compiled <- traverse compileOne (zip [1 :: Int ..] filters)
+  compiled <- traverse compileGroup (zip [1 :: Int ..] filters)
   pure (CompiledFilters (map fst compiled) (concatMap snd compiled))
   where
-    compileOne (index, input) = do
+    compileGroup (index, input) = do
+      compiled <- traverse (\(position, term) -> compileOne (show index <> if length (Wire.filterTerms input) == 1 then "" else "_or_" <> show position) term) (zip [1 :: Int ..] (Wire.filterTerms input))
+      pure ("(" <> Text.intercalate " OR " (map fst compiled) <> ")", concatMap snd compiled)
+    compileOne index input = do
       dimension <- first dimensionErrorMessage (resolve (Wire.dimension input))
       let expression = dimensionExpr dimension
           kind = dimensionType dimension
@@ -48,7 +51,7 @@ compileFiltersWith prefix resolve inputs = do
             Just operand -> [operand]
             Nothing -> []
       traverse_ (compatible kind) operands
-      let bindings = zipWith (\position operand -> (parameterName prefix index position, operandText operand)) [1 :: Int ..] operands
+      let bindings = zipWith (\position operand -> (prefix <> "_" <> index <> "_" <> show position, operandText operand)) [1 :: Int ..] operands
           placeholders = [parameter kind name | (name, _) <- bindings]
           comparison operator = case placeholders of
             [placeholder] -> Right ("coalesce((" <> expression <> " " <> operator <> " " <> placeholder <> "), false)", bindings)
@@ -71,9 +74,6 @@ compileFiltersWith prefix resolve inputs = do
     compatible ScalarBool (Aeson.Bool _) = Right ()
     compatible _ _ = Left "filter operand does not match the declared dimension type"
 
-parameterName :: String -> Int -> Int -> String
-parameterName prefix index position = prefix <> "_" <> show index <> "_" <> show position
-
 parameter :: ScalarType -> String -> Text
 parameter kind name =
   let placeholder = "{" <> Text.pack name <> ":String}"
@@ -95,8 +95,10 @@ filteredEventScope declared inputs =
     [] -> declared
     firstScope : rest -> foldl intersect (if null declared then firstScope else declared `intersect` firstScope) rest
   where
-    positive = [nub (map EventName values) | input <- inputs, Wire.dimension input == "event_name", Just values <- [positiveValues input]]
-    positiveValues input = case (Wire.op input, Wire.value input) of
-      (Wire.FilterEq, Just (Aeson.String value)) -> Just [value]
-      (Wire.FilterIn, Just (Aeson.Array values)) -> traverse (\case Aeson.String value -> Just value; _ -> Nothing) (toList values)
-      _ -> Nothing
+    positive = [nub (concat scopes) | input <- inputs, Just scopes <- [traverse positiveValues (Wire.filterTerms input)]]
+    positiveValues input
+      | Wire.dimension input /= "event_name" = Nothing
+      | otherwise = case (Wire.op input, Wire.value input) of
+          (Wire.FilterEq, Just (Aeson.String value)) -> Just [EventName value]
+          (Wire.FilterIn, Just (Aeson.Array values)) -> traverse (\case Aeson.String value -> Just (EventName value); _ -> Nothing) (toList values)
+          _ -> Nothing

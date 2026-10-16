@@ -217,7 +217,9 @@ spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
 expectedServedPaths :: [Text]
 expectedServedPaths =
   List.sort
-    [ "/cohorts",
+    [ "/metric-definitions",
+      "/metric-definitions/{id}",
+      "/cohorts",
       "/cohorts/{id}",
       "/cohorts/{id}/members",
       "/cohorts/{id}/size",
@@ -250,7 +252,12 @@ operationalPaths = ["/health/live", "/health/ready", "/health", "/ready", "/inte
 
 expectedOperationIds :: [(Text, Text, Text)]
 expectedOperationIds =
-  [ ("/cohorts", "get", "getCohorts"),
+  [ ("/metric-definitions", "get", "getMetricDefinitions"),
+    ("/metric-definitions", "post", "postMetricDefinitions"),
+    ("/metric-definitions/{id}", "get", "getMetricDefinitionsId"),
+    ("/metric-definitions/{id}", "put", "putMetricDefinitionsId"),
+    ("/metric-definitions/{id}", "delete", "deleteMetricDefinitionsId"),
+    ("/cohorts", "get", "getCohorts"),
     ("/cohorts", "post", "postCohorts"),
     ("/cohorts/{id}", "get", "getCohortsId"),
     ("/cohorts/{id}", "put", "putCohortsId"),
@@ -308,9 +315,9 @@ operationIdentity (path, method, operation) =
 assertStatuses :: OperationValue -> Expectation
 assertStatuses (path, method, operation) = do
   let actual = List.sort (Key.toText <$> KeyMap.keys (objectAt ["responses"] operation))
-      success = if method == "post" && not ("/cohorts" `Text.isPrefixOf` path) then "202" else "200"
+      success = if method == "post" && not ("/cohorts" `Text.isPrefixOf` path || "/metric-definitions" `Text.isPrefixOf` path) then "202" else "200"
       authStatuses
-        | "/metrics/" `Text.isPrefixOf` path || "/cohorts" `Text.isPrefixOf` path || path == "/v1/beacon" = ["401", "403"]
+        | "/metrics/" `Text.isPrefixOf` path || "/metric-definitions" `Text.isPrefixOf` path || "/cohorts" `Text.isPrefixOf` path || path == "/v1/beacon" = ["401", "403"]
         | otherwise = ["401"]
       expected
         | path == "/v1/schemas" = ["200", "405", "406", "413", "500"]
@@ -339,7 +346,7 @@ assertSecurity (path, _method, operation) =
     ("/v1/schemas", securityValue) ->
       expectationFailure ("public schema operation unexpectedly secured: " <> show securityValue)
     (_, Just (Aeson.Array requirements))
-      | "/metrics/" `Text.isPrefixOf` path || "/cohorts" `Text.isPrefixOf` path ->
+      | "/metrics/" `Text.isPrefixOf` path || "/metric-definitions" `Text.isPrefixOf` path || "/cohorts" `Text.isPrefixOf` path ->
           requirements `shouldSatisfy` any (containsObjectKey "serviceToken")
       | otherwise ->
           requirements `shouldSatisfy` any (containsObjectKey "writeKey")
@@ -404,7 +411,7 @@ assertRouted manager port path = do
 expectedStatus :: Text -> Status
 expectedStatus path
   | path `elem` ["/v1/events", "/v1/batch", "/v1/beacon"] = status202
-  | path `elem` ["/metrics/organizations", "/metrics/custom"] = status404
+  | path `elem` ["/metrics/organizations"] = status404
   | otherwise = status200
 
 requestForPath :: HTTP.Manager -> Warp.Port -> Text -> IO (HTTP.Response BSL.ByteString)
@@ -520,4 +527,4 @@ containsFailedCheck expectedName expectedObserved = \case
 
 -- These two Relay endpoints use the released pagination 400 JSON exemption.
 isRelayPage :: Text -> Text -> Bool
-isRelayPage path method = method == "get" && path `elem` ["/cohorts", "/cohorts/{id}/members"]
+isRelayPage path method = method == "get" && path `elem` ["/metric-definitions", "/cohorts", "/cohorts/{id}/members"]

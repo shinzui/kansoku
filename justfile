@@ -149,3 +149,7 @@ cohorts-acceptance: build-with-tests
 # Own a scratch ClickHouse and verify bounded paths, page flows and reverse traversal.
 paths-acceptance: build-with-tests
     python3 scripts/paths-acceptance.py
+
+# Own disposable stores and verify custom metrics and saved definitions.
+custom-metrics-acceptance: build-with-tests
+    python3 scripts/custom_metrics_acceptance.py

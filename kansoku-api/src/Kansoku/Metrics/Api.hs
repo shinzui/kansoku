@@ -237,7 +237,7 @@ instance ToHttpApiData ExperimentMeasure where
   toUrlPiece ExperimentDiagnostics = "diagnostics"
 
 type MetricParameters result =
-  Description "Every metric requires a positive half-open from/to range of at most 366 days and returns at most 10000 complete points. groupBy accepts one or two distinct dimensions: event_name, source, source_service, host, route, enrichment/acquisition fields prop:<declared scalar property>, or current user:<governed trait>. Repeated filter parameters are AND-combined JSON objects with dimension/op/value (omit value for set/unset): at most 8 filters, 100 in values, 1024 UTF-8 bytes per string and 16384 decoded bytes combined. Missing/null values are unset; comparisons including neq do not match unset values. Group keys keep full dimension names and null differs from an empty string. Unsupported parameters are errors. See the documented route matrix."
+  Description "Every metric requires a positive half-open from/to range of at most 366 days and returns at most 10000 complete points. groupBy accepts one or two distinct dimensions: event_name, source, source_service, host, route, enrichment/acquisition fields prop:<declared scalar property>, or current user:<governed trait>. Repeated filter parameters are AND-combined JSON terms, JSON {or:[term,...]} groups, or shorthand dimension:op:value terms separated by | for OR (literal | requires JSON; omit value for set/unset): at most 8 groups of at most 8 terms, 100 in values, 1024 UTF-8 bytes per string and 16384 decoded bytes combined. Missing/null values are unset; comparisons including neq do not match unset values. Group keys keep full dimension names and null differs from an empty string. Unsupported parameters are errors. See the documented route matrix."
     :> MetricArguments result
 
 type MetricArguments result =
@@ -255,7 +255,7 @@ type MetricQuery = MetricParameters MetricResponse
 type WebMetricQuery = MetricParameters (QueryParam "includeBots" Bool :> MetricResponse)
 
 type SessionQuery =
-  Description "Whole retained web sessions keyed by account/source_service/nonempty session_id; assemble before selecting the start date or UTC bucket. Defaults: measure=count, day grain, no grouping, includeBots=false. bounce_rate is exactly one page_view and no engagement divided by all selected sessions; lifecycle/identity/exposure events are not engagement. average_duration_seconds includes every selected session, including zero-duration visits, and measures last minus first observed event including page_leave. Attribute grouping/filters select first page_view, else earliest event; entry_page/exit_page come from page views. Arbitrary prop: filters/grouping are rejected. Any bot event excludes the whole session unless includeBots=true. Empty ungrouped buckets return zero; nonexistent groups are omitted. One/two dimensions, at most 8 AND filters (100 in values, 1024 UTF-8 bytes per string, 16384 decoded bytes), positive half-open range at most 366 days, at most 10000 complete points. Late arrivals and retained-history changes can change start/attribution/duration."
+  Description "Whole retained web sessions keyed by account/source_service/nonempty session_id; assemble before selecting the start date or UTC bucket. Defaults: measure=count, day grain, no grouping, includeBots=false. bounce_rate is exactly one page_view and no engagement divided by all selected sessions; lifecycle/identity/exposure events are not engagement. average_duration_seconds includes every selected session, including zero-duration visits, and measures last minus first observed event including page_leave. Attribute grouping/filters select first page_view, else earliest event; entry_page/exit_page come from page views. Arbitrary prop: filters/grouping are rejected. Any bot event excludes the whole session unless includeBots=true. Empty ungrouped buckets return zero; nonexistent groups are omitted. One/two dimensions, at most 8 AND filter groups with up to 8 OR terms each (100 in values, 1024 UTF-8 bytes per string, 16384 decoded bytes), positive half-open range at most 366 days, at most 10000 complete points. Late arrivals and retained-history changes can change start/attribution/duration."
     :> MetricArguments (QueryParam "measure" SessionMeasure :> QueryParam "includeBots" Bool :> MetricResponse)
 
 type UserQuery =
@@ -326,7 +326,7 @@ data MetricsRoutes mode = MetricsRoutes
     lifecycle :: mode :- MetricsAuth :> "metrics" :> "lifecycle" :> DailyActivityQuery,
     revenue :: mode :- MetricsAuth :> "metrics" :> "revenue" :> MetricQuery,
     organizations :: mode :- MetricsAuth :> "metrics" :> "organizations" :> MetricQuery,
-    custom :: mode :- MetricsAuth :> "metrics" :> "custom" :> MetricQuery,
+    custom :: mode :- MetricsAuth :> "metrics" :> "custom" :> MetricParameters (QueryParam "metric" Text :> QueryParam "events" Text :> QueryParam "aggregation" Text :> QueryParam "property" Text :> QueryParam "denominatorEvents" Text :> QueryParam "denominatorAggregation" Text :> MetricResponse),
     experiments ::
       mode
         :- MetricsAuth

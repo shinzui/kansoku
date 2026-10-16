@@ -171,7 +171,7 @@ def verify_cohorts(base, write_key, token, other_token, erase_user=None, large_u
     print('Cohorts: CRUD, validation, account isolation, all metric families, negative/trait membership, replay, static replacement, bidirectional pagination passed.',flush=True)
 
 
-def main():
+def main(verify=verify_cohorts):
     from contextlib import contextmanager
     import time
     import signal
@@ -237,9 +237,10 @@ def main():
                         (ROOT/'cohort-erasure.log').write_text(result.stdout+result.stderr)
                         result.check_returncode()
                         assert json.loads(result.stdout)['stage']=='complete'
-                    verify_cohorts(base,*tokens,erase_user=erase_user,large_upload=True)
-                    print('Cohort static member erasure: passed.',flush=True)
-    print('Private cohort evidence: '+str(ROOT),flush=True)
+                    verify(base,*tokens,erase_user=erase_user,large_upload=True)
+                    if verify is verify_cohorts:
+                        print('Cohort static member erasure: passed.',flush=True)
+    print('Private resource evidence: '+str(ROOT),flush=True)
 
 
 if __name__=='__main__': main()

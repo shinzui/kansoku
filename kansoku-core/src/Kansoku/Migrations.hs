@@ -36,7 +36,8 @@ kansokuApplicationMigrations = do
   acceptance <- sqlMigration "0003-accepted-events" acceptanceSql
   maintenance <- sqlMigration "0004-maintenance" maintenanceSql
   cohorts <- sqlMigration "0005-cohorts" cohortsSql
-  migrationComponent "kansoku" (Set.singleton "pgmq") (apiKeys :| [rejections, acceptance, maintenance, cohorts])
+  definitions <- sqlMigration "0006-metric-definitions" metricDefinitionsSql
+  migrationComponent "kansoku" (Set.singleton "pgmq") (apiKeys :| [rejections, acceptance, maintenance, cohorts, definitions])
 
 apiKeysSql :: ByteString
 apiKeysSql =
@@ -184,4 +185,16 @@ cohortsSql =
     updated_at timestamptz NOT NULL DEFAULT now(), UNIQUE(account_id,name)
   );
   CREATE INDEX cohorts_account_id ON kansoku.cohorts(account_id,id);
+  """
+
+metricDefinitionsSql :: ByteString
+metricDefinitionsSql =
+  """
+  CREATE TABLE kansoku.metric_definitions (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(), account_id text NOT NULL,
+    name text NOT NULL, definition jsonb NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE(account_id,name)
+  );
+  CREATE INDEX metric_definitions_account_id ON kansoku.metric_definitions(account_id,id);
   """

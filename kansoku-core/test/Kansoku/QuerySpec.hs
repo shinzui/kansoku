@@ -1,6 +1,5 @@
 module Kansoku.QuerySpec (spec) where
 
-import Data.Aeson qualified as Aeson
 import Data.Either (isRight)
 import Data.Foldable (traverse_)
 import Data.Map.Strict qualified as Map
@@ -230,7 +229,7 @@ spec = describe "Kansoku.Query.buildSQL" $ do
     let filteredMetric =
           revenueDefinition
             & #filters
-            .~ Map.fromList [("plan", Aeson.String "pro")]
+            .~ ["prop:plan:eq:pro"]
     buildSQL (Simple filteredMetric) dayRequest
       `shouldContainText` "{metric_filter_1_1:String}"
 

@@ -20,6 +20,13 @@ import Test.Hspec
 
 spec :: Spec
 spec = describe "Kansoku.Metrics.Handler" $ do
+  it "rejects invalid Custom definitions before forcing the query pool" $
+    Warp.testWithApplication (pure validationApplication) $ \port -> do
+      manager <- HTTP.newManager HTTP.defaultManagerSettings
+      traverse_
+        (\suffix -> assertBadRequest manager port ("/metrics/custom?from=2026-07-01&to=2026-07-02&" <> suffix) "invalid_metric" "")
+        ["events=payment_completed&aggregation=sum&property=plan", "aggregation=count", "events=bad%27name&aggregation=count", "events=payment_completed&aggregation=ratio", "metric=x&events=payment_completed"]
+
   it "rejects invalid funnel counting and attribution before storage on both routes" $
     Warp.testWithApplication (pure validationApplication) $ \port -> do
       manager <- HTTP.newManager HTTP.defaultManagerSettings
@@ -168,6 +175,7 @@ validationApplicationWithPool pool =
     sentinelContext
     Api.KansokuAPI
       { Api.ingest = sentinelIngestServer,
+        Api.metricDefinitions = error "definition routes unused in metric handler tests",
         Api.cohorts = error "cohort routes are unused in metric handler tests",
         Api.metrics = metricsServer pool,
         Api.schemas = pure (schemaCatalog defaultRegistry)

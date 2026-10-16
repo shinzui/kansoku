@@ -160,9 +160,8 @@ conversion returns a single zero when its denominator is zero.
 | `/metrics/experiments/conversion` | Exact identity-resolved exposed and post-exposure converted users per variant, plus rate. |
 | `/metrics/experiments/funnel` | Exact post-exposure funnel reach/timing per variant, including any-order, attempt totals and property attribution. |
 
-`/metrics/organizations` and `/metrics/custom` are reserved in the
-contract but not implemented. They currently return HTTP 404 with code `not_implemented`; do not
-build an integration that expects data from them.
+`/metrics/custom` computes ad-hoc or saved definitions as described below.
+`/metrics/organizations` remains reserved and returns HTTP 404 `not_implemented`.
 
 ## Standard metric example
 
@@ -563,7 +562,8 @@ current traits. Repeated references share one bounded pivot per resolved source.
 | Rolling users, stickiness, retention, lifecycle | Identical current-trait population across the full lookback. |
 | Sessions and acquisition | First resolved user of the entire retained session, before trait/date selection; all session events remain included. |
 | Experiment exposures/conversion/diagnostics | Current user selection only; selected exposures use exact resolved users, while unselected default exposures retain the raw-identity sketch. |
-| Organizations/custom | Unimplemented stubs. |
+| Custom | Event, property, cohort and current-user selection under the definition scope. |
+| Organizations | Unimplemented stub. |
 
 ```json
 {
@@ -690,3 +690,84 @@ The Haskell `cohortsClient` in `Kansoku.Client.Metrics` is derived from the serv
 record. It uses `kansokuMetricsCredential`, the cohort DTOs in `Kansoku.Cohort.Types`, and
 Relay `ClientPage` arguments. Deleting a cohort makes subsequent metric references fail
 with `cohort_not_found`, including future saved metric definitions that reference it.
+
+## OR filters
+
+Separate `filter` parameters are joined with AND. Alternatives inside one parameter
+are joined with OR. Use full terms, for example
+`filter=prop:plan:eq:pro|prop:plan:eq:enterprise`, then another filter such as
+`filter=source:eq:web` to select either plan on web events. Prefixes such as `prop:`
+and `user:` belong to the dimension. `set`/`unset` omit the last colon and operand.
+Shorthand operands parse JSON numbers/Booleans; JSON string quotes preserve numeric-looking
+text. `in` uses a JSON scalar array as its operand. A literal `|` in a shorthand value
+is ambiguous and rejected; the existing JSON form preserves arbitrary text.
+
+Typed clients can encode an OR group as
+`{"or":[{"dimension":"source","op":"eq","value":"web"},{"dimension":"source","op":"eq","value":"app"}]}`.
+Nested groups are rejected. There are at most eight terms per group, eight repeated groups,
+100 values per `in`, 1024 UTF-8 bytes per string and 16384 decoded bytes across the request.
+All terms are type checked and parameterized. A mixed OR group does not establish an event
+scope: only a group consisting entirely of positive event-name eq/in terms narrows scope.
+
+## Custom metrics
+
+`GET /metrics/custom` requires `from`, `to`, `events` (1..100 comma-separated validated
+names) and `aggregation`: `count`, `unique_count`, `sum`, `average` or `ratio`.
+Sum/average require `property`, declared numeric across every listed event/version.
+Count deduplicates event IDs; unique count uses resolved identities across all listed
+events. Event names need not be registered, but property dimensions require declarations.
+The standard filters, up to two group dimensions and time grains apply; day is the default.
+
+```bash
+curl --get "$BASE_URL/metrics/custom" -H "Authorization: Bearer $TOKEN" \
+  --data-urlencode from=2026-07-01 --data-urlencode to=2026-08-01 \
+  --data-urlencode events=payment_completed --data-urlencode aggregation=sum \
+  --data-urlencode property=amount --data-urlencode groupBy=prop:plan \
+  --data-urlencode 'filter=prop:plan:eq:pro|prop:plan:eq:enterprise'
+```
+
+For ratios, supply `denominatorEvents` and optionally `denominatorAggregation` (default
+`unique_count`). `aggregation=ratio` selects a unique-count numerator; supplying another
+aggregation with `denominatorEvents` selects that numerator aggregation. A shared `property`
+applies to whichever component uses sum/average. Ratios are unbucketed; omit `timeGrain`.
+Event-property grouping is unsupported for ratios. A zero denominator returns zero.
+Invalid definitions and unsupported aggregation combinations return 400 `invalid_metric`.
+Filters retain `invalid_filter`; date, cardinality and resource bounds retain their standard
+codes. No custom definition contains SQL, and every query uses the authenticated account.
+
+Save a simple definition with `POST /metric-definitions`:
+
+```json
+{
+  "name": "paid_revenue",
+  "description": "Revenue from paid plans",
+  "eventNames": ["payment_completed"],
+  "aggregation": "sum",
+  "aggregationProperty": "amount",
+  "filters": ["prop:plan:eq:pro|prop:plan:eq:enterprise"],
+  "groupBy": ["prop:plan"],
+  "timeGrain": "day"
+}
+```
+
+A ratio body has `name`, optional `description`, and `numerator`/`denominator` containing
+simple definitions of the same shape (each with empty groupBy and null timeGrain).
+Component filters select only that side; request filters select both sides. The name has
+1..200 characters and is unique within an account. Names are labels and cannot change
+builtin dispatch. Both simple and ratio definitions are validated on write and execution.
+
+The response wraps `id`, `definition`, `createdAt`, and `updatedAt`. Read, replace and delete
+by UUID using GET/PUT/DELETE `/metric-definitions/{id}`; a duplicate name returns
+400 `invalid_metric`. List with GET `/metric-definitions?first=20&after=<cursor>` or
+`last`/`before`. Lists use UUID keysets in canonical order, default 20 and maximum 100;
+`edges` and `pageInfo` follow the same Relay contract as cohorts. Lists are current reads.
+Missing or foreign IDs/names return 404 `metric_not_found`.
+
+Run `GET /metrics/custom?metric=paid_revenue&from=2026-07-01&to=2026-08-01`.
+Request `groupBy`/`timeGrain` override simple saved defaults. Request filters are conjoined
+with saved filters, and the combined population remains subject to the eight-group cap.
+Do not combine `metric` with ad-hoc definition parameters. Saved cohort references are
+resolved in the current account at execution time; deleting a cohort makes its references
+fail with `cohort_not_found`. Trait and cohort selection uses resolved event paths even
+for event counts and sums. The typed client exposes `Metrics.custom metricsClient` and
+`metricDefinitionsClient` from `Kansoku.Client.Metrics`.

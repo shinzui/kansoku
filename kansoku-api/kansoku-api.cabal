@@ -44,6 +44,8 @@ library
     Kansoku.Event.Validation
     Kansoku.Ingest.Api
     Kansoku.Metrics.Api
+    Kansoku.Metrics.Definition
+    Kansoku.Metrics.DefinitionApi
     Kansoku.Metrics.Filter
     Kansoku.Metrics.Limits
     Kansoku.Prelude

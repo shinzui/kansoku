@@ -35,6 +35,7 @@ import Kansoku.Event
   )
 import Kansoku.Ingest.Api (BatchAck, BeaconEnvelope, IngestAck, IngestEvent, RejectedEvent)
 import Kansoku.Metrics.Api (AcquisitionMeasure, CohortMode, ExperimentMeasure, FunnelAttribution, FunnelCounting, FunnelMeasure, FunnelMode, MetricPoint, MetricResult, PathBy, RetentionMode, SessionMeasure, TimeGrain, UserWindow)
+import Kansoku.Metrics.Definition
 import Kansoku.Metrics.Filter (FilterOp, MetricFilter)
 import Kansoku.Metrics.Limits (maxMetricPoints)
 import Kansoku.Prelude
@@ -120,7 +121,7 @@ instance O.ToParamSchema MetricFilter where
   toParamSchema _ =
     O.toParamSchema (Proxy @Text)
       & O.description
-      ?~ "A URL-decoded JSON object with dimension, op and value; set/unset omit value. Repeat filter for AND. Operators: eq, neq, in, contains, gt, lt, set, unset."
+      ?~ "A URL-decoded JSON term or {or:[term,...]} (1..8 non-nested terms), or shorthand dimension:op:value terms separated by | for OR. Repeat filter for AND (at most 8 groups, 16384 total decoded bytes). Literal | in values requires JSON. Operators: eq, neq, in, contains, gt, lt, set, unset; set/unset omit value."
 
 instance O.ToSchema MetricPoint where
   declareNamedSchema proxy = do
@@ -428,22 +429,58 @@ instance O.ToSchema CohortSize
 instance O.ToSchema MetricFilter where
   declareNamedSchema _ = do
     operator <- O.declareSchemaRef (Proxy @FilterOp)
-    pure
-      ( O.NamedSchema
-          (Just "MetricFilter")
-          ( mempty
-              & O.type_
-              ?~ O.OpenApiTypeSingle O.OpenApiObject
-              & O.required
-              .~ ["dimension", "op"]
-              & O.properties
-              .~ (mempty & at "dimension" ?~ O.Inline (O.toSchema (Proxy @Text)) & at "op" ?~ operator & at "value" ?~ O.Inline mempty)
-              & O.additionalProperties
-              ?~ O.AdditionalPropertiesAllowed False
-              & O.description
-              ?~ "JSON filter with dimension, op, and scalar value (omitted for set/unset); in accepts an array of matching scalar types."
-          )
-      )
+    let term =
+          mempty
+            & O.type_
+            ?~ O.OpenApiTypeSingle O.OpenApiObject
+            & O.required
+            .~ ["dimension", "op"]
+            & O.properties
+            .~ (mempty & at "dimension" ?~ O.Inline (O.toSchema (Proxy @Text)) & at "op" ?~ operator & at "value" ?~ O.Inline mempty)
+            & O.additionalProperties
+            ?~ O.AdditionalPropertiesAllowed False
+        alternatives =
+          mempty
+            & O.type_
+            ?~ O.OpenApiTypeSingle O.OpenApiArray
+            & O.minItems
+            ?~ 1
+            & O.maxItems
+            ?~ 8
+            & O.items
+            ?~ O.OpenApiItemsObject (O.Inline term)
+        group =
+          mempty
+            & O.type_
+            ?~ O.OpenApiTypeSingle O.OpenApiObject
+            & O.required
+            .~ ["or"]
+            & O.properties
+            .~ (mempty & at "or" ?~ O.Inline alternatives)
+            & O.additionalProperties
+            ?~ O.AdditionalPropertiesAllowed False
+    pure (O.NamedSchema (Just "MetricFilter") (mempty & O.oneOf ?~ [O.Inline term, O.Inline group]))
 
 instance O.ToSchema FilterOp where
   declareNamedSchema _ = pure (O.NamedSchema (Just "FilterOp") (O.toSchema (Proxy @Text) & O.enum_ ?~ ["eq", "neq", "in", "contains", "gt", "lt", "set", "unset"]))
+
+instance O.ToSchema Aggregation where
+  declareNamedSchema = O.genericDeclareNamedSchema O.defaultSchemaOptions {O.constructorTagModifier = \case "UniqueCount" -> "unique_count"; x -> map toLower x}
+
+instance O.ToSchema MetricDefinition where
+  declareNamedSchema proxy = do
+    named <- O.genericDeclareNamedSchema O.defaultSchemaOptions proxy
+    pure (named & O.schema . O.description ?~ "Simple custom metric: name has 1..200 characters; eventNames has 1..100 validated names; aggregation is count, unique_count, sum or average. Sum/average require a numeric aggregationProperty declared across every listed event. Filters are grammar strings: at most eight AND groups, each with up to eight OR terms and 16384 decoded UTF-8 bytes combined with request filters. groupBy uses up to two distinct full dimension names. Day is the default grain; request grouping/grain override saved defaults. No SQL is accepted.")
+
+instance O.ToSchema RatioMetric where
+  declareNamedSchema proxy = do
+    named <- O.genericDeclareNamedSchema O.defaultSchemaOptions proxy
+    pure (named & O.schema . O.description ?~ "Ratio of two simple definitions; component grouping must be empty and timeGrain null. Each side supports count, unique_count, sum or average and its own filters. Request filters apply to both sides within each population's eight-group/16384-byte budget. Ratios are unbucketed, reject event-property grouping and return zero for a zero denominator. Names are labels, never builtin dispatch keys.")
+
+instance O.ToSchema SavedMetric
+
+instance O.ToSchema CustomDefinition where
+  declareNamedSchema _ = do
+    simple <- O.declareSchemaRef (Proxy @MetricDefinition)
+    ratio <- O.declareSchemaRef (Proxy @RatioMetric)
+    pure (O.NamedSchema (Just "CustomDefinition") (mempty & O.oneOf ?~ [simple, ratio]))

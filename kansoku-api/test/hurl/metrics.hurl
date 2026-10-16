@@ -121,11 +121,11 @@ jsonpath "$.retryable" == false
 
 GET {{base_url}}/metrics/custom?from={{from}}&to={{to}}
 Authorization: Bearer {{service_token}}
-HTTP 404
+HTTP 400
 [Asserts]
 header "Content-Type" contains "application/problem+json"
-jsonpath "$.code" == "not_implemented"
-jsonpath "$.status" == 404
+jsonpath "$.code" == "invalid_metric"
+jsonpath "$.status" == 400
 jsonpath "$.retryable" == false
 
 GET {{base_url}}/metrics/events?from=2026-07-01&to=2026-07-01

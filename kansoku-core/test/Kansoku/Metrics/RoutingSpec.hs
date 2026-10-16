@@ -24,11 +24,11 @@ import Data.ByteString.Lazy qualified as BSL
 import Data.Foldable (traverse_)
 import Data.Text (Text)
 import Data.Text qualified as Text
-import Data.Time (Day)
+import Data.Time (Day, fromGregorian)
 import Data.UUID qualified as UUID
 import Kansoku.Api qualified as Api
 import Kansoku.Api.Response qualified as Response
-import Kansoku.Auth.Api (IngestAuth)
+import Kansoku.Auth.Api (IngestAuth, MetricsAuth)
 import Kansoku.Auth.Handler ()
 import Kansoku.Auth.Types
   ( ApiKeyId (..),
@@ -52,6 +52,8 @@ import Kansoku.Event
 import Kansoku.Ingest.Api qualified as Ingest
 import Kansoku.Ingest.RequestContext (emptyRequestContext)
 import Kansoku.Metrics.Api qualified as Metrics
+import Kansoku.Metrics.Definition qualified as Definition
+import Kansoku.Metrics.DefinitionApi qualified as Definition
 import Kansoku.Metrics.Filter (MetricFilter)
 import Kansoku.Server (envelopeFormatters)
 import Network.HTTP.Client qualified as HTTP
@@ -132,6 +134,22 @@ spec = describe "Kansoku analytics route dispatch" $ do
       success <- runClientM (Ingest.postBatch (Api.ingest client) credential []) (mkClientEnv manager url)
       success `shouldBe` Right (Response.KansokuOk Ingest.BatchAck {Ingest.accepted = 2, Ingest.rejected = []})
 
+  -- Generated client exercises the expanded custom signature and the untagged write body.
+  it "roundtrips Custom metrics and saved definitions through the generated client" $
+    Warp.testWithApplication (pure sentinelApplication) $ \port -> do
+      manager <- HTTP.newManager HTTP.defaultManagerSettings
+      url <- parseBaseUrl (baseUrl port)
+      let client = genericClient @Api.KansokuAPI @ClientM
+          credential = mkAuthenticatedRequest @MetricsAuth () (const id)
+          environment = mkClientEnv manager url
+          definition = Definition.CustomSimple (Definition.MetricDefinition "client" Nothing ["payment_completed"] Definition.Count Nothing [] [] Nothing)
+      result <- runClientM (Metrics.custom (Api.metrics client) credential (fromGregorian 2026 7 1) (fromGregorian 2026 7 2) Nothing Nothing [] Nothing (Just "payment_completed") (Just "count") Nothing Nothing Nothing) environment
+      result `shouldBe` Right (Response.KansokuOk (sentinelResult "custom"))
+      saved <- runClientM (Definition.createDefinition (Api.metricDefinitions client) credential definition) environment
+      case saved of
+        Right (Response.KansokuOk value) -> Definition.definition value `shouldBe` definition
+        other -> expectationFailure (show other)
+
 metricRoutes :: [(String, Text)]
 metricRoutes =
   [ ("events", "events"),
@@ -182,7 +200,7 @@ assertMetricRoute manager port (path, expected) = do
       Metrics.metric result `shouldBe` expected
 
 stubPaths :: [String]
-stubPaths = ["organizations", "custom"]
+stubPaths = ["organizations"]
 
 assertIngestRoutes :: HTTP.Manager -> Warp.Port -> Expectation
 assertIngestRoutes manager port = do
@@ -257,6 +275,7 @@ sentinelKansokuServer =
   Api.KansokuAPI
     { Api.ingest = sentinelIngestServer,
       Api.metrics = sentinelMetricsServer,
+      Api.metricDefinitions = sentinelDefinitions,
       Api.cohorts = sentinelCohorts,
       Api.schemas = pure (schemaCatalog defaultRegistry)
     }
@@ -286,7 +305,7 @@ sentinelMetricsServer =
       Metrics.lifecycle = webSentinel "lifecycle",
       Metrics.revenue = standardSentinel "revenue",
       Metrics.organizations = stubSentinel "organizations",
-      Metrics.custom = stubSentinel "custom",
+      Metrics.custom = \p f t g grain fs _ _ _ _ _ _ -> standardSentinel "custom" p f t g grain fs,
       Metrics.experiments = \principal fromDay toDay experiment grain _measure _group _filters -> metricSentinel "experiments" principal fromDay toDay experiment grain,
       Metrics.experimentConversion = experimentConversionSentinel,
       Metrics.experimentFunnel = experimentFunnelSentinel
@@ -337,3 +356,16 @@ sentinelCohorts =
     definition = Cohort.CohortDefinition "sentinel" "static" [] []
     sample input = Cohort.Cohort UUID.nil input (read "2026-07-01 00:00:00 UTC") (read "2026-07-01 00:00:00 UTC")
     emptyPage = Relay.Connection [] (Relay.PageInfo False False Nothing Nothing)
+
+sentinelDefinitions :: Definition.MetricDefinitions (AsServerT Handler)
+sentinelDefinitions =
+  Definition.MetricDefinitions
+    { Definition.createDefinition = \_ def -> pure (Response.KansokuOk (sample def)),
+      Definition.getDefinition = \_ _ -> pure (Response.KansokuOk (sample definition)),
+      Definition.listDefinitions = \_ _ -> pure (Cohort.PageOk (Relay.Connection [] (Relay.PageInfo False False Nothing Nothing))),
+      Definition.updateDefinition = \_ _ def -> pure (Response.KansokuOk (sample def)),
+      Definition.deleteDefinition = \_ _ -> pure (Response.KansokuOk True)
+    }
+  where
+    definition = Definition.CustomSimple (Definition.MetricDefinition "sample" Nothing ["payment_completed"] Definition.Count Nothing [] [] Nothing)
+    sample def = Definition.SavedMetric UUID.nil def (read "2026-07-01 00:00:00 UTC") (read "2026-07-01 00:00:00 UTC")

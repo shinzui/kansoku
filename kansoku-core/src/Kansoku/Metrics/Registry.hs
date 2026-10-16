@@ -67,7 +67,7 @@ returningUsers =
 
 featureAdoption :: MetricDefinition
 featureAdoption =
-  metric "feature_adoption" "Distinct users who used a tracked feature." ["feature_used"] UniqueCount ["feature"] (Just Day)
+  metric "feature_adoption" "Distinct users who used a tracked feature." ["feature_used"] UniqueCount ["prop:feature"] (Just Day)
 
 revenue :: MetricDefinition
 revenue =
@@ -128,7 +128,7 @@ metric name description eventNames aggregation groupBy timeGrain =
       eventNames,
       aggregation,
       aggregationProperty = Nothing,
-      filters = Map.empty,
+      filters = [],
       groupBy,
       timeGrain
     }

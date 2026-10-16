@@ -11,6 +11,7 @@ module Kansoku.Client.Metrics
     kansokuMetricsCredential,
     metricsClient,
     cohortsClient,
+    metricDefinitionsClient,
   )
 where
 
@@ -20,6 +21,7 @@ import Kansoku.Auth.Api (MetricsAuth)
 import Kansoku.Cohort.Api (Cohorts)
 import Kansoku.Metrics.Api (MetricResult, MetricsRoutes, PathBy, TimeGrain)
 import Kansoku.Metrics.Api qualified as Metrics
+import Kansoku.Metrics.DefinitionApi (MetricDefinitions)
 import Kansoku.Metrics.Filter (MetricFilter)
 import Kansoku.Prelude
 import Servant.API (NamedRoutes)
@@ -59,3 +61,6 @@ cohortsClient = ServantClient.client (Proxy @(NamedRoutes Cohorts))
 -- | Paths and page flows, derived directly from the served route.
 pathsClient :: AuthenticatedRequest MetricsAuth -> Day -> Day -> Maybe Text -> Maybe Text -> Maybe Int -> Maybe Int -> Maybe Int -> Maybe Text -> Maybe Text -> Maybe PathBy -> [MetricFilter] -> ClientM (KansokuResult MetricResult)
 pathsClient = Metrics.paths metricsClient
+
+metricDefinitionsClient :: MetricDefinitions (AsClientT ClientM)
+metricDefinitionsClient = ServantClient.client (Proxy @(NamedRoutes MetricDefinitions))
