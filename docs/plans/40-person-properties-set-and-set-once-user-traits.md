@@ -76,8 +76,11 @@ On 2026-10-16 store a decoded String/numeric Float64/type tuple in argMax/argMin
 quoted JSON strings. One shared catalog owns identify v2/identify_once v1 and user: resolution.
 Scientific 0.3.9.0 is already the resolved dependency; Mori has no corpus entry, so its current
 Hackage release and upstream v0.3.9.0 tag (commit 17870f8706ac8b99d3973bea56fcee1290d821ec)
-were verified, and source for isInteger/toRealFloat was read before use. The API now declares
-the direct >=0.3.9,<0.4 dependency for exact, finite, nonnegative integer validation.
+were verified, and source for isInteger/toRealFloat was read before use. The first packaged
+build exposed an older Scientific in the pinned Nix package set; upstream v0.3.8.0/v0.3.8.1
+source confirms the same required API and bounded normalization, so the bound supports those
+released versions as well as 0.3.9.0 without changing the package set. The API now declares
+the direct >=0.3.8,<0.4 dependency for exact, finite, nonnegative integer validation.
 
 Trait erasure owns permanent account/event-ID tombstones before clearing both state tables
 and scrubbing/deleting governed source events. Rebuilds and old raw replays exclude those IDs;
