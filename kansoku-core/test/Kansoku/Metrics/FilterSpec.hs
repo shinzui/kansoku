@@ -103,6 +103,7 @@ spec = describe "Kansoku.Metrics filters" $ do
     let req endpoint query = defaultRequest {pathInfo = [], rawPathInfo = Text.encodeUtf8 ("/metrics/" <> endpoint), queryString = query}
         encoded = Just (Text.encodeUtf8 (toUrlPiece input))
     validateMetricRequest (req "events" [("filter", encoded), ("filter", encoded)]) `shouldBe` Right ()
+    validateMetricRequest (req "funnel" [("groupBy", Just "source"), ("exclude", Just "a"), ("exclude", Just "a")]) `shouldBe` Right ()
     traverse_
       (\candidate -> validateMetricRequest candidate `shouldSatisfy` isLeft)
       [ req "events" [("typo", Just "value")],
@@ -111,7 +112,7 @@ spec = describe "Kansoku.Metrics filters" $ do
         req "events" [("filter", Nothing)],
         req "events" [("groupBy", Nothing)],
         req "sessions" [("attribution", Just "event")],
-        req "funnel" [("groupBy", Just "source")]
+        req "funnel" [("timeGrain", Just "day")]
       ]
   where
     request = Query.QueryRequest (AccountId "filters-unit") (fromGregorian 2026 7 1) (fromGregorian 2026 7 2) Nothing Nothing [] False

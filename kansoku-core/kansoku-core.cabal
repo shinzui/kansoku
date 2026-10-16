@@ -72,6 +72,7 @@ library
     Kansoku.Metrics.Query
     Kansoku.Metrics.Query.Dimension
     Kansoku.Metrics.Query.Filter
+    Kansoku.Metrics.Query.Funnel
     Kansoku.Metrics.Query.Property
     Kansoku.Metrics.Query.Session
     Kansoku.Metrics.Query.Validate
@@ -174,6 +175,8 @@ test-suite kansoku-core-test
     Kansoku.Metrics.ActivityIntegrationSpec
     Kansoku.Metrics.FilterIntegrationSpec
     Kansoku.Metrics.FilterSpec
+    Kansoku.Metrics.FunnelIntegrationSpec
+    Kansoku.Metrics.FunnelReferenceSpec
     Kansoku.Metrics.HandlerSpec
     Kansoku.Metrics.LimitsSpec
     Kansoku.Metrics.RoutingSpec

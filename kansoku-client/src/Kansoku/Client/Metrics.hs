@@ -37,13 +37,13 @@ metricsClient :: MetricsRoutes (AsClientT ClientM)
 metricsClient = ServantClient.client (Proxy @(NamedRoutes MetricsRoutes))
 
 experimentsClient :: AuthenticatedRequest MetricsAuth -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> ClientM (KansokuResult MetricResult)
-experimentsClient credential =
-  Metrics.experiments metricsClient credential
+experimentsClient credential fromDay toDay experiment grain =
+  Metrics.experiments metricsClient credential fromDay toDay experiment grain Nothing
 
 experimentConversionClient :: AuthenticatedRequest MetricsAuth -> Text -> Text -> Day -> Day -> ClientM (KansokuResult MetricResult)
 experimentConversionClient credential =
   Metrics.experimentConversion metricsClient credential
 
 experimentFunnelClient :: AuthenticatedRequest MetricsAuth -> Text -> Text -> Day -> Day -> Maybe Int -> ClientM (KansokuResult MetricResult)
-experimentFunnelClient credential =
-  Metrics.experimentFunnel metricsClient credential
+experimentFunnelClient credential experiment steps fromDay toDay window =
+  Metrics.experimentFunnel metricsClient credential experiment steps fromDay toDay window Nothing Nothing [] Nothing []

@@ -51,13 +51,13 @@ spec = describe "Kansoku.Query.buildSQL" $ do
     sql `shouldContainText` "ORDER BY bucket, sort_group_1 NULLS FIRST, sort_group_2 NULLS FIRST"
 
   it "builds conversion ratio SQL from identity-resolved users" $
-    buildSQL (Ratioed conversionRate) dayRequest
-      `shouldContainText` "if(denominator = 0, 0, numerator / denominator) AS value"
+    buildSQL (Ratioed conversionRate) wholeRangeRequest
+      `shouldContainText` "maxIf(value,sort_step=2)/maxIf(value,sort_step=1)"
 
   it "uses native ClickHouse placeholders for built-in event names" $ do
-    let sql = buildSQL (Ratioed conversionRate) dayRequest
-    sql `shouldContainText` "{numerator_event_name_1:String}"
-    sql `shouldContainText` "{denominator_event_name_1:String}"
+    let sql = buildSQL (Ratioed conversionRate) wholeRangeRequest
+    sql `shouldContainText` "{funnel_step_2:String}"
+    sql `shouldContainText` "{funnel_step_1:String}"
     sql `shouldNotContainText` "'signup_completed'"
     sql `shouldNotContainText` "'signup_started'"
 
@@ -77,16 +77,16 @@ spec = describe "Kansoku.Query.buildSQL" $ do
 
   it "builds a single-pass ordered funnel with native placeholders" $ do
     let sql = buildFunnelSQL dayRequest 604800 (sqlName <$> ["signup_started", "signup_completed"])
-    sql `shouldContainText` "windowFunnel(604800)(toDateTime(occurred_at), event_name = {funnel_step_1:String}, event_name = {funnel_step_2:String})"
-    sql `shouldContainText` "event_name IN ({funnel_step_1:String}, {funnel_step_2:String})"
-    sql `shouldContainText` "ARRAY JOIN [(1, {funnel_step_1:String}), (2, {funnel_step_2:String})] AS step"
-    sql `shouldContainText` "toFloat64(countIf(level >= step.1)) AS value"
-    sql `shouldContainText` "ORDER BY step.1"
+    sql `shouldContainText` "arrayFold((acc,j)"
+    sql `shouldContainText` "has(steps,event_name)"
+    sql `shouldContainText` "ARRAY JOIN [(1,{funnel_step_1:String}),(2,{funnel_step_2:String})] AS step"
+    sql `shouldContainText` "toFloat64(arrayCount(level->level>=step.1,levels)) AS value"
+    sql `shouldContainText` "sort_step, sort_measure"
     sql `shouldNotContainText` "UNION ALL"
 
   it "renders three funnel step indices in caller order" $
     buildFunnelSQL dayRequest 3600 (sqlName <$> ["one", "two", "three"])
-      `shouldContainText` "ARRAY JOIN [(1, {funnel_step_1:String}), (2, {funnel_step_2:String}), (3, {funnel_step_3:String})] AS step"
+      `shouldContainText` "ARRAY JOIN [(1,{funnel_step_1:String}),(2,{funnel_step_2:String}),(3,{funnel_step_3:String})] AS step"
 
   it "builds guarded experiment exposure rollup queries at daily and whole-range grains" $ do
     let experiment = sqlName "checkout_v2"
@@ -124,13 +124,13 @@ spec = describe "Kansoku.Query.buildSQL" $ do
             (sqlName "checkout_v2")
             604800
             (sqlName <$> ["checkout_started", "purchase_completed"])
-    sql `shouldContainText` "windowFunnel(604800)(toDateTime(r.occurred_at), r.event_name = {experiment_funnel_step_1:String}, r.event_name = {experiment_funnel_step_2:String})"
+    sql `shouldContainText` "arrayFold((acc,j)"
     sql `shouldContainText` "INNER JOIN exposures AS e"
-    sql `shouldContainText` "r.occurred_at >= e.first_exposure"
-    sql `shouldContainText` "r.event_name IN ({experiment_funnel_step_1:String}, {experiment_funnel_step_2:String})"
-    sql `shouldContainText` "ARRAY JOIN [(1, {experiment_funnel_step_1:String}), (2, {experiment_funnel_step_2:String})] AS step"
-    sql `shouldContainText` "toFloat64(countIf(level >= step.1)) AS value"
-    sql `shouldContainText` "ORDER BY variant, step.1"
+    sql `shouldContainText` "b.occurred_at>=e.first_exposure"
+    sql `shouldContainText` "has(steps,event_name)"
+    sql `shouldContainText` "ARRAY JOIN [(1,{experiment_funnel_step_1:String}),(2,{experiment_funnel_step_2:String})] AS step"
+    sql `shouldContainText` "toFloat64(arrayCount(level->level>=step.1,levels)) AS value"
+    sql `shouldContainText` "sort_variant NULLS FIRST"
     sql `shouldNotContainText` "checkout_v2"
     sql `shouldNotContainText` "checkout_started"
     sql `shouldNotContainText` "purchase_completed"
@@ -138,7 +138,7 @@ spec = describe "Kansoku.Query.buildSQL" $ do
 
   it "renders three experiment funnel step indices in caller order" $
     buildExperimentFunnelSQL dayRequest (sqlName "checkout_v2") 3600 (sqlName <$> ["one", "two", "three"])
-      `shouldContainText` "ARRAY JOIN [(1, {experiment_funnel_step_1:String}), (2, {experiment_funnel_step_2:String}), (3, {experiment_funnel_step_3:String})] AS step"
+      `shouldContainText` "ARRAY JOIN [(1,{experiment_funnel_step_1:String}),(2,{experiment_funnel_step_2:String}),(3,{experiment_funnel_step_3:String})] AS step"
 
   it "decodes experiment group keys into the public metric-point vocabulary" $ do
     experimentExposuresPoint (Just "2026-08-01") "[\"checkout_v2\",\"control\"]" 5
@@ -165,7 +165,7 @@ spec = describe "Kansoku.Query.buildSQL" $ do
 
   it "uses the native JSON projection for every experiment query" $
     traverse_
-      (`shouldNotContainText` "JSONExtract")
+      (`shouldNotContainText` "JSONExtractString(properties")
       [ buildExperimentExposuresSQL dayRequest (Just (sqlName "checkout_v2")),
         buildExperimentConversionSQL dayRequest (sqlName "checkout_v2") (sqlName "purchase_completed"),
         buildExperimentFunnelSQL dayRequest (sqlName "checkout_v2") 604800 (sqlName <$> ["checkout_started", "purchase_completed"])
@@ -180,7 +180,7 @@ spec = describe "Kansoku.Query.buildSQL" $ do
             buildSQL (Simple events) dayRequest,
             buildSQL (requiredMetric "new_users") dayRequest,
             buildSQL (requiredMetric "revenue") dayRequest,
-            buildSQL (Ratioed conversionRate) dayRequest,
+            buildSQL (Ratioed conversionRate) wholeRangeRequest,
             sessionSQL dayRequest,
             retentionSQL dayRequest [1, 7],
             buildFunnelSQL dayRequest 604800 (sqlName <$> ["signup_started", "signup_completed"]),
@@ -203,7 +203,7 @@ spec = describe "Kansoku.Query.buildSQL" $ do
         buildSQL (Simple events) dayRequest,
         buildSQL (requiredMetric "new_users") dayRequest,
         buildSQL (requiredMetric "revenue") dayRequest,
-        buildSQL (Ratioed conversionRate) dayRequest,
+        buildSQL (Ratioed conversionRate) wholeRangeRequest,
         sessionSQL dayRequest,
         retentionSQL dayRequest [1, 7],
         buildFunnelSQL dayRequest 604800 (sqlName <$> ["signup_started", "signup_completed"]),
@@ -220,7 +220,7 @@ spec = describe "Kansoku.Query.buildSQL" $ do
     sql `shouldContainText` "dynamicElement(getSubcolumn(properties_json, 'plan'), 'String')"
     sql `shouldContainText` "toFloat64OrNull"
     sql `shouldContainText` "isNotNull("
-    sql `shouldNotContainText` "JSONExtract"
+    sql `shouldNotContainText` "JSONExtractString(properties"
 
   it "honors feature_adoption's declared property grouping by default" $
     buildSQL (requiredMetric "feature_adoption") dayRequest

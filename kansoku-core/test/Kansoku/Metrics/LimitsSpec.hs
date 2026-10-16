@@ -130,16 +130,16 @@ spec = describe "Kansoku.Metrics.Limits" $ do
         retention <- success =<< runEff (Query.runRetention pool range [10, 2, 1])
         [(lookupGroup "cohort" (point ^. #group), lookupGroup "offset" (point ^. #group), point ^. #value) | point <- retention ^. #points]
           `shouldBe` [(Just cohort, Just offset, count) | (cohort, count) <- [("2026-07-01", 2), ("2026-07-04", 1)], offset <- ["0", "1", "2", "10"]]
-        funnel <- success =<< runEff (Query.runFunnel pool range 3600 steps)
+        funnel <- success =<< runEff (Query.runFunnel pool (range {Query.timeGrain = Nothing}) 3600 steps)
         [(lookupGroup "index" (point ^. #group), point ^. #value) | point <- funnel ^. #points]
           `shouldBe` [(Just (tshow index), 2) | index <- [1 .. 10 :: Int]]
-        experiment <- success =<< runEff (Query.runExperimentFunnel pool range (sqlName "bound_exp") 3600 steps)
+        experiment <- success =<< runEff (Query.runExperimentFunnel pool (range {Query.timeGrain = Nothing}) (sqlName "bound_exp") 3600 steps)
         [(lookupGroup "variant" (point ^. #group), lookupGroup "index" (point ^. #group), point ^. #value) | point <- experiment ^. #points]
           `shouldBe` [(Just variant, Just (tshow index), 1) | variant <- ["a", "b"], index <- [1 .. 10 :: Int]]
         -- Repeated executions must preserve both values and SQL order.
-        runEff (Query.runFunnel pool range 3600 steps) `shouldReturn` Right funnel
+        runEff (Query.runFunnel pool (range {Query.timeGrain = Nothing}) 3600 steps) `shouldReturn` Right funnel
         runEff (Query.runRetention pool range [1, 2, 10]) `shouldReturn` Right retention
-        runEff (Query.runExperimentFunnel pool range (sqlName "bound_exp") 3600 steps) `shouldReturn` Right experiment
+        runEff (Query.runExperimentFunnel pool (range {Query.timeGrain = Nothing}) (sqlName "bound_exp") 3600 steps) `shouldReturn` Right experiment
 
     it "classifies failures after disposal and propagates cancellation through real metric execution" $ withNativeFixture $ \_conn -> do
       cfg <- clickHouseConfigFromConfig <$> requireConfig

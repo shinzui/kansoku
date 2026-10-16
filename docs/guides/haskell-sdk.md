@@ -116,7 +116,7 @@ semantics.
 
 `Kansoku.Client.Metrics.metricsClient` exposes the complete generated route record. Authenticate
 each operation with `kansokuMetricsCredential` and run the resulting `ClientM` action in a `ClientEnv`.
-For example, `Metrics.events metricsClient credential fromDay toDay Nothing Nothing` supplies
+For example, `Metrics.events metricsClient credential fromDay toDay Nothing Nothing []` supplies
 the credential to the selected leaf operation (`Metrics` is `Kansoku.Metrics.Api`).
 Convenience functions are currently provided for:
 
@@ -124,6 +124,8 @@ Convenience functions are currently provided for:
 - `experimentConversionClient`
 - `experimentFunnelClient`
 
+The experiment convenience wrappers retain default exposures and sequential/count funnel behavior.
+Use the route record to select strict/timing/exclusions/grouping or diagnostics.
 These return the same typed `KansokuResult MetricResult` alternatives as the HTTP API. See
 [Query metrics](query-metrics.md) before interpreting exposure and stitched conversion counts.
 

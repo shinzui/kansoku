@@ -71,7 +71,7 @@ spec = describe "Kansoku.Metrics filters native" $ do
       insertEvents connection (reverse rows)
       total pool countMetric request `shouldReturn` 9
       total pool sumMetric request `shouldReturn` 13.5
-      let step key name user service = event key [] & #eventName .~ EventName name & #userId ?~ UserId user & #sourceService ?~ service
+      let step key name user service = event key [] & #eventName .~ EventName name & #userId ?~ UserId user & #sourceService ?~ service & #occurredAt .~ read (if name == "signup_completed" then "2026-07-01 00:00:00.001 UTC" else "2026-07-01 00:00:00 UTC")
           ratio = Registry.Ratioed Registry.conversionRate
           ratioRequest = request {Query.timeGrain = Nothing}
       insertEvents
@@ -90,7 +90,7 @@ spec = describe "Kansoku.Metrics filters native" $ do
       total pool ratio ratioRequest {Query.filters = [selected]} `shouldReturn` 0.5
       split <- query pool ratio ratioRequest {Query.groupBy = Just ["source", "source_service"]}
       [(Map.lookup "source_service" (point ^. #group), point ^. #value) | point <- split ^. #points]
-        `shouldBe` [(Just (Just "a"), 0.5), (Just (Just "b"), 2)]
+        `shouldBe` [(Just (Just "a"), 1), (Just (Just "b"), 1)]
 
   it "keeps null, empty, arbitrary Unicode and namespaced dual dimensions distinct and sorts numbers numerically" $ withNative $ \connection -> do
     seed connection

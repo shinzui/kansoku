@@ -62,7 +62,7 @@ exception to the collection pagination standard, documented in
 still follow `mori://shinzui/haskell-jitsurei/docs/api-relay-pagination`.
 
 Standard event/user/revenue routes accept `timeGrain` (`hour`, `day`, `week`, `month`),
-`groupBy` and repeatable `filter`. The default grain is day; conversion without a grain is one
+`groupBy` and repeatable `filter`. The default grain is day; ordered signup conversion rejects timeGrain and returns one
 ratio over the whole interval. `groupBy` contains one or two distinct comma-separated names:
 `event_name`, `source`, `source_service`, `host`, `route`, enrichment/acquisition dimensions
 from [web enrichment](web-enrichment.md), or `prop:<name>`.
@@ -92,26 +92,27 @@ All operand values are native parameters. Strings retain their text, Booleans re
 `true`/`false`, and numbers use native Float64 text. Numeric groups sort numerically; missing
 groups sort first. Full group keys such as `source` and `prop:source` remain distinct.
 
-Unknown/unsupported parameters return 400 `unsupported_query_parameter`. Only `filter` may
+Unknown/unsupported parameters return 400 `unsupported_query_parameter`. Only `filter` and funnel `exclude` may
 repeat; duplicate scalar parameters or missing values return `invalid_query_parameter`.
 Invalid JSON/filter grammar or incompatible filter types return `invalid_filter`.
 
 | Route | Parameters in addition to required `from`, `to` |
 | --- | --- |
-| events, feature-adoption, revenue, conversion | `groupBy`, `timeGrain`, repeatable `filter` |
+| events, feature-adoption, revenue | `groupBy`, `timeGrain`, repeatable `filter` |
 | page-views | `groupBy`, `timeGrain`, repeatable `filter`, `includeBots` (default false) |
 | acquisition | `groupBy` (default channel), `timeGrain`, repeatable session-attribute `filter`, `measure` (sessions/users), `includeBots` (default false) |
 | sessions | `groupBy`, `timeGrain`, repeatable session-attribute `filter`, `measure` (count/bounce_rate/average_duration_seconds), `includeBots` (default false) |
-| funnel | required `steps`; optional `window` |
+| conversion | `groupBy` (no prop), repeatable `filter`; timeGrain rejected |
+| funnel | required `steps`; optional `window`, `mode`, `measure`, repeatable `exclude`, `groupBy`, repeatable `filter` |
 | users | `groupBy`, `timeGrain`, repeatable `filter`, `window` (calendar/rolling7/rolling30), `includeBots` |
 | stickiness, lifecycle | `groupBy`, `timeGrain` (day only), repeatable `filter`, `includeBots` |
 | retention | `groupBy`, `timeGrain` (day only), repeatable `filter`, `days`, `mode` (on/on_or_after), `cohort` (window/lifetime), `includeBots` |
-| experiments | `experiment`, `timeGrain` (day/week/month) |
+| experiments | `experiment`, `timeGrain` (day/week/month), `measure` (exposures/diagnostics) |
 | experiments/conversion | required `experiment`, `event` |
-| experiments/funnel | required `experiment`, `steps`; optional `window` |
+| experiments/funnel | required `experiment`, `steps`; optional `window`, `mode`, `measure`, repeatable `exclude`, `groupBy`, repeatable `filter` |
 
-Session/cohort/funnel-specific filter populations are extended by their dedicated feature
-contracts; unsupported event-filter parameters currently fail explicitly on those routes.
+Session/cohort/funnel filters follow their dedicated population contracts; strict funnels reject
+event filters so that interruptions remain visible.
 `source_service` and URL `host` separate applications/properties within one account. They do
 not establish cross-origin browser identity: that also needs the SDK cookie/handoff contract.
 
@@ -147,14 +148,14 @@ conversion returns a single zero when its denominator is zero.
 | `/metrics/funnel` | Exact identity-resolved users completing ordered event steps. |
 | `/metrics/retention` | Exact closed-day on/on-or-after retention for window or retained-history lifetime cohorts, omitting immature offsets. |
 | `/metrics/feature-adoption` | Exact identity-resolved users emitting `feature_used`, grouped by its `feature` property by default. |
-| `/metrics/conversion` | Users with `signup_completed` divided by users with `signup_started`; returns 0 when the denominator is 0. |
+| `/metrics/conversion` | Ordered signup completers among starters within the bounded default window; 0 for empty denominator, always 0..1. |
 | `/metrics/users` | Exact calendar or rolling7/rolling30 active subjects, excluding profile-only and default bot rows. |
 | `/metrics/stickiness` | Exact daily active, rolling30 active and their ratio as separate numeric measures. |
 | `/metrics/lifecycle` | Nonnegative new/returning/resurrecting/dormant counts based on retained matching activity. |
 | `/metrics/revenue` | Sum of numeric `amount` on `payment_completed` events. |
-| `/metrics/experiments` | Approximate raw identities exposed per experiment and variant. |
+| `/metrics/experiments` | Approximate raw identities exposed per experiment/variant, or exact contamination and exclusive first-observed assignment diagnostics. |
 | `/metrics/experiments/conversion` | Exact identity-resolved exposed and post-exposure converted users per variant, plus rate. |
-| `/metrics/experiments/funnel` | Exact identity-resolved ordered post-exposure funnel counts per variant. |
+| `/metrics/experiments/funnel` | Exact identity-resolved selected-chain post-exposure funnel counts/timing per variant. |
 
 `/metrics/organizations` and `/metrics/custom` are reserved in the
 contract but not implemented. They currently return HTTP 404 with code `not_implemented`; do not
@@ -376,3 +377,54 @@ earlier start bucket or extend duration. These are retained-history sessions: ex
 or corrected historical facts can change their minimum and attribution after a fenced rebuild.
 The server does not invent IDs or apply a second inactivity timeout; browser SDK rotation
 controls browser sessions. Identical IDs in different source services remain separate.
+
+
+## Deterministic funnels and conversion
+
+Both `/metrics/funnel` and `/metrics/experiments/funnel` accept `mode=sequential|strict`,
+`measure=count|time_to_convert`, repeatable `exclude`, one/two `groupBy` dimensions and repeated
+JSON `filter`. Defaults are sequential/count/no exclusions. Timelines use canonical users,
+immutable event deduplication and `(occurred_at milliseconds,event_id)` ordering. One event
+cannot satisfy two repeated steps. Sequential skips intervening events; strict requires
+adjacent events, including automatic events, without an implicit repeated-event rule. Strict
+event filters return 400 because removing rows could hide interruptions.
+
+Every matching start is considered. Select greatest reach, earliest completion, earliest
+start, then event IDs. The inclusive window measures milliseconds from that start; public
+`window` remains seconds, defaulting to range length capped at 90 days. An excluded event
+between matched steps stops further reach; a later start may still qualify. Up to 20 distinct
+validated exclusions are allowed, with no step/exclusion overlap. Sequential filters select
+step rows; exclusions always remain visible. Experiment chains use only events at or after
+that user's first exposure for the variant within the range. Multi-variant users remain in
+each variant.
+
+Counts emit cumulative reach by `group.index` and `group.step`. Timing emits reached steps
+2 onward with `group.measure=p50_seconds|p90_seconds`. These are exact nearest-rank quantiles:
+sort selected-chain elapsed milliseconds/1000, select rank ceil(p*N). No reached chains means
+no timing rows. Group attributes belong to the earliest eligible first-step event, even if
+a later attempt wins. A `prop:` breakdown requires only the first-step schema; missing is null.
+Typed dimensions, numeric steps and measure names determine final ordering. Large timelines
+fail the shared resource limit instead of being truncated.
+
+`/metrics/conversion` now means ordered signup conversion: denominator = canonical users with
+signup_started; numerator = those starters with a valid subsequent signup_completed within
+the range and default window capped at 90 days. Completion-only and completion-before-start
+users do not convert. Empty denominator yields zero; the ratio stays in [0,1]. Group ownership
+is the earliest eligible start. timeGrain and prop grouping return explicit 400 errors.
+
+## Exposure diagnostics
+
+`/metrics/experiments?measure=diagnostics` uses exact resolved users; default `measure=exposures`
+retains the approximate raw-identity sketch. Select an optional experiment and whole-range,
+day, week or month scope. For each experiment/bucket, assign each user once to their earliest
+valid exposure ordered by millisecond time then event ID. Missing/invalid variant names do
+not enter the diagnostic population. `group.measure` contains exposed_users, multiple_exposure
+(users seeing >1 variant), and per-variant assigned_users and variant_share. Re-exposures do
+not increase assignment counts; all observed variants remain visible, including zero assignments.
+Shares sum to one for nonempty buckets. Empty buckets emit zero totals and no variant rows;
+without an experiment selection or observations, the experiment label is null.
+
+A user seeing A then B has exposed_users=1, multiple_exposure=1, assigned A=1, B=0, shares 1/0.
+Existing experiment conversion still counts that user in both observed variants. First observed
+exposure is not an authoritative randomization log. High contamination invalidates a naive
+sample-ratio interpretation; these diagnostics do not calculate significance or select winners.

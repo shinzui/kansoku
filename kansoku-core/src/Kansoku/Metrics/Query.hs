@@ -31,6 +31,11 @@ module Kansoku.Metrics.Query
     runExperimentExposures,
     runExperimentFunnel,
     runFunnel,
+    FunnelOptions (..),
+    defaultFunnelOptions,
+    runFunnelMetric,
+    buildFunnelMetricSQL,
+    runExperimentDiagnostics,
     runRetention,
     runRetentionMetric,
     runUsers,
@@ -65,7 +70,7 @@ import Data.List qualified as List
 import Data.Map.Strict qualified as Map
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
-import Data.Time (Day, addDays, dayOfWeek, diffDays, fromGregorian, getCurrentTime, toGregorian, utctDay)
+import Data.Time (Day, addDays, dayOfWeek, diffDays, fromGregorian, toGregorian, utctDay)
 import Data.Time.Format (defaultTimeLocale, formatTime)
 import Effectful (Eff, IOE, type (:>))
 import Kansoku.ClickHouse (QueryPool, queryDeadlineMicros, withIdentityQueryConnection, withMetricsQueryConnection)
@@ -76,13 +81,14 @@ import Kansoku.Event
     defaultRegistry,
   )
 import Kansoku.Exception (trySynchronous)
-import Kansoku.Metrics.Api (AcquisitionMeasure (..), CohortMode (..), MetricPoint (..), MetricResult (..), RetentionMode (..), SessionMeasure (..), TimeGrain (..), UserWindow (..))
+import Kansoku.Metrics.Api (AcquisitionMeasure (..), CohortMode (..), FunnelMeasure (..), FunnelMode (..), MetricPoint (..), MetricResult (..), RetentionMode (..), SessionMeasure (..), TimeGrain (..), UserWindow (..))
 import Kansoku.Metrics.Definition (Aggregation (..), MetricDefinition (..), RatioMetric (..))
 import Kansoku.Metrics.Filter (MetricFilter)
 import Kansoku.Metrics.Filter qualified as WireFilter
 import Kansoku.Metrics.Limits (maxMetricPoints, maxQueryDays)
 import Kansoku.Metrics.Query.Dimension
 import Kansoku.Metrics.Query.Filter qualified as Filters
+import Kansoku.Metrics.Query.Funnel qualified as Funnel
 import Kansoku.Metrics.Query.Property
   ( PropertyError (..),
     PropertyName,
@@ -147,7 +153,7 @@ data QueryExecutionError
   deriving stock (Generic, Eq, Show)
 
 -- No caller-supplied SQL may select a result ordering.
-data ResultOrder = BucketDimensions | BucketDimensionsMeasure | RetentionDimensionsOrder | BucketGroup | ExperimentExposureOrder | ExperimentConversionOrder | RetentionOrder | FunnelOrder | ExperimentFunnelOrder
+data ResultOrder = FunnelDimensionsOrder | DiagnosticOrder | BucketDimensions | BucketDimensionsMeasure | RetentionDimensionsOrder | BucketGroup | ExperimentExposureOrder | ExperimentConversionOrder | RetentionOrder | FunnelOrder | ExperimentFunnelOrder
   deriving stock (Generic)
 
 buildSQL :: EventRegistry -> BuiltinMetric -> QueryRequest -> Either QueryCompileError Text
@@ -280,15 +286,67 @@ windowDays CalendarWindow = 1
 windowDays Rolling7 = 7
 windowDays Rolling30 = 30
 
+data FunnelOptions = FunnelOptions
+  { mode :: !FunnelMode,
+    measure :: !FunnelMeasure,
+    exclusions :: ![SqlName]
+  }
+  deriving stock (Generic, Eq, Show)
+
+defaultFunnelOptions :: FunnelOptions
+defaultFunnelOptions = FunnelOptions FunnelSequential FunnelCount []
+
 runFunnel :: (IOE :> es) => QueryPool -> QueryRequest -> Int -> [SqlName] -> Eff es (Either QueryExecutionError MetricResult)
-runFunnel pool req window steps =
-  checked req (funnelLimits window steps) $
-    runSQLWith
+runFunnel pool req = runFunnelMetric defaultRegistry pool req Nothing defaultFunnelOptions
+
+runFunnelMetric :: (IOE :> es) => EventRegistry -> QueryPool -> QueryRequest -> Maybe SqlName -> FunnelOptions -> Int -> [SqlName] -> Eff es (Either QueryExecutionError MetricResult)
+runFunnelMetric registry pool req experiment requestedOptions window steps =
+  let options = requestedOptions {exclusions = List.nub (requestedOptions ^. #exclusions)}
+   in case first QueryLimitFailure (validateDateRange (req ^. #from) (req ^. #to) >> funnelLimits window steps >> exclusionLimits steps (options ^. #exclusions))
+        >> first QueryCompileFailure (compileFunnel registry req experiment options window steps) of
+        Left failure -> pure (Left failure)
+        Right compiled ->
+          liftIO $
+            runSQL
+              pool
+              (if isNothing experiment then "funnel" else "experiment_funnel")
+              (compiled ^. #groupLabels)
+              (accountParameter req <> maybe [] (pure . experimentParameter) experiment <> namedParameters (funnelPrefix experiment) steps <> namedParameters "funnel_exclude" (options ^. #exclusions) <> compiled ^. #filterParameters)
+              (boundedSQL FunnelDimensionsOrder (compiled ^. #sql))
+
+exclusionLimits :: [SqlName] -> [SqlName] -> Either QueryLimitError ()
+exclusionLimits steps excluded = do
+  unless (length (List.nub excluded) <= 20) (Left (QueryLimitError "too_many_funnel_exclusions" "at most 20 distinct exclusions are supported"))
+  unless (null [name | name <- excluded, name `elem` steps]) (Left (QueryLimitError "invalid_funnel_exclusion" "a step cannot also be excluded"))
+
+runExperimentDiagnostics :: (IOE :> es) => QueryPool -> QueryRequest -> Maybe SqlName -> Eff es (Either QueryExecutionError MetricResult)
+runExperimentDiagnostics pool req experiment =
+  checked req (unless (req ^. #timeGrain /= Just Hour) (Left (QueryLimitError "invalid_experiment_time_grain" "hour is unsupported for experiments"))) $
+    runSQL
       pool
-      "funnel"
-      funnelPoint
-      (accountParameter req <> namedParameters "funnel_step" steps)
-      (buildFunnelSQL req window steps)
+      "experiment_diagnostics"
+      ["experiment", "measure", "variant"]
+      (accountParameter req <> maybe [] (pure . experimentParameter) experiment)
+      (boundedSQL DiagnosticOrder (experimentDiagnosticsSQL req experiment))
+
+experimentDiagnosticsSQL :: QueryRequest -> Maybe SqlName -> Text
+experimentDiagnosticsSQL req experiment =
+  let bucket = maybe "''" (bucketExpr . Just) (req ^. #timeGrain)
+      calendar = if isNothing (req ^. #timeGrain) then "SELECT '' AS bucket" else sessionCalendar req
+      experiments = case experiment of
+        Just _ -> "SELECT CAST({experiment:String},'Nullable(String)') AS experiment"
+        Nothing -> "SELECT DISTINCT experiment FROM assignments UNION ALL SELECT CAST(NULL,'Nullable(String)') AS experiment WHERE NOT EXISTS(SELECT 1 FROM assignments)"
+   in Text.unlines
+        [ "WITH exposures AS (SELECT canonical_user,event_id,occurred_at," <> bucket <> " AS bucket,CAST(toString(getSubcolumn(properties_json,'experiment')),'Nullable(String)') AS experiment,CAST(toString(getSubcolumn(properties_json,'variant')),'String') AS variant FROM " <> resolvedSource req <> " WHERE " <> accountPredicate <> " AND canonical_user!='' AND " <> timestampPredicate req <> " AND " <> validExposurePredicate <> experimentFilterClause experiment <> "),",
+          "assignments AS (SELECT bucket,experiment,canonical_user,argMin(variant,tuple(occurred_at,event_id)) AS assigned,groupUniqArray(variant) AS variants FROM exposures GROUP BY bucket,experiment,canonical_user),",
+          "totals AS (SELECT bucket,experiment,toFloat64(count()) AS exposed_users,toFloat64(countIf(length(variants)>1)) AS multiple_exposure FROM assignments GROUP BY bucket,experiment),",
+          "observed_variants AS (SELECT DISTINCT bucket,experiment,arrayJoin(variants) AS variant FROM assignments),",
+          "assigned_counts AS (SELECT bucket,experiment,assigned AS variant,toFloat64(count()) AS assigned_users FROM assignments GROUP BY bucket,experiment,assigned),",
+          "variant_totals AS (SELECT observed.bucket AS bucket,observed.experiment AS experiment,observed.variant AS variant,ifNull(assigned.assigned_users,0.) AS assigned_users,totals.exposed_users AS exposed_users FROM observed_variants AS observed LEFT JOIN assigned_counts AS assigned ON observed.bucket=assigned.bucket AND observed.experiment=assigned.experiment AND observed.variant=assigned.variant INNER JOIN totals ON observed.bucket=totals.bucket AND observed.experiment=totals.experiment),",
+          "filled AS (SELECT calendar.bucket AS bucket,experiments.experiment AS experiment,ifNull(totals.exposed_users,0.) AS exposed_users,ifNull(totals.multiple_exposure,0.) AS multiple_exposure FROM (" <> calendar <> ") AS calendar CROSS JOIN (" <> experiments <> ") AS experiments LEFT JOIN totals ON calendar.bucket=totals.bucket AND isNotDistinctFrom(experiments.experiment,totals.experiment)),",
+          "answers AS (SELECT bucket,experiment,CAST(NULL,'Nullable(String)') AS variant,m.1 AS measure,m.2 AS value FROM filled ARRAY JOIN [('exposed_users',exposed_users),('multiple_exposure',multiple_exposure)] AS m UNION ALL SELECT bucket,experiment,CAST(variant,'Nullable(String)') AS variant,m.1 AS measure,m.2 AS value FROM variant_totals ARRAY JOIN [('assigned_users',assigned_users),('variant_share',if(exposed_users=0,0.,assigned_users/exposed_users))] AS m)",
+          "SELECT bucket,toJSONString([experiment,measure,variant]) AS group_key,experiment AS sort_experiment,measure AS sort_measure,variant AS sort_variant,value FROM answers"
+        ]
 
 runExperimentExposures :: (IOE :> es) => QueryPool -> QueryRequest -> Maybe SqlName -> Eff es (Either QueryExecutionError MetricResult)
 runExperimentExposures pool req experiment =
@@ -311,14 +369,7 @@ runExperimentConversion pool req experiment conversionEvent =
       (buildExperimentConversionSQL req experiment conversionEvent)
 
 runExperimentFunnel :: (IOE :> es) => QueryPool -> QueryRequest -> SqlName -> Int -> [SqlName] -> Eff es (Either QueryExecutionError MetricResult)
-runExperimentFunnel pool req experiment window steps =
-  checked req (funnelLimits window steps) $
-    runSQLWith
-      pool
-      "experiment_funnel"
-      (experimentFunnelAggPoint experiment)
-      (accountParameter req <> [experimentParameter experiment] <> namedParameters "experiment_funnel_step" steps)
-      (buildExperimentFunnelSQL req experiment window steps)
+runExperimentFunnel pool req experiment = runFunnelMetric defaultRegistry pool req (Just experiment) defaultFunnelOptions
 
 checked :: (IOE :> es) => QueryRequest -> Either QueryLimitError () -> IO (Either QueryExecutionError MetricResult) -> Eff es (Either QueryExecutionError MetricResult)
 checked req additional action =
@@ -348,6 +399,8 @@ boundedSQL order sql =
       sql,
       ")",
       "ORDER BY " <> case order of
+        FunnelDimensionsOrder -> "sort_variant NULLS FIRST, sort_group_1 NULLS FIRST, sort_group_2 NULLS FIRST, sort_step, sort_measure"
+        DiagnosticOrder -> "bucket, sort_experiment NULLS FIRST, sort_measure, sort_variant NULLS FIRST"
         BucketDimensions -> "bucket, sort_group_1 NULLS FIRST, sort_group_2 NULLS FIRST"
         BucketDimensionsMeasure -> "bucket, sort_group_1 NULLS FIRST, sort_group_2 NULLS FIRST, sort_measure"
         RetentionDimensionsOrder -> "sort_cohort, sort_group_1 NULLS FIRST, sort_group_2 NULLS FIRST, sort_offset"
@@ -414,20 +467,12 @@ defaultPoint labels AggRow {bucket, group_key, value} = do
   group <- decodeGroups labels key
   pure MetricPoint {bucket = nonEmpty bucketText, group, value}
 
-funnelPoint :: AggRow -> Either Text MetricPoint
-funnelPoint = defaultPoint ["index", "step"]
-
 experimentExposuresAggPoint :: AggRow -> Either Text MetricPoint
 experimentExposuresAggPoint = defaultPoint ["experiment", "variant"]
 
 experimentConversionAggPoint :: SqlName -> AggRow -> Either Text MetricPoint
 experimentConversionAggPoint experiment row = do
   point <- defaultPoint ["measure", "variant"] row
-  pure (point & #group %~ Map.insert "experiment" (Just (renderSqlName experiment)))
-
-experimentFunnelAggPoint :: SqlName -> AggRow -> Either Text MetricPoint
-experimentFunnelAggPoint experiment row = do
-  point <- defaultPoint ["index", "step", "variant"] row
   pure (point & #group %~ Map.insert "experiment" (Just (renderSqlName experiment)))
 
 experimentExposuresPoint :: Maybe Text -> Text -> Double -> Either Text MetricPoint
@@ -463,6 +508,7 @@ compileMetric :: EventRegistry -> BuiltinMetric -> QueryRequest -> Either QueryC
 compileMetric registry metric req = case metric of
   Simple def | def ^. #name == "sessions" -> compileSessions SessionCount req
   Simple def -> compileSimpleMetric registry def req
+  Ratioed ratio | ratio ^. #name == "conversion_rate" -> compileOrderedConversion registry req
   Ratioed ratio -> do
     let scope = Filters.filteredEventScope (definitionEvents (ratio ^. #numerator) <> definitionEvents (ratio ^. #denominator)) (req ^. #filters)
     when (any (Text.isPrefixOf "prop:") (fromMaybe [] (req ^. #groupBy))) (Left (QueryCompileUnsupportedPropertyGrouping (ratio ^. #name)))
@@ -474,6 +520,17 @@ compileMetric registry metric req = case metric of
     numeratorFilters <- first QueryCompileFilterError (Filters.compileMetricFiltersWithPrefix "numerator_filter" registry (definitionEvents (ratio ^. #numerator)) numeratorInputs)
     denominatorFilters <- first QueryCompileFilterError (Filters.compileMetricFiltersWithPrefix "denominator_filter" registry (definitionEvents (ratio ^. #denominator)) denominatorInputs)
     pure CompiledMetric {sql = buildRatioSQL ratio grouping (Filters.predicates common) (Filters.predicates numeratorFilters) (Filters.predicates denominatorFilters) req, groupLabels = map dimensionLabel grouping, filterParameters = Filters.parameters common <> Filters.parameters numeratorFilters <> Filters.parameters denominatorFilters, ordering = BucketDimensions}
+
+-- Two-step conversion shares the selected-chain count contract. Group ownership
+-- is fixed at the earliest eligible signup_started, even when a later attempt wins.
+compileOrderedConversion :: EventRegistry -> QueryRequest -> Either QueryCompileError CompiledMetric
+compileOrderedConversion registry req = do
+  unless (isNothing (req ^. #timeGrain)) (Left (QueryCompileFilterError "timeGrain is unsupported for ordered conversion"))
+  when (any (Text.isPrefixOf "prop:") (fromMaybe [] (req ^. #groupBy))) (Left (QueryCompileUnsupportedPropertyGrouping "conversion_rate"))
+  steps <- first QueryCompileFilterError (traverse mkSqlName ["signup_started", "signup_completed"])
+  compiled <- compileFunnel registry req Nothing defaultFunnelOptions (fromInteger (min 7776000 (max 1 (diffDays (req ^. #to) (req ^. #from) * 86400)))) steps
+  let sql = "SELECT '' AS bucket,dimensions AS group_key,sort_group_1,sort_group_2,if(maxIf(value,sort_step=1)=0,0.,maxIf(value,sort_step=2)/maxIf(value,sort_step=1)) AS value FROM (SELECT *,toJSONString(arraySlice(JSONExtract(group_key,'Array(Nullable(String))'),1,length(JSONExtract(group_key,'Array(Nullable(String))'))-2)) AS dimensions FROM (" <> compiled ^. #sql <> ")) GROUP BY sort_group_1,sort_group_2,dimensions"
+  pure compiled {sql, groupLabels = take (length (compiled ^. #groupLabels) - 2) (compiled ^. #groupLabels), filterParameters = namedParameters "funnel_step" steps <> compiled ^. #filterParameters, ordering = BucketDimensions}
 
 compileSimpleMetric :: EventRegistry -> MetricDefinition -> QueryRequest -> Either QueryCompileError CompiledMetric
 compileSimpleMetric registry def req = do
@@ -747,70 +804,60 @@ compileRetention registry mode cohort req offsets = do
           ]
   pure CompiledMetric {sql, groupLabels = map dimensionLabel grouping <> ["cohort", "offset"], filterParameters = Filters.parameters filters, ordering = RetentionDimensionsOrder}
 
--- | One-pass ordered funnel over identity-resolved users. Converting
--- DateTime64 to DateTime is load-bearing: windowFunnel measures its window in
--- timestamp ticks, so the conversion makes the public window unit seconds.
--- Equal timestamps may satisfy consecutive steps; repeated step names mean
--- the user performed that event repeatedly in order.
+-- | Both public routes use the same millisecond/id-ordered selected chain.
 buildFunnelSQL :: QueryRequest -> Int -> [SqlName] -> Text
-buildFunnelSQL req window steps = boundedSQL FunnelOrder (buildFunnelSQLAggregate req window steps)
+buildFunnelSQL req window steps = boundedSQL FunnelDimensionsOrder (funnelAggregate req Nothing defaultFunnelOptions window steps [] [])
 
-buildFunnelSQLAggregate :: QueryRequest -> Int -> [SqlName] -> Text
-buildFunnelSQLAggregate req window steps =
-  """
-  SELECT
-      '' AS bucket,
-      step.1 AS sort_step,
-      toJSONString([toString(step.1), step.2]) AS group_key,
-      toFloat64(countIf(level >= step.1)) AS value
-  FROM
-  (
-      SELECT
-          canonical_user,
-          windowFunnel(
-  """
-    <> Text.pack (show window)
-    <> ")(toDateTime(occurred_at), "
-    <> conditions
-    <> ") AS level\nFROM "
-    <> resolvedSource req
-    <> "\nWHERE "
-    <> accountPredicate
-    <> """
-       AND canonical_user != ''
-       AND event_name IN (
-       """
-    <> placeholders
-    <> ")\n      AND "
-    <> timestampPredicate req
-    <> """
+buildFunnelMetricSQL :: EventRegistry -> QueryRequest -> Maybe SqlName -> FunnelOptions -> Int -> [SqlName] -> Either QueryCompileError Text
+buildFunnelMetricSQL registry req experiment options window steps = boundedSQL FunnelDimensionsOrder . view #sql <$> compileFunnel registry req experiment options {exclusions = List.nub (options ^. #exclusions)} window steps
 
-           GROUP BY canonical_user
-       )
-       ARRAY JOIN [
-       """
-    <> stepTuples
-    <> """
-       ] AS step
-       GROUP BY step
-       ORDER BY step.1
-       """
-  where
-    indexedSteps = zip [1 :: Int ..] steps
-    placeholders =
-      Text.intercalate
-        ", "
-        [parameterPlaceholder "funnel_step" position | (position, _step) <- indexedSteps]
-    conditions =
-      Text.intercalate
-        ", "
-        ["event_name = " <> parameterPlaceholder "funnel_step" position | (position, _step) <- indexedSteps]
-    stepTuples =
-      Text.intercalate
-        ", "
-        [ "(" <> Text.pack (show position) <> ", " <> parameterPlaceholder "funnel_step" position <> ")"
-        | (position, _step) <- indexedSteps
-        ]
+funnelPrefix :: Maybe SqlName -> Text
+funnelPrefix Nothing = "funnel_step"
+funnelPrefix Just {} = "experiment_funnel_step"
+
+compileFunnel :: EventRegistry -> QueryRequest -> Maybe SqlName -> FunnelOptions -> Int -> [SqlName] -> Either QueryCompileError CompiledMetric
+compileFunnel registry req experiment options window steps = do
+  unless (isNothing (req ^. #timeGrain)) (Left (QueryCompileFilterError "timeGrain is unsupported for funnels"))
+  when (options ^. #mode == FunnelStrict && not (null (req ^. #filters))) (Left (QueryCompileFilterError "strict funnels do not support event filters; interruptions must remain visible"))
+  let firstScope = map (EventName . renderSqlName) (take 1 steps)
+  grouping <- requestedGrouping registry firstScope (req ^. #groupBy) []
+  filters <- first QueryCompileFilterError (Filters.compileMetricFilters registry (map (EventName . renderSqlName) steps) (req ^. #filters))
+  pure
+    CompiledMetric
+      { sql = funnelAggregate req experiment options window steps grouping (Filters.predicates filters),
+        groupLabels = map dimensionLabel grouping <> ["index", "step"] <> (if isJust experiment then ["variant", "experiment"] else []) <> ["measure" | options ^. #measure == FunnelTimeToConvert],
+        filterParameters = Filters.parameters filters,
+        ordering = FunnelDimensionsOrder
+      }
+
+funnelAggregate :: QueryRequest -> Maybe SqlName -> FunnelOptions -> Int -> [SqlName] -> [GroupDimension] -> [Text] -> Text
+funnelAggregate req experiment options window steps grouping predicates =
+  let prefix = funnelPrefix experiment
+      stepArray = "[" <> Text.intercalate "," [parameterPlaceholder prefix i | i <- [1 .. length steps]] <> "]"
+      excludeArray = if null (options ^. #exclusions) then "CAST([], 'Array(String)')" else "[" <> Text.intercalate "," [parameterPlaceholder "funnel_exclude" i | i <- [1 .. length (options ^. #exclusions)]] <> "]"
+      stepTuples = "[" <> Text.intercalate "," ["(" <> Text.pack (show i) <> "," <> parameterPlaceholder prefix i <> ")" | i <- [1 .. length steps]] <> "]"
+      eligible = if null predicates then "1" else "(" <> Text.intercalate " AND " predicates <> ")"
+      selection = if options ^. #mode == FunnelStrict then "1" else "(has(steps,event_name) AND " <> eligible <> ") OR has(excluded,event_name)"
+      source = "SELECT *," <> groupProjection grouping <> " FROM " <> resolvedSource req <> " WHERE " <> accountPredicate <> " AND canonical_user!='' AND " <> timestampPredicate req
+      exposure = "exposures AS (SELECT canonical_user,CAST(toString(getSubcolumn(properties_json,'variant')),'String') AS variant,min(occurred_at) AS first_exposure FROM base WHERE " <> validExposurePredicate <> " AND CAST(toString(getSubcolumn(properties_json,'experiment')),'String')={experiment:String} GROUP BY canonical_user,variant),"
+      timelineSource = case experiment of
+        Nothing -> "SELECT *,CAST(NULL,'Nullable(String)') AS variant FROM base WHERE " <> selection
+        Just _ -> "SELECT b.*,e.variant AS variant FROM base AS b INNER JOIN exposures AS e ON b.canonical_user=e.canonical_user WHERE b.occurred_at>=e.first_exposure AND (" <> selection <> ")"
+      timeline = "timelines AS (SELECT canonical_user,variant," <> Funnel.sortedTimelineSQL "groupArray(tuple(toInt64(toUnixTimestamp64Milli(occurred_at)),event_id,toString(event_name),sort_group_1,sort_group_2,group_key))" <> " AS timeline FROM (" <> timelineSource <> ") GROUP BY canonical_user,variant),"
+      selectedCTE = "chosen AS (SELECT *,timeline[arrayFirstIndex(event->event.3=steps[1],timeline)].4 AS sort_group_1,timeline[arrayFirstIndex(event->event.3=steps[1],timeline)].5 AS sort_group_2,timeline[arrayFirstIndex(event->event.3=steps[1],timeline)].6 AS group_key," <> Funnel.selectedChainSQL "timeline" "steps" "excluded" (Text.pack (show (toInteger window * 1000))) (if options ^. #mode == FunnelStrict then "1" else "0") <> " AS selected FROM timelines WHERE arrayExists(event->event.3=steps[1],timeline))"
+      withClause = "WITH " <> stepArray <> " AS steps," <> excludeArray <> " AS excluded,base AS (" <> source <> ")," <> (if isJust experiment then exposure else "") <> timeline <> selectedCTE
+      variantFields = if isJust experiment then ["sort_variant", "{experiment:String}"] else []
+      metadata extra = extendGroups (["toString(step.1)", "step.2"] <> variantFields <> extra)
+      grouped = not (null grouping) || isJust experiment
+      groupCols = "group_key,sort_group_1,sort_group_2,variant"
+      countAggregate = "SELECT " <> (if grouped then groupCols <> "," else "'[]' AS group_key,CAST(NULL,'Nullable(String)') AS sort_group_1,CAST(NULL,'Nullable(String)') AS sort_group_2,CAST(NULL,'Nullable(String)') AS variant,") <> "groupArray(length(selected)) AS levels FROM chosen" <> (if grouped then " GROUP BY " <> groupCols else "")
+      countSQL = "SELECT '' AS bucket," <> metadata [] <> " AS group_key,sort_group_1,sort_group_2,variant AS sort_variant,step.1 AS sort_step,'' AS sort_measure,toFloat64(arrayCount(level->level>=step.1,levels)) AS value FROM (" <> countAggregate <> ") ARRAY JOIN " <> stepTuples <> " AS step"
+      durations = "SELECT " <> groupCols <> ",step,arraySort(groupArrayIf(toFloat64(timeline[selected[step.1]].1-timeline[selected[1]].1)/1000,length(selected)>=step.1)) AS durations FROM chosen ARRAY JOIN " <> stepTuples <> " AS step WHERE step.1>=2 GROUP BY " <> groupCols <> ",step HAVING notEmpty(durations)"
+      timeSQL = "SELECT '' AS bucket," <> metadata ["quantile.1"] <> " AS group_key,sort_group_1,sort_group_2,variant AS sort_variant,step.1 AS sort_step,quantile.1 AS sort_measure,durations[toUInt64(ceil(quantile.2*length(durations)))] AS value FROM (" <> durations <> ") ARRAY JOIN [('p50_seconds',0.5),('p90_seconds',0.9)] AS quantile"
+   in withClause <> " " <> if options ^. #measure == FunnelCount then countSQL else timeSQL
+
+validExposurePredicate :: Text
+validExposurePredicate = "event_name='experiment_viewed' AND match(CAST(toString(getSubcolumn(properties_json,'experiment')),'String'),'^[a-z0-9_.:-]{1,128}$') AND match(CAST(toString(getSubcolumn(properties_json,'variant')),'String'),'^[a-z0-9_.:-]{1,128}$')"
 
 -- | Exposure sketches are daily, but merging them across days computes a set
 -- union. With no grain, a user exposed on several days therefore still counts
@@ -917,71 +964,9 @@ experimentFilterClause = \case
   Nothing -> ""
   Just _ -> "\n  AND experiment = {experiment:String}"
 
--- | Ordered per-variant funnel restricted to each user's post-exposure event
--- timeline. DateTime64 is converted to DateTime so windowFunnel's public
--- window unit remains seconds, matching the plain funnel endpoint.
+-- | Exposure gating precedes the shared chain evaluation.
 buildExperimentFunnelSQL :: QueryRequest -> SqlName -> Int -> [SqlName] -> Text
-buildExperimentFunnelSQL req experiment window steps = boundedSQL ExperimentFunnelOrder (buildExperimentFunnelSQLAggregate req experiment window steps)
-
-buildExperimentFunnelSQLAggregate :: QueryRequest -> SqlName -> Int -> [SqlName] -> Text
-buildExperimentFunnelSQLAggregate req _experiment window steps =
-  Text.unlines
-    [ "WITH exposures AS",
-      "(",
-      "    SELECT",
-      "        canonical_user,",
-      "        CAST(toString(getSubcolumn(properties_json, 'variant')), 'String') AS variant,",
-      "        min(occurred_at) AS first_exposure",
-      "    FROM " <> resolvedSource req,
-      "    WHERE canonical_user != ''",
-      "      AND " <> accountPredicate,
-      "      AND event_name = 'experiment_viewed'",
-      "      AND CAST(toString(getSubcolumn(properties_json, 'experiment')), 'String') = {experiment:String}",
-      "      AND match(CAST(toString(getSubcolumn(properties_json, 'experiment')), 'String'), '^[a-z0-9_.:-]{1,128}$')",
-      "      AND match(CAST(toString(getSubcolumn(properties_json, 'variant')), 'String'), '^[a-z0-9_.:-]{1,128}$')",
-      "      AND " <> timestampPredicate req,
-      "    GROUP BY canonical_user, variant",
-      ")",
-      "SELECT",
-      "    '' AS bucket,",
-      "    variant AS sort_variant, step.1 AS sort_step,",
-      "    toJSONString([toString(step.1), step.2, variant]) AS group_key,",
-      "    toFloat64(countIf(level >= step.1)) AS value",
-      "FROM",
-      "(",
-      "    SELECT",
-      "        e.variant AS variant,",
-      "        r.canonical_user AS canonical_user,",
-      "        windowFunnel(" <> Text.pack (show window) <> ")(toDateTime(r.occurred_at), " <> conditions <> ") AS level",
-      "    FROM " <> resolvedSource req <> " AS r",
-      "    INNER JOIN exposures AS e ON e.canonical_user = r.canonical_user",
-      "    WHERE r.canonical_user != ''",
-      "      AND r.account_id = {account_id:String}",
-      "      AND r.event_name IN (" <> placeholders <> ")",
-      "      AND r.occurred_at >= e.first_exposure",
-      "      AND " <> qualifiedTimestampPredicate "r" req,
-      "    GROUP BY e.variant, r.canonical_user",
-      ")",
-      "ARRAY JOIN [" <> stepTuples <> "] AS step",
-      "GROUP BY variant, step",
-      "ORDER BY variant, step.1"
-    ]
-  where
-    indexedSteps = zip [1 :: Int ..] steps
-    placeholders =
-      Text.intercalate
-        ", "
-        [parameterPlaceholder "experiment_funnel_step" position | (position, _step) <- indexedSteps]
-    conditions =
-      Text.intercalate
-        ", "
-        ["r.event_name = " <> parameterPlaceholder "experiment_funnel_step" position | (position, _step) <- indexedSteps]
-    stepTuples =
-      Text.intercalate
-        ", "
-        [ "(" <> Text.pack (show position) <> ", " <> parameterPlaceholder "experiment_funnel_step" position <> ")"
-        | (position, _step) <- indexedSteps
-        ]
+buildExperimentFunnelSQL req experiment window steps = boundedSQL FunnelDimensionsOrder (funnelAggregate req (Just experiment) defaultFunnelOptions window steps [] [])
 
 effectiveGrain :: MetricDefinition -> QueryRequest -> Maybe TimeGrain
 effectiveGrain MetricDefinition {timeGrain = defaultGrain} QueryRequest {timeGrain = requestedGrain} =
@@ -1055,16 +1040,6 @@ timestampPredicate req =
   "occurred_at >= "
     <> sqlString (renderDay (req ^. #from) <> " 00:00:00")
     <> " AND occurred_at < "
-    <> sqlString (renderDay (req ^. #to) <> " 00:00:00")
-
-qualifiedTimestampPredicate :: Text -> QueryRequest -> Text
-qualifiedTimestampPredicate qualifier req =
-  qualifier
-    <> ".occurred_at >= "
-    <> sqlString (renderDay (req ^. #from) <> " 00:00:00")
-    <> " AND "
-    <> qualifier
-    <> ".occurred_at < "
     <> sqlString (renderDay (req ^. #to) <> " 00:00:00")
 
 eventNameClause :: Text -> [SqlName] -> Text

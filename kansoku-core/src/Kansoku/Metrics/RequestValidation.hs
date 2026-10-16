@@ -20,10 +20,12 @@ validateMetricRequest request = case allowedParameters (decodePathSegments (rawP
     case filter (`notElem` allowed) names of
       invalid : _ -> Left ("unsupported_query_parameter", "unsupported query parameter: " <> Text.take 128 invalid)
       [] -> pure ()
-    unless (length (filter (/= "filter") names) == length (nub (filter (/= "filter") names))) $
-      Left ("invalid_query_parameter", "only filter may be repeated")
+    unless (length (filter (`notElem` ["filter", "exclude"]) names) == length (nub (filter (`notElem` ["filter", "exclude"]) names))) $
+      Left ("invalid_query_parameter", "only filter and exclude may be repeated")
     unless (all (\(name, operand) -> name == "filter" || isJust operand) query) $
       Left ("invalid_query_parameter", "query parameters require a value")
+    let exclusions = [operand | ("exclude", operand) <- query]
+    unless (length (nub exclusions) <= 20 && all (maybe False (not . BS.null)) exclusions) (Left ("invalid_funnel_exclusion", "at most 20 distinct nonempty exclusions are supported"))
     let rawFilters = [operand | ("filter", operand) <- query]
     unless (length rawFilters <= maxFilters) (Left ("invalid_filter", "at most eight filters are supported"))
     unless (sum (map (maybe 0 BS.length) rawFilters) <= maxFilterBytes) (Left ("invalid_filter", "decoded filters are limited to 16384 UTF-8 bytes"))
@@ -43,9 +45,9 @@ allowedParameters = \case
     | endpoint `elem` ["events", "feature-adoption", "conversion", "revenue", "organizations", "custom"] ->
         Just ["from", "to", "groupBy", "timeGrain", "filter"]
   ["metrics", "sessions"] -> Just ["from", "to", "groupBy", "timeGrain", "filter", "measure", "includeBots"]
-  ["metrics", "funnel"] -> Just ["from", "to", "steps", "window"]
+  ["metrics", "funnel"] -> Just ["from", "to", "steps", "window", "mode", "measure", "exclude", "groupBy", "filter"]
   ["metrics", "retention"] -> Just ["from", "to", "groupBy", "timeGrain", "filter", "days", "mode", "cohort", "includeBots"]
-  ["metrics", "experiments"] -> Just ["from", "to", "experiment", "timeGrain"]
+  ["metrics", "experiments"] -> Just ["from", "to", "experiment", "timeGrain", "measure"]
   ["metrics", "experiments", "conversion"] -> Just ["from", "to", "experiment", "event"]
-  ["metrics", "experiments", "funnel"] -> Just ["from", "to", "experiment", "steps", "window"]
+  ["metrics", "experiments", "funnel"] -> Just ["from", "to", "experiment", "steps", "window", "mode", "measure", "exclude", "groupBy", "filter"]
   _ -> Nothing

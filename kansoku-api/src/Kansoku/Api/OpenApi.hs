@@ -33,7 +33,7 @@ import Kansoku.Event
     VersionedEventSchema,
   )
 import Kansoku.Ingest.Api (BatchAck, IngestAck, IngestEvent, RejectedEvent)
-import Kansoku.Metrics.Api (AcquisitionMeasure, CohortMode, MetricPoint, MetricResult, RetentionMode, SessionMeasure, TimeGrain, UserWindow)
+import Kansoku.Metrics.Api (AcquisitionMeasure, CohortMode, ExperimentMeasure, FunnelMeasure, FunnelMode, MetricPoint, MetricResult, RetentionMode, SessionMeasure, TimeGrain, UserWindow)
 import Kansoku.Metrics.Filter (MetricFilter)
 import Kansoku.Metrics.Limits (maxMetricPoints)
 import Kansoku.Prelude
@@ -178,6 +178,15 @@ instance O.ToParamSchema UserWindow where
 
 instance O.ToParamSchema RetentionMode where
   toParamSchema _ = O.toParamSchema (Proxy @Text) & O.enum_ ?~ ["on", "on_or_after"]
+
+instance O.ToParamSchema FunnelMode where
+  toParamSchema _ = O.toParamSchema (Proxy @Text) & O.enum_ ?~ ["sequential", "strict"]
+
+instance O.ToParamSchema FunnelMeasure where
+  toParamSchema _ = O.toParamSchema (Proxy @Text) & O.enum_ ?~ ["count", "time_to_convert"]
+
+instance O.ToParamSchema ExperimentMeasure where
+  toParamSchema _ = O.toParamSchema (Proxy @Text) & O.enum_ ?~ ["exposures", "diagnostics"]
 
 instance O.ToParamSchema CohortMode where
   toParamSchema _ = O.toParamSchema (Proxy @Text) & O.enum_ ?~ ["window", "lifetime"]

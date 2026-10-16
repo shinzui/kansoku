@@ -26,6 +26,8 @@ import Kansoku.Metrics.AcquisitionIntegrationSpec qualified
 import Kansoku.Metrics.ActivityIntegrationSpec qualified
 import Kansoku.Metrics.FilterIntegrationSpec qualified
 import Kansoku.Metrics.FilterSpec qualified
+import Kansoku.Metrics.FunnelIntegrationSpec qualified
+import Kansoku.Metrics.FunnelReferenceSpec qualified
 import Kansoku.Metrics.HandlerSpec qualified
 import Kansoku.Metrics.LimitsSpec qualified
 import Kansoku.Metrics.RoutingSpec qualified
@@ -91,6 +93,8 @@ normalTests = hspec $ do
   Kansoku.Metrics.ActivityIntegrationSpec.spec
   Kansoku.Metrics.SessionIntegrationSpec.spec
   Kansoku.Metrics.FilterIntegrationSpec.spec
+  Kansoku.Metrics.FunnelReferenceSpec.spec
+  Kansoku.Metrics.FunnelIntegrationSpec.spec
   Kansoku.Metrics.HandlerSpec.spec
   Kansoku.Metrics.LimitsSpec.spec
   Kansoku.Metrics.RoutingSpec.spec

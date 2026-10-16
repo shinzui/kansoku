@@ -16,6 +16,7 @@ import uuid
 
 from ingest_acceptance import verify_ingest
 from activity_acceptance import verify_activity
+from funnel_acceptance import verify_funnels
 from enrichment_acceptance import ADDRESSES, verify_enrichment, verify_country_disabled
 from isolated_clickhouse import isolated_clickhouse, apply_migrations, free_port
 from test_support import binary, execute, hspec, probes
@@ -264,6 +265,7 @@ def main():
                                 hspec([binary('kansoku-client:test:kansoku-client-test')], env=live, log=ROOT / 'client-tests.log')
                             verify_enrichment(base, credentials['enrichment_write'], credentials['enrichment_service'])
                             verify_activity(base, credentials['enrichment_write'], credentials['enrichment_service'])
+                            verify_funnels(base, credentials['enrichment_write'], credentials['enrichment_service'])
                             for path in ('/health', '/ready', '/health/live', '/health/ready'):
                                 urllib.request.urlopen(base + path, timeout=3).close()
                             population_filter = urllib.parse.urlencode({'filter': json.dumps(dict(dimension='event_name', op='neq', value=sentinel))})

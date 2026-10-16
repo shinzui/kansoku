@@ -2,7 +2,7 @@
 type: Architecture Decision Record
 title: Exposure-based experiment analytics
 description: Define exposure-based experiment analytics using an approximate daily rollup for exposure counts and exact query-time resolution for conversion and funnels.
-timestamp: 2026-10-15T20:56:24Z
+timestamp: 2026-10-16T00:12:46Z
 generated:
   by: human:kansoku-maintainers
   at: 2026-07-19T00:00:00Z
@@ -44,17 +44,20 @@ This endpoint documents its approximate and pre-stitch identity semantics.
 Conversion and funnel endpoints read `analytics.events_resolved` at query time and count
 exact canonical users. Conversion requires a conversion event at or after the user's
 first exposure to that variant. The experiment funnel similarly ignores step events
-before first exposure and then applies the existing ordered `windowFunnel` semantics.
-Equal timestamps may satisfy the ordering constraint. A user exposed to multiple variants
+before first exposure and then applies [ADR-15](0015-deterministic-selected-funnel-chains-and-exclusive-exposure-diagnostics.md)'s
+deterministic selected-chain semantics over millisecond time and event IDs. One physical event
+cannot satisfy repeated steps. A user exposed to multiple variants
 counts in every variant observed; cross-variant exposure is retained as a data-quality
 signal rather than silently reassigned.
 
 All endpoints inherit service-token authentication and bind account and validated names
 as native ClickHouse parameters. Stored experiment and variant values are guarded by the
 same anchored name pattern before they become composite group keys. A syntactically valid
-experiment with no data returns HTTP 200 with an empty point list.
+experiment with no data returns HTTP 200 with an empty point list for exposure counts and
+conversion; diagnostics instead emit zero totals without variant rows.
 
-The API returns exposure counts, conversion counts and rates, and ordered funnel counts.
+The API returns exposure counts, conversion counts and rates, ordered funnel counts/timing,
+and exact contamination and exclusive first-observed assignment diagnostics under ADR-15.
 It does not calculate statistical significance, confidence intervals, sample-size
 adequacy, or winner recommendations.
 

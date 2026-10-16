@@ -36,7 +36,7 @@ spec = describe "Kansoku.Query integration" $ do
               propertyEvent "replay-page-1" "page_view" "replay-user" [],
               propertyEvent "replay-page-2" "page_view" "replay-user" [],
               propertyEvent "replay-start" "signup_started" "replay-user" [],
-              propertyEvent "replay-complete" "signup_completed" "replay-user" [],
+              propertyEvent "replay-complete" "signup_completed" "replay-user" [] & #occurredAt .~ read "2026-07-01 12:00:00.001 UTC",
               propertyEvent "replay-identify" "identify" "replay-user" [] & #anonymousId ?~ AnonymousId "replay-anon"
             ]
               <&> (\event -> (if event ^. #eventName == EventName "page_view" then event & #userId .~ Nothing & #anonymousId ?~ AnonymousId "replay-anon" else event) & #accountId ?~ AccountId "acct_replay" & #sessionId ?~ SessionId "replay-session" & #url ?~ "https://example.com/replay")
@@ -44,7 +44,7 @@ spec = describe "Kansoku.Query integration" $ do
       metrics <- traverse requireBuiltinMetric ["events", "revenue", "page_views", "sessions", "active_users", "conversion_rate"]
       revenue <- requireBuiltinMetric "revenue"
       average <- case revenue of Simple definition -> pure (Simple (definition & #name .~ "payment_average" & #aggregation .~ Average)); _ -> fail "expected revenue definition"
-      let snapshot pool = traverse (\metric -> runEff (Query.run defaultRegistry pool metric req) >>= expectCompiled >>= pure . sum . fmap (view #value) . view #points) (metrics <> [average])
+      let snapshot pool = traverse (\metric -> runEff (Query.run defaultRegistry pool metric (if metric == fromMaybe metric (builtinMetric "conversion_rate") then req {Query.timeGrain = Nothing} else req)) >>= expectCompiled >>= pure . sum . fmap (view #value) . view #points) (metrics <> [average])
       bracket (newQueryPool cfg 2) closeQueryPool $ \pool -> do
         bracket_ (command conn "SYSTEM STOP MERGES analytics.events_raw") (command conn "SYSTEM START MERGES analytics.events_raw") $ do
           insertEvents conn rows

@@ -23,6 +23,11 @@ provenance:
       at: 2026-10-15T15:43:15Z
       mode: "update"
       note: "Reconcile first-release APIs, domain semantics, dependencies and acceptance with the source-validated MP-5 review."
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-10-15T23:49:10Z
+      mode: "implement"
+      note: "Begin deterministic funnel reference/native parity, shared selected-chain timing and breakdown, ordered conversion and exact exposure diagnostics after EP-35 acceptance."
 ---
 
 # Funnel modes and experiment exposure diagnostics
@@ -38,7 +43,7 @@ actually sums to one without hiding multi-variant users.
 ## Progress
 
 
-- [ ] M1: Strict/sequential funnels have a deterministic reference evaluator and native parity.
+- [x] M1: Strict/sequential funnels have a deterministic reference evaluator and native parity.
 - [ ] M2: Exclusions, durations and first-touch breakdown use the same selected-chain semantics.
 - [ ] M3: Exposure diagnostics distinguish contamination from mutually exclusive assignment share.
 
@@ -50,6 +55,16 @@ strict_order cannot observe excluded rows. strict_deduplication is an additional
 synonym for strict order. Per-variant users divided by unique experiment users exceed one when
 users see multiple variants. A first-touch label must not drift to a later converting attempt.
 
+Native acceptance on the pinned ClickHouse 26.8.2.7 proves a single A can satisfy two
+windowFunnel A,A conditions. Use the common array evaluator for every mode, rather than
+maintain two subtly different algorithms. Stored millisecond values and event IDs are the
+ordering source of truth. Early owned engine startup attempts stalled even on --version;
+after startup recovered, all differential assertions executed (no skipped or fake green runs).
+
+The first diagnostic implementation scanned a subject array for every variant. The 4999-variant
+10000-point fixture hit the shared memory budget; replace it with grouped assignment counts
+and observed-variant joins, preserving zero-assignment variants without a quadratic matrix.
+
 ## Decision Log
 
 
@@ -58,10 +73,36 @@ where it proves equivalent. New diagnostics use exact resolved identities; exist
 exposure counts remain explicitly separate. Only exclusive assignment counts support a simple
 sample-ratio diagnostic.
 
+On 2026-10-16 choose exact nearest-rank p50/p90 over selected-chain elapsed milliseconds/1000,
+using ceil(p*N). Exclusions stop extension while preserving the already reached prefix; later
+starts may qualify. Empty diagnostic buckets emit zero totals without variant rows, including
+a null experiment label when no experiment is selected and none is observed. Current-trait
+population integration remains EP-40's responsibility; strict event filters are rejected.
+[ADR-15](../adr/0015-deterministic-selected-funnel-chains-and-exclusive-exposure-diagnostics.md)
+records these decisions (Proposed pending all acceptance gates).
+
+Dependency lookup used Mori's registered ClickHouse client corpus and the vendored driver;
+DateTime64 conversion stores floor(POSIX*1000), so native integer milliseconds match the
+reference. The engine itself is not registered by Mori. The pinned target is upstream
+v26.8.2.7-lts (commit c2930599c56702022276de06657ed51d83f31a05). The current authoritative
+upstream release was checked as v26.9.19.9-stable (commit
+4388bba75927a5367dc8169b667110ffefe06f98); no engine pin or dependency bound changes are needed.
+Primary upstream arrayFold examples and windowFunnel documentation were read before the
+native implementation; current-release-only modes were not assumed on the pinned engine.
+
+
 ## Outcomes & Retrospective
 
 
-Planning reviewed; randomized parity and native execution remain pending.
+M1 native/reference parity passes 1000 seeded timelines in both modes (2000 full selected-ID
+and millisecond-duration comparisons), alongside ten explicit semantic fixtures. M2/M3
+functional native cases pass, including both 10000-point boundaries and native resource
+classification (18 focused examples, zero failures). The full source gate passes 356 core
+examples, 17 client examples, four probes, regenerated contracts, strict 15-ADR validation,
+three HTTP telemetry modes and four lifecycle cases. Public packaged, SDK and expanded
+performance gates remain pending. The diagnostics cost issue is corrected with grouped
+assignment counts; no budget was raised. Private logs are under
+`.dev/acceptance/identity-validation/ep36-{native,check}.log`.
 
 ## Context and Orientation
 

@@ -1,5 +1,9 @@
 # Bundle Update Log
 
+## 2026-10-16
+* **Update**: Align ADR-6 exposure semantics with ADR-15 deterministic funnels and explicit diagnostics
+* **Update**: Add ADR-15 selected-chain funnel and exclusive exposure diagnostics contract (Proposed)
+
 ## 2026-10-15
 * **Update**: Accept ADR-14 after native, packaged public, pinned SDK and expanded ten-million-event activity performance evidence.
 * **Update**: Propose ADR-14 for exact closed-day rolling activity, retention maturity and retained-history lifecycle.

@@ -277,7 +277,7 @@ sentinelMetricsServer =
       Metrics.revenue = standardSentinel "revenue",
       Metrics.organizations = stubSentinel "organizations",
       Metrics.custom = stubSentinel "custom",
-      Metrics.experiments = metricSentinel "experiments",
+      Metrics.experiments = \principal fromDay toDay experiment grain _measure -> metricSentinel "experiments" principal fromDay toDay experiment grain,
       Metrics.experimentConversion = experimentConversionSentinel,
       Metrics.experimentFunnel = experimentFunnelSentinel
     }
@@ -294,8 +294,8 @@ sentinelMetricsServer =
     stubSentinel name _principal _fromDay _toDay _groupBy _timeGrain _filters =
       pure (Response.KansokuNotFound (Response.notFound "not_implemented" ("metric endpoint is stubbed in the MVP: " <> name)))
 
-    funnelSentinel :: MetricsPrincipal -> Day -> Day -> Text -> Maybe Int -> Handler (Response.KansokuResult Metrics.MetricResult)
-    funnelSentinel _principal _fromDay _toDay _steps _window = pure (Response.KansokuOk (sentinelResult "funnel"))
+    funnelSentinel :: MetricsPrincipal -> Day -> Day -> Text -> Maybe Int -> Maybe Metrics.FunnelMode -> Maybe Metrics.FunnelMeasure -> [Text] -> Maybe Text -> [MetricFilter] -> Handler (Response.KansokuResult Metrics.MetricResult)
+    funnelSentinel _principal _fromDay _toDay _steps _window _mode _measure _exclude _group _filters = pure (Response.KansokuOk (sentinelResult "funnel"))
 
     retentionSentinel :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe Metrics.TimeGrain -> [MetricFilter] -> Maybe Text -> Maybe Metrics.RetentionMode -> Maybe Metrics.CohortMode -> Maybe Bool -> Handler (Response.KansokuResult Metrics.MetricResult)
     retentionSentinel _principal _fromDay _toDay _group _grain _filters _days _mode _cohort _bots = pure (Response.KansokuOk (sentinelResult "retention"))
@@ -304,8 +304,8 @@ sentinelMetricsServer =
     experimentConversionSentinel _principal _experiment _event _fromDay _toDay =
       pure (Response.KansokuOk (sentinelResult "experiment-conversion"))
 
-    experimentFunnelSentinel :: MetricsPrincipal -> Text -> Text -> Day -> Day -> Maybe Int -> Handler (Response.KansokuResult Metrics.MetricResult)
-    experimentFunnelSentinel _principal _experiment _steps _fromDay _toDay _window =
+    experimentFunnelSentinel :: MetricsPrincipal -> Text -> Text -> Day -> Day -> Maybe Int -> Maybe Metrics.FunnelMode -> Maybe Metrics.FunnelMeasure -> [Text] -> Maybe Text -> [MetricFilter] -> Handler (Response.KansokuResult Metrics.MetricResult)
+    experimentFunnelSentinel _principal _experiment _steps _fromDay _toDay _window _mode _measure _exclude _group _filters =
       pure (Response.KansokuOk (sentinelResult "experiment-funnel"))
 
 sentinelResult :: Text -> Metrics.MetricResult
