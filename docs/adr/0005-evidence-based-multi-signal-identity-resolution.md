@@ -2,7 +2,7 @@
 type: Architecture Decision Record
 title: Evidence-based multi-signal identity resolution
 description: Resolve identity at query time from evidence-based multi-signal identifier bindings instead of a latest-wins cookie-to-user map.
-timestamp: 2026-10-15T19:38:22Z
+timestamp: 2026-10-16T03:24:40Z
 generated:
   by: human:kansoku-maintainers
   at: 2026-07-19T00:00:00Z
@@ -146,3 +146,8 @@ ASCII whitespace trimming, Unicode default lowercase, UTF-8 and version-prefixed
 HMAC-SHA-256 hex; no Unicode normalization/provider rewriting. Browsers receive opaque values,
 never the pepper. Legacy unkeyed hashes remain accepted but discouraged. See the ingest guide
 for the normalization/rotation contract and SDK vocabulary generation.
+
+[ADR-17](0017-fenced-resumable-administration-and-applied-retention.md) implements the fenced
+cross-store erasure/retention workflow. It discovers raw mapped values even after lookup TTL
+expiry, refreshes context keys and all current projections, and applies separate fingerprint
+cleanup without removing other kinds. Rejected diagnostics never establish erasure bindings.

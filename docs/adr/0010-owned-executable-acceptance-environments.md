@@ -5,7 +5,7 @@ description: Gate service changes with deterministic checks and required integra
 docId: ADR-10
 status: Accepted
 date: 2026-10-15
-timestamp: 2026-10-15T05:24:16Z
+timestamp: 2026-10-16T03:24:40Z
 generated:
   by: process:codex
   at: 2026-10-15T05:12:00Z
@@ -66,3 +66,9 @@ The public contracts remain owned by ADRs 1–9 rather than redefined by the har
 A deliberate Hurl status mismatch produces nonzero exit and sanitized evidence; restoring
 it permits a clean rerun. Both runs leave an unrelated listener responsive and stop all
 recorded service PIDs. Invalid packaged startup configuration fails within its watchdog.
+
+The owned packaged gate also requires seven administrative scenario families, including
+transaction rollback/concurrency, backend write draining, failed-job resume, retained writer
+payloads, old native-block replay, independent fingerprint cleanup and raw/rollup agreement.
+It records and stops CLI/server processes and keeps sensitive command evidence outside the
+sanitized log set. Required configured SDK helper cases run in each telemetry mode.

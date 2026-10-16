@@ -3,9 +3,9 @@ type: Architecture Decision Record
 title: Fenced resumable administration and applied retention
 description: Coordinate cross-store jobs with persisted fences, protect stale writer batches with permanent event dispositions, replay archives transactionally, and rebuild current projections under one applied retention cutoff.
 docId: ADR-17
-status: Proposed
+status: Accepted
 date: 2026-10-16
-timestamp: 2026-10-16T03:15:08Z
+timestamp: 2026-10-16T03:24:40Z
 generated:
   by: process:codex
   at: 2026-10-16T02:47:59Z
@@ -107,4 +107,5 @@ Other accounts' facts survive account-scoped erasure, while global retention int
 to every account. Future newly generated events can establish new observations. Backups and
 manual database restoration require operator policy, including retained tombstones and cutoffs;
 the tool cannot find unknown personal values embedded in arbitrary JSON. Owned source, packaged
-CLI and ordinary public workflow acceptance are required before Accepted.
+CLI and ordinary public workflow acceptance pass, including seven non-skipped administrative
+scenario families, backend-lifetime fencing and native old-block replay under retention.

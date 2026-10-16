@@ -2,7 +2,7 @@
 type: Architecture Decision Record
 title: API-key authentication and account-scoped analytics
 description: Require write-key or service-token bearer authentication on ingest and metrics routes, scoped to an account, via SHA-256-hashed credentials.
-timestamp: 2026-10-15T03:43:15Z
+timestamp: 2026-10-16T03:24:40Z
 generated:
   by: human:kansoku-maintainers
   at: 2026-07-19T00:00:00Z
@@ -94,3 +94,7 @@ Authentication failures use the RFC 9457 schema and `application/problem+json`, 
 body; the public schema catalog stays unauthenticated. See
 [ADR-8](0008-rfc9457-problem-details-and-generated-client-media.md) for the coordinated
 server/client migration and the distinction between typed handler results and pre-handler failures.
+
+The shipped administrative key issue/list/revoke commands and immediate revocation proof are
+recorded in [ADR-17](0017-fenced-resumable-administration-and-applied-retention.md). The server
+issue-key alias shares the same issuance implementation; listings expose metadata without hashes.

@@ -48,11 +48,11 @@ and prevent queue/archive replay from undoing deletion.
 ## Progress
 
 
-- [ ] M1: Key issue/list/revoke works through the packaged kansoku-admin executable.
-- [ ] M2: Resumable account-scoped erasure covers raw, derived, queued and quarantined data.
-- [ ] M3: Retention applies consistently to canonical facts and dependent aggregates.
-- [ ] M4: Transactional archive replay is safe across crashes and repeated invocations.
-- [ ] M5: Bounded rejection inspection and manual purge complement automatic expiry.
+- [x] M1: Key issue/list/revoke works through the packaged kansoku-admin executable.
+- [x] M2: Resumable account-scoped erasure covers raw, derived, queued and quarantined data.
+- [x] M3: Retention applies consistently to canonical facts and dependent aggregates.
+- [x] M4: Transactional archive replay is safe across crashes and repeated invocations.
+- [x] M5: Bounded rejection inspection and manual purge complement automatic expiry.
 
 ## Surprises & Discoveries
 
@@ -111,22 +111,31 @@ families plus required SDK cases, but the final-candidate repeat includes these 
 
 ## Outcomes & Retrospective
 
+All five milestones are complete. Final source acceptance passes 361 core examples, 18 client
+examples, four probes, generated contracts/formatting, strict validation of all 17 ADRs, three
+telemetry modes and four lifecycle cases. Final packaged acceptance passes 423 core examples,
+19 live-configured Haskell client examples, four probes and 59 executed Hurl requests (43 safe,
+15 stateful including retries, one disabled). Native recovery/limits/replay/identity, all public
+EP-33/34/35/36/40 workflows, geography defaults/startup/privacy and required SDK helper cases
+pass in all three telemetry modes.
 
-Implementation now provides all five command families, the shared server issue-key alias,
-persisted global fencing, staged resume, current-definition projection rebuilds, permanent
-account/event dispositions and legacy-ID reservation. The owned source-executable proof passes
-seven non-skipped scenario families: metadata/preview/revocation; replay rollback/concurrency/
-committed-before-output recovery; bounded rejection inspection/purge; admitted-read fencing,
-retained writer payload and failed-rebuild resume; explicit deletion/account isolation/logical
-retries; unlimited-event fingerprint cleanup; and retained canonical/rollup/filtered agreement,
-whole sessions, old native-block replay, expired sources and irreversible unlimited-policy reset.
-Evidence: `.dev/acceptance/admin-smoke-4fjlityp` and subsequent source reruns under
-`.dev/acceptance/identity-validation/ep37-admin-smoke-*.log`. New fingerprint and reader/CORS
-cases pass in the latest source rerun. The final source gate passes 361 core examples,
-18 client examples, four probes, generated contract/format checks, strict validation of all
-17 ADRs, three telemetry modes and four lifecycle cases. Packaged executable acceptance
-remains pending; milestones and whole-child status stay open. ADR-17 is Proposed.
+The packaged kansoku-admin passes seven non-skipped scenario families: credential metadata,
+preview/revocation; transactional replay rollback/concurrency and committed-before-output recovery;
+rejection inspection/purge; backend transaction/native insert draining, retained writer payload,
+failed rebuild/resume and legacy-ID reservation; explicit deletion/account isolation and logical
+retry; fingerprint cleanup with unlimited event retention; and retained canonical/rollup/filtered
+agreement, crossing sessions, native old-block replay, source expiry and irreversible policy reset.
+The fixtures cover Unicode/quoted and leading-dash user selectors, CORS under the persisted fence,
+redacted 0600 receipts and valid reuse of a previously rejected ID by another user. No required
+case is skipped. Evidence: `.dev/acceptance/run-s46qcs0h/sanitized`, including `admin-summary.log`;
+owned CLI processes and private receipts are under its sibling `admin` directory.
 
+The compiled runtime candidate is b33474f; Nix mainProgram metadata is verified at 562b4c8
+with both attribute evaluation and nix run --help. ADR-17 is Accepted. Global maintenance windows,
+explicit cutoff advancement, full retained-history rebuild cost, indefinite minimal identities,
+future new observations and backup/unknown-JSON boundaries are documented in
+`docs/guides/administration.md`. EP-39 consumes the same fenced ingest/transaction boundary;
+EP-38 owns the final joint consumer, cost and capacity gate.
 
 ## Context and Orientation
 

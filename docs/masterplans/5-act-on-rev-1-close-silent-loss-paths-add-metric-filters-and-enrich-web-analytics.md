@@ -118,7 +118,7 @@ is `mori://shinzui/kansoku-ts/okf/adrs/concepts/ADR-2`.
 | 34 | Session analytics: duration, bounce, entry and exit pages | docs/plans/34-session-analytics-duration-bounce-entry-and-exit-pages.md | EP-26; EP-30; EP-33 | None | Complete |
 | 35 | Rolling active users, retention modes, and lifetime cohorts | docs/plans/35-rolling-active-users-retention-modes-and-lifetime-cohorts.md | EP-26; EP-31; EP-32 | None | Complete |
 | 36 | Funnel modes and experiment exposure diagnostics | docs/plans/36-funnel-modes-and-experiment-exposure-diagnostics.md | EP-26; EP-31; EP-32 | None | Complete |
-| 37 | Administrative executable for keys, erasure, retention, and replay | docs/plans/37-administrative-executable-for-keys-erasure-retention-and-replay.md | EP-29; EP-30; EP-32; EP-34; EP-40 | None | In Progress |
+| 37 | Administrative executable for keys, erasure, retention, and replay | docs/plans/37-administrative-executable-for-keys-erasure-retention-and-replay.md | EP-29; EP-30; EP-32; EP-34; EP-40 | None | Complete |
 | 38 | Single-tenant consumption guide for dashboards and experiments | docs/plans/38-single-tenant-consumption-guide-for-dashboards-and-experiments.md | EP-31; EP-33; EP-34; EP-35; EP-36; EP-37; EP-39; EP-40 | None | Not Started |
 | 39 | Beacon ingest route for page-exit delivery | docs/plans/39-beacon-ingest-route-for-page-exit-delivery.md | EP-29; EP-30; EP-33 | None | Not Started |
 | 40 | Person properties: set and set-once user traits | docs/plans/40-person-properties-set-and-set-once-user-traits.md | EP-29; EP-31; EP-32; EP-34 | None | Complete |
@@ -218,7 +218,7 @@ the migration ledger; unsafe append-backfills are replaced with verified rebuild
 ## Progress
 
 
-EP-29, EP-30, EP-32, EP-31, EP-33, EP-34, EP-35, EP-36 and EP-40 are Complete; EP-37 is In Progress and two children remain Not Started. Accepted foundations now include bounded timestamp/rejection
+EP-29, EP-30, EP-32, EP-31, EP-33, EP-34, EP-35, EP-36, EP-40 and EP-37 are Complete; two children remain Not Started. Accepted foundations now include bounded timestamp/rejection
 handling, immutable acceptance and canonical replay-safe facts, outage recovery/admission,
 conservative exact identity resolution, typed filters, nullable dual grouping and immutable device/channel/bot/trusted-country enrichment. Child plans
 hold the native, packaged and consumer evidence. The tested ten-minute outage/restart and
@@ -343,13 +343,16 @@ implementation, not this planning update.
 
 ## Outcomes & Retrospective
 
-Nine children are complete. EP-40 adds governed current traits, deterministic set/set-once
+Ten children are complete. EP-40 adds governed current traits, deterministic set/set-once
 state, resolved-user segmentation across implemented metrics and fenced erasure primitives.
 Its packaged 423-core/19-client/four-probe gate, 60 actual Hurl requests, three-mode public
 workflows and required live SDK helper cases pass. SDK M4 is accepted at
 `mori://shinzui/kansoku-ts/plans/8-serve-kansoku-masterplan-5-sentat-beacon-exit-flush-bot-flag-and-identifyonce`;
 the other SDK/browser milestones remain for EP-38. The repeated 28-case 10M-fact cost gate
-passes at 0.9568–1.3449× baseline with peak memory below 512MiB. Next is EP-37, then EP-39
+passes at 0.9568–1.3449× baseline with peak memory below 512MiB. EP-37 adds packaged, fenced and resumable administration with seven required CLI scenario
+families, backend transaction/native-write draining, current-projection rebuilds, applied event/
+fingerprint retention and transactional replay. Its final 423-core/19-client/four-probe and
+59-request Hurl gate passes with required SDK cases in all three telemetry modes. Next is EP-39
 and the joint EP-38 acceptance. No deployment or artifact publication is performed.
 
 

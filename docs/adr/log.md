@@ -1,6 +1,7 @@
 # Bundle Update Log
 
 ## 2026-10-16
+* **Update**: Accept fenced administration after final packaged CLI/public/SDK acceptance and connect credential, identity and owned-gate records.
 * **Update**: Refine administrative fencing to cover backend payload transactions and surviving native INSERTs before discovery.
 * **Update**: Record the proposed persisted administrative fence, event dispositions, transactional archive replay and applied event/fingerprint retention decision.
 * **Update**: Accept governed current traits after native, packaged public, required SDK helper and 10M-fact performance acceptance.
