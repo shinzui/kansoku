@@ -15,6 +15,8 @@ query time, and serves reusable metrics through a typed HTTP API.
   [`docs/contracts/events.json`](docs/contracts/events.json).
 - Immutable event acceptance, at-least-once PostgreSQL PGMQ delivery, and a supervised Shibuya
   batch writer with bounded outage recovery and replay-safe ClickHouse reads and rollups.
+- Pre-acceptance validation of event schemas and native JSON storage compatibility, with
+  indexed per-event rejections for batches and beacons and per-credential rate limiting.
 - Multi-signal identity evidence for cookies, devices, hashed email, and expiring fingerprints,
   with conflict visibility and query-time resolution.
 - Web enrichment, bot flagging, first-touch acquisition, whole-session analytics, and governed
@@ -23,7 +25,8 @@ query time, and serves reusable metrics through a typed HTTP API.
   experiment metrics; event paths and page flows; sequential, strict, and any-order funnels
   with unique or nonoverlapping attempt counts and property attribution.
 - Saved behavioural and static cohorts, ad-hoc and saved custom metrics, bounded AND-of-OR
-  filters, and organization counts and aggregation across member activity.
+  filters (including current organization traits in cohort event conditions), and organization
+  counts and aggregation across member activity.
 - Constrained SQL reader views and verified Grafana/GrowthBook consumption.
 - Fenced, resumable administration for credentials, user erasure, applied retention, archive
   replay, and ingest rejection diagnostics.
@@ -56,11 +59,15 @@ evidence and limits; the [terminology catalog](docs/terminology/index.md) explai
 - [Use the browser and React SDKs](mori://shinzui/kansoku-ts/docs/getting-started)
 - [Consume ClickHouse from Grafana or GrowthBook](docs/guides/consume-clickhouse.md)
 - [Configure Kansoku](docs/guides/configuration.md)
+- [Measure pipeline capacity and size an outage budget](docs/guides/capacity.md)
 - [Operate Kansoku](docs/guides/operations.md)
 - [Administer credentials, retention, erasure, and replay](docs/guides/administration.md)
+- [Develop Kansoku](docs/guides/development.md)
 - [Explore the architecture atlas](docs/artifcats/kansoku-architecture.html)
 
-The shortest local path is:
+Install Nix with flakes enabled and enter the checkout. The development shell supplies GHC,
+Cabal, PostgreSQL, ClickHouse, and the supporting command-line tools. Start the local databases
+and leave this terminal running:
 
 ```bash
 nix develop
@@ -78,8 +85,11 @@ just issue-key service dev "local reader"
 just run
 ```
 
-Credential issuance prints each token exactly once. See the
-[quickstart](docs/guides/getting-started.md) for a complete accepted event and metric query.
+Credential issuance prints each token exactly once. The service listens at
+`http://localhost:8080` by default; verify `/health/live` and `/health/ready` from a third
+terminal. `just up` uses port 8081 for process control. See the
+[quickstart](docs/guides/getting-started.md) for a complete accepted event and metric query,
+port overrides, and reuse of an existing local database.
 
 ## Architecture
 
@@ -118,6 +128,14 @@ Trusted SQL consumers use constrained reader views directly. They coordinate the
 during maintenance; the HTTP traffic fence does not cover external database queries.
 
 ## API status
+
+Accepted events are durable in PostgreSQL before the HTTP 202 response; ClickHouse visibility
+follows asynchronously.
+Identical event-ID retries acknowledge the original acceptance, while changed producer content
+conflicts. Batch and beacon responses report accepted counts and indexed rejections, so inspect
+the response before retrying individual events. New events with colliding flattened JSON paths
+in `properties` or `context` are rejected before acceptance. See
+[Send events](docs/guides/send-events.md) for authentication, JSON constraints, limits, and retries.
 
 Implemented metric routes are:
 
@@ -163,7 +181,9 @@ boundaries, and [Consume ClickHouse](docs/guides/consume-clickhouse.md) for the 
 | `kansoku-server` | `kansoku-server`, explicit migrations via `kansoku-migrate`, and lifecycle operations via `kansoku-admin`. |
 | `kansoku-client` | Buffered Haskell producer SDK and typed metrics, cohort, and saved-definition clients. |
 
-The codebase uses GHC 9.12, Effectful, Servant/Warp, PostgreSQL, PGMQ, Shibuya, and ClickHouse.
+The locked development environment uses GHC 9.12.4. The codebase uses GHC2024, Effectful,
+Servant/Warp, PostgreSQL, PGMQ, Shibuya, and ClickHouse. A pinned ClickHaskell source snapshot
+lives under `vendor/ClickHaskell` and is included in the Cabal workspace.
 
 ## Development
 
@@ -181,6 +201,22 @@ nix fmt
 hand-edit generated JSON. The local database processes and their state live inside the checkout;
 `just ch-reset` is development-only and destroys all local ClickHouse analytics data.
 
+Contributor gates run inside the locked Nix environment:
+
+```bash
+nix develop -c just check
+nix develop -c just acceptance
+```
+
+`check` builds all components with tests and validates formatting, deterministic tests, generated
+contracts, OpenAPI 3.1, ADRs, capability/terminology/guide catalogs, and HTTP telemetry.
+`acceptance` owns disposable databases and runs native/live tests and Hurl against the
+Nix-packaged executable. `just test` can report pending storage/live cases when prerequisites
+are absent; use the aggregate gates for required verification. CI also builds the server,
+admin, and client packages and runs `nix flake check`. See the
+[developer guide](docs/guides/development.md) and the
+[HTTP acceptance suite](kansoku-api/test/hurl/README.md) for fixture and evidence handling.
+
 ## Scope
 
 Kansoku owns event validation and ingestion, analytics credentials and account boundaries,
@@ -191,15 +227,3 @@ billing, email delivery, or CRM state.
 The original [product vision](docs/initial-spec.md) describes longer-term direction. Current
 behavior is defined by the guides, the [OpenAPI document](docs/api/openapi.json), and the
 [event schema catalog](docs/contracts/events.json).
-
-Contributor gates run inside the locked Nix environment:
-
-```bash
-nix develop -c just check
-nix develop -c just acceptance
-```
-
-`check` validates deterministic tests, formatting, generated contracts, OpenAPI and ADRs.
-`acceptance` owns disposable databases and runs native/live tests and Hurl against the
-Nix-packaged executable. See [development](docs/guides/development.md) and the
-[HTTP acceptance suite](kansoku-api/test/hurl/README.md) for fixture and evidence handling.
