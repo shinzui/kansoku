@@ -29,6 +29,8 @@ Non-Haskell producers use the documented HTTP API.
 
 The [documentation index](docs/README.md) separates adopter guides, generated contracts,
 operations, and internal project records.
+The [capability catalog](docs/capabilities/index.md) describes the current implementation with
+evidence and limits; the [terminology catalog](docs/terminology/index.md) explains its vocabulary.
 
 - [Run Kansoku locally](docs/guides/getting-started.md)
 - [Send events](docs/guides/send-events.md)

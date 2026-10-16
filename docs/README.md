@@ -48,6 +48,11 @@ file by hand.
 - [Product vision](initial-spec.md) describes Kansoku's direction. It is not a list of shipped
   APIs; the guides and generated references above describe the current release.
 - [Architecture decisions](adr/) capture durable design constraints.
+- [Capabilities](capabilities/index.md) catalog what the current checkout provides, with
+  compatibility limits and source/test evidence. Run `just capabilities-check` to validate it.
+- [Terminology](terminology/index.md) defines the project's vocabulary by reader journey,
+  including consequential distinctions around identity, retention and analytical populations.
+  Run `just terminology-check` to validate it.
 - [Reviews](reviews/) record artifact examinations under the shared OKF review profile.
   Run `just reviews-check` to validate the bundle and its log.
 - [MasterPlans](masterplans/) and [ExecPlans](plans/) are implementation history. Completed

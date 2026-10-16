@@ -77,5 +77,19 @@ in  Schema.Project::{
         , okfVersion = "0.2"
         , description = Some "Artifact review records with stable REV handles"
         }
+      , Schema.OkfBundle::{
+        , name = "capabilities"
+        , path = "docs/capabilities"
+        , profile = Some "docs/capabilities/profile.dhall"
+        , okfVersion = "0.2"
+        , description = Some "What Kansoku provides today, with stable CAP handles, compatibility limits and evidence"
+        }
+      , Schema.OkfBundle::{
+        , name = "terminology"
+        , path = "docs/terminology"
+        , profile = Some "docs/terminology/profile.dhall"
+        , okfVersion = "0.2"
+        , description = Some "Controlled Kansoku vocabulary with stable TERM handles and evidence anchors"
+        }
       ]
     }
