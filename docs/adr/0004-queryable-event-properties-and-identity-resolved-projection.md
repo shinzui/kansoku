@@ -4,7 +4,7 @@ title: Queryable event properties and identity-resolved projection
 description: Store event properties as native ClickHouse JSON and expose them for metric grouping only after registry declaration.
 timestamp: 2026-10-16T17:52:47Z
 generated:
-  by: human:kansoku-maintainers
+  by: process:codex
   at: 2026-10-16T17:52:47Z
 docId: ADR-4
 status: Accepted

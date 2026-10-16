@@ -4,7 +4,7 @@ title: SDK-grade ingest contract boundaries
 description: Accept syntactically valid ingest batches partially, cap request size and count, and scope CORS to /v1/* so SDKs get stable retry semantics.
 timestamp: 2026-10-16T17:52:47Z
 generated:
-  by: human:kansoku-maintainers
+  by: process:codex
   at: 2026-10-16T17:52:47Z
 docId: ADR-1
 status: Accepted

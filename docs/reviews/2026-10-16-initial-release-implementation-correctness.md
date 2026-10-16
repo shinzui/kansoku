@@ -8,7 +8,7 @@ description: >-
   also fails because its scenarios share leftover cohort fixtures.
 generated:
   by: process:codex
-  at: "2026-10-16T17:15:21Z"
+  at: "2026-10-16T18:12:01Z"
 reviewId: REV-2
 subject: mori://shinzui/kansoku
 subjectKind: project
@@ -265,3 +265,28 @@ external-consumer mode, the ten-million-row benchmarks or the long outage proof.
 
 This review changes documentation only. It does not implement the corrections or publish a
 release.
+
+## Implementation follow-up — 2026-10-16
+
+F1 is resolved by [EP-46](../plans/46-reject-storage-incompatible-json-before-acceptance.md),
+implemented in `e5af95f`. Pure shared validation rejects duplicate non-null flattened paths in
+properties and context before new acceptance claims. Native parity covers 21 shapes in both
+materialized columns. Public single, batch and beacon proofs exercise 48 permanent rejections,
+154 valid canonical events, corrected-ID reuse, immutable retries, raw/native values and
+second-account progress after each incompatible submission. The first-release scope confirmed
+that no historical accepted queue exists; no legacy-input migration is required. The packaged
+outage smoke passed 8,000 accepted events through storage failure and writer restart with zero
+valid archives; recovery and acknowledgement code is unchanged.
+
+F4 is resolved by [EP-48](../plans/48-clean-acceptance-fixtures-across-telemetry-modes.md) in the
+same implementation. Scenario-owned cleanup preserves exact pagination, clears static members
+before deleting definitions, releases foreign resources and runs on injected failure. The
+required composition verifies repeated baselines and continued cleanup without deleting an
+unrelated resource. `nix develop -c just acceptance` now exits zero, passing 523 core examples,
+four probes, 22 live client examples, all three telemetry modes, reader parity and all seven
+administrative families. Private evidence is `.dev/acceptance/run-1szhsbva/`; the packaged
+outage report is `.dev/acceptance/outage-kthl2ca1/report.json`. `just check` also exits zero.
+
+This follow-up records implementation acceptance evidence, not a new independent review or
+release approval. F2 and F3 remain outside this repair. The separate external browser/consumer
+configuration, long outage proof and capacity benchmarks were not rerun here.

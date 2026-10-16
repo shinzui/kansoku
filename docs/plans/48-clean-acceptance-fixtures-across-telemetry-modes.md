@@ -39,7 +39,7 @@ This plan has three milestones. [EP-46](46-reject-storage-incompatible-json-befo
 
 - [x] M1: (2026-10-16; both scenario ownership wrappers pass repeated success and injected membership-failure cleanup in the focused composition proof.) Custom-metric fixtures clean up every owned definition and static membership on success and failure, across both accounts.
 - [x] M2: (2026-10-16; `just fixture-isolation-acceptance` passed twice per scenario, exact two-account baselines, native active-membership clearing, unrelated sentinel and continued cleanup after an injected cleanup failure; evidence `.dev/acceptance/cohort-ebdemk_y/`.) A shared-store regression proves repeated scenarios preserve resource baselines and cohort pagination remains exact.
-- [ ] M3: Full packaged acceptance passes all three telemetry modes and the later reader/administration families, with private evidence retained.
+- [x] M3: (2026-10-16; `just acceptance` exit 0 on combined implementation `e5af95f`: all three telemetry modes, reader checks and seven non-skipped administration families; private evidence `.dev/acceptance/run-1szhsbva/`.) Full packaged acceptance passes all three telemetry modes and the later reader/administration families, with private evidence retained.
 
 ## Surprises & Discoveries
 
@@ -58,14 +58,18 @@ This plan has three milestones. [EP-46](46-reject-storage-incompatible-json-befo
 ## Outcomes & Retrospective
 
 
-(To be filled during implementation.)
+Completed with the prerequisite work for [EP-46](46-reject-storage-incompatible-json-before-acceptance.md) in implementation commit `e5af95f`. Both scenarios now finalize every registered saved definition under its owning credential on success and failure. Dependent metrics are deleted before explicit static-member clearing and cohort removal. Expected absence is the only tolerated cleanup status; failures remain observable, remaining cleanup proceeds and a primary exception stays primary.
+
+`nix develop -c just fixture-isolation-acceptance` exited zero with two repetitions per scenario, exact baselines in both accounts, injected membership-upload failures, native active-member clearing, an unrelated sentinel and an injected cleanup failure. Evidence is `.dev/acceptance/cohort-ebdemk_y/`. `just cohorts-acceptance` also passed the 50,000-member replacement/retry/clear and erasure checks (`.dev/acceptance/cohort-vizgc8qb/`). The composition runs the complete custom-metric scenario twice, in addition to its packaged execution; the packaged native suite covers its native filter regressions.
+
+The combined final candidate passed `nix develop -c just check` and `nix develop -c just acceptance` (exit 0), with 523 required core examples, four probes, 22 live client examples, exact cohort pagination in legacy/stable/duplicate modes, reader checks and all seven required packaged administration families. Evidence is `.dev/acceptance/run-1szhsbva/`, with sanitized shared logs in its `sanitized/` child. The separate optional external browser/consumer configuration was not enabled. Documentation/profile checks and `git diff --check` passed. The development guide and ADR-10 carry the durable ownership convention; historical static facts remain acceptable after explicit removal of active membership. No production API or pagination behavior changed.
 
 ## Context and Orientation
 
 
-`scripts/acceptance.py` starts the packaged server in three OpenTelemetry HTTP semantic modes: legacy (`''`), stable (`http`) and duplicate (`http/dup`). It reuses an account and stores across those runs. `verify_cohorts` runs every mode, while `verify_custom_metrics` runs only in the first.
+`scripts/acceptance.py` starts the packaged server in three OpenTelemetry HTTP semantic modes: legacy (`''`), stable (`http`) and duplicate (`http/dup`). It reuses an account and stores across those runs. `verify_cohorts` runs every mode. In the first mode, the required composition verifier now runs custom metrics and cohorts twice and checks their complete resource baselines and failure paths.
 
-`scripts/custom_metrics_acceptance.py` creates five local metric definitions, a foreign-account metric definition and a static cohort. Its successful end deletes only the original local metric. The other resources survive. `scripts/cohorts_acceptance.py` then walks all cohort definitions forward and backward and correctly expects exactly its three fixture IDs. The leaked fourth cohort breaks that assertion. The review reproduced this independently and did not find a production pagination defect.
+At the reviewed revision, `scripts/custom_metrics_acceptance.py` created five local metric definitions, a foreign-account metric definition and a static cohort. Its successful end deleted only the original local metric; the other resources survived. Both scenario scripts now wrap saved-resource work with `scripts/acceptance_resources.py`, registering returned IDs and credentials immediately. `scripts/cohorts_acceptance.py` then walks all cohort definitions forward and backward and correctly expects exactly its three fixture IDs. The leaked fourth cohort breaks that assertion. The review reproduced this independently and did not find a production pagination defect.
 
 [ADR-10](../adr/0010-owned-executable-acceptance-environments.md) requires fresh owned processes, nonzero required checks, retained private evidence and sanitized shared logs. [ADR-19](../adr/0019-saved-query-time-cohorts-and-static-membership.md) permits historical static membership facts to outlive definition deletion; a full empty replacement removes active membership. [ADR-20](../adr/0020-custom-metric-definitions-and-bounded-or-filters.md) defines account-scoped saved metrics and OR predicates. Cleanup must respect ownership rather than deleting all account resources.
 
