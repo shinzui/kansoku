@@ -10,10 +10,10 @@ def binary(target):
     return subprocess.check_output(['cabal', 'list-bin', target], text=True).strip()
 
 
-def execute(command, *, env=None, timeout=180, input=None):
+def execute(command, *, env=None, timeout=180, input=None, cwd=None):
     """A timeout/interruption must also stop children created by the test executable."""
     process = subprocess.Popen(command, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                               stderr=subprocess.PIPE, text=True, start_new_session=True)
+                               stderr=subprocess.PIPE, text=True, start_new_session=True, cwd=cwd)
     try:
         stdout, stderr = process.communicate(input=input, timeout=timeout)
         return subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
