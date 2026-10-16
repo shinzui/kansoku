@@ -3,9 +3,9 @@ type: Architecture Decision Record
 title: Initial release analytics contracts
 description: Establish coherent event identity, analytical populations and lifecycle boundaries before the first Kansoku deployment.
 docId: ADR-11
-status: Proposed
+status: Accepted
 date: 2026-10-15
-timestamp: 2026-10-15T15:38:35Z
+timestamp: 2026-10-16T05:40:26Z
 generated:
   by: process:codex
   at: 2026-10-15T15:38:35Z
@@ -18,8 +18,9 @@ originatingPlan: docs/masterplans/5-act-on-rev-1-close-silent-loss-paths-add-met
 
 Kansoku has not been deployed. A review of MasterPlan 5 found contradictory retry, identity,
 session and query contracts that would otherwise become difficult to change after adoption.
-ADRs 1–10 describe the current implementation; this proposal governs the planned initial release
-and does not claim the runtime already implements it. Relevant existing boundaries are
+ADRs 1–10 and 12–18 retain the implemented boundaries. MasterPlan 5 now supplies the native,
+packaged, browser/SDK, real-consumer, ordinary-workflow and measured cost/capacity acceptance
+for this initial release. Relevant existing boundaries are
 [ingest](0001-sdk-grade-ingest-contract-boundaries.md),
 [properties](0004-queryable-event-properties-and-identity-resolved-projection.md),
 [identity](0005-evidence-based-multi-signal-identity-resolution.md),
@@ -83,7 +84,14 @@ review was rejected: native failure tests and SDK/consumer proofs remain require
 
 ## Consequences
 
-MasterPlan 5 has stronger foundational dependencies and additional work inside its existing
-children. Storage/query performance must be measured before claiming readiness. Proposed status
-remains until the implementation evidence passes and affected accepted ADRs are reconciled.
-The first deployment can then freeze a coherent contract without transitional compatibility APIs.
+All twelve MasterPlan 5 children and their final integration gates pass. Accepted ADRs
+12–18 retain the detailed enrichment, session, activity, funnel, trait, maintenance and reader
+contracts. Stable SQL uses explicit definer ownership and constrained single-tenant privileges;
+external query schedules pause during destructive maintenance because SQL does not hold the
+HTTP fence. Downstream exports/caches have separate deletion responsibilities.
+
+The final integration includes a real previous SDK, fresh-clone ordinary startup/reuse/recovery,
+zero-skipped required browser/consumer cases, a ten-million-event cost repeat and a mixed
+600-second/200-events-per-second outage/restart proof. Measurements remain workload-specific.
+This accepts implemented source/local-package contracts without publishing or deploying an
+artifact, and without adding transitional compatibility APIs for an unused service.

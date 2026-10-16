@@ -45,7 +45,7 @@ consumers; the first release has no dashboard or experiment statistics engine.
 
 - [x] M1: A versioned stable SQL surface and working read-only role reproduce HTTP fixtures.
 - [x] M2: GrowthBook assignment/fact queries pass a real consumer check.
-- [ ] M3: Final API documentation and cross-repository release conformance pass without skips.
+- [x] M3: Final API documentation and cross-repository release conformance pass without skips.
 
 ## Surprises & Discoveries
 
@@ -73,27 +73,72 @@ query are not an access-control mechanism for an untrusted dashboard viewer.
 
 ## Outcomes & Retrospective
 
+Complete on 2026-10-16. The stable seven-column resolved projection is preserved; migration
+0023 adds events_analytics_v1 and explicit definer security, and the constrained reader grants
+only the three supported views. All three executable SQL recipes match HTTP on physical
+retries, canonical anonymous/user identity, bots, missing/empty/incompatible properties and
+applied retention. Direct SQL maintenance and downstream-copy boundaries are explicit.
 
-M1/M2 accepted on 2026-10-16: `.dev/acceptance/reader-smoke-sizfm0g4/reader`
-executes the constrained role, denies excluded reads/writes and disabled limits, matches all
-three SQL recipes to HTTP before/after applied retention, and verifies the actual GrowthBook
-5.1.0 adapter (four cases) and Grafana 13.2.4/plugin 4.22.1 (three cases), all with zero skips.
-The strengthened fixture with incompatible historical JSON also passes in
-`.dev/acceptance/identity-validation/ep38-reader-r14-basic.log`. Native result caps are checked
-at block boundaries, while HTTP retains its strict complete-or-error point cap. Required SDK
-source evidence passes nine live cases, three real beacon/rate-limit protocol cases and eight
-multi-origin Chromium identity/bot cases. Final packaged acceptance, consumer pin, ordinary
-fresh-clone reuse/recovery and final packaged acceptance remain pending.
+Final packaged acceptance is `.dev/acceptance/run-e73nvh9u/sanitized`: 426 core examples,
+20 live-configured Haskell client examples, four probes and 58 actual Hurl requests (43 safe,
+14 stateful and one disabled-metrics request). Native recovery/limits/replay/identity, all public
+analytics workflows and privacy/correlation pass in legacy/http/http-dup modes. All seven
+administrative families pass, including backend/native write draining, resumable failure,
+explicit deletion, fingerprint policy, old replay and retained projection agreement.
 
-The final mixed queue-v2 outage proof passes in `.dev/acceptance/outage-ni1sty8k/report.json`:
-120000 events at 200/s for 600.004 seconds, writer restart while storage remains blocked,
-4.651-second first recovered write and 40.822-second full drain, against a 362.834-second
-calibrated bound. All 120000 facts retain nonempty sessions and authoritative enrichment;
-12000 governed trait operations exercise current projections. Zero valid events are archived.
-Database growth is 212238336 bytes and generated WAL 547020800 bytes. The revised finite
-10-GiB/50%-headroom/200-sample budget is about 1.18 hours, extrapolated from a tested ten-minute
-outage with input stopped at recovery. `docs/guides/capacity.md` replaces the older small-payload
-measurement. No task-owned build/test load overlapped the accepted measurement.
+The required consumer is mori://shinzui/kansoku-ts/packages/kansoku-js at code/test commit
+f26f74358d2931a94b40c1a7077f6b7630edd01a. Its built JavaScript SHA256 is
+f4a20924a5f97eb4774cd3ed2cf0a369efb93e045bfb561de1957cd36e460f56.
+Required checks pass nine live cases (including actual queued-clock correction, duplicate
+retry, email_hmac, versions and trait queries), three real beacon/rate-limit protocol cases,
+two real-server vanilla/React examples, eight multi-origin identity/bot Chromium families and
+six beacon/origin/quota/BFCache Chromium cases, all with zero feature skips. A separate trait
+case also passes in each telemetry mode. SDK source checks pass 85 unit and two explicit SSR
+cases plus types/lint/format/generated contracts/package validation; JavaScript/React gzip
+sizes are 8565/1550 bytes inside their unchanged budgets. The accepted wire pin contains server
+candidate e0eb782; the final metadata pin is recorded at mori://shinzui/kansoku-ts with
+project-relative path contracts/KANSOKU_COMMIT (artifact-level URI pending) after the
+documentation completion commit.
+
+The reader gate uses the exact upstream GrowthBook 5.1.0 commit and unmodified Node/tsconfig
+adapter for four connection/query-editor/schema/data/denial cases. Grafana OSS 13.2.4 with the
+hash-verified official ClickHouse plugin 4.22.1 passes three datasource/import/panel cases.
+These pass again through packaged acceptance; reproduction and pinned artifact hashes are
+in docs/guides/consumer-conformance.md and docs/examples/consumer-versions.json. Optional
+Metabase remains an example, and no experiment statistics engine or causal claim is added.
+
+The ordinary workflow passes four non-skipped cases in
+`.dev/acceptance/first-use-gd1o3eze/summary.json`: clean local clone at b0a548c, shipped shellHook
+and just up/migrate/ch-migrate/issue-key/run, repeated migrations, actual capture with the
+previously accepted SDK revision 0a4eea715b5f34fad8593e3dfd123ce407976c95, immutable retry,
+storage loss, durable queue preservation, full stack restart and exact recovered count. The
+SDK's own Nix shell supplies every Bun invocation. No SQL seed substitutes for these product
+steps. The source reference is mori://shinzui/kansoku-ts/packages/kansoku-js. The shipped
+process-control port defaults to 8081, preserving Kansoku's default 8080 and an explicit
+PC_PORT_NUM override.
+
+The final mixed queue-v2 outage proof in `.dev/acceptance/outage-ni1sty8k/report.json`
+preserves 120000 events at 200/s for 600.004 seconds through writer restart: first recovered
+write 4.651 seconds, full drain 40.822 seconds against a 362.834-second calibrated bound,
+zero valid archives. All 120000 facts retain nonempty sessions and authoritative enrichment;
+the workload includes 12000 governed trait operations. Database growth is 212238336 bytes,
+generated WAL 547020800 bytes. The finite 10-GiB/50%-headroom/200-sample budget is about
+1.18 hours, extrapolated from the tested ten-minute outage with input stopped at recovery.
+The updated capacity guide replaces the earlier small-payload measurement.
+
+Final cost evidence `.dev/acceptance/identity-bench-wm32m0ts/report.json` passes all 28
+five-run-median comparisons over 3M recent +7M older facts, seven production query families
+and day/month windows. Identity ratios are 1.0355–1.3119, below 2x; maximum resolved median
+469 ms, cold native total 946 ms, warm peak 451288707 bytes and cold peak 448542781 bytes,
+below the unchanged 536870912-byte budget. Neither accepted measurement overlaps task-owned
+build/test load. Source just check passes 364 core, 19 client, four probes, 18 strict ADRs,
+seven telemetry cases in each mode and four lifecycle checks.
+
+ADR-11 and ADR-18 accept the durable contracts after this integration evidence; the other
+cross-plan decisions remain in their owning accepted ADRs. Results establish source and local
+Nix-packaged executable behavior. No globally installed executable was used or changed;
+neither executable was found in the initial PATH. No package, container, hosted endpoint or
+deployment is published. All implementation and required acceptance work is complete.
 
 ## Context and Orientation
 
@@ -196,7 +241,7 @@ executable acceptance above. Record only the relevant evidence here. This follow
 ## Idempotence and Recovery
 
 
-Documentation follows accepted behavior. Regeneration and SDK pin refresh are reviewed together. No runtime implementation or deployment is authorized merely by completing this planning review.
+Documentation follows accepted behavior. Repeated migrations and immutable retries are exercised by the ordinary workflow. Regeneration and the consumer pin are checked together; publication and deployment remain separate operator actions.
 
 ## Interfaces and Dependencies
 
@@ -209,16 +254,3 @@ Revision note (2026-10-15): reviewed against the current source and revised for 
 [ADR-11](../adr/0011-initial-release-analytics-contracts.md) records the proposed cross-plan
 contracts; implementation must supply the acceptance evidence before those contracts become
 accepted runtime guarantees.
-
-
-Final cost repeat (2026-10-16): `.dev/acceptance/identity-bench-wm32m0ts/report.json`
-passes all 28 five-run-median comparisons over 3M recent +7M older facts, seven production
-query families and day/month windows. Ratios are 1.0355–1.3119, below 2x throughout;
-maximum resolved median is 469 ms, cold native total 946 ms, warm peak 451288707 bytes and
-cold peak 448542781 bytes, below the unchanged 536870912-byte budget. No task-owned build/test
-load overlaps this accepted run. Full source checks pass 364 core, 19 client, four probes,
-18 strict ADRs, seven telemetry cases in each mode and four lifecycle checks. SDK source
-checks pass 85 unit and two explicit SSR cases plus types/lint/format/contracts/packages/sizes.
-The first ordinary clean-clone proof passes all four cases in
-`.dev/acceptance/first-use-3vv9rsez/summary.json`; the final repeat uses the SDK's declared Nix
-shell for every Bun invocation. Final required packaged acceptance remains in progress.

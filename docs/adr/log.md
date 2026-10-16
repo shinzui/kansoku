@@ -1,6 +1,7 @@
 # Bundle Update Log
 
 ## 2026-10-16
+* **Update**: Accept ADR-11 after all twelve MasterPlan 5 children and final packaged, consumer, workflow, performance and capacity gates pass.
 * **Update**: Accept ADR-18 after constrained reader parity and pinned real GrowthBook/Grafana consumer execution.
 * **Update**: Propose versioned bounded reader projections, explicit definer privilege ownership and actual dashboard/experiment consumer conformance.
 * **Update**: Document the public-write-key beacon body boundary, duplicate-safe media decoding and shared ingest/CORS ownership.

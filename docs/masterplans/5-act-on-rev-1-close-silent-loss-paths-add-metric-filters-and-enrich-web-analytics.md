@@ -119,7 +119,7 @@ is `mori://shinzui/kansoku-ts/okf/adrs/concepts/ADR-2`.
 | 35 | Rolling active users, retention modes, and lifetime cohorts | docs/plans/35-rolling-active-users-retention-modes-and-lifetime-cohorts.md | EP-26; EP-31; EP-32 | None | Complete |
 | 36 | Funnel modes and experiment exposure diagnostics | docs/plans/36-funnel-modes-and-experiment-exposure-diagnostics.md | EP-26; EP-31; EP-32 | None | Complete |
 | 37 | Administrative executable for keys, erasure, retention, and replay | docs/plans/37-administrative-executable-for-keys-erasure-retention-and-replay.md | EP-29; EP-30; EP-32; EP-34; EP-40 | None | Complete |
-| 38 | Single-tenant consumption guide for dashboards and experiments | docs/plans/38-single-tenant-consumption-guide-for-dashboards-and-experiments.md | EP-31; EP-33; EP-34; EP-35; EP-36; EP-37; EP-39; EP-40 | None | In Progress |
+| 38 | Single-tenant consumption guide for dashboards and experiments | docs/plans/38-single-tenant-consumption-guide-for-dashboards-and-experiments.md | EP-31; EP-33; EP-34; EP-35; EP-36; EP-37; EP-39; EP-40 | None | Complete |
 | 39 | Beacon ingest route for page-exit delivery | docs/plans/39-beacon-ingest-route-for-page-exit-delivery.md | EP-29; EP-30; EP-33 | None | Complete |
 | 40 | Person properties: set and set-once user traits | docs/plans/40-person-properties-set-and-set-once-user-traits.md | EP-29; EP-31; EP-32; EP-34 | None | Complete |
 
@@ -217,44 +217,12 @@ the migration ledger; unsafe append-backfills are replaced with verified rebuild
 
 ## Progress
 
-
-EP-29, EP-30, EP-32, EP-31, EP-33, EP-34, EP-35, EP-36, EP-40, EP-37 and EP-39 are Complete; EP-38 is In Progress as the final integration and consumption child. Accepted foundations now include bounded timestamp/rejection
-handling, immutable acceptance and canonical replay-safe facts, outage recovery/admission,
-conservative exact identity resolution, typed filters, nullable dual grouping and immutable device/channel/bot/trusted-country enrichment. Child plans
-hold the native, packaged and consumer evidence. The tested ten-minute outage/restart and
-finite capacity budget remain workload-specific; see `docs/guides/capacity.md`.
-
-EP-39 closes the public-key-only beacon boundary and its shared ingest adaptation. Packaged
-acceptance includes the pinned SDK's required real Chromium origin/quota/BFCache cases with no
-skips, plus all public and administrative regressions. The child owns exact artifact/evidence
-counts; SDK transport/page lifecycle milestones are accepted, while bot/cross-origin/final
-consumer acceptance remains part of EP-38.
-
-Final integration gate (owned by EP-38): a practical ordinary first-use/adoption/reuse/recovery
-workflow from a fresh clone and the previously supported consumer, plus packaged server acceptance, generated API/catalog,
-SDK contracts and required live/browser cases all agree with zero feature skips. Performance,
-geo dependency compatibility and external GrowthBook consumer acceptance remain implementation
-proofs, not results established by this document review. Source builds, published artifacts and
-the installed executable must be identified separately; test-only fixture preparation cannot
-substitute for steps the shipped workflow leaves to developers.
-
-EP-31's final packaged gate passes 225 core examples, 18 live-client examples, 51 Hurl
-requests and native recovery/limits/replay/identity proofs. Its ten-million-event identity
-regression remains below 2× for all twelve cases (1.24–1.58×), and the pinned SDK contract
-refresh passes 60 unit and two SSR examples plus package checks. EP-33 adds 384 native core examples, public enrichment acceptance in all three telemetry modes,
-optional-geography privacy/startup checks and pinned SDK consumer `e199567` with 61 unit/two
-SSR examples. EP-34 adds replay-idempotent whole-session state and count/bounce/duration measures, with
-388 native core examples, packaged public workflows in all three telemetry modes and pinned
-SDK consumer `bfe281c`. EP-35 adds exact closed-day rolling/stickiness, mature retained-history retention and lifecycle,
-with 394 native core examples, packaged public workflows, pinned SDK consumer `3501e45` and
-28 ten-million-event performance cases below 2× (1.09–1.54×). EP-36 adds deterministic selected-chain modes, exclusions, exact timing, first-touch breakdown,
-ordered signup conversion and exact exclusive exposure diagnostics. Its 2000 seeded native
-chain comparisons, 412-example packaged core gate, three-mode public workflows and pinned
-SDK consumer `5db6d5c` pass. The repeated 28-case ten-million-event cost gate is below 2×
-(1.02–1.54×), with peak native memory below 452 MB against the unchanged 512 MiB budget.
-[ADR-15](../adr/0015-deterministic-selected-funnel-chains-and-exclusive-exposure-diagnostics.md)
-is Accepted. EP-40 follows; the final joint SDK/browser, performance and outage gates remain
-EP-38 obligations.
+All twelve child ExecPlans are Complete, in the required sequence. Final EP-38 integration
+accepts the stable SQL/HTTP contract, pinned real consumers, all required SDK/browser cases,
+ordinary clean-clone adoption/reuse/recovery, refreshed ten-million-event query cost and the
+600-second/200-events-per-second mixed-workload outage proof. No required feature is skipped.
+Source and local packaged results are recorded separately from publication or deployment;
+neither is performed. Child plans own detailed milestones and evidence.
 
 ## Surprises & Discoveries
 
@@ -321,6 +289,11 @@ families with the actual extended/history evidence scopes and must be reused by 
 
 ## Decision Log
 
+On 2026-10-16 accept the initial-release contracts only after the final joint native, packaged,
+SDK/browser, real-consumer, ordinary-workflow, cost and outage gates pass. ADR-11 and ADR-18
+distill the cross-plan and external-consumer boundaries; direct SQL does not inherit the HTTP
+maintenance fence, and downstream copies need their own lifecycle.
+
 
 On 2026-10-15 preserve the twelve-child scope, including the previously promoted beacon,
 quarantine and current-value traits. Container distribution and event-time traits remain excluded.
@@ -349,20 +322,34 @@ implementation, not this planning update.
 
 ## Outcomes & Retrospective
 
-Ten children are complete. EP-40 adds governed current traits, deterministic set/set-once
-state, resolved-user segmentation across implemented metrics and fenced erasure primitives.
-Its packaged 423-core/19-client/four-probe gate, 60 actual Hurl requests, three-mode public
-workflows and required live SDK helper cases pass. SDK M4 is accepted at
-`mori://shinzui/kansoku-ts/plans/8-serve-kansoku-masterplan-5-sentat-beacon-exit-flush-bot-flag-and-identifyonce`;
-the other SDK/browser milestones remain for EP-38. The repeated 28-case 10M-fact cost gate
-passes at 0.9568–1.3449× baseline with peak memory below 512MiB. EP-37 adds packaged, fenced and resumable administration with seven required CLI scenario
-families, backend transaction/native-write draining, current-projection rebuilds, applied event/
-fingerprint retention and transactional replay. Its final 423-core/19-client/four-probe and
-59-request Hurl gate passes with required SDK cases in all three telemetry modes. Next is EP-39
-and the joint EP-38 acceptance. No deployment or artifact publication is performed.
+Complete on 2026-10-16. All twelve children implement one coherent initial-release contract:
+immutable acceptance and replay-safe facts, bounded outage/admission handling, conservative
+identity, exact typed analytics, whole retained sessions/activity/cohorts, deterministic funnels
+and assignment diagnostics, governed current traits, fenced resumable maintenance and body-key
+beacon delivery. Stable SQL views and constrained privileges now have real consumer proofs.
 
+The final packaged gate passes 426 core, 20 client and four probe cases, 58 Hurl requests,
+all three telemetry modes and seven administrative families. Required SDK gates pass nine
+live, three protocol, two real-server example, eight identity/bot Chromium and six beacon
+Chromium cases without feature skips. Pinned GrowthBook and Grafana integrations reproduce
+reader answers, and four ordinary clean-clone cases exercise the previously accepted SDK,
+repeated migrations, queue recovery and duplicate identity. EP-38 records exact artifacts,
+commands, consumer revisions and private/sanitized evidence.
 
-The original plan set was not ready to implement unchanged. This update records and corrects
-the material findings and creates a coherent implementation sequence. Implementation must still
-prove writer source pausing, event idempotency under failures, identity performance, native geo
-compatibility and external consumer behavior. EP-29 and EP-30 are Complete; the remaining acceptance obligations stay open. No deployment is performed.
+The final ten-minute outage recovers all 120000 mixed queue-v2/session/enrichment/trait events,
+with zero valid archives, 4.651-second first write and 40.822-second drain. The finite capacity
+budget remains workload/hardware-specific. All 28 ten-million-event comparisons stay below
+2x identity overhead (1.0355–1.3119), with native peak below the unchanged 512-MiB budget.
+These are measured local results, not a generic latency or arbitrary-outage guarantee.
+
+The final ADR distillation reviewed child Decision Logs, Surprises and Outcomes. Accepted
+ADR-11 coordinates the release; ADRs 12–18 retain enrichment, sessions, retained-history
+activity, selected chains, traits, maintenance and SQL-consumer boundaries. Earlier ADRs retain
+ingest/auth/schema/query limits. Real integration found defects that source compilation or SQL
+review alone missed, including typed JSON extraction, client deadline translation and default
+process-control port collision. No task-local workaround is presented as a product guarantee.
+
+Implementation and required integration are complete on master. The Nix-packaged executables
+and source builds are validated locally; no globally installed executable is changed and no
+artifact or endpoint is published or deployed. Container distribution, external dashboards as
+product UI, statistics engines and event-time trait history remain outside this initiative.
