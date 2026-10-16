@@ -1,3 +1,5 @@
+{-# LANGUAGE TypeApplications #-}
+
 module Main (main) where
 
 import Control.Concurrent (threadDelay)
@@ -6,6 +8,7 @@ import Data.Aeson qualified as Aeson
 import Data.Aeson.Key qualified as Key
 import Data.Aeson.KeyMap qualified as KeyMap
 import Data.ByteString (ByteString)
+import Data.ByteString qualified as BS
 import Data.ByteString.Lazy qualified as LBS
 import Data.Char (isAlphaNum)
 import Data.Foldable (traverse_)
@@ -19,16 +22,19 @@ import Kansoku.Api.Response qualified as Response
 import Kansoku.Client
 import Kansoku.Client.Metrics
 import Kansoku.Event
+import Kansoku.Ingest.Api (BatchAck (..), BeaconAPI, BeaconEnvelope (..), PlainTextJSON, ingestEvent)
 import Kansoku.Metrics.Api (MetricResult (..), TimeGrain (Day))
 import Kansoku.Metrics.Api qualified as Metrics
 import Kansoku.Metrics.Filter qualified as Filter
 import Kansoku.Prelude
 import Network.HTTP.Client qualified as HTTP
 import Network.HTTP.Types (Status, status200, status202, status400, status401, status404, status413, status429, status503, statusCode)
-import Network.HTTP.Types.Header (hAuthorization)
+import Network.HTTP.Types.Header (hAuthorization, hContentType)
 import Network.Wai (Application, Request, pathInfo, queryString, requestHeaders, requestMethod, responseLBS, strictRequestBody)
 import Network.Wai.Handler.Warp qualified as Warp
+import Servant.API (JSON)
 import Servant.Client (mkClientEnv, parseBaseUrl, runClientM)
+import Servant.Client qualified as SC
 import System.Environment (lookupEnv)
 import System.Process (readProcess)
 import Test.Hspec
@@ -40,6 +46,27 @@ main =
 
 spec :: Spec
 spec = describe "Kansoku.Client" $ do
+  it "generated beacon clients send both body media through the public context helper without auth headers" $ do
+    now <- getCurrentTime
+    media <- newTVarIO []
+    let event = ingestEvent (baseEvent (EventId "beacon-client") (EventName "custom") Web now now)
+        body = BeaconEnvelope "ksk_w_fixture" [event]
+        app request respond = do
+          pathInfo request `shouldBe` ["v1", "beacon"]
+          lookup hAuthorization (requestHeaders request) `shouldBe` Nothing
+          lookup "X-Api-Key" (requestHeaders request) `shouldBe` Nothing
+          atomically $ modifyTVar' media (<> [fromMaybe "" (lookup hContentType (requestHeaders request))])
+          bytes <- strictRequestBody request
+          fmap (const True) (Aeson.eitherDecode bytes :: Either String BeaconEnvelope) `shouldBe` Right True
+          respond (responseLBS status202 [(hContentType, "application/json")] (Aeson.encode (BatchAck 1 [])))
+    Warp.testWithApplication (pure app) $ \port -> do
+      manager <- HTTP.newManager HTTP.defaultManagerSettings
+      url <- parseBaseUrl ("http://127.0.0.1:" <> show port)
+      let env = mkClientEnv manager url
+      runClientM (SC.client (Proxy @(BeaconAPI '[PlainTextJSON])) kansokuBeaconContext body) env `shouldReturn` Right (KansokuOk (BatchAck 1 []))
+      runClientM (SC.client (Proxy @(BeaconAPI '[JSON])) kansokuBeaconContext body) env `shouldReturn` Right (KansokuOk (BatchAck 1 []))
+      fmap (BS.takeWhile (/= 59)) <$> readTVarIO media `shouldReturn` ["text/plain", "application/json"]
+
   it "trackEvent builds service-source events with identity fields outside properties" $
     withRecorder (const (pure status202)) $ \port received _ -> do
       let ids =

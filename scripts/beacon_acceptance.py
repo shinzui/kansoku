@@ -49,11 +49,21 @@ def verify_beacon_browser(server, admin, env, root, sdk, tokens=None):
                 time.sleep(.1)
             else:
                 raise RuntimeError('owned beacon server readiness timed out')
-            result = subprocess.run(['bun', 'run', 'scripts/beacon-browser.ts'], env=settings, cwd=sdk,
-                                    capture_output=True, text=True, timeout=150)
-            (root / 'browser.private').write_text(result.stdout + result.stderr)
-            result.check_returncode()
-            report = json.loads(result.stdout.strip().splitlines()[-1])
+            with (root / 'browser.private').open('w') as browser_log:
+                with owned_process(['bun', 'run', 'scripts/beacon-browser.ts'], settings, root,
+                                   'chromium-consumer', cwd=sdk, stdout=browser_log, stderr=browser_log,
+                                   start_new_session=True) as browser_process:
+                    try:
+                        browser_process.wait(timeout=150)
+                    finally:
+                        # The session belongs to this one fixture, including Chromium
+                        # descendants if the consumer times out before its own cleanup.
+                        try:
+                            os.killpg(browser_process.pid, signal.SIGTERM)
+                        except ProcessLookupError:
+                            pass
+                    assert browser_process.returncode == 0, 'required Chromium consumer failed; see private evidence'
+            report = json.loads((root / 'browser.private').read_text().strip().splitlines()[-1])
             assert report['cases'] == 6 and report['skipped'] == 0 and report['result'] == 'passed'
     output = (root / 'server.private').read_text()
     assert all(key not in output for key in keys), 'beacon credential leaked into server logs/spans'

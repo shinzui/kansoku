@@ -82,6 +82,7 @@ test-suite kansoku-client-test
     kansoku-api,
     kansoku-client,
     process,
+    servant,
     servant-client,
     stm,
     text,
