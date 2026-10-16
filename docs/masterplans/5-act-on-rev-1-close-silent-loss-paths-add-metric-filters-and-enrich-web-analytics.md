@@ -120,7 +120,7 @@ is `mori://shinzui/kansoku-ts/okf/adrs/concepts/ADR-2`.
 | 36 | Funnel modes and experiment exposure diagnostics | docs/plans/36-funnel-modes-and-experiment-exposure-diagnostics.md | EP-26; EP-31; EP-32 | None | Complete |
 | 37 | Administrative executable for keys, erasure, retention, and replay | docs/plans/37-administrative-executable-for-keys-erasure-retention-and-replay.md | EP-29; EP-30; EP-32; EP-34; EP-40 | None | Complete |
 | 38 | Single-tenant consumption guide for dashboards and experiments | docs/plans/38-single-tenant-consumption-guide-for-dashboards-and-experiments.md | EP-31; EP-33; EP-34; EP-35; EP-36; EP-37; EP-39; EP-40 | None | Not Started |
-| 39 | Beacon ingest route for page-exit delivery | docs/plans/39-beacon-ingest-route-for-page-exit-delivery.md | EP-29; EP-30; EP-33 | None | In Progress |
+| 39 | Beacon ingest route for page-exit delivery | docs/plans/39-beacon-ingest-route-for-page-exit-delivery.md | EP-29; EP-30; EP-33 | None | Complete |
 | 40 | Person properties: set and set-once user traits | docs/plans/40-person-properties-set-and-set-once-user-traits.md | EP-29; EP-31; EP-32; EP-34 | None | Complete |
 
 EP-26 is `docs/plans/26-bound-analytics-query-inputs-and-result-cardinality.md`, Complete in
@@ -218,11 +218,17 @@ the migration ledger; unsafe append-backfills are replaced with verified rebuild
 ## Progress
 
 
-EP-29, EP-30, EP-32, EP-31, EP-33, EP-34, EP-35, EP-36, EP-40 and EP-37 are Complete; EP-39 is In Progress and one child remains Not Started. Accepted foundations now include bounded timestamp/rejection
+EP-29, EP-30, EP-32, EP-31, EP-33, EP-34, EP-35, EP-36, EP-40, EP-37 and EP-39 are Complete; EP-38 is the one remaining child. Accepted foundations now include bounded timestamp/rejection
 handling, immutable acceptance and canonical replay-safe facts, outage recovery/admission,
 conservative exact identity resolution, typed filters, nullable dual grouping and immutable device/channel/bot/trusted-country enrichment. Child plans
 hold the native, packaged and consumer evidence. The tested ten-minute outage/restart and
 finite capacity budget remain workload-specific; see `docs/guides/capacity.md`.
+
+EP-39 closes the public-key-only beacon boundary and its shared ingest adaptation. Packaged
+acceptance includes the pinned SDK's required real Chromium origin/quota/BFCache cases with no
+skips, plus all public and administrative regressions. The child owns exact artifact/evidence
+counts; SDK transport/page lifecycle milestones are accepted, while bot/cross-origin/final
+consumer acceptance remains part of EP-38.
 
 Final integration gate (owned by EP-38): a practical ordinary first-use/adoption/reuse/recovery
 workflow from a fresh clone and the previously supported consumer, plus packaged server acceptance, generated API/catalog,

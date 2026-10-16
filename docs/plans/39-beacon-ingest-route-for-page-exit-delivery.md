@@ -44,7 +44,7 @@ Session semantics cannot depend on a page-leave event always arriving.
 
 
 - [x] M1: Both media types use shared authenticated ingest validation, rate limits and counters.
-- [ ] M2: OpenAPI/client and the SDK browser test prove envelope, origin and quota behavior.
+- [x] M2: OpenAPI/client and the SDK browser test prove envelope, origin and quota behavior.
 
 ## Surprises & Discoveries
 
@@ -53,6 +53,14 @@ Released dependency source verification: Mori indexed Aeson 2.3.1.0 while Hackag
 upstream tags already publish 2.3.2.0. This change adds no latest-version pin; the public token
 decoder was checked in the resolved 2.2.4.1 source (Cabal uses 2.2.5.1) and the API lower
 bound is explicit. wai-cors 0.2.7 rejects unsupported origins before invoking the application.
+
+The default Playwright headless-shell delegate reports BFCacheDisabledForDelegate. Full
+Chromium with its default BFCache-disabling argument removed preserves the document; restoration
+must wait for navigation commit rather than a load event. The proof checks a retained document
+token, two view IDs and one pre-restore leave. The owned browser fixture uses a 1 MiB body cap
+so normal delivery of an event above the exit budget is exercised independently of the public
+perimeter fixture's 4 KiB cap. A pre-browser packaged attempt was deliberately stopped to fix
+that fixture mismatch; only the final complete run above is acceptance evidence.
 
 The beacon standard permits preflight for non-safelisted content types; it does not categorically
 forbid it. text/plain avoids that dependency. The 64 KiB keepalive budget is shared in flight,
@@ -66,16 +74,53 @@ On 2026-10-15 keep body credentials only on /v1/beacon and only for public write
 Use the same post-auth ingest service as normal requests. Enforce configured origin policy
 before side effects, including simple requests; do not rely on the browser reading a response.
 
+On 2026-10-16 retain the SDK mirror after beacon true and count it separately from accepted.
+Use one conservative complete-body byte reservation across client instances in a document;
+beacon reservations last for that document because completion is unobservable. Keepalive is
+the default, and false/missing/throw fallback remains best effort. Pending queue capacity is
+bounded without a silent time expiry. Page leaves use monotonic time and original view identity;
+privacy transitions retire snapshots. These browser decisions are accepted in
+`mori://shinzui/kansoku-ts/okf/adrs/concepts/ADR-2` and
+`mori://shinzui/kansoku-ts/okf/adrs/concepts/ADR-4`.
+
 ## Outcomes & Retrospective
 
 
-M1 is implemented. Source `just check` passes 364 core, 18 client and four probe cases;
-seven HTTP telemetry cases pass in each semantic mode and four exporter lifecycle checks pass.
-The new native PostgreSQL perimeter test exercises both generated Haskell client media types,
-unknown/revoked/service credentials, competing headers, no-Origin and disallowed-Origin requests,
-byte/count limits, partial invalid batches, durable deduplication, shared rate limiting and
-credential-free diagnostic payloads. OpenAPI route/status/security conformance has 16 passing
-cases. Packaged browser delivery and final acceptance remain pending.
+Complete. `POST /v1/beacon` accepts both JSON media types through the same authenticated
+admission, immutable acceptance, normalization, enrichment and quarantine service. Its deferred
+body authentication rejects competing headers, missing/ambiguous keys, unknown/revoked keys
+and service credentials with the documented status algebra. Duplicate escaped envelope keys
+are rejected before object construction and neither decoder exposes producer parser details.
+
+Source `just check` passed 364 core, 19 client and four probe cases; seven HTTP telemetry cases
+passed in each semantic mode and four exporter lifecycle checks passed. The native PostgreSQL
+perimeter test covers both generic media clients, credentials, origins, byte/count bounds,
+partial rejection, cross-route admission and diagnostic credential exclusion. The public
+Haskell client helper independently proves both wire media and absent auth headers.
+
+Final packaged acceptance passed in `.dev/acceptance/run-0bzk67yc/sanitized`: 426 core,
+20 client, four probe and 58 actual Hurl requests (43 safe, 14 stateful and one disabled-metrics
+request), plus native recovery/limits/replay/identity and every public analytics workflow in
+legacy, http and http/dup modes. Required SDK governed traits passed one non-skipped live case
+in each mode. All seven packaged administration families passed after the browser scenarios.
+
+Six required Chromium cases prove same/cross-origin text/plain without OPTIONS, denied-origin
+zero rows, actual shared keepalive quota refusal with fallback, oversized Unicode envelope
+retention, acknowledged retry deduplication and a genuinely restored BFCache document with
+separate view intervals. The harness records runtime consumer commit
+0a4eea715b5f34fad8593e3dfd123ce407976c95 and built artifact SHA-256 in its private consumer
+manifest; source package ownership is `mori://shinzui/kansoku-ts/packages/kansoku-js`.
+The source contract pin is server commit 3d0e3d8 (containing this route); gate commit is
+942af8c. Source iteration evidence is `.dev/acceptance/beacon-smoke-p9i3jo3j`.
+
+SDK M1/M2/M4 are complete. Its full unit suite has 77 passing cases plus two explicit no-DOM/SSR
+cases; source types/lint/format/contracts/packages/strict ADRs pass. JavaScript/React gzip
+outputs are 10150/1843 bytes within their 10240/3072 budgets. The additional privacy case proves
+opt-out and suppressed exits retire page snapshots rather than resurrect old identity on opt-in.
+Bot and final cross-origin/release conformance remain owned by
+`mori://shinzui/kansoku-ts/plans/8-serve-kansoku-masterplan-5-sentat-beacon-exit-flush-bot-flag-and-identifyonce`
+and server EP-38. This evidence establishes built source/package behavior, not a published
+package or deployed endpoint. Accepted ADRs 1 and 3 and the send-events guide describe the boundary.
 
 ## Context and Orientation
 
