@@ -6,7 +6,7 @@ docId: DOC-9
 tags: ["operations", "migrations", "observability", "recovery"]
 generated:
   by: process:codex
-  at: "2026-10-16T22:48:56Z"
+  at: "2026-10-17T00:54:46Z"
 ---
 
 # Operate Kansoku
@@ -21,7 +21,8 @@ planning.
 Kansoku has two independent, forward-only migration systems:
 
 1. `just migrate` (or `cabal run kansoku-migrate -- up`) installs the vendored PGMQ schema and
-   then the application credential, rejection and acceptance-ledger tables in PostgreSQL.
+   then the application credential, rejection, acceptance, maintenance, cohort, metric-definition
+   and native-administration session tables in PostgreSQL.
 2. `kansoku-ch-migrate` executes its compiled native plan under a persistent maintenance
    session and records immutable checksummed events in `kansoku_migration_ledger`. Follow the
    [first-use and subsequent-upgrade runbook](clickhouse-migrations.md), including retained
@@ -266,9 +267,13 @@ finite insert-block token window.
 
 Migration `0017_replay_safe_sources.sql` requires the writer stopped for its entire execution.
 It builds replacement rollups from canonical retained rows, verifies every aggregate group,
-then atomically swaps each public table name. If interrupted, leave the writer stopped and
-reapply the migration; appending an additive backfill to an existing table is unsafe. Fresh
-install and interrupted-rebuild native checks verify this administrative boundary.
+then atomically swaps each public table name. If interrupted, keep the writer stopped and the
+native maintenance session fenced. Inspect fresh guarded history and follow the
+[explicit recovery runbook](clickhouse-migrations.md#interruption-receipts-and-explicit-repair)
+for the recorded attempt and selected step. Never replay the whole original SQL file or clear
+native history; an additive backfill into an existing rollup can double-count, and repeating
+an exchange can swap the old table back in. Fresh-install and interrupted-rebuild native checks
+verify this administrative boundary.
 
 ## Data maintenance
 

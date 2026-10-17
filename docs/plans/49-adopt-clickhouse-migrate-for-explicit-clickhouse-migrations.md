@@ -26,6 +26,11 @@ provenance:
       at: 2026-10-16T22:15:10Z
       mode: "implement"
       note: "Implement released dependency wiring, reviewed embedded component and native administration integration"
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-10-17T00:55:03Z
+      mode: "update"
+      note: "Clarify that the unfinished review outcome predates completed native adoption; audit and correct README and operational reuse/recovery guidance"
   reviews:
     - model: "gpt-6-astra"
       harness: "codex-cli"
@@ -124,7 +129,7 @@ clickhouse-migrate-test-support-0.1.0.0 917f7165f9792eae771a02db4ac80befb0d03fa8
 
 ADR-22, with ADR-10/17/18 updates, preserves the durable native/session/platform contract. Operator guides, README and architecture atlas describe explicit identities, PostgreSQL-first setup, actual drain, initialization and recovery. Raw evidence remains private; sanitized aggregate summaries are retained separately. Source implementation checkpoint is `11d3f63`; the final follow-up commit records documentation and acceptance only. Linux qualification, the intended production artifact/target, crash and intervening-patch review, and observed required remote CI remain release/deployment gates. Optional GrowthBook/Grafana integrations were not supplied for this rerun; constrained SQL/HTTP reader parity passed. No deployment, publication, persistent user-data mutation or upstream repository change occurred.
 
-2026-10-16 review/update outcome: The original plan was authored and revised by gpt-6.1-sol and had no recorded review entry. This pass checked the current release, source/tag identity, relevant public contracts, upstream review/qualification evidence, captured SQL hashes, local coordination paths, build configuration and ADR-10/17/18. The initial recommendation deferred supported adoption; the user then clarified that Kansoku has not been deployed. The revised recommendation is pre-deployment adoption, omitting legacy import and retaining platform and runtime safety gates. No native suite, Kansoku build, migration or persistent database operation was run; M1–M6 remain unfinished. No accepted architecture decision changes in this review: platform and admission changes remain proposed work, and their ADR updates belong with implementation.
+2026-10-16 pre-implementation review/update outcome (historical; superseded by the implementation outcome above): The original plan was authored and revised by gpt-6.1-sol and had no recorded review entry at the start of that pass. The pass checked the current release, source/tag identity, relevant public contracts, upstream review/qualification evidence, captured SQL hashes, local coordination paths, build configuration and ADR-10/17/18. The initial recommendation deferred supported adoption; the user then clarified that Kansoku has not been deployed. The revised recommendation was pre-deployment adoption, omitting legacy import and retaining platform and runtime safety gates. That review ran no native suite, Kansoku build, migration or persistent database operation; M1–M6 were still unfinished at that point. Accepted architecture decisions were unchanged during that review; the subsequent implementation completed the milestones and ADR updates recorded above.
 
 
 ## Context and Orientation

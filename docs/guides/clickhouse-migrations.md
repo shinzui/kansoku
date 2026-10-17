@@ -6,7 +6,7 @@ docId: DOC-13
 tags: ["clickhouse", "migrations", "maintenance", "recovery"]
 generated:
   by: process:codex
-  at: "2026-10-16T22:48:56Z"
+  at: "2026-10-17T00:54:46Z"
 ---
 
 # Initialize and upgrade ClickHouse
@@ -148,19 +148,60 @@ failure preserves the fence. Start application traffic and resume external reade
 successful completion. The migration operator remains the definer of reader views and must
 retain their underlying SELECT rights; keep the separately constrained reader role and grants.
 
+## Reload retained identities
+
+When reopening a shell for reuse, upgrade or recovery, enter `nix develop` in the same checkout.
+Restore the same PostgreSQL connection and migration operator credentials from your environment
+or secret manager, including an explicitly set `KANSOKU_CLICKHOUSE_PASSWORD`. Apply PostgreSQL
+migrations first and rebuild/select the new executable. Load the saved binding instead of
+repeating the first-install UUID generation:
+
+```bash
+set -euo pipefail
+umask 077
+just migrate
+migration_package="$(nix build .#kansoku-server --no-link --print-out-paths)"
+export CH_MIGRATE="$migration_package/bin/kansoku-ch-migrate"
+export KANSOKU_CH_MIGRATION_TARGET="$(jq -er .KANSOKU_CH_MIGRATION_TARGET .dev/migration-audit/target.json)"
+export KANSOKU_CH_MIGRATION_ENDPOINT="$(jq -er .KANSOKU_CH_MIGRATION_ENDPOINT .dev/migration-audit/target.json)"
+export KANSOKU_CH_MIGRATION_SERVER_ID="$(jq -er .KANSOKU_CH_MIGRATION_SERVER_ID .dev/migration-audit/target.json)"
+export KANSOKU_CH_MIGRATION_LEDGER_ID="$(jq -er .KANSOKU_CH_MIGRATION_LEDGER_ID .dev/migration-audit/target.json)"
+"$CH_MIGRATE" plan --json
+```
+
+Retain all session reports alongside this binding. For recovery, restore
+`KANSOKU_CH_MIGRATION_SESSION` from the matching report's `.result.id`; if begin lost its
+response, unset that variable and use `maintenance status --json` to find the active session
+under the retained binding. Do not start a replacement session while one remains unfinished.
+
 ## Subsequent native migration
 
 Back up both stores consistently, retain the identities and rehearse the new executable against
 an isolated restored copy before a persistent rollout. Append native definitions; never edit
 applied names, SQL, checksums or their ordering. Inspect the new offline plan, apply any new
-PostgreSQL migrations first, stop submitting clients/read schedules, and begin a new maintenance
-session with the same native ledger binding. Establish external drain before each entry.
+PostgreSQL migrations first, and reload the retained identities as above. Stop submitting
+clients/read schedules. After confirming the previous session completed, unset
+`KANSOKU_CH_MIGRATION_SESSION` and begin a new session with the same native ledger binding,
+using the fresh-install `maintenance begin` command with a new reason and a new private report
+path. Export that report's `.result.id` as the new session ID. Preserve earlier reports.
+Establish external drain before each entry.
 
-Run the same `up` command with fresh session/counter/audit evidence and **without**
-`--initialize-ledger`. It applies only a compatible pending suffix. A repeated clean run, after
-fresh drain evidence, submits no application SQL. Verify currentness, establish fresh drain
-again and finish. Ordinary `up` does not resume interrupted work or consume standing repair
-authorization. Do not run the old shell runner beside native history.
+After recording fresh external drain evidence for this session/counter, run:
+
+```bash
+predecessor="$("$CH_MIGRATE" maintenance status --json | jq -r .result.entry)"
+"$CH_MIGRATE" --predecessor "$predecessor" up --json \
+  --expect-target "$KANSOKU_CH_MIGRATION_TARGET" --actor "$USER" \
+  --reason 'reviewed native upgrade or clean repeat' --quiescent \
+  --evidence "$DRAIN_EVIDENCE"
+"$CH_MIGRATE" verify --require-current --guarded --json
+```
+
+Do not supply `--initialize-ledger` for recurring execution. `up` applies only a compatible
+pending suffix. A repeated clean run, after fresh drain evidence, submits no application SQL.
+Establish fresh drain again and finish with the fresh-install `maintenance finish` command and
+the newly observed predecessor counter. Ordinary `up` does not resume interrupted work or
+consume standing repair authorization. Do not run the old shell runner beside native history.
 
 Rollback is a separately reviewed restore of consistent backups into a separate isolated target
 with reviewed target/server/ledger identities. Prevent simultaneously active cloned identities.
@@ -185,6 +226,7 @@ Explicit reconciliation performs native reads under exclusion. It acknowledges o
 resolved history after external drain; `NotObserved` alone is never permission to submit SQL:
 
 ```bash
+predecessor="$("$CH_MIGRATE" maintenance status --json | jq -r .result.entry)"
 "$CH_MIGRATE" --predecessor "$predecessor" maintenance reconcile --json \
   --expect-target "$KANSOKU_CH_MIGRATION_TARGET" --actor "$USER" \
   --reason 'reconcile retained response loss after external drain' \
@@ -199,10 +241,19 @@ Interrupted initialization can reconcile absent/uninitialized history only while
 objects remain absent, or resume the matching initialized native ledger. It retains the original
 UUID in either case.
 
-Use `repair --help` and the selected operation's help for exact syntax. From fresh guarded
-status, retain `.result.report.observation.position`, the active migration's `attempt`, and the
-selected step's `attempt.ownerAttempt`, `attempt.step` and `attempt.queryId`. Review those values;
-do not select a different step merely because a prior command failed:
+Use `repair --help` and the selected operation's help for exact syntax. After external drain,
+capture fresh guarded status and the current predecessor counter:
+
+```bash
+"$CH_MIGRATE" status --guarded --json > .dev/migration-audit/status.private.json
+predecessor="$("$CH_MIGRATE" maintenance status --json | jq -r .result.entry)"
+```
+
+From that report, retain `.result.report.observation.position`, the active migration's `attempt`
+in `.result.report.migrations`, and the selected step's `attempt.ownerAttempt`, `attempt.step`
+and `attempt.queryId` in its `steps` array. Set `POSITION`, `ATTEMPT`, `STEP_ATTEMPT`, `STEP`
+and `QUERY_ID` from those reviewed values, and set `DRAIN_EVIDENCE` to fresh evidence for this
+session/counter. Do not select a different step merely because a prior command failed:
 
 ```bash
 "$CH_MIGRATE" --predecessor "$predecessor" repair accept-step --json \

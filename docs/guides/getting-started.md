@@ -6,7 +6,7 @@ docId: DOC-7
 tags: ["getting-started", "installation", "ingestion", "metrics"]
 generated:
   by: process:codex
-  at: "2026-10-16T22:48:56Z"
+  at: "2026-10-17T00:54:46Z"
 ---
 
 # Run Kansoku locally
@@ -178,10 +178,18 @@ If the account already contains data, `value` may be greater than 1.
 ## Reuse and recover this checkout
 
 Stop the server, then stop `just up` with Ctrl-C. Keep the checkout's `db/` and `clickhouse/`
-directories to retain data. Start `just up` again, repeat both migration commands, then start
-`just run` with the same account credentials. Already-applied migrations are skipped. Retrying
-the exact event ID and producer content acknowledges the original event without creating a
-second metric event; changing that content returns an immutable-ID conflict.
+directories and `.dev/migration-audit/` identity/session records to retain the stack and its
+administrative binding. Start `just up` again and run `just migrate`. Reload the retained native
+identities and follow [subsequent native migration](clickhouse-migrations.md#subsequent-native-migration):
+inspect the new plan, begin a new session only after the previous one completed, establish
+external drain, run `up` without `--initialize-ledger`, verify, drain again and finish. A clean
+repeat skips applied migrations; `plan --json` alone only inspects definitions. If a session
+was interrupted, follow [explicit recovery](clickhouse-migrations.md#interruption-receipts-and-explicit-repair)
+under that same session instead.
+
+After session completion, start `just run` with the same account credentials. Retrying the exact
+event ID and producer content acknowledges the original event without creating a second metric
+event; changing that content returns an immutable-ID conflict.
 
 A ClickHouse outage leaves new accepted events in PostgreSQL; restore storage and let the
 writer retry. The readiness probe can fail during the outage while ingest still accepts within

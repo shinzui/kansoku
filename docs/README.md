@@ -25,6 +25,11 @@ the bundle and its migration log.
 
 - [Consume ClickHouse](guides/consume-clickhouse.md) documents the constrained SQL reader, exact recipes and verified Grafana/GrowthBook integrations.
 
+- [Initialize and upgrade ClickHouse](guides/clickhouse-migrations.md) covers retained native
+  identities, maintenance sessions, external drain, first initialization, and explicit recovery.
+  Native execution currently requires the qualified arm64 macOS artifact; Linux qualification
+  and the deployment target remain release gates.
+
 - [Web enrichment and acquisition](guides/web-enrichment.md) documents first-touch sessions, device/bot rules and optional trusted country lookup.
 
 ## Contract references

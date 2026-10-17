@@ -1,5 +1,9 @@
 # Bundle Update Log
 
+## 2026-10-17
+
+* **Update**: Correct DOC-7 checkout reuse and DOC-9 interrupted migration recovery after native adoption; expand DOC-13 with retained-identity reload, recurring execution and fresh recovery counters. Preserve original SQL as evidence rather than a replay procedure.
+
 ## 2026-10-16
 
 * **Update**: Document PostgreSQL-first native initialization, retained identities, explicit sessions/drain/repair and qualification limits; add DOC-13 migration runbook.

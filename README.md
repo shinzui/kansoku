@@ -30,6 +30,8 @@ query time, and serves reusable metrics through a typed HTTP API.
 - Constrained SQL reader views and verified Grafana/GrowthBook consumption.
 - Fenced, resumable administration for credentials, user erasure, applied retention, archive
   replay, and ingest rejection diagnostics.
+- Explicit ClickHouse migrations through `kansoku-ch-migrate`, with an embedded checksummed
+  plan, persistent maintenance sessions, and deliberate recovery after interruption.
 - OpenAPI at `GET /openapi.json`, liveness at `GET /health/live`, readiness at
   `GET /health/ready`, safe correlated JSON access logs, Prometheus metrics at
   `GET /internal/metrics`, and opt-in OpenTelemetry trace export.
@@ -65,6 +67,10 @@ evidence and limits; the [terminology catalog](docs/terminology/index.md) explai
 - [Administer credentials, retention, erasure, and replay](docs/guides/administration.md)
 - [Develop Kansoku](docs/guides/development.md)
 - [Explore the architecture atlas](docs/artifcats/kansoku-architecture.html)
+
+Local native migration execution currently requires arm64 macOS and exactly ClickHouse
+26.8.28.14. Linux qualification and the deployment target remain release gates; see the
+[migration runbook](docs/guides/clickhouse-migrations.md).
 
 Install Nix with flakes enabled and enter the checkout. The development shell supplies GHC,
 Cabal, PostgreSQL, ClickHouse, and the supporting command-line tools. Start the local databases
@@ -130,8 +136,10 @@ account-scoped evidence when exact user metrics are queried.
 PostgreSQL migrations explicitly install the vendored PGMQ schema without requiring the upstream
 PostgreSQL extension, followed by credential, acceptance, rejection, maintenance, cohort, and
 metric-definition tables. ClickHouse holds static cohort membership and derived organization
-state alongside event analytics, with a separate forward-only migration ledger. Normal server
-startup performs neither schema migration.
+state alongside event analytics. `kansoku-ch-migrate` embeds its immutable migration plan and
+records checksummed history in the separate `kansoku_migration_ledger` database, coordinated
+by persistent PostgreSQL maintenance sessions. Normal server startup performs neither schema
+migration.
 
 Trusted SQL consumers use constrained reader views directly. They coordinate their own pause
 during maintenance; the HTTP traffic fence does not cover external database queries.
@@ -187,7 +195,7 @@ boundaries, and [Consume ClickHouse](docs/guides/consume-clickhouse.md) for the 
 | --- | --- |
 | `kansoku-api` | Canonical event and schema types, response algebra, and Servant route types. |
 | `kansoku-core` | Configuration, migrations, authentication, queue/writer, ClickHouse queries, telemetry, and HTTP assembly. |
-| `kansoku-server` | `kansoku-server`, explicit migrations via `kansoku-migrate`, and lifecycle operations via `kansoku-admin`. |
+| `kansoku-server` | `kansoku-server`, PostgreSQL migrations via `kansoku-migrate`, ClickHouse migrations via `kansoku-ch-migrate`, and lifecycle operations via `kansoku-admin`. |
 | `kansoku-client` | Buffered Haskell producer SDK and typed metrics, cohort, and saved-definition clients. |
 
 The locked development environment uses GHC 9.12.4. The codebase uses GHC2024, Effectful,
