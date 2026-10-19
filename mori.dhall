@@ -86,6 +86,13 @@ in  Schema.Project::{
         , description = Some "What Kansoku provides today, with stable CAP handles, compatibility limits and evidence"
         }
       , Schema.OkfBundle::{
+        , name = "improvement-requests"
+        , path = "docs/improvement-requests"
+        , profile = Some "docs/improvement-requests/profile.dhall"
+        , okfVersion = "0.2"
+        , description = Some "Kansoku-owned improvement requests with stable IR handles"
+        }
+      , Schema.OkfBundle::{
         , name = "terminology"
         , path = "docs/terminology"
         , profile = Some "docs/terminology/profile.dhall"
