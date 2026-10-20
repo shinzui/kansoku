@@ -6,7 +6,15 @@ generated:
   by: process:claude-code
   at: "2026-10-19T17:02:45Z"
 requestId: IR-1
-status: proposed
+status: withdrawn
+resolution: >-
+  Withdrawn by the requesting operator on 2026-10-20. The DML-only PostgreSQL runtime was an
+  addition of the requesting plan, not an operator requirement, and creating the PGMQ queue
+  at startup with provisionQueue is the pattern every project follows. The platform will
+  instead let an app declare extra runtime privileges inside its own database
+  (mori://shinzui/nagare/okf/improvement-requests/concepts/IR-35); a local PostgreSQL 18.6
+  rehearsal showed Kansoku 9127c47's unchanged server creating its queue as the runtime with
+  CREATE on schema pgmq. No Kansoku change is needed.
 origin: mori://tan/tan-ng-labs/plans/2-deploy-kansoku-to-the-intranet-as-a-shared-analytics-service-for-nagare-apps
 dependencies:
   - ref: mori://shinzui/nagare/okf/improvement-requests/concepts/IR-30
