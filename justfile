@@ -45,6 +45,10 @@ reviews-check:
 capabilities-check:
     okf validate docs/capabilities --profile docs/capabilities/profile.dhall --profile-enforce --log-enforce
 
+# Enforce the shared research-document profile and log freshness for docs/research.
+research-check:
+    okf validate docs/research --strict --profile docs/research/profile.dhall --profile-enforce --log-enforce
+
 # Enforce controlled vocabulary metadata, term references and log freshness.
 terminology-check:
     okf validate docs/terminology --strict --profile docs/terminology/profile.dhall --profile-enforce --log-enforce

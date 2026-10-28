@@ -118,5 +118,12 @@ in  Schema.Project::{
         , okfVersion = "0.2"
         , description = Some "Reader-facing guides, tutorials, explanations, reference material and operational runbooks with stable DOC handles"
         }
+      , Schema.OkfBundle::{
+        , name = "research"
+        , path = "docs/research"
+        , profile = Some "docs/research/profile.dhall"
+        , okfVersion = "0.2"
+        , description = Some "Research records with stable RES handles"
+        }
       ]
     }

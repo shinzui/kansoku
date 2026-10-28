@@ -64,6 +64,9 @@ file by hand.
   Run `just terminology-check` to validate it.
 - [Reviews](reviews/) record artifact examinations under the shared OKF review profile.
   Run `just reviews-check` to validate the bundle and its log.
+- [Research](research/) records bounded investigations with stable `RES` handles under the
+  shared OKF research-document profile. Run `just research-check` to validate the bundle and
+  its log.
 - [MasterPlans](masterplans/) and [ExecPlans](plans/) are implementation history. Completed
   plans can describe an earlier state and are not user documentation.
 
