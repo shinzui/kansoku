@@ -48,8 +48,8 @@ port. It stays outside Servant/OpenAPI, ingest CORS, and body-size handling, and
 with `KANSOKU_INTERNAL_METRICS_ENABLED`.
 
 A supervised poller samples PGMQ metrics once per configured interval and publishes one shared
-sample to both Prometheus and readiness. Readiness never scans the queue directly. `/ready`
-always reports five ordered checks: `writer_alive`, `pgmq_reachable`, `clickhouse_query_reachable`, `queue_depth`, and
+sample to both Prometheus and readiness. Readiness never scans the queue directly. `/health/ready`
+evaluates five ordered checks: `writer_alive`, `pgmq_reachable`, `clickhouse_query_reachable`, `queue_depth`, and
 `writer_flush_stale`. The pipeline checks use configurable depth and successful-flush-age
 thresholds. Flush age matters only while a fresh sample shows backlog; startup is the baseline
 until the first successful flush, an empty queue is healthy, and samples older than three poll
@@ -71,9 +71,11 @@ failures retain their onset until recovery. Liveness reads in-process state only
 Readiness short-circuits in the five-check order above. Native ClickHouse ping is a
 query-path dependency check; it does not scan tables. External checks have a 750 ms
 budget including pool wait and disposal, and the complete probe has a 2 second budget.
-Compatibility `/health` and diagnostic `/ready` remain. All four exact paths stay
-outside customer OpenAPI, auth and ingest middleware, and form the shared access-log
-exclusion inventory.
+The legacy `/health` and `/ready` routes are removed; existing deployments must
+use `/health/live` and `/health/ready`. The two canonical probe paths stay outside
+customer OpenAPI, auth and ingest middleware, and form the shared access-log
+exclusion inventory. Readiness exposes the first failure through the canonical
+contract; pipeline observations remain available through Prometheus metrics.
 
 Query operations let exceptions escape the resource-pool callback, so failed handles
 are physically disposed before errors propagate. A later checkout creates a fresh

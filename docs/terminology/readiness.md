@@ -22,7 +22,7 @@ anchors:
 
 The operational determination that the process and required pipeline dependencies can currently serve traffic within configured thresholds.
 
-Health/ready checks writer liveness, PostgreSQL, ClickHouse query reachability, sampled queue depth and flush freshness in order. The first failure determines a 503 with its consecutive failingSince timestamp; recovery resets it. A process can remain live while storage readiness fails.
+/health/ready checks writer liveness, PostgreSQL, ClickHouse query reachability, sampled queue depth and flush freshness in order. The first failure determines a 503 with its consecutive failingSince timestamp; recovery resets it. A process can remain live while storage readiness fails.
 
 Related: [writer breaker](writer-breaker.md), [liveness](liveness.md).
 

@@ -1,5 +1,9 @@
 # Bundle Update Log
 
+## 2026-11-01
+
+* **Update**: Align liveness and readiness terminology with the two canonical probe endpoints.
+
 ## 2026-10-16
 
 * **Adoption**: Bootstrap OKF 0.2 with the frozen v0.20.0 [terminology profile](mori://shinzui/okf-profiles/profiles/terminology).

@@ -23,8 +23,7 @@ import Kansoku.Ingest.Api qualified as Ingest
 import Kansoku.Metrics.Api qualified as Metrics
 import Kansoku.Metrics.RoutingSpec (sentinelContext, sentinelKansokuServer)
 import Kansoku.Prelude
-import Kansoku.Readiness (ReadyCheckFailure (..))
-import Kansoku.Server (ReadyProbe (..), internalMetrics, waiWrapper)
+import Kansoku.Server (internalMetrics, waiWrapper)
 import Network.HTTP.Client qualified as HTTP
 import Network.HTTP.Types
   ( Status,
@@ -33,7 +32,6 @@ import Network.HTTP.Types
     status200,
     status202,
     status404,
-    status503,
   )
 import Network.Wai (Application)
 import Network.Wai.Handler.Warp qualified as Warp
@@ -178,21 +176,10 @@ spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
       envelope <- decodeBody @ProblemDetails (HTTP.responseBody missing)
       code envelope `shouldBe` "not_found"
 
-  it "pins health, readiness, internal metrics, and OpenAPI as the WAI-level allowlist" $ do
+  it "keeps operational routes out of OpenAPI and serves WAI-level reference and metrics routes" $ do
     traverse_ (\path -> path `shouldNotSatisfy` (`elem` documentedPaths)) operationalPaths
-    Warp.testWithApplication (pure (waiWrapper alwaysReadyProbe (internalMetrics True sentinelApplication))) $ \port -> do
+    Warp.testWithApplication (pure (waiWrapper (internalMetrics True sentinelApplication))) $ \port -> do
       manager <- HTTP.newManager HTTP.defaultManagerSettings
-      health <- get manager port "/health"
-      HTTP.responseStatus health `shouldBe` status200
-      HTTP.responseBody health `shouldBe` "OK"
-
-      ready <- get manager port "/ready"
-      HTTP.responseStatus ready `shouldBe` status200
-      readyBody <- decodeBody @Aeson.Value (HTTP.responseBody ready)
-      lookupText ["status"] readyBody `shouldBe` Just "ready"
-      checkNames readyBody
-        `shouldBe` ["writer_alive", "pgmq_reachable", "clickhouse_query_reachable", "queue_depth", "writer_flush_stale"]
-
       openapi <- get manager port "/openapi.json"
       HTTP.responseStatus openapi `shouldBe` status200
       decodeBody @Aeson.Value (HTTP.responseBody openapi) `shouldReturn` documentValue
@@ -201,18 +188,6 @@ spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
       HTTP.responseStatus metrics `shouldBe` status200
       BSL.toStrict (HTTP.responseBody metrics)
         `shouldSatisfy` BS8.isInfixOf "kansoku_queue_length"
-
-  it "renders named pipeline readiness failures with observations"
-    $ Warp.testWithApplication
-      (pure (waiWrapper failingPipelineProbe sentinelApplication))
-    $ \port -> do
-      manager <- HTTP.newManager HTTP.defaultManagerSettings
-      ready <- get manager port "/ready"
-      HTTP.responseStatus ready `shouldBe` status503
-      readyBody <- decodeBody @Aeson.Value (HTTP.responseBody ready)
-      lookupText ["status"] readyBody `shouldBe` Just "unavailable"
-      valueAt ["checks"] readyBody
-        `shouldSatisfy` maybe False (containsFailedCheck "queue_depth" 101)
 
 expectedServedPaths :: [Text]
 expectedServedPaths =
@@ -248,7 +223,7 @@ expectedServedPaths =
     ]
 
 operationalPaths :: [Text]
-operationalPaths = ["/health/live", "/health/ready", "/health", "/ready", "/internal/metrics", "/openapi.json"]
+operationalPaths = ["/health/live", "/health/ready", "/internal/metrics", "/openapi.json"]
 
 expectedOperationIds :: [(Text, Text, Text)]
 expectedOperationIds =
@@ -387,19 +362,6 @@ sentinelApplication =
     sentinelContext
     sentinelKansokuServer
 
-alwaysReadyProbe :: ReadyProbe
-alwaysReadyProbe =
-  ReadyProbe
-    { writerAlive = pure True,
-      pgmqReachable = pure (Right ()),
-      clickhouseReachable = pure True,
-      pipelineReady = pure []
-    }
-
-failingPipelineProbe :: ReadyProbe
-failingPipelineProbe =
-  alwaysReadyProbe & #pipelineReady .~ pure [QueueDepthExceeded {observed = 101, limit = 100}]
-
 assertRouted :: HTTP.Manager -> Warp.Port -> Text -> Expectation
 assertRouted manager port path = do
   response <- requestForPath manager port path
@@ -503,26 +465,6 @@ operationParameterNames operation =
         Just (Aeson.String name) <- [KeyMap.lookup "name" parameter]
       ]
     _ -> []
-
-checkNames :: Aeson.Value -> [Text]
-checkNames body =
-  case valueAt ["checks"] body of
-    Just (Aeson.Array checks) ->
-      [ name
-      | check <- Foldable.toList checks,
-        Just name <- [lookupText ["check"] check]
-      ]
-    _ -> []
-
-containsFailedCheck :: Text -> Int -> Aeson.Value -> Bool
-containsFailedCheck expectedName expectedObserved = \case
-  Aeson.Array checks -> any matches (Foldable.toList checks)
-  _ -> False
-  where
-    matches check =
-      lookupText ["check"] check == Just expectedName
-        && valueAt ["ok"] check == Just (Aeson.Bool False)
-        && valueAt ["observed"] check == Just (Aeson.toJSON expectedObserved)
 
 -- These two Relay endpoints use the released pagination 400 JSON exemption.
 isRelayPage :: Text -> Text -> Bool

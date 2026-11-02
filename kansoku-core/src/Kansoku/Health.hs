@@ -24,7 +24,7 @@ operationalApi :: Proxy (NamedRoutes OperationalApi)
 operationalApi = Proxy
 
 probePaths :: [ByteString]
-probePaths = healthRawPaths <> ["/health", "/ready"]
+probePaths = healthRawPaths
 
 probeApplication :: ProbeCheck -> ProbeCheck -> Application
 probeApplication liveCheck readyCheck =

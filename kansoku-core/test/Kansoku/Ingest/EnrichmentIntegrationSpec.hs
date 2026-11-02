@@ -51,7 +51,7 @@ spec metrics = describe "Kansoku.Enrichment native" $
       Pool.use pool (Pgmq.createQueue queue) >>= either (fail . show) pure
       (_, Token token) <- issueKey pool WriteKey account "owned enrichment consumer" >>= either (fail . show) pure
       service <- newIngestService cfg metrics pool queue
-      let app = kansokuAppWithChecks (pure Healthy) (pure Healthy) metrics cfg missing pool service missing
+      let app = kansokuAppWithChecks (pure Healthy) (pure Healthy) metrics cfg pool service missing
           timestamp = read "2026-07-01 12:00:00 UTC"
           event =
             baseEvent (EventId "enriched-first") (EventName "page_view") Web timestamp timestamp

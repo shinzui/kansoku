@@ -185,7 +185,7 @@ def privacy(name, token, sentinel):
     if name in ('server-http', 'server-http-dup'):
         assert '"url.path"' in attributes, 'stable semantic mode was not enabled'
         assert '"url.query"' not in attributes or '("url.query",AttributeValue (TextAttribute ""))' in attributes, 'stable query captured values'
-    assert not any(row.get('path') in ('/health', '/ready', '/health/live', '/health/ready')
+    assert not any(row.get('path') in ('/health/live', '/health/ready')
                    for row in records if 'method' in row), 'probe access record emitted'
     print(f'{name}: complete span/access privacy and correlation passed', flush=True)
 
@@ -312,7 +312,7 @@ def main():
                                 evidence = (ROOT / ('sdk-traits-' + name + '.log')).read_text()
                                 if not re.search(r'\b1 pass\b', evidence) or not re.search(r'\b0 fail\b', evidence) or re.search(r'\b[1-9]\d* skip\b', evidence):
                                     raise RuntimeError('SDK trait acceptance needs one passing, non-skipped live test')
-                            for path in ('/health', '/ready', '/health/live', '/health/ready'):
+                            for path in ('/health/live', '/health/ready'):
                                 urllib.request.urlopen(base + path, timeout=3).close()
                             population_filter = urllib.parse.urlencode({'filter': json.dumps(dict(dimension='event_name', op='neq', value=sentinel))})
                             answer = request(base, '/metrics/revenue?from=2026-07-01&to=2026-07-12&groupBy=prop:plan&' + population_filter,

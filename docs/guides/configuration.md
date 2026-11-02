@@ -171,8 +171,7 @@ recovery.
 
 [Documentation index](../README.md)
 
-Canonical probes are `/health/live` and `/health/ready`; `/health` and `/ready`
-remain compatibility routes. Probe timeouts are fixed operational limits: 2 seconds
+The probe endpoints are `/health/live` and `/health/ready`. Probe timeouts are fixed operational limits: 2 seconds
 for each complete probe and 750 ms for each external readiness check, including pool
 wait and disposal. They do not impose an analytics-query duration policy. ClickHouse
 query reachability is checked independently of the writer and queue thresholds.

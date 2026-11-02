@@ -77,7 +77,7 @@ spec metrics = describe "Kansoku beacon perimeter" $ do
       (_, Token revokedKey) <- issueKey pool WriteKey account "revoked" >>= either (fail . show) pure
       Pool.use pool (S.script "UPDATE kansoku.api_keys SET revoked_at=now() WHERE description='revoked'") >>= either (fail . show) pure
       service <- newIngestServiceWithClock (readIORef clock) configured metrics pool queue
-      let app = kansokuAppWithChecks (pure Healthy) (pure Healthy) metrics configured unused pool service unused
+      let app = kansokuAppWithChecks (pure Healthy) (pure Healthy) metrics configured pool service unused
       now <- getCurrentTime
       let event n = ingestEvent (baseEvent (EventId n) (EventName "custom") Web now now)
           envelope token events = Aeson.encode (BeaconEnvelope token events)

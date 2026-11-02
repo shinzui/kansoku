@@ -15,19 +15,16 @@ jsonpath "$.check" == "all"
 jsonpath "$.failingSince" == null
 
 GET {{base_url}}/health
-HTTP 200
+HTTP 404
 [Asserts]
-header "Content-Type" contains "text/plain"
-body == "OK"
+header "Content-Type" contains "application/problem+json"
+jsonpath "$.code" == "not_found"
 
 GET {{base_url}}/ready
-HTTP 200
+HTTP 404
 [Asserts]
-header "Content-Type" contains "application/json"
-jsonpath "$.status" == "ready"
-jsonpath "$.checks" count == 5
-jsonpath "$.checks[2].check" == "clickhouse_query_reachable"
-jsonpath "$.checks[2].ok" == true
+header "Content-Type" contains "application/problem+json"
+jsonpath "$.code" == "not_found"
 
 GET {{base_url}}/internal/metrics
 HTTP 200

@@ -11,9 +11,10 @@ import Data.Time.Clock
 import Kansoku.Config (loadConfig)
 import Kansoku.Health (probePaths)
 import Kansoku.Prelude ((&), (.~))
+import Kansoku.Readiness (ReadyCheckFailure (..))
 import Kansoku.Server (ReadyProbe (..), kansokuAppWithChecks, newProbeChecks)
 import Network.HTTP.Client qualified as Http
-import Network.HTTP.Types (hContentType, status503)
+import Network.HTTP.Types (hContentType, status404, status503)
 import Network.Wai.Handler.Warp qualified as Warp
 import Servant.Health
 import Test.Hspec
@@ -58,11 +59,32 @@ spec = describe "Kansoku.Health production checks" $ do
     now <- getCurrentTime
     let failed = pure (Unhealthy "injected" now)
         unused = error "probe touched analytics dependency"
-        app = kansokuAppWithChecks failed failed unused cfg unused unused unused unused
+        app = kansokuAppWithChecks failed failed unused cfg unused unused unused
     Warp.testWithApplication (pure app) $ \port -> do
       manager <- Http.newManager Http.defaultManagerSettings
       mapM_ (assertFailure manager port) ["/health/live", "/health/ready"]
-    probePaths `shouldBe` ["/health/live", "/health/ready", "/health", "/ready"]
+    probePaths `shouldBe` ["/health/live", "/health/ready"]
+
+  it "reports the first failing pipeline check through canonical readiness" $ do
+    let probe = healthy & #pipelineReady .~ pure [QueueDepthExceeded {observed = 101, limit = 100}]
+    (live, ready) <- newProbeChecks probe
+    ready >>= (`shouldSatisfy` named "queue_depth")
+    live `shouldReturn` Healthy
+
+  it "returns ordinary routing failures for the retired probe endpoints" $ do
+    cfg <- loadConfig >>= either (fail . show) pure
+    let unused = error "retired probe touched analytics dependency"
+        app = kansokuAppWithChecks (pure Healthy) (pure Healthy) unused cfg unused unused unused
+    Warp.testWithApplication (pure app) $ \port -> do
+      manager <- Http.newManager Http.defaultManagerSettings
+      mapM_
+        ( \path -> do
+            req <- Http.parseRequest ("http://127.0.0.1:" <> show port <> path)
+            response <- Http.httpLbs req manager
+            Http.responseStatus response `shouldBe` status404
+            lookup hContentType (Http.responseHeaders response) `shouldBe` Just "application/problem+json"
+        )
+        ["/health", "/ready"]
 
 assertFailure :: Http.Manager -> Int -> String -> Expectation
 assertFailure manager port path = do

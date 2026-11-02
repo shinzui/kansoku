@@ -1,12 +1,11 @@
 {-# LANGUAGE TypeApplications #-}
 
--- | The minimal HTTP server for EP-1: a single /health route returning 200 OK.
+-- | HTTP application assembly, operational probes, and analytics routes.
 module Kansoku.Server
   ( ReadyProbe (..),
     bodySizeLimit,
     problemBoundary,
     envelopeFormatters,
-    healthApp,
     ingestCors,
     internalMetrics,
     kansokuApp,
@@ -25,7 +24,6 @@ import Data.ByteString.Builder (toLazyByteString)
 import Data.ByteString.Lazy qualified as LBS
 import Data.Either (isRight)
 import Data.Generics.Labels ()
-import Data.List (find)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text.Encoding
 import Effectful (Eff, IOE, runEff, type (:>))
@@ -53,7 +51,7 @@ import Kansoku.Metrics.DefinitionHandler (definitionsServer)
 import Kansoku.Metrics.Handler (metricsServerWithCohorts)
 import Kansoku.Observability (PipelineMetrics)
 import Kansoku.Prelude
-import Kansoku.Readiness (ReadyCheckFailure (..), checkName)
+import Kansoku.Readiness (ReadyCheckFailure, checkName)
 import Network.HTTP.Types (status200, status404, status413, status500, status503, statusCode)
 import Network.HTTP.Types.Header (hContentType)
 import Network.Wai (Application, Middleware, Response, pathInfo, responseLBS)
@@ -76,9 +74,8 @@ import Servant.Health (ProbeCheck, ProbeVerdict (..))
 import Servant.Health.Check (boolCheck, newFailureTracker, safeCheck, sequenceChecks, withProbeTimeout)
 import Servant.Server (ErrorFormatter, ErrorFormatters (..), defaultErrorFormatters)
 import Servant.Server.Generic (AsServerT)
-import System.Timeout (timeout)
 
--- | Runtime checks used to answer GET /ready.
+-- | Runtime checks used to answer GET /health/ready.
 data ReadyProbe = ReadyProbe
   { writerAlive :: !(IO Bool),
     pgmqReachable :: !(IO (Either Text ())),
@@ -86,15 +83,6 @@ data ReadyProbe = ReadyProbe
     pipelineReady :: !(IO [ReadyCheckFailure])
   }
   deriving stock (Generic)
-
--- | The WAI application. GET /health -> 200 "OK"; everything else -> 404.
-healthApp :: Application
-healthApp req respond =
-  case pathInfo req of
-    ["health"] ->
-      respond (responseLBS status200 [(hContentType, "text/plain")] "OK")
-    _ ->
-      respond (responseLBS status404 [(hContentType, "text/plain")] "Not Found")
 
 kansokuServer :: Pool.Pool -> Text -> IngestService -> QueryPool -> KansokuAPI (AsServerT Handler)
 kansokuServer pgPool settings service queryPool =
@@ -110,7 +98,7 @@ kansokuApp :: MaintenancePool -> PipelineMetrics -> Config -> ReadyProbe -> Pool
 kansokuApp maintenance pipelineMetrics config probe pool queueName queryPool = do
   service <- newIngestService config pipelineMetrics pool queueName
   (liveCheck, readyCheck) <- newProbeChecks probe
-  pure (appWithGate (maintenanceTraffic maintenance) liveCheck readyCheck pipelineMetrics config probe pool service queryPool)
+  pure (appWithGate (maintenanceTraffic maintenance) liveCheck readyCheck pipelineMetrics config pool service queryPool)
 
 maintenanceTraffic :: MaintenancePool -> Middleware
 maintenanceTraffic pool app request respond
@@ -132,14 +120,13 @@ maintenanceTraffic pool app request respond
 
 -- | Production assembly with independently injectable checks. The conformance kit
 -- uses this same builder; analytics dependencies stay unevaluated for probes.
-kansokuAppWithChecks :: ProbeCheck -> ProbeCheck -> PipelineMetrics -> Config -> ReadyProbe -> Pool.Pool -> IngestService -> QueryPool -> Application
+kansokuAppWithChecks :: ProbeCheck -> ProbeCheck -> PipelineMetrics -> Config -> Pool.Pool -> IngestService -> QueryPool -> Application
 kansokuAppWithChecks = appWithGate id
 
-appWithGate :: Middleware -> ProbeCheck -> ProbeCheck -> PipelineMetrics -> Config -> ReadyProbe -> Pool.Pool -> IngestService -> QueryPool -> Application
-appWithGate maintenanceGate liveCheck readyCheck _pipelineMetrics config probe pool service queryPool =
+appWithGate :: Middleware -> ProbeCheck -> ProbeCheck -> PipelineMetrics -> Config -> Pool.Pool -> IngestService -> QueryPool -> Application
+appWithGate maintenanceGate liveCheck readyCheck _pipelineMetrics config pool service queryPool =
   operational liveCheck readyCheck $
     waiWrapper
-      probe
       ( internalMetrics
           (config ^. #internalMetricsEnabled)
           ( ingestCors
@@ -261,103 +248,13 @@ payloadTooLarge maxBytes =
 -- | Operational/meta routes stay at WAI level; all analytics routes delegate
 -- to the one Servant application. Taking the inner app keeps this wrapper
 -- testable without database connections.
-waiWrapper :: ReadyProbe -> Application -> Application
-waiWrapper probe inner req respond =
+waiWrapper :: Middleware
+waiWrapper inner req respond =
   case pathInfo req of
-    ["health"] ->
-      healthApp req respond
-    ["ready"] ->
-      readyApp probe req respond
     ["openapi.json"] ->
       respond (responseLBS status200 [(hContentType, "application/json")] (Aeson.encode kansokuOpenApi))
     _ ->
       inner req respond
-
-readyApp :: ReadyProbe -> Application
-readyApp probe _req respond = do
-  result <- timeout 2_000_000 (trySynchronous (readyResponse probe))
-  respond $ case result of
-    Just (Right response) -> response
-    _ ->
-      responseLBS status503 [(hContentType, "application/json")] $
-        Aeson.encode
-          ( Aeson.object
-              [ "status" Aeson..= ("unavailable" :: Text),
-                "failing" Aeson..= (["readiness"] :: [Text]),
-                "checks"
-                  Aeson..= fmap
-                    (`simpleCheck` False)
-                    ["writer_alive", "pgmq_reachable", "clickhouse_query_reachable", "queue_depth", "writer_flush_stale"]
-              ]
-          )
-
-readyResponse :: ReadyProbe -> IO Response
-readyResponse probe = do
-  isWriterAlive <- passed <$> boundedCheck "writer_alive" (probe ^. #writerAlive)
-  postgresOk <- passed <$> boundedCheck "pgmq_reachable" (isRight <$> (probe ^. #pgmqReachable))
-  clickhouseOk <- passed <$> boundedCheck "clickhouse_query_reachable" (probe ^. #clickhouseReachable)
-  pipelineFailures <- probe ^. #pipelineReady
-  let failingDependencies :: [Text]
-      failingDependencies =
-        ["writer" | not isWriterAlive]
-          <> ["postgres" | not postgresOk]
-          <> ["clickhouse" | not clickhouseOk]
-          <> (checkName <$> pipelineFailures)
-      checks =
-        [ simpleCheck "writer_alive" isWriterAlive,
-          simpleCheck "pgmq_reachable" postgresOk,
-          simpleCheck "clickhouse_query_reachable" clickhouseOk,
-          pipelineCheck "queue_depth" pipelineFailures,
-          pipelineCheck "writer_flush_stale" pipelineFailures
-        ]
-      body
-        | null failingDependencies =
-            Aeson.object
-              [ "status" Aeson..= ("ready" :: Text),
-                "checks" Aeson..= checks
-              ]
-        | otherwise =
-            Aeson.object
-              [ "status" Aeson..= ("unavailable" :: Text),
-                "failing" Aeson..= failingDependencies,
-                "checks" Aeson..= checks
-              ]
-      status
-        | null failingDependencies = status200
-        | otherwise = status503
-  pure (responseLBS status [(hContentType, "application/json")] (Aeson.encode body))
-
-passed :: ProbeVerdict -> Bool
-passed Healthy = True
-passed Unhealthy {} = False
-
-simpleCheck :: Text -> Bool -> Aeson.Value
-simpleCheck name ok = Aeson.object ["check" Aeson..= name, "ok" Aeson..= ok]
-
-pipelineCheck :: Text -> [ReadyCheckFailure] -> Aeson.Value
-pipelineCheck name failures =
-  case find ((== name) . checkName) failures of
-    Nothing -> simpleCheck name True
-    Just failure -> renderPipelineFailure failure
-
-renderPipelineFailure :: ReadyCheckFailure -> Aeson.Value
-renderPipelineFailure = \case
-  QueueDepthExceeded {observed, limit} ->
-    Aeson.object
-      [ "check" Aeson..= ("queue_depth" :: Text),
-        "ok" Aeson..= False,
-        "observed" Aeson..= observed,
-        "limit" Aeson..= limit
-      ]
-  WriterFlushStale {lastFlushAt, ageSeconds, limitSeconds, backlog} ->
-    Aeson.object
-      [ "check" Aeson..= ("writer_flush_stale" :: Text),
-        "ok" Aeson..= False,
-        "lastFlushAt" Aeson..= lastFlushAt,
-        "ageSeconds" Aeson..= ageSeconds,
-        "limitSeconds" Aeson..= limitSeconds,
-        "backlog" Aeson..= backlog
-      ]
 
 -- | Make Servant's parser and routing rejections use the typed problem contract.
 envelopeFormatters :: ErrorFormatters
@@ -427,5 +324,5 @@ pgmqReady pool queueName = do
 startServer :: (IOE :> es, Reader Config :> es, Log :> es) => Application -> Eff es ()
 startServer app = do
   port <- asks @Config (^. #serverPort)
-  logInfo ("kansoku-server listening on port " <> Text.pack (show port) <> " (GET /health, GET /ready, GET /internal/metrics, GET /openapi.json, GET /v1/schemas, POST /v1/events, POST /v1/batch, POST /v1/beacon, GET /metrics/*)")
+  logInfo ("kansoku-server listening on port " <> Text.pack (show port) <> " (GET /health/live, GET /health/ready, GET /internal/metrics, GET /openapi.json, GET /v1/schemas, POST /v1/events, POST /v1/batch, POST /v1/beacon, GET /metrics/*)")
   liftIO (Warp.run port app)

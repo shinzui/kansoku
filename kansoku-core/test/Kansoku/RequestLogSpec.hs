@@ -39,12 +39,12 @@ spec = describe "Kansoku.RequestLog" $ do
         KeyMap.lookup "trace_id" fields `shouldBe` Nothing
       _ -> expectationFailure "access record is not JSON"
 
-  it "excludes only the four exact probe paths" $ do
+  it "excludes only the two exact probe paths" $ do
     output <- newIORef []
     let sink line = modifyIORef' output (line :)
         app _ respond = respond (responseLBS status200 [] "")
         send path = requestLogger sink app (defaultRequest {rawPathInfo = path}) (const (pure ResponseReceived))
     mapM_ send probePaths
     readIORef output `shouldReturn` []
-    _ <- send "/health/live/extra"
-    length <$> readIORef output `shouldReturn` 1
+    mapM_ send ["/health", "/ready", "/health/live/extra"]
+    length <$> readIORef output `shouldReturn` 3

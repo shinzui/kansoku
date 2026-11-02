@@ -73,7 +73,7 @@ spec = describe "Kansoku.HttpTelemetry" $ do
   it "traces production success, typed auth failure and canonical probes without extra spans" $ withCapture $ \middleware exported logs -> do
     cfg <- loadConfig >>= either (fail . show) pure
     let unused = error "unexpected database access"
-        app = kansokuAppWithChecks (pure Healthy) (pure Healthy) unused cfg unused unused unused unused
+        app = kansokuAppWithChecks (pure Healthy) (pure Healthy) unused cfg unused unused unused
         request path = defaultRequest {rawPathInfo = path, pathInfo = pathParts path}
     mapM_ (\path -> middleware app (request path) (const (pure ResponseReceived))) ["/v1/schemas", "/metrics/events", "/health/ready"]
     spans <- readIORef exported

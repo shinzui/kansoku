@@ -107,8 +107,7 @@ curl --fail --silent http://localhost:8080/health/ready | jq .
 
 Both canonical responses are `{"status":"ok","check":"all","failingSince":null}`
 when healthy. Readiness evaluates five checks: `writer_alive`, `pgmq_reachable`, `clickhouse_query_reachable`, `queue_depth`, and `writer_flush_stale`.
-Canonical readiness reports the first failure with a stable `failingSince`; `/ready`
-retains the detailed check array, and `/health` retains the compatibility `OK` body.
+Readiness reports the first failure with a stable `failingSince`.
 
 ## 5. Send an event
 

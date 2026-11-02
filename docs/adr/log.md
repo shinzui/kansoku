@@ -1,5 +1,9 @@
 # Bundle Update Log
 
+## 2026-11-01
+
+* **Update**: ADR-2: remove legacy liveness and diagnostic readiness handlers; keep the canonical shared probe contract and Prometheus observations.
+
 ## 2026-10-16
 * **Update**: Connect ADR-10/17/18 to ADR-22 native artifact qualification, persistent migration sessions and external reader suspension.
 * **Update**: Add ADR-22 for explicit native migrations, qualified artifacts and persistent administrative sessions with exact uncertain receipts.

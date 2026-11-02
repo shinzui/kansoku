@@ -10,5 +10,5 @@ main = defaultMain (probeContractTests "Kansoku production probes" build)
   where
     build live ready = do
       config <- loadConfig >>= either (fail . show) pure
-      pure (kansokuAppWithChecks live ready unused config unused unused unused unused)
+      pure (kansokuAppWithChecks live ready unused config unused unused unused)
     unused = error "probe touched an analytics dependency"

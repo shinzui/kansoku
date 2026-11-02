@@ -1,5 +1,9 @@
 # Bundle Update Log
 
+## 2026-11-01
+
+* **Update**: Remove legacy probe routes from operator instructions and document the canonical replacements and HTTP 404 behavior.
+
 ## 2026-10-17
 
 * **Update**: Correct DOC-7 checkout reuse and DOC-9 interrupted migration recovery after native adoption; expand DOC-13 with retained-identity reload, recurring execution and fresh recovery counters. Preserve original SQL as evidence rather than a replay procedure.

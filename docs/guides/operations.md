@@ -99,8 +99,6 @@ zero-downtime rotation.
 | --- | --- | --- |
 | `GET /health/live` | HTTP 200 JSON | Process responsiveness, independent of dependencies. |
 | `GET /health/ready` | HTTP 200 JSON | First failing dependency determines 503. |
-| `GET /health` | HTTP 200, `OK` | The HTTP process can answer. It does not check dependencies. |
-| `GET /ready` | HTTP 200 JSON | Compatibility diagnostics: writer, PGMQ, ClickHouse, queue depth, and flush freshness satisfy readiness thresholds. |
 | `GET /internal/metrics` | HTTP 200 Prometheus text | Pipeline telemetry, when enabled. |
 | `GET /openapi.json` | HTTP 200 JSON | Current generated public HTTP contract. |
 | `GET /v1/schemas` | HTTP 200 JSON | Current public event schema catalog. |
@@ -117,14 +115,13 @@ include pool acquisition and physical cleanup in a 750 ms deadline; the complete
 probe has a 2 second deadline. Query reachability uses native ping without scanning
 analytics tables. Backlog thresholds still use the poller's cached sample.
 
-`/health` retains its `OK` text response. `/ready` retains detailed diagnostics,
-including all five ordered checks and observations for failed thresholds. It returns
-503 with `status: unavailable` and a `failing` list on failure. These four exact probe
-paths are operational contracts, exempt from RFC 9457 problem bodies and excluded
-from access logging. They are absent from customer OpenAPI and outside ingestion
-CORS, authentication and body limits.
+The two canonical probe paths are operational contracts, exempt from RFC 9457
+problem bodies and excluded from access logging. They are absent from customer
+OpenAPI and outside ingestion CORS, authentication and body limits. The former
+`/health` and `/ready` endpoints have been removed and return HTTP 404; migrate
+existing probe configurations to `/health/live` and `/health/ready` respectively.
 
-The reference and operational routes are unauthenticated. Restrict `/ready`,
+The reference and operational routes are unauthenticated. Restrict `/health/ready`,
 `/internal/metrics`, and deployment-specific diagnostics with network policy or a reverse proxy.
 
 ## Prometheus metrics
@@ -202,8 +199,8 @@ variables. Writer batches do not claim to be children of individual ingest reque
 
 ### PostgreSQL unavailable
 
-Ingest and credential checks return retryable HTTP 503, `/ready` fails `pgmq_reachable`, and queue
-sampling logs warnings. Restore PostgreSQL, then confirm `/ready` and queue metrics recover.
+Ingest and credential checks return retryable HTTP 503, `/health/ready` fails `pgmq_reachable`, and queue
+sampling logs warnings. Restore PostgreSQL, then confirm `/health/ready` and queue metrics recover.
 Accepted events already in the queue remain durable.
 
 ### ClickHouse unavailable

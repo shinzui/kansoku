@@ -21,7 +21,7 @@ anchors:
 
 The operational check that the HTTP process responds independently of dependency health.
 
-Use /health/live for orchestration process checks. Dependency failures belong to readiness and do not make liveness fail. The older /health compatibility endpoint also answers process responsiveness; it is not a substitute for dependency-aware readiness.
+Use /health/live for orchestration process checks. Dependency failures belong to readiness and do not make liveness fail.
 
 Related: [readiness](readiness.md).
 

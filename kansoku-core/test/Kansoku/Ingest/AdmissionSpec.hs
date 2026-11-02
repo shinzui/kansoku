@@ -55,7 +55,7 @@ spec metrics = describe "Kansoku.Ingest.Admission" $
       service <- newIngestServiceWithClock (readIORef clock) configured metrics pool queue
       let principal = AuthenticatedPrincipal keyA WriteKey account
           unused = error "analytics dependencies must not be needed for ingest admission"
-          app = kansokuAppWithChecks (pure Healthy) (pure Healthy) metrics configured unused pool service unused
+          app = kansokuAppWithChecks (pure Healthy) (pure Healthy) metrics configured pool service unused
       manager <- Http.newManager Http.defaultManagerSettings
       Warp.testWithApplication (pure app) $ \port -> do
         let post :: (ToJSON a) => String -> Text -> a -> IO (Http.Response LBS.ByteString)
