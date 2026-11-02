@@ -1,9 +1,13 @@
 module Main (main) where
 
+import ClickHaskell (closeConnection, ping)
+import Control.Exception (bracket)
 import Kansoku.Auth.HandlerSpec qualified
 import Kansoku.Auth.TokenSpec qualified
+import Kansoku.ClickHouse (clickHouseConfigFromConfig, closeQueryPool, newQueryPool, openClickHouse, queryReachable)
 import Kansoku.ClickHouseSpec qualified
 import Kansoku.Cohort.QuerySpec qualified
+import Kansoku.Config (loadConfig)
 import Kansoku.ConfigSpec qualified
 import Kansoku.ContractSpec qualified
 import Kansoku.CorsSpec qualified
@@ -53,7 +57,7 @@ import Kansoku.Writer.LifecycleSpec qualified
 import Kansoku.Writer.OutageSpec qualified
 import Kansoku.Writer.RecoverySpec qualified
 import System.Environment (lookupEnv)
-import Test.Hspec (hspec, runIO)
+import Test.Hspec (describe, hspec, it, runIO, shouldReturn)
 
 main :: IO ()
 main = do
@@ -61,12 +65,20 @@ main = do
   benchmarkMode <- lookupEnv "KANSOKU_IDENTITY_BENCH_SQL"
   outageMode <- lookupEnv "KANSOKU_PIPELINE_OUTAGE_CHILD"
   childMode <- lookupEnv "KANSOKU_TELEMETRY_LIFECYCLE_CHILD"
-  case (sessionMode, benchmarkMode, outageMode, childMode) of
-    (Just _, _, _, _) -> Kansoku.QueryBenchmark.runSession
-    (_, Just _, _, _) -> Kansoku.QueryBenchmark.emitSql
-    (_, _, Just _, _) -> hspec Kansoku.Writer.OutageSpec.spec
-    (_, _, _, Just _) -> Kansoku.HttpTelemetrySpec.lifecycleChild
-    _ -> normalTests
+  tlsProbe <- lookupEnv "KANSOKU_TLS_PROBE_CHILD"
+  if tlsProbe == Just "1"
+    then hspec $ describe "Kansoku.ClickHouse TLS transport" $ do
+      it "opens a native connection and a query pool with the configured transport" $ do
+        config <- clickHouseConfigFromConfig <$> (loadConfig >>= either (fail . show) pure)
+        bracket (openClickHouse config) closeConnection ping
+        bracket (newQueryPool config 1) closeQueryPool $ \pool ->
+          queryReachable pool `shouldReturn` True
+    else case (sessionMode, benchmarkMode, outageMode, childMode) of
+      (Just _, _, _, _) -> Kansoku.QueryBenchmark.runSession
+      (_, Just _, _, _) -> Kansoku.QueryBenchmark.emitSql
+      (_, _, Just _, _) -> hspec Kansoku.Writer.OutageSpec.spec
+      (_, _, _, Just _) -> Kansoku.HttpTelemetrySpec.lifecycleChild
+      _ -> normalTests
 
 normalTests :: IO ()
 normalTests = hspec $ do

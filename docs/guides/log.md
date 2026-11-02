@@ -1,5 +1,9 @@
 # Bundle Update Log
 
+## 2026-11-02
+
+* **Update**: DOC-3: Document the verified native TLS selector, explicit port and independent HTTPS migration endpoint.
+
 ## 2026-11-01
 
 * **Update**: Remove legacy probe routes from operator instructions and document the canonical replacements and HTTP 404 behavior.

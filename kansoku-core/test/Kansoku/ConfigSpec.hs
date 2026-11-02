@@ -20,6 +20,7 @@ configVariables =
     "KANSOKU_CLICKHOUSE_DATABASE",
     "KANSOKU_CLICKHOUSE_USER",
     "KANSOKU_CLICKHOUSE_PASSWORD",
+    "KANSOKU_CLICKHOUSE_SECURE",
     "KANSOKU_CH_QUERY_POOL_SIZE",
     "KANSOKU_METRICS_MAX_EXECUTION_SEC",
     "KANSOKU_METRICS_MAX_MEMORY_BYTES",
@@ -75,6 +76,7 @@ spec = around_ preserveConfigEnvironment $ describe "Kansoku.Config.loadConfig" 
         (cfg ^. #clickHouseHost) `shouldBe` "127.0.0.1"
         (cfg ^. #clickHouseTcpPort) `shouldBe` 9000
         (cfg ^. #clickHouseHttpPort) `shouldBe` 8123
+        (cfg ^. #clickHouseSecure) `shouldBe` False
         (cfg ^. #clickHouseDatabase) `shouldBe` "analytics"
         (cfg ^. #clickHouseUser) `shouldBe` "default"
         (cfg ^. #clickHousePassword) `shouldBe` ""
@@ -115,6 +117,17 @@ spec = around_ preserveConfigEnvironment $ describe "Kansoku.Config.loadConfig" 
       Right config -> do
         config ^. #metricsMaxExecutionSec `shouldBe` 2
         config ^. #metricsMaxMemoryBytes `shouldBe` 8388608
+
+  it "requires an explicit valid TLS selection without changing the configured port" $ do
+    clearEnv
+    setEnv "KANSOKU_CLICKHOUSE_SECURE" "true"
+    setEnv "CLICKHOUSE_TCP_PORT" "9440"
+    secured <- loadConfig >>= either (fail . show) pure
+    secured ^. #clickHouseSecure `shouldBe` True
+    secured ^. #clickHouseTcpPort `shouldBe` 9440
+    setEnv "KANSOKU_CLICKHOUSE_SECURE" "sometimes"
+    invalid <- loadConfig
+    invalid `shouldBe` Left (ConfigError "KANSOKU_CLICKHOUSE_SECURE: expected true, false, 1, or 0")
 
   it "parses values from the environment" $ do
     clearEnv

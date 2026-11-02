@@ -38,6 +38,7 @@ data Config = Config
     clickHouseHost :: !String,
     clickHouseTcpPort :: !Int,
     clickHouseHttpPort :: !Int,
+    clickHouseSecure :: !Bool,
     clickHouseDatabase :: !String,
     clickHouseUser :: !String,
     clickHousePassword :: !String,
@@ -81,6 +82,7 @@ loadConfig = do
   chHost <- fromMaybe "127.0.0.1" <$> lookupEnv "KANSOKU_CLICKHOUSE_HOST"
   chTcp <- lookupEnv "CLICKHOUSE_TCP_PORT"
   chHttp <- lookupEnv "CLICKHOUSE_HTTP_PORT"
+  chSecure <- lookupEnv "KANSOKU_CLICKHOUSE_SECURE"
   chDatabase <- fromMaybe "analytics" <$> lookupEnv "KANSOKU_CLICKHOUSE_DATABASE"
   chUser <- fromMaybe "default" <$> lookupEnv "KANSOKU_CLICKHOUSE_USER"
   chPassword <- fromMaybe "" <$> lookupEnv "KANSOKU_CLICKHOUSE_PASSWORD"
@@ -112,6 +114,7 @@ loadConfig = do
   pure $ do
     tcp <- parsePort "CLICKHOUSE_TCP_PORT" 9000 chTcp
     http <- parsePort "CLICKHOUSE_HTTP_PORT" 8123 chHttp
+    secure <- parseBool "KANSOKU_CLICKHOUSE_SECURE" False chSecure
     maxBatch <- parsePositiveInt "KANSOKU_WRITER_MAX_BATCH" 5000 writerBatch
     maxLatency <- parsePositiveInt "KANSOKU_WRITER_MAX_LATENCY_MS" 5000 writerLatency
     visibility <- parsePositiveInt32 "KANSOKU_WRITER_VT_SEC" 60 writerVt
@@ -147,6 +150,7 @@ loadConfig = do
           clickHouseHost = chHost,
           clickHouseTcpPort = tcp,
           clickHouseHttpPort = http,
+          clickHouseSecure = secure,
           clickHouseDatabase = chDatabase,
           clickHouseUser = chUser,
           clickHousePassword = chPassword,

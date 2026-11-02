@@ -6,7 +6,7 @@ docId: DOC-3
 tags: ["configuration", "deployment", "ingestion", "telemetry"]
 generated:
   by: process:codex
-  at: "2026-10-16T22:48:56Z"
+  at: "2026-11-02T03:15:02Z"
 ---
 
 # Configure Kansoku
@@ -23,6 +23,7 @@ authentication-off mode.
 | `KANSOKU_CLICKHOUSE_HOST` | `127.0.0.1` | ClickHouse host. |
 | `CLICKHOUSE_TCP_PORT` | `9000` | Native-protocol port used by writer and queries. |
 | `CLICKHOUSE_HTTP_PORT` | `8123` | HTTP port carried in ClickHouse configuration. |
+| `KANSOKU_CLICKHOUSE_SECURE` | `false` | Verify TLS certificates and hostname for every native writer/query connection. Set `true` with the endpoint's explicit native TLS port; no plaintext fallback. |
 | `KANSOKU_CLICKHOUSE_DATABASE` | `analytics` | ClickHouse database containing Kansoku tables and views. |
 | `KANSOKU_CLICKHOUSE_USER` | `default` | ClickHouse user. |
 | `KANSOKU_CLICKHOUSE_PASSWORD` | empty | ClickHouse password. |
@@ -51,6 +52,12 @@ first use, retained bindings and explicit recovery.
 | `KANSOKU_CLICKHOUSE_PASSWORD` | Must be set, may be empty for an owned local fixture | Never included in rendering or coordination state. |
 
 The endpoint fallback requires both `KANSOKU_CLICKHOUSE_HOST` and `CLICKHOUSE_HTTP_PORT`.
+Native TLS uses the system CA store, or the trusted bundle selected by `SSL_CERT_FILE`.
+For example, a provider's native endpoint on 9440 needs both
+`KANSOKU_CLICKHOUSE_SECURE=true` and `CLICKHOUSE_TCP_PORT=9440`. The migration endpoint
+is independent: configure `KANSOKU_CH_MIGRATION_ENDPOINT=https://host:8443` explicitly
+when its HTTP interface requires TLS. Enabling native TLS does not qualify a migration
+server version or topology; see [verified native TLS](../adr/0023-verified-tls-for-native-clickhouse-connections.md).
 The ledger namespace is fixed to `kansoku_migration_ledger`, separate from analytics. First use
 also requires `--initialize-ledger UUID`; recurring runs bind the existing ledger and refuse to
 create missing history. `--predecessor ENTRY`, `--quiescent` and audit/evidence arguments bind

@@ -205,6 +205,7 @@ def main():
     if os.environ.get('KANSOKU_REQUIRE_CONSUMERS')=='1' and len(consumers)!=len(consumer_keys):
         raise RuntimeError('Required consumer gate needs pinned GrowthBook source, Grafana home and plugin paths')
     env = clean_environment()
+    run(['python3', 'scripts/native-tls.py'], env, 'native-tls', timeout=120)
     builds = json.loads(run(['nix', 'build', '.#kansoku-server', '.#kansoku-client', '--no-link', '--json'], env, 'nix-build', timeout=1200))
     server_output = next(item['outputs']['out'] for item in builds if 'kansoku-server' in item['drvPath'])
     # Execute resolved outputs directly; never inspect the store directory.

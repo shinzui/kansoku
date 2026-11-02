@@ -99,7 +99,7 @@ def isolated_clickhouse(block_size=65536, directory=None, query_logging=False, a
                 controller['restart'] = restart
             try:
                 clean = {key:value for key,value in os.environ.items() if not key.startswith("KANSOKU_CH_MIGRATION_") or key == "KANSOKU_CH_MIGRATION_BINARY"}
-                env = dict(clean, CLICKHOUSE_TCP_PORT=str(tcp), CLICKHOUSE_HTTP_PORT=str(http), KANSOKU_CLICKHOUSE_HOST='127.0.0.1', KANSOKU_CLICKHOUSE_DATABASE='analytics', KANSOKU_CLICKHOUSE_USER='default', KANSOKU_CLICKHOUSE_PASSWORD='', KANSOKU_REQUIRED_INTEGRATION='1', KANSOKU_OWNED_CLICKHOUSE_ROOT=str(root.resolve()))
+                env = dict(clean, CLICKHOUSE_TCP_PORT=str(tcp), CLICKHOUSE_HTTP_PORT=str(http), KANSOKU_CLICKHOUSE_HOST='127.0.0.1', KANSOKU_CLICKHOUSE_DATABASE='analytics', KANSOKU_CLICKHOUSE_USER='default', KANSOKU_CLICKHOUSE_PASSWORD='', KANSOKU_CLICKHOUSE_SECURE='false', KANSOKU_REQUIRED_INTEGRATION='1', KANSOKU_OWNED_CLICKHOUSE_ROOT=str(root.resolve()))
                 yield env
             finally:
                 _OWNED_STACKS.pop(str(root.resolve()), None)

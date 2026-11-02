@@ -91,6 +91,10 @@ ch-fixtures-ep18-conflict:
 ch-fixtures-ep19:
     clickhouse-client --port $CLICKHOUSE_TCP_PORT --multiquery < db/clickhouse/fixtures/ep19_fixtures.sql
 
+# Verify native TLS and trust failures against an owned disposable server.
+native-tls:
+    python3 scripts/native-tls.py
+
 # Run the HTTP server.
 run: migrate
     cabal run kansoku-server:exe:kansoku-server

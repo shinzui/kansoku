@@ -119,6 +119,8 @@ library
     bytestring,
     containers,
     crypton,
+    crypton-connection >=0.4.6 && <0.5,
+    data-default,
     effectful,
     effectful-core,
     generic-lens >=2.2 && <2.4,

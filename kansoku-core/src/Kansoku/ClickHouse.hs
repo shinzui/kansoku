@@ -28,7 +28,8 @@ module Kansoku.ClickHouse
 where
 
 import ClickHaskell
-  ( Connection,
+  ( BufferArgs (..),
+    Connection,
     ConnectionArgs,
     Select,
     UInt64,
@@ -38,6 +39,7 @@ import ClickHaskell
     insert,
     intoTable,
     openConnection,
+    overrideInitConnection,
     ping,
     select,
     setDatabase,
@@ -49,6 +51,9 @@ import ClickHaskell
   )
 import Control.Concurrent.MVar (MVar, modifyMVar, newMVar)
 import Control.Exception (SomeException, onException, throwIO, try)
+import Data.ByteString.Builder (toLazyByteString)
+import Data.ByteString.Lazy qualified as Lazy
+import Data.Default (def)
 import Data.Generics.Labels ()
 import Data.IORef (IORef, newIORef)
 import Data.Int (Int64)
@@ -60,10 +65,13 @@ import Kansoku.Event (AnalyticsEvent)
 import Kansoku.Identity.Cache (IdentityCacheState, prepareIdentityCache)
 import Kansoku.Ingest.QueuedEvent (QueuedEvent)
 import Kansoku.Prelude
+import Network.Connection qualified as TLS
+import Network.Socket (SockAddr (..), getPeerName)
 
 data ClickHouseConfig = ClickHouseConfig
   { clickHouseHost :: !String,
     clickHouseTcpPort :: !String,
+    clickHouseSecure :: !Bool,
     clickHouseDatabase :: !String,
     clickHouseUser :: !String,
     clickHousePassword :: !String
@@ -75,13 +83,43 @@ clickHouseConfigFromConfig cfg =
   ClickHouseConfig
     { clickHouseHost = Config.clickHouseHost cfg,
       clickHouseTcpPort = show (Config.clickHouseTcpPort cfg),
+      clickHouseSecure = Config.clickHouseSecure cfg,
       clickHouseDatabase = Config.clickHouseDatabase cfg,
       clickHouseUser = Config.clickHouseUser cfg,
       clickHousePassword = Config.clickHousePassword cfg
     }
 
 openClickHouse :: ClickHouseConfig -> IO Connection
-openClickHouse = openConnection . connectionArgs
+openClickHouse config
+  | not (clickHouseSecure config) = openConnection (connectionArgs config)
+  | otherwise = do
+      context <- TLS.initConnectionContext
+      let secureSocket hostname socket = do
+            -- The driver already opened this exact socket. Wrap it before its
+            -- native handshake can send credentials, retaining hostname/SNI and
+            -- normal certificate verification from crypton-connection.
+            peer <- getPeerName socket
+            port <- case peer of
+              SockAddrInet value _ -> pure value
+              SockAddrInet6 value _ _ _ -> pure value
+              _ -> fail "ClickHouse TLS requires a TCP socket"
+            connection <-
+              TLS.connectFromSocket
+                context
+                socket
+                TLS.ConnectionParams
+                  { TLS.connectionHostname = hostname,
+                    TLS.connectionPort = port,
+                    TLS.connectionUseSecure = Just def,
+                    TLS.connectionUseSocks = Nothing
+                  }
+            pure
+              MkBufferArgs
+                { writeSock = TLS.connectionPut connection . Lazy.toStrict . toLazyByteString,
+                  readSock = TLS.connectionGetChunk connection,
+                  closeSock = TLS.connectionClose connection
+                }
+      openConnection (overrideInitConnection secureSocket (connectionArgs config))
 
 -- | A dedicated writer cache. Failed operations close the physical connection;
 -- the next queue retry opens a fresh handle.

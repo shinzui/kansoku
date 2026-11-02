@@ -1,5 +1,9 @@
 # Bundle Update Log
 
+## 2026-11-02
+
+* **Add**: ADR-23: Require explicit verified TLS for native ClickHouse writer and query connections; preserve independent migration qualification.
+
 ## 2026-11-01
 
 * **Update**: ADR-2: remove legacy liveness and diagnostic readiness handlers; keep the canonical shared probe contract and Prometheus observations.
