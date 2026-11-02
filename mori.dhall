@@ -86,6 +86,11 @@ in  Schema.Project::{
               }
             , role = Schema.ApiDependencyRole.Client
             }
+          , Schema.ApiDependency::{
+            -- mori://shinzui/kansoku-ts-client/packages/kansoku-ts-client
+            , package = "kansoku-ts-client"
+            , role = Schema.ApiDependencyRole.Client
+            }
           ]
         }
       ]
