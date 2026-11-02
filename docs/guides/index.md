@@ -15,6 +15,7 @@ okf_version: "0.2"
 - [Measure pipeline capacity](capacity.md) - Measure pipeline outage and recovery capacity, size a finite storage budget, and set alerts from the recorded workload.
 - [Consume ClickHouse from a trusted analytics tool](consume-clickhouse.md) - Configure a trusted ClickHouse reader and use supported projections and recipes with dashboard and experiment consumers.
 - [Reproduce the external consumer gate](consumer-conformance.md) - Reproduce the pinned external-consumer release gate and ordinary SDK adoption and recovery proof in owned environments.
+- [Build the TAN container image](container-image.md) - Build and inspect the immutable Linux image and retain its source, recipe and registry digest before deployment qualification.
 - [Develop Kansoku](development.md) - Build and test Kansoku, follow source conventions, regenerate contracts, and run isolated acceptance gates.
 - [Use the Haskell SDK](haskell-sdk.md) - Integrate the buffered Haskell producer SDK and typed clients with explicit schema versions, retries, identity helpers and trait writes.
 - [Send events](send-events.md) - Send authenticated single, batch or beacon events with governed schemas, identity signals, immutable event IDs and correct retry handling.

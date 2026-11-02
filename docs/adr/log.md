@@ -2,6 +2,8 @@
 
 ## 2026-11-02
 
+* **Update**: Package independently pinned TAN images from the source flake using the proven Labs runtime layout.
+
 * **Add**: ADR-23: Require explicit verified TLS for native ClickHouse writer and query connections; preserve independent migration qualification.
 
 ## 2026-11-01

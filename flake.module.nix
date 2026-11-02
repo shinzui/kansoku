@@ -244,8 +244,15 @@
         kansoku-api = kansokuApi;
         kansoku-core = kansokuCore;
       };
+      container = import ./nix/kansoku-image.nix {
+        inherit pkgs kansokuServer;
+        sourceRevision = inputs.self.rev or "uncommitted";
+      };
     in
     {
+      checks = pkgs.lib.optionalAttrs (system == "x86_64-linux") {
+        kansoku-image-smoke = container.smoke;
+      };
       haskellProject.extraDevPackages = [
         geoipReader
         qualifiedClickhouse
@@ -287,6 +294,8 @@
         };
         clickhouse-qualified = qualifiedClickhouse;
         libmaxminddb = geoipReader;
+      } // pkgs.lib.optionalAttrs (system == "x86_64-linux") {
+        kansoku-image = container.image;
       };
     };
 }

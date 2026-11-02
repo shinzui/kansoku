@@ -12,9 +12,9 @@ generated:
 # Run Kansoku locally
 
 This guide starts a development instance, creates one account's credentials, sends a valid
-`page_view`, and reads it through the metrics API. Kansoku currently ships as source plus a Nix
-development environment; the repository does not yet publish a container image or a hosted
-service.
+`page_view`, and reads it through the metrics API. Kansoku ships a Nix development
+environment and a [TAN Linux container build](container-image.md). A build recipe does
+not establish a published digest or a qualified hosted environment.
 
 ## Prerequisites
 
