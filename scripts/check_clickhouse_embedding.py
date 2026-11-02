@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Prove released embedding from the server sdist observes preserved-time SQL changes."""
+"""Prove pinned embedding from the server sdist observes preserved-time SQL changes."""
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import tarfile
@@ -10,6 +11,8 @@ import tempfile
 
 def main():
     repo = Path(__file__).resolve().parents[1]
+    project = (repo / 'cabal.project').read_text()
+    migration_version = re.search(r'(?m)^\s*clickhouse-migrate ==([0-9.]+),', project).group(1)
     os.umask(0o077)
     parent = repo / '.dev/acceptance'
     parent.mkdir(parents=True, exist_ok=True)
@@ -43,9 +46,9 @@ executable embedding-proof
   hs-source-dirs: proof src
   main-is: Main.hs
   other-modules: Kansoku.ClickHouseMigrations
-  build-depends: base >=4.21 && <4.22, bytestring, text, clickhouse-migrate ==0.1.0.0, clickhouse-migrate-embed ==0.1.0.0
-''')
-    (package / 'cabal.project').write_text('packages: .\nindex-state: 2026-10-16T20:50:11Z\n')
+  build-depends: base >=4.21 && <4.22, bytestring, text, clickhouse-migrate ==MIGRATION_VERSION, clickhouse-migrate-embed ==MIGRATION_VERSION
+'''.replace('MIGRATION_VERSION', migration_version))
+    (package / 'cabal.project').write_text('packages: .\n' + project[project.index('index-state:'):])
     build = ['clickhouse-migrate-embed-build', '--input', '.', 'migrations/clickhouse/manifest.json', '--', 'build', 'all']
     run(build, package)
     binary = run(['cabal', 'list-bin', 'embedding-proof'], package)

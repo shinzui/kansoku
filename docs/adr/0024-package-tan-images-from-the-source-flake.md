@@ -36,7 +36,12 @@ Use `gcr.io/tan-ng/kansoku`, a source-revision tag with packaging revision `p1`,
 OCI source/revision labels. A publishable build must come from a clean immutable
 commit; `uncommitted` artifacts are development outputs. Changes to packaging are
 committed alongside source, so the image retains one exact source and recipe identity.
-Published tags are immutable; deployment references the registry digest.
+Published tags are immutable; deployment references the registry digest. A native
+`kansoku-image-stream` app exports the exact Linux producer's arguments and closure
+on Darwin or Linux into a normal artifact file. Keep archive configuration digests,
+Docker's loaded image IDs and registry manifest digests under distinct field names;
+Docker may normalize legacy archive configuration while loading it. The exported-image
+checker binds the loaded filesystem layers/configuration before invoking its recorded ID.
 
 The Linux image smoke test boots the image in its own Docker VM without host
 mounts, checks all four executable paths, the embedded plan, CA bundle and complete
@@ -54,7 +59,11 @@ TLS/port variables and explicit credential overrides, rejected a missing require
 mapping, and contained the configured CA bundle. This used the development image
 tag while authoring the recipe; a clean source revision and final qualified native
 dependency must be built again before immutable publication. No image was published
-by this check.
+by this check. With the qualified `0.1.0.1` source pin, the Linux image/VM and Darwin
+server builds pass, preserved-time embedding remains content-qualified, and ten extracted
+workspace/source-repository archives build the production CLI with all 25/257 embedded
+steps after withholding SQL inputs. The native exporter also receives a separate,
+network-disabled Docker smoke check against the actual exported artifact before publication.
 
 ## Consequences
 

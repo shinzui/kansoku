@@ -1,6 +1,7 @@
 # Bundle Update Log
 
 ## 2026-11-02
+* **Update**: Document the exact qualified native dependency source, artifact variants and existing-cluster staging gate.
 * **Update**: Add source-owned TAN container build, smoke and immutable publication guidance.
 
 * **Update**: DOC-3: Document the verified native TLS selector, explicit port and independent HTTPS migration endpoint.

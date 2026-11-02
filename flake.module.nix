@@ -35,6 +35,14 @@
                   inherit pkg ver sha256;
                 }
                 { }));
+            # Exact locally qualified source candidate; no Hackage publication implied.
+            # mori://shinzui/clickhouse-migrate
+            clickhouseMigrateSrc = pkgs.fetchFromGitHub {
+              owner = "shinzui";
+              repo = "clickhouse-migrate";
+              rev = "00afa9fa1038f2b90e7bc5f041ac1b56649b639f";
+              sha256 = "0bgahw4hmmi6cw5kaag0x7pfmgwbd91w278b69aiz77246ag95rw";
+            };
             hasqlMigrationSrc = pkgs.fetchFromGitHub {
               owner = "shinzui";
               repo = "hasql-migration";
@@ -205,11 +213,11 @@
             servant-health = callHackageNoCheck "servant-health" "0.1.0.0" "1g24jnnijpap99vkmmqmkinlw18pg0hd23arrijgss430y63iv4x";
             servant-openapi-hs = callHackageNoCheck "servant-openapi-hs" "5.1.0" "19mvvlzfk7ffh5gbmqhpy587rjjd0xcgydbkcy1b48wxx061h8im";
 
-            # Released mori://shinzui/clickhouse-migrate; preserve bounds and checks.
-            clickhouse-migrate = self.callHackageDirect { pkg = "clickhouse-migrate"; ver = "0.1.0.0"; sha256 = "0xdisgai66ljqn4w316d0w0gqbgmalaf0avqig1bajs5kbps59v9"; } { };
-            clickhouse-migrate-embed = self.callHackageDirect { pkg = "clickhouse-migrate-embed"; ver = "0.1.0.0"; sha256 = "0wrzsm783asvc8fqapg88p261mkn7dnkyv7sp0g95rj6pw864m8g"; } { };
-            clickhouse-migrate-cli = self.callHackageDirect { pkg = "clickhouse-migrate-cli"; ver = "0.1.0.0"; sha256 = "12m6pwdf1cn826ffjcklc30zbv203nkgn5lvnkvlyznzhmnfifpd"; } { };
-            clickhouse-migrate-test-support = self.callHackageDirect { pkg = "clickhouse-migrate-test-support"; ver = "0.1.0.0"; sha256 = "143pc7mh1rbzd9a958cx89s2a16zxy6j0m3xsgm3r6pn1sqmhrr3"; } { };
+            # Keep the four-package cohort at the same immutable 0.1.0.1 source.
+            clickhouse-migrate = self.callCabal2nix "clickhouse-migrate" (clickhouseMigrateSrc + "/clickhouse-migrate") { };
+            clickhouse-migrate-embed = self.callCabal2nix "clickhouse-migrate-embed" (clickhouseMigrateSrc + "/clickhouse-migrate-embed") { };
+            clickhouse-migrate-cli = self.callCabal2nix "clickhouse-migrate-cli" (clickhouseMigrateSrc + "/clickhouse-migrate-cli") { };
+            clickhouse-migrate-test-support = self.callCabal2nix "clickhouse-migrate-test-support" (clickhouseMigrateSrc + "/clickhouse-migrate-test-support") { };
 
             pg-migrate = callHackageNoCheck "pg-migrate" "1.1.0.0" "103y2bddn50pvrjnlhnfcqznlfihp68bpm72xg8s9xv2x8kv3s2b";
             pg-migrate-cli = callHackageNoCheck "pg-migrate-cli" "1.1.0.0" "1mc2scspfr1p872lxxl8pcpgf3gm2kp2xhjfwad9xv2wcnz1dj6w";
@@ -244,12 +252,18 @@
         kansoku-api = kansokuApi;
         kansoku-core = kansokuCore;
       };
+      # Export with native tools using the exact Linux producer's package set.
+      imageStream = pkgs.dockerTools.streamLayeredImage
+        ((builtins.removeAttrs inputs.self.packages.x86_64-linux.kansoku-image.imageArgs [ "compressor" ]) // { architecture = "amd64"; });
       container = import ./nix/kansoku-image.nix {
         inherit pkgs kansokuServer;
         sourceRevision = inputs.self.rev or "uncommitted";
       };
     in
     {
+      apps = pkgs.lib.optionalAttrs (system == "aarch64-darwin" || system == "x86_64-linux") {
+        kansoku-image-stream = { type = "app"; program = "${imageStream}"; };
+      };
       checks = pkgs.lib.optionalAttrs (system == "x86_64-linux") {
         kansoku-image-smoke = container.smoke;
       };

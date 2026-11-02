@@ -9,7 +9,7 @@ let
     executable = true;
     text = builtins.readFile ../packaging/entrypoint.sh;
   };
-  image = pkgs.dockerTools.buildLayeredImage {
+  imageArgs = {
     name = imageRepository;
     tag = imageTag;
     contents = [ kansokuServer pkgs.busybox pkgs.cacert entrypoint ];
@@ -29,9 +29,10 @@ let
       };
     };
   };
+  image = pkgs.dockerTools.buildLayeredImage (imageArgs // { passthru = { inherit imageArgs; }; });
 in
 {
-  inherit image;
+  inherit image imageArgs;
   smoke = pkgs.testers.runNixOSTest {
     name = "kansoku-image-smoke";
     nodes.machine = { ... }: {
@@ -63,6 +64,8 @@ in
           return dict(row.split("=", 1) for row in machine.succeed(run(env, "env")).splitlines() if "=" in row)
       machine.wait_for_unit("docker.service")
       machine.succeed("docker load -i ${image}")
+      image_id = machine.succeed(f"docker image inspect --format '{{{{.Id}}}}' {image}").strip()
+      print("Kansoku image configuration: " + image_id)
       plan = json.loads(machine.succeed(run(supplied, "kansoku-ch-migrate", "plan", "--json")))
       assert plan["status"] == "ok" and len(plan["result"]["schedule"]) == 25
       mapped = environment(supplied)

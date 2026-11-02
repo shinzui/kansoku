@@ -31,7 +31,20 @@ features. It boots the actual image without mounting host binaries. Build and
 smoke success alone do not establish database compatibility or deployment readiness.
 
 The archive contains `gcr.io/tan-ng/kansoku:<first-12-source-characters>-p1`.
-Before publishing, inspect the archive with `skopeo inspect docker-archive:<archive>`
+On Darwin or Linux, export the same Linux closure to a normal artifact file by
+executing the native stream app. It uses the source flake's pinned Docker tools;
+no manual store-file inspection or copying is needed:
+
+```bash
+nix run .#kansoku-image-stream > /tmp/kansoku-image.tar
+python3 scripts/check_container_image.py \
+  --archive /tmp/kansoku-image.tar \
+  --docker-context <isolated-local-context> \
+  --revision "$(git rev-parse HEAD)" \
+  --report /tmp/kansoku-image-smoke.json
+```
+
+Before publishing, inspect that exported archive with `skopeo inspect docker-archive:<archive>`
 and retain its architecture, source/revision labels, entrypoint, command and digest.
 Use a registry credential supplied through a private auth file, rather than putting
 an access token in a command argument. Publish only a previously unused source tag

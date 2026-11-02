@@ -2,6 +2,7 @@
 """Build the real production CLI from extracted workspace source archives only."""
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import tarfile
@@ -10,6 +11,7 @@ import tempfile
 
 def main():
     repo = Path(__file__).resolve().parents[1]
+    migration_version = re.search(r'(?m)^\s*clickhouse-migrate ==([0-9.]+),', (repo / 'cabal.project').read_text()).group(1)
     os.umask(0o077)
     parent = repo / '.dev/acceptance'
     parent.mkdir(parents=True, exist_ok=True)
@@ -33,6 +35,7 @@ def main():
             source.extractall(workspace,filter='data')
             packages.append(workspace / top)
     required = {'kansoku-api-0.1.0.0', 'kansoku-core-0.1.0.0', 'kansoku-server-0.1.0.0', 'kansoku-client-0.1.0.0', 'ClickHaskell-1.1.0', 'hs-opentelemetry-instrumentation-servant-0.3.0.0'}
+    required |= {name + '-' + migration_version for name in ['clickhouse-migrate', 'clickhouse-migrate-embed', 'clickhouse-migrate-cli', 'clickhouse-migrate-test-support']}
     assert {path.name for path in packages} == required, 'Archive every workspace and pinned source-repository package'
     server = next(path for path in packages if path.name.startswith('kansoku-server-'))
     settings = (repo / 'cabal.project').read_text().split('index-state:',1)[1].split('source-repository-package',1)[0]
@@ -44,7 +47,7 @@ def main():
     document = json.loads(run([binary,'plan','--json'],root,offline))
     migrations = document['result']['components'][0]['migrations']
     assert len(migrations) == 25 and sum(len(item['steps']) for item in migrations) == 257
-    print('source archives: six extracted packages built the production CLI; 25/257 offline plan passed with inputs withheld',flush=True)
+    print('source archives: ' + str(len(packages)) + ' extracted packages built the production CLI; 25/257 offline plan passed with inputs withheld',flush=True)
 
 
 if __name__ == '__main__':

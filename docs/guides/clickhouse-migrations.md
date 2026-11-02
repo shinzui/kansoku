@@ -21,9 +21,15 @@ The qualified integration target is one directly addressed, self-managed ClickHo
 effects. `nix develop` supplies the hash-qualified artifact ahead of the template binary.
 The [matrix](../../db/clickhouse/qualification/matrix.json) and
 [adoption evidence](../evidence/clickhouse-migrate-adoption.md) record its digest and limits.
-Linux acceptance is blocked on upstream qualification. The actual deployment target,
-intervening server fixes and unknown-cause startup crash remain deployment gates. This
-runbook rehearses owned development targets; it is not approval to deploy that candidate.
+The pinned upstream `0.1.0.1` source cohort also qualifies exact Altinity
+`26.3.60.10001.altinitystable` on an owned Linux arm64 server. Both Nix and extracted
+source artifacts pass all thirteen native groups on both candidates. This does not
+qualify managed-cloud/proxy topology or the Linux amd64 application image. The
+staging initiative at
+`mori://tan/tan-app-infrastructure/plans/42-qualify-kansoku-artifacts-and-the-staging-clickhouse-contract`
+uses the existing cluster for first-service qualification; its managed/package and
+persistent recovery evidence remain required before normal serving. This runbook's
+local commands still use the original qualified Darwin fixture and fresh identities.
 
 ## Fresh installation
 

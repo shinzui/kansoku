@@ -1,6 +1,7 @@
 # Bundle Update Log
 
 ## 2026-11-02
+* **Update**: Pin the fully engine-qualified upstream source cohort for Altinity while preserving managed deployment acceptance.
 
 * **Update**: Package independently pinned TAN images from the source flake using the proven Labs runtime layout.
 

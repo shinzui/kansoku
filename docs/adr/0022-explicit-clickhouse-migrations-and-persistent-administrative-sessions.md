@@ -5,7 +5,7 @@ description: Embed immutable native migration steps, bind administration to reta
 docId: ADR-22
 status: Accepted
 date: 2026-10-16
-timestamp: 2026-10-16T22:55:08Z
+timestamp: 2026-11-02T04:34:08Z
 generated:
   by: process:codex
   at: 2026-10-16T22:55:08Z
@@ -24,12 +24,25 @@ contracts also apply to native schema changes.
 
 ## Decision
 
-Use the released [core](mori://shinzui/clickhouse-migrate/packages/clickhouse-migrate),
+Use an exact qualified [core](mori://shinzui/clickhouse-migrate/packages/clickhouse-migrate),
 [embedding](mori://shinzui/clickhouse-migrate/packages/clickhouse-migrate-embed) and
 [CLI](mori://shinzui/clickhouse-migrate/packages/clickhouse-migrate-cli) cohort in a
 separate `kansoku-ch-migrate` executable. Application reads and writes retain their
 native driver. Normal startup applies neither store's migrations. PostgreSQL
 migrations run first and create additive session coordination state.
+
+The initial cohort came from Hackage `0.1.0.0`. Staging's Altinity engine requires
+`0.1.0.1`, selected as the immutable upstream source commit
+`00afa9fa1038f2b90e7bc5f041ac1b56649b639f` across all four dependency packages.
+Hackage and the upstream release tags were checked; this is a qualified source
+candidate, not a claimed registry release. The upstream Nix and seven extracted
+source-archive variants each pass both exact server candidates and all thirteen
+native groups. Cabal and Nix retain the same source revision; archive/embedding
+checks must use that cohort too. Do not locally patch the guard or substitute an
+unqualified source revision. Managed endpoint and packaged application acceptance
+remain independent deployment gates. Qualification evidence lives in
+`mori://shinzui/clickhouse-migrate`, project-relative
+`docs/release-evidence/2026-11-02-altinity.md` (artifact URI pending).
 
 The package owns an explicit 25-migration/257-step baseline. Preserve the original
 SQL as conversion evidence. Two standalone assertions become explicit

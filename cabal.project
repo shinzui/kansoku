@@ -7,10 +7,10 @@ packages:
 
 index-state: 2026-10-16T20:50:11Z
 constraints:
-  clickhouse-migrate ==0.1.0.0,
-  clickhouse-migrate-embed ==0.1.0.0,
-  clickhouse-migrate-cli ==0.1.0.0,
-  clickhouse-migrate-test-support ==0.1.0.0,
+  clickhouse-migrate ==0.1.0.1,
+  clickhouse-migrate-embed ==0.1.0.1,
+  clickhouse-migrate-cli ==0.1.0.1,
+  clickhouse-migrate-test-support ==0.1.0.1,
   hs-opentelemetry-instrumentation-wai ==1.0.0.0,
   hs-opentelemetry-exporter-in-memory ==1.0.0.0,
   servant-health ==0.1.0.0,
@@ -33,3 +33,14 @@ source-repository-package
   type: git
   location: https://github.com/shinzui/hs-opentelemetry-instrumentation-servant.git
   tag: 5e99a7857032484abc669076704dee4335e7d0ad
+
+-- Exact source candidate: mori://shinzui/clickhouse-migrate; not a Hackage release.
+source-repository-package
+  type: git
+  location: https://github.com/shinzui/clickhouse-migrate.git
+  tag: 00afa9fa1038f2b90e7bc5f041ac1b56649b639f
+  subdir:
+    clickhouse-migrate
+    clickhouse-migrate-embed
+    clickhouse-migrate-cli
+    clickhouse-migrate-test-support
