@@ -63,6 +63,32 @@ in  Schema.Project::{
       , "shinzui/shibuya"
       , "shinzui/shibuya-pgmq-adapter"
       ]
+    , apis =
+      [ Schema.Api::{
+        , name = "kansoku-api"
+        , type = Schema.ApiType.OpenAPI
+        , specPath = "docs/api/openapi.json"
+        , owner = "kansoku-api"
+        , ownerRef = Some Schema.MoriRef::{
+          , namespace = "shinzui"
+          , name = "kansoku"
+          , kind = Some Schema.MoriArtifactKind.Package
+          , key = Some "kansoku-api"
+          }
+        , dependencies =
+          [ Schema.ApiDependency::{
+            , package = "kansoku-client"
+            , packageRef = Some Schema.MoriRef::{
+              , namespace = "shinzui"
+              , name = "kansoku"
+              , kind = Some Schema.MoriArtifactKind.Package
+              , key = Some "kansoku-client"
+              }
+            , role = Schema.ApiDependencyRole.Client
+            }
+          ]
+        }
+      ]
     , okfBundles =
       [ Schema.OkfBundle::{
         , name = "adrs"
