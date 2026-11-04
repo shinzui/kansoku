@@ -26,6 +26,11 @@ provenance:
       at: 2026-11-03T15:59:59Z
       mode: "update"
       note: "Restore numeric child identifiers EP-54 to EP-57 with reserved paths, the next unclaimed numbers after MasterPlan 7's children, so the registry parses; keep workstream names as aliases."
+    - model: "claude-fable-5-1"
+      harness: "claude-code"
+      at: 2026-11-04T05:58:09Z
+      mode: "update"
+      note: "Performance review: bound the traffic-lock hold per read slice under ADR-17's thirty-second exclusive wait, stream blocks without accumulation, materialize the arrival index in every partition, detect re-resolution by digest instead of rewriting seven days nightly, target erasure rewrites by disposition, separate the PostgreSQL catalog database, and add measured budgets every child re-runs."
 ---
 
 # Publish Kansoku analytics as a DuckLake lakehouse data product
@@ -102,8 +107,10 @@ storage relations remains out of scope; they are not stable interfaces.
 - **DuckLake and DuckDB.** The DuckLake specification and its DuckDB reference implementation
   are at version 1.1, shipped with DuckDB 2.0, and provide the catalog, the snapshot change
   feed, zero-copy registration of existing Parquet files with name mapping, data inlining for
-  small inserts, and the flush, merge, expire and cleanup maintenance operations this design
-  relies on. EP-54 pins exact versions after checking upstream releases, since the local
+  small inserts, row-level delete and update through delete files with the data-file rewrite
+  that removes them, per-file column statistics for pruning, and the flush, merge, expire and
+  cleanup maintenance operations this design relies on. EP-54 pins exact versions after
+  checking upstream releases, since the local
   corpus may lag, and proves that the `ducklake`, `httpfs`, `azure` and the catalog driver
   extensions are available inside the Nix closure and the image. No guessed package is
   approved here.
@@ -111,6 +118,12 @@ storage relations remains out of scope; they are not stable interfaces.
   `duckdb-simple`) is tested against DuckDB 1.5.0. The publisher drives the `duckdb` CLI as a
   subprocess first, as Kikan's fixture harness did, and adopts the FFI bindings only after a
   recorded compatibility proof against the pinned DuckDB 2.0 release.
+- **Consumer DuckDB versions.** Kikan's fixture harness and mesh connector run DuckDB 1.5.4
+  with that release's DuckLake extension, and other adopters attach with whatever DuckDB their
+  tooling ships. A catalog written by the pinned producer must stay attachable read-only from
+  the oldest consumer release the data-product contract names. EP-54 records that floor,
+  proves it in conformance by attaching from both the pinned DuckDB and the floor release, and
+  treats a DuckLake specification version that breaks the floor as a contract change.
 - **Haskell Parquet writer.** `wireform-parquet`
   (<https://github.com/iand675/wireform-/tree/main/wireform-parquet>, BSD-3-Clause, GHC 9.10 or
   later) is the preferred writer for the staging files. Its owner reports it as release-grade
@@ -154,21 +167,26 @@ and the maintenance operations; typed datasets are additive on top of a proven p
 Owns the ADR, the structured contract document, configuration, the catalog and storage
 abstraction, the arrival-bounded lake projection and the arrival-time index migration, the
 PostgreSQL publication journal, the `kansoku-lake` executable with `close-day`, `republish`
-and `status`, the fenced read-stage-commit mechanism and the writer spike that selects it,
-packaging, the capability, terminology and guide records, and the two-tier conformance gate. At its end the
+and `status`, the sliced and fenced read-stage-commit mechanism with its bounded lock hold,
+the publisher's ClickHouse settings profile, the writer spike that selects the export
+mechanism, the performance harness and budgets every later child re-runs, packaging, the
+capability, terminology and guide records, and the two-tier conformance gate. At its end the
 closed dataset is declared and confirmed by an observed refresh and query.
 
 **EP-55 (LAKE-RECENT) — Micro-batch a provisional recent dataset with maintenance and freshness telemetry.**
 Owns `publish-recent` and `maintain`, the arrival watermark, the recent dataset's semantics
-and partition drops, DuckLake inlining and compaction policy, snapshot retention, the
-publish-lag metrics and readiness interaction, and the consumer guidance on provisional data
-and the change-feed window.
+and partition drops, late-arrival dirty recording, the DuckLake inlining threshold, the
+file-count budget and compaction cadence, snapshot retention, the publish-lag and cost
+metrics and readiness interaction, and the consumer guidance on provisional data and the
+change-feed window.
 
 **EP-56 (LAKE-LIFECYCLE) — Propagate erasure, retention and identity re-resolution to the lake.** Owns dirty
-partition recording inside the existing administrative jobs, partition rewrite in both
-datasets, snapshot expiry and file cleanup after erasure, applied-retention partition drops,
-the trailing re-resolution window, administration guide updates and the amendments to ADRs
-16, 17 and 18 that give exports a lifecycle owner.
+partition recording inside the existing administrative jobs, targeted rewrites in both
+datasets proportional to the erased rows with partition re-export as the measured fallback,
+data-file rewrite, snapshot expiry and file cleanup after erasure, applied-retention
+whole-file drops, the digest-gated trailing re-resolution window, the coalesced dirty backlog
+and its nightly budget, administration guide updates and the amendments to ADRs 16, 17 and 18
+that give exports a lifecycle owner.
 
 **EP-57 (LAKE-TYPED) — Derive typed event datasets from the versioned schema registry.** Owns per-event
 family datasets generated from the same typed contracts that produce OpenAPI and the event
@@ -220,16 +238,36 @@ number under the ADR-22 session, and later children add PostgreSQL journal migra
 ## Integration Points
 
 **Lake projection and arrival index — EP-54 owner.** Add a parameterized ClickHouse view that
-takes an account and half-open `received_at` bounds and delegates to the same conservative
-resolver as `analytics.events_analytics_v1`, returning that projection's columns plus
-`received_at`. The current analytical view accepts only occurred-at bounds and cannot drive an
-arrival watermark. Add a minmax skipping index on `received_at` to the canonical events table,
-which has none today, so a two-minute arrival window does not scan the active month
-partition. Both changes are one ClickHouse migration applied through `kansoku-ch-migrate` in a
-persistent maintenance session. The view uses SQL SECURITY DEFINER with the migration operator
-as definer, as ADR-18 requires. The publisher authenticates with its own ClickHouse identity;
-the `kansoku_reader` role's result and time bounds are consumer limits and never apply to
-publication.
+takes an account scope and half-open `received_at` bounds and delegates to the same
+conservative resolver as `analytics.events_analytics_v1`, returning that projection's columns
+plus `received_at`. The current analytical view accepts only occurred-at bounds and cannot
+drive an arrival watermark. Like `analytics.events_resolved_internal`, the view accepts an
+explicit all-accounts flag so one micro-batch query serves every account and the resolver's
+evidence materialization is paid once per cycle, not once per account. Because the ingest
+contract of ADR-1 leaves past occurrence times unchanged, an arrival window can contain events
+for any occurred day; the view derives the resolver's evidence day set from the candidates it
+actually selected rather than from caller-supplied occurred bounds, and the publisher treats a
+candidate whose occurred day is already published as a dirty partition, never as a recent
+append. The projection serializes `properties_json` with `toJSONString`, because the vendored
+ClickHaskell driver declares no decoder for the native `JSON` column; the writer spike confirms
+this.
+
+Add a minmax skipping index on `received_at` to the canonical events table, which has none
+today. The table is partitioned by occurred month and an arrival-bounded query carries no
+occurred predicate, so a part without the index would be scanned in full on every cycle. The
+migration therefore materializes the index in every existing partition inside the ADR-22
+session with synchronous mutations, and EP-54 records the one-time materialization duration
+per retained million events so operators can size the maintenance window. Both changes are one
+ClickHouse migration applied through `kansoku-ch-migrate` in a persistent maintenance session.
+The view uses SQL SECURITY DEFINER with the migration operator as definer, as ADR-18 requires.
+
+The publisher authenticates with its own ClickHouse identity under its own settings profile.
+The `kansoku_reader` role's result and time bounds are consumer limits and never apply to
+publication, but the publisher is not unbounded either: its profile caps threads, memory,
+network bandwidth and execution time per query, gives its queries a lower scheduling priority
+than the server's identity, and keeps `FINAL` deduplication from merging across partitions so
+it stays within the parts the index selected. The acceptance budget for this profile is in the
+performance budgets integration point below.
 
 **Publisher executable and configuration — EP-54 owner, EP-55 and EP-56 extend.** `kansoku-lake`
 ships in the `kansoku-server` package beside the existing executables and reads the shared
@@ -241,75 +279,175 @@ arguments; object-store and catalog credentials are supplied through the environ
 operator files and become DuckDB secrets at run time. Catalog and data path are URIs; the
 same code path serves PostgreSQL, SQLite, DuckDB-file and MySQL catalogs, and S3-compatible,
 GCS, Azure and local-filesystem data paths. The configuration guide documents every setting
-with one example per store family; no example privileges a vendor.
+with one example per store family; no example privileges a vendor. A PostgreSQL catalog lives
+in its own database, never in Kansoku's operational database, which already carries the pgmq
+ingest queue, the administrative journal and the publication journal; every consumer attach
+and every micro-batch commit would otherwise draw on the queue's connection and I/O budget.
+The realistic gate therefore provisions two databases on the owned PostgreSQL. Consumers
+attach with a read-only catalog role, and the guide documents a connection pooler for
+installations with many concurrent consumers. The `duckdb` subprocess runs with an explicit
+memory limit, thread count and temporary directory inside the staging directory, read from
+`KANSOKU_LAKE_*` settings with conservative defaults, so a large closed-day insert spills to
+disk instead of competing with the server for memory.
 
-**Export mechanism — EP-54 owner, EP-55 extends.** The publisher reads each
-publication unit from the lake projection over the native protocol, streaming blocks through
-the typed row decoding Kansoku already uses, and writes a Parquet staging file itself with the
-Haskell writer. Kansoku therefore controls the dataset schema at the source: UTC millisecond
-timestamps, UTF8 strings, a JSON-typed `properties_json`, explicit nullability, row-group
-sizing and Zstandard compression, independent of the ClickHouse version and with no
-object-store credentials or network egress on the ClickHouse server. DuckDB then inserts from
-the staged file into the target dataset, `events_v1` for a closed day and `events_recent_v1`
-for a micro-batch, so DuckLake owns every data file, assigns field identifiers, writes
-statistics and inlines small batches; one code path serves every store family because
-DuckDB's `httpfs` and `azure` extensions own the data path. Staged files are deleted after the
-commit. Zero-copy registration of very large closed-day files is a later optimization with a
-measured trigger, since it needs the publisher to upload to the data path itself. The
-ClickHouse table-function export is the fallback: EP-54's first milestone measures
-the Haskell writer on a ten-million-event day for throughput, memory, DuckDB readability and
+**Export mechanism — EP-54 owner, EP-55 extends.** The publisher reads each publication unit
+from the lake projection over the native protocol and writes a Parquet staging file itself with
+the Haskell writer. The vendored driver's `select` hands each decoded block to a callback and
+retains only what the callback returns, so memory stays bounded by one block as long as the
+publisher writes each block straight into the Parquet writer and returns unit. Every existing
+caller concatenates the blocks into one list, as `selectEventProjections` does; the publisher
+needs a new streaming consumer and must not copy that pattern, and the writer spike confirms
+that the Parquet writer flushes row groups incrementally rather than buffering a file. A
+closed-day unit is read in bounded slices by occurred-time range, each slice to its own
+staging file, so no single query outlives the fence budget below, staging never holds more
+than a slice ahead of the writer, and a crash loses at most a slice; the slices are then
+inserted in one DuckDB transaction so the partition still receives exactly one snapshot.
+Kansoku therefore controls the dataset schema at the source: UTC millisecond timestamps, UTF8
+strings, a JSON-annotated `properties_json`, explicit nullability, row-group sizing and
+Zstandard compression, independent of the ClickHouse version and with no object-store
+credentials or network egress on the ClickHouse server. DuckDB then inserts from the staged
+files into the target dataset, `events_v1` for a closed day and `events_recent_v1` for a
+micro-batch, so DuckLake owns every data file, assigns field identifiers, writes statistics
+and inlines small batches; one code path serves every store family because DuckDB's `httpfs`
+and `azure` extensions own the data path. Staged files are deleted after the commit, and the
+publisher refuses to start a unit when the staging directory lacks room for the measured
+per-slice size. Zero-copy registration of very large closed-day files is a later optimization
+with a measured trigger, since it needs the publisher to upload to the data path itself. The
+ClickHouse table-function export is the fallback: EP-54's first milestone measures the Haskell
+writer on a ten-million-event day for throughput, peak resident memory, DuckDB readability and
 type fidelity, and selects the mechanism on that evidence before the dataset schema is frozen.
 
 **Publication journal and watermark — EP-54 owner, EP-55 and EP-56 extend.** PostgreSQL is the
 authoritative journal, in the `kansoku` schema beside the retention policy and dispositions:
 publications (dataset, account, partition date, DuckLake snapshot identifier, staged file
-digest, published time, state), arrival watermarks per dataset, and dirty partitions. A
+digest, the resolution digest described under re-resolution, row count, published time,
+state), arrival watermarks per dataset, and dirty partitions with their origin: late arrival,
+erasure with a reference to its dispositions, retention, re-resolution or operator request.
+EP-54 creates all three relations, so EP-55 can record late arrivals before EP-56 exists. A
 watermark or publication row advances only after the DuckLake commit succeeds. A crash
 re-exports the same unit; the closed-day publication reconciles any duplicate created by the
 provisional tier. No cross-store transaction is claimed; the journal and DuckLake snapshots
 are reconciled on resume by comparing recorded snapshot identifiers with the catalog.
 
-**Maintenance fence — EP-54 owner.** Each publication unit holds the shared session lock that
-ADR-17 gives every writer insert, and refuses to start while an ADR-22 migration session is
-open. The publisher therefore pauses during erasure and retention jobs and can never publish
-rows in the middle of a scrub. ADR-18 could not offer this to direct SQL readers; a
-Kansoku-owned publisher can, and that is the reason the publisher is part of Kansoku rather
-than an external pull.
+**Maintenance fence — EP-54 owner.** Each read slice holds the shared traffic lock that ADR-17
+gives every writer insert, admitted by try-lock after checking that no job or ADR-22 migration
+session owns the fence. The hold is bounded. A confirmed maintenance job acquires the
+exclusive traffic lock under a thirty-second statement timeout in
+`Kansoku.Admin.Coordination.trafficLock`, and a holder that outlives it fails the job and
+leaves the persisted fence active until an operator resumes; a publisher holding the lock for
+a whole closed-day read would turn every erasure, retention and migration job into such a
+failure. The publisher therefore sizes slices for a hold of a few seconds, releases the lock
+between slices, aims for a measured ten-second ceiling and exports its longest hold as a
+metric. Parquet writing beyond the block in hand, staging and the DuckDB commit happen outside
+the lock. Because the lock is released between slices, a unit records the maintenance
+journal's completion state when it starts and compares it before committing; if a job
+completed in between, the staged unit is discarded and re-read rather than published half
+scrubbed. The publisher pauses during erasure and retention jobs, never publishes
+rows from the middle of a scrub, and never extends a maintenance outage by more than one
+slice. ADR-18 could not offer this to direct SQL readers; a Kansoku-owned publisher can, and
+that is the reason the publisher is part of Kansoku rather than an external pull. The ADR that
+EP-54 writes records the hold budget as a constraint derived from ADR-17's exclusive-wait
+timeout, so a future change to either is made knowingly.
 
 **Recent dataset semantics — EP-55 owner.** `events_recent_v1` is append-only per cycle,
 partitioned by account and occurred date, and bounded to a rolling window, forty-eight hours
-by default. An event may appear more than once across cycles because the writer is
-at-least-once and arrival windows are disjoint but retries are not; `canonical_user` may still
-be anonymous when later evidence binds it. Consumers dedupe on `event_id` or read `events_v1`.
-Partitions whose day has closed are deleted from the recent dataset in the same transaction
-that publishes them to the closed dataset. The default cycle is 120 seconds with a 90-second
+by default. One cycle is one publication unit covering every account, read with the
+projection's all-accounts flag, so the ClickHouse resolver and the DuckDB commit run once per
+cycle regardless of account count. An event may appear more than once across cycles because
+the writer is at-least-once and arrival windows are disjoint but retries are not;
+`canonical_user` may still be anonymous when later evidence binds it. Consumers dedupe on
+`event_id` or read `events_v1`. A candidate whose occurred day is already published is not
+appended here; it is recorded as a dirty partition in the journal for `republish` and, once
+EP-56 exists, for the rewrite path. Partitions whose day has closed are deleted from the
+recent dataset in the same transaction that publishes them to the closed dataset; because each
+data file belongs to one account and day, that deletion drops whole files and writes no delete
+files, which EP-55 verifies in the catalog. The default cycle is 120 seconds with a 90-second
 grace behind the current time; with the writer's five-second maximum flush latency the
 end-to-end budget is about four minutes, stated as the freshness objective and measured.
+DuckLake data inlining stores a small insert's rows in the catalog database itself, so it is
+enabled only below a measured row limit, a few hundred rows by default, and never for the
+roughly fourteen thousand rows a ten-million-event day delivers per cycle; routing that volume
+through PostgreSQL would be the catalog's heaviest write load. Every cycle otherwise adds one
+data file per account touched, about seven hundred per account per day, so EP-55 states a
+file-count budget per partition and a compaction cadence that keeps the window within it, and
+exports the catalog's file count per dataset as a metric.
 
-**Maintenance and snapshot retention — EP-55 owner.** After each closed-day publication and
-on demand through `maintain`, flush inlined data, merge adjacent files, expire snapshots
-older than the configured retention, seven days by default, and clean up orphaned files.
-Consumers reading the snapshot change feed must stay within that retention; the guide says
-so, and the publication journal exposes the oldest retained snapshot through `status`.
+**Maintenance and snapshot retention — EP-55 owner.** On a configured cadence, hourly by
+default for the recent dataset, after each closed-day publication, and on demand through
+`maintain`, flush inlined data, merge adjacent files up to the target file size, expire
+snapshots older than the configured retention, seven days by default, and clean up orphaned
+files. Maintenance runs as its own bounded DuckDB job, never inside a publication unit, so a
+slow compaction cannot delay a micro-batch or hold the traffic lock. After any row-level
+delete or update in either dataset, maintenance also rewrites the data files that carry delete
+files, so consumers do not pay merge-on-read on every scan and erased bytes leave the data
+path once the superseded files are expired and cleaned. Consumers reading the snapshot change
+feed must stay within that retention; the guide says so, and the publication journal exposes
+the oldest retained snapshot through `status`. The cycle interval, retention and compaction
+cadence are settled by measuring catalog growth and file counts at the default cycle, as
+Surprises & Discoveries records, not by assumption.
 
-**Freshness telemetry — EP-55 owner.** Export the publish lag, the last successful
-publication time per dataset, the number of dirty partitions and the oldest retained
-snapshot through the existing Prometheus registry. Readiness is not coupled to lake
-publication; a lake outage degrades the data product and is visible, but never fails ingest
-or metric reads.
+**Freshness telemetry — EP-55 owner, EP-54 starts.** Export the publish lag, the last
+successful publication time per dataset, the number of dirty partitions and the oldest
+retained snapshot through the existing Prometheus registry, together with the cost signals the
+budgets below need: rows and bytes published per unit, unit duration, the longest traffic-lock
+hold, the data-file count per dataset, maintenance duration and the dirty-partition backlog
+age. EP-54 exports the lock-hold and unit-duration series with the first publisher; EP-55 adds
+the rest. Readiness is not coupled to lake publication; a lake outage degrades the data product
+and is visible, but never fails ingest or metric reads.
 
 **Erasure, retention and re-resolution — EP-56 owner.** Identity unlinking, explicit-fact
 deletion and `apply-retention` record the affected dataset partitions as dirty inside their
 own PostgreSQL transaction, after discovery and before completion, so a job that fails or
-resumes cannot lose the obligation. The publisher rewrites dirty partitions: replace in
-`events_v1`, delete and re-append in `events_recent_v1`. After an erasure rewrite it expires
-every snapshot older than the rewrite commit and cleans files, so time travel cannot reach
-erased rows; this deliberately shortens consumers' change-feed window and is documented.
-Applied retention drops partitions older than the applied cutoff. A trailing window, seven
-days by default, is rewritten nightly to absorb identity reclassification, and `republish`
-rewrites any range on demand. ADRs 16, 17 and 18 are amended to state that the lake is a
-Kansoku-owned export with these guarantees; external copies of the lake remain the
-consumer's responsibility.
+resumes cannot lose the obligation. The erasure jobs already persist per-event dispositions in
+`kansoku.event_dispositions`, so a dirty record for erasure carries the affected event
+identifiers and the rewrite is proportional to the erased rows rather than to the partition:
+the publisher re-reads only those identifiers from the lake projection after the scrub,
+deletes them and re-inserts whatever the re-read returns in `events_v1` and `events_recent_v1`
+in one transaction, then rewrites the data files that received delete files, expires every
+snapshot older than that commit and cleans the superseded files, so time travel cannot reach
+erased rows and the erased bytes leave the data path. A full partition re-export remains the
+fallback when the affected fraction of a partition is large, with the threshold measured. The
+expiry deliberately shortens consumers' change-feed window and is documented. Applied
+retention drops partitions older than the applied cutoff as whole-file drops, verified in the
+catalog. Identity reclassification is detected, not assumed: nightly, for the trailing window
+of seven days by default, the publisher first checks the identity evidence indexes for
+bindings observed since the last pass for each account, then recomputes a per-partition digest
+of event identifier and canonical subject with one ClickHouse expression, which scans the day
+but moves one row, and rewrites only partitions whose digest differs from the one the journal
+recorded at publication. Rewriting the whole window blindly would move seven times the daily
+volume through the publisher and the data path every night. Dirty partitions from every
+source, including the late arrivals EP-55 records, are coalesced and rewritten oldest-first
+under a nightly budget, with the backlog age exported as a metric, and `republish` rewrites
+any range on demand. ADRs 16, 17 and 18 are amended to state that the lake is a Kansoku-owned
+export with these guarantees; external copies of the lake remain the consumer's
+responsibility.
+
+**Performance budgets and resource governance — EP-54 owner, every child extends.** The lake
+must never make ingest or metric reads slower in a way nobody measured. EP-54 defines the
+budgets and the harness that measures them on the ten-million-event-day fixture, and each
+child re-runs the harness for the behaviour it adds:
+
+- Publisher resident memory stays under a fixed ceiling, 512 MiB proposed, independent of
+  unit size, because reads stream block by block and the Parquet writer flushes row groups.
+- No traffic-lock hold exceeds the ten-second ceiling; the longest hold is a metric.
+- A closed-day export of ten million events completes within a stated wall-clock budget under
+  the publisher's ClickHouse profile, and the ninety-ninth percentile latency of the
+  representative HTTP metric recipes measured during the export stays within a stated ratio
+  of their idle latency, 1.5 proposed, while the writer's flush latency and queue depth are
+  unchanged.
+- One micro-batch cycle reads a bounded number of granules, taken from the query log, and
+  finishes in a small fraction of the cycle interval, one tenth proposed, on the grown-history
+  fixture of `docs/plans/32-time-aware-identity-bindings-and-bounded-resolution-cost.md`.
+- The catalog's data-file count per dataset and the PostgreSQL catalog size stay within the
+  budgets EP-55 states at the default cycle and compaction cadence over a simulated
+  forty-eight-hour window.
+- Erasure cost is proportional to erased rows and retention drops are whole-file drops, shown
+  by catalog inspection in EP-56.
+
+Proposed figures are starting points. The first measurement either confirms them or replaces
+them with measured values and a reason, recorded in the owning child's plan and summarized in
+Outcomes & Retrospective. A budget that cannot be met changes the design before the dataset
+schema is frozen; it is never relaxed silently.
 
 **Data-product contract — EP-54 owner, EP-55, EP-56 and EP-57 extend.** One structured Markdown
 document with stable sections: product identity and owner, catalog and storage location,
@@ -333,8 +471,11 @@ file-backed DuckLake catalog and a local data path. The realistic gate adds an o
 PostgreSQL catalog and an owned S3-compatible object-store process with recorded version and
 hash. Conformance attaches the catalog from an unmodified DuckDB CLI, runs the daily-users
 recipe over `events_v1`, and compares it with the HTTP metric and the ADR-18 reader recipe,
-before and after an erasure and a retention job. EP-55 adds a measured freshness proof; EP-56
-adds a snapshot-expiry proof that erased rows are unreachable at every retained snapshot. A
+before and after an erasure and a retention job. EP-54 adds the performance harness that
+measures the budgets above on the ten-million-event fixture, and every later child re-runs
+it. EP-55 adds a measured freshness proof; EP-56 adds a snapshot-expiry proof that erased rows
+are unreachable at every retained snapshot and a catalog proof that retention drops are
+whole-file drops. A
 mesh-style consumer proof reads the snapshot change feed exactly as Kikan's fixture harness
 does. Successful compilation or skipped native cases are never acceptance.
 
@@ -348,10 +489,12 @@ views of the same closed partitions and inherit their lifecycle through EP-56.
 ## Progress
 
 Not started. The MasterPlan was authored on 2026-11-03 after the design discussion recorded in
-the Decision Log and revised the same day for child numbering and for the Haskell Parquet
-writer. EP-54 is the next plan to author; its first milestone is the proof set in
-Surprises & Discoveries below, led by the writer spike, because the dataset schema cannot be
-frozen before those measurements exist.
+the Decision Log and revised the same day for child numbering, for the Haskell Parquet writer,
+and after a performance review that bounded the traffic-lock hold, replaced blind nightly
+rewrites with detected ones and added measured budgets. EP-54 is the next plan to author; its
+first milestone is the proof set in Surprises & Discoveries below, led by the writer spike and
+the performance harness, because the dataset schema cannot be frozen before those measurements
+exist.
 
 ## Surprises & Discoveries
 
@@ -383,6 +526,43 @@ Planning-time findings on 2026-11-03, each with the child that must resolve it:
 - Lakehouse loading guidance discourages file loads more often than once a minute; DuckLake's
   catalog inlining relaxes that, but no published commit-rate figure exists, so the cycle
   interval is settled by measuring catalog growth, not assumed. (EP-55)
+
+Performance review findings on 2026-11-03, verified against the working tree:
+
+- `Kansoku.Admin.Coordination.trafficLock` acquires the exclusive traffic lock under a
+  thirty-second statement timeout after the fence is already persisted, and a timeout fails
+  the job with the fence retained. A publisher holding the shared lock for a whole closed-day
+  read would turn every erasure, retention and migration job into an operator-resumed
+  failure; the hold must be per slice and bounded well under that timeout. (EP-54)
+- The vendored ClickHaskell `select` hands each decoded block to a callback and retains only
+  the callback's results, so streaming is available, but every existing caller concatenates
+  the blocks into one list. The publisher needs a new streaming consumer, not the helpers in
+  `Kansoku.ClickHouse`. (EP-54)
+- The vendored driver declares no decoder for ClickHouse's native `JSON` column; the lake
+  projection must serialize `properties_json` to a string in SQL, which also fixes the Parquet
+  representation Kansoku controls. (EP-54)
+- ADR-1 leaves past occurrence times unchanged, so an arrival window can carry events for any
+  closed day. They cannot be appended to the recent dataset without breaking its contract and
+  cannot be dropped without breaking the closed dataset's completeness; they are dirty
+  partitions, which the EP-54 journal must already be able to record. (EP-54, EP-55, EP-56)
+- Adding the arrival-time index to a table partitioned by occurred month protects only parts
+  that have the index materialized; an arrival-bounded query without an occurred predicate
+  would scan every unindexed historical part on every cycle. Materialization is a one-time
+  mutation over the arrival-time column whose duration must be recorded. (EP-54)
+- A blind nightly rewrite of a seven-day trailing window moves seven times the daily volume
+  through the publisher and the data path every night. Identity reclassification can be
+  detected from the evidence indexes' observation times and a per-partition digest for a
+  fraction of that cost. (EP-56)
+- The erasure jobs already persist per-event dispositions, so an erasure rewrite can be
+  targeted to the affected identifiers; a day with ten million events need not be re-exported
+  to remove a handful of rows, and the superseded data files are rewritten by DuckDB from the
+  data path rather than through ClickHouse. (EP-56)
+- Kikan's connector and fixture harness run DuckDB 1.5.4, while the producer pins DuckDB 2.0
+  with DuckLake 1.1. The data product must name the oldest DuckDB release that can attach its
+  catalog and prove it in conformance. (EP-54)
+- The operational PostgreSQL database already carries the pgmq ingest queue and the
+  administrative journal. A DuckLake catalog in the same database would add every consumer's
+  attach and every micro-batch commit to the queue's connection and I/O budget. (EP-54)
 
 ## Decision Log
 
@@ -450,12 +630,42 @@ datasets later from the versioned registry. Rationale: the generic dataset must 
 and stable first; typed columns are additive and should come from the governed contracts, not
 from inference over stored rows.
 
+On 2026-11-03, after a performance review, bound the publisher's traffic-lock hold per read
+slice and split closed-day units into slices committed in one DuckDB transaction. Rationale:
+ADR-17's exclusive acquisition waits thirty seconds and fails the job with the fence retained;
+slices keep every hold well under that, bound memory and staging, and one transaction preserves
+one snapshot per partition.
+
+On 2026-11-03 replace the blind nightly trailing-window rewrite with detected rewrites and
+make erasure rewrites targeted by disposition. Rationale: the blind rewrite costs seven daily
+volumes a night for a change that is usually absent; evidence observation times and a
+per-partition digest detect reclassification at the cost of a ClickHouse scan that moves one
+row; and the erasure jobs already enumerate affected event identifiers, so a rewrite can be
+proportional to erased rows with partition re-export as the measured fallback.
+
+On 2026-11-03 give the publisher its own bounded ClickHouse settings profile and define
+measured performance budgets that every child re-runs. Rationale: the reader profile's limits
+are the wrong shape for publication, but an unbounded publisher competes with ingest and
+metric reads; a budget confirmed on the ten-million-event fixture, including metric latency
+during export, is the only honest way to claim the lake does not degrade the service.
+
+On 2026-11-03 publish the recent tier as one unit per cycle across accounts, enable DuckLake
+inlining only below a small measured row limit, state a file-count budget with a compaction
+cadence, and place a PostgreSQL catalog in its own database. Rationale: the resolver's
+evidence materialization is per query, not per account; inlining routes rows through the
+catalog database, which is the wrong place for a ten-million-event day; uncompacted
+micro-batches produce about seven hundred files per account per day; and the operational
+database already serves the ingest queue.
+
 ## Outcomes & Retrospective
 
 Pending. Record here, when the children complete: the pinned DuckDB, DuckLake, Parquet-writer
-and emulator versions; the selected export mechanism with its measured throughput and memory;
-the measured Parquet type of the JSON column on the fallback; the measured freshness distribution
-and catalog growth at the default cycle; the erasure-to-unreachable latency; which store
-families and catalogs were proven in owned environments versus documented as compatibility;
-and whether EP-57 shipped, was rescoped or was cancelled, with the adopter evidence behind
-that choice.
+and emulator versions and the oldest consumer DuckDB release proven to attach; the selected
+export mechanism with its measured throughput and peak resident memory; the measured Parquet
+type of the JSON column on the fallback; every performance budget with its proposed and
+measured values, including the longest traffic-lock hold, the metric latency ratio during a
+closed-day export, the index materialization duration, granules read per cycle, the data-file
+count and catalog size at the default cycle, and the erasure cost per erased row; the measured
+freshness distribution; the erasure-to-unreachable latency; which store families and catalogs
+were proven in owned environments versus documented as compatibility; and whether EP-57
+shipped, was rescoped or was cancelled, with the adopter evidence behind that choice.
