@@ -31,6 +31,11 @@ provenance:
       at: 2026-11-04T05:58:09Z
       mode: "update"
       note: "Performance review: bound the traffic-lock hold per read slice under ADR-17's thirty-second exclusive wait, stream blocks without accumulation, materialize the arrival index in every partition, detect re-resolution by digest instead of rewriting seven days nightly, target erasure rewrites by disposition, separate the PostgreSQL catalog database, and add measured budgets every child re-runs."
+    - model: "claude-fable-5-1"
+      harness: "claude-code"
+      at: 2026-11-04T13:54:03Z
+      mode: "update"
+      note: "Author EP-54 at its reserved path; record the 2026-11-04 upstream findings (wireform-parquet unpublished, DuckDB 2.0.0 with DuckLake 1.1 released, DuckLake 1.0 catalog floor, nixpkgs DuckDB 1.5.5) and clarify that EP-54 records metric values while EP-55 serves the registry."
 ---
 
 # Publish Kansoku analytics as a DuckLake lakehouse data product
@@ -86,7 +91,7 @@ Kikan portfolio's deferred mesh connector
 `mori://shinzui/kikan/plans/15-data-mesh-ingestion-ducklake-duckdb-and-parquet-on-gcs-as-a-source`)
 consumes DuckLake tables through the snapshot change feed. They are examples the acceptance
 must satisfy, not the design authority; the data product must be equally usable from a
-laptop running the DuckDB CLI against a SQLite catalog and a MinIO bucket. The Mori registry does
+laptop running the DuckDB CLI against a SQLite catalog and a local S3-compatible bucket. The Mori registry does
 not yet resolve the two plan URIs above; the registered projects and files were verified directly.
 
 Micro-batching is the accepted freshness model. The initiative delivers minutes, not seconds;
@@ -252,8 +257,8 @@ append. The projection serializes `properties_json` with `toJSONString`, because
 ClickHaskell driver declares no decoder for the native `JSON` column; the writer spike confirms
 this.
 
-Add a minmax skipping index on `received_at` to the canonical events table, which has none
-today. The table is partitioned by occurred month and an arrival-bounded query carries no
+**Arrival index — EP-54 owner.** Add a minmax skipping index on `received_at` to the canonical
+events table, which has none today. The table is partitioned by occurred month and an arrival-bounded query carries no
 occurred predicate, so a part without the index would be scanned in full on every cycle. The
 migration therefore materializes the index in every existing partition inside the ADR-22
 session with synchronous mutations, and EP-54 records the one-time materialization duration
@@ -261,7 +266,8 @@ per retained million events so operators can size the maintenance window. Both c
 ClickHouse migration applied through `kansoku-ch-migrate` in a persistent maintenance session.
 The view uses SQL SECURITY DEFINER with the migration operator as definer, as ADR-18 requires.
 
-The publisher authenticates with its own ClickHouse identity under its own settings profile.
+**Publisher identity and settings profile — EP-54 owner.** The publisher authenticates with its
+own ClickHouse identity under its own settings profile.
 The `kansoku_reader` role's result and time bounds are consumer limits and never apply to
 publication, but the publisher is not unbounded either: its profile caps threads, memory,
 network bandwidth and execution time per query, gives its queries a lower scheduling priority
@@ -391,9 +397,11 @@ successful publication time per dataset, the number of dirty partitions and the 
 retained snapshot through the existing Prometheus registry, together with the cost signals the
 budgets below need: rows and bytes published per unit, unit duration, the longest traffic-lock
 hold, the data-file count per dataset, maintenance duration and the dirty-partition backlog
-age. EP-54 exports the lock-hold and unit-duration series with the first publisher; EP-55 adds
-the rest. Readiness is not coupled to lake publication; a lake outage degrades the data product
-and is visible, but never fails ingest or metric reads.
+age. EP-54 registers the lock-hold, unit-duration, rows and bytes series and records their
+values in the publication journal and the command receipt, since its commands are one-shot;
+EP-55 serves the registry over HTTP from the long-running loop and adds the rest. Readiness is
+not coupled to lake publication; a lake outage degrades the data product and is visible, but
+never fails ingest or metric reads.
 
 **Erasure, retention and re-resolution — EP-56 owner.** Identity unlinking, explicit-fact
 deletion and `apply-retention` record the affected dataset partitions as dirty inside their
@@ -425,29 +433,24 @@ responsibility.
 **Performance budgets and resource governance — EP-54 owner, every child extends.** The lake
 must never make ingest or metric reads slower in a way nobody measured. EP-54 defines the
 budgets and the harness that measures them on the ten-million-event-day fixture, and each
-child re-runs the harness for the behaviour it adds:
-
-- Publisher resident memory stays under a fixed ceiling, 512 MiB proposed, independent of
-  unit size, because reads stream block by block and the Parquet writer flushes row groups.
-- No traffic-lock hold exceeds the ten-second ceiling; the longest hold is a metric.
-- A closed-day export of ten million events completes within a stated wall-clock budget under
-  the publisher's ClickHouse profile, and the ninety-ninth percentile latency of the
-  representative HTTP metric recipes measured during the export stays within a stated ratio
-  of their idle latency, 1.5 proposed, while the writer's flush latency and queue depth are
-  unchanged.
-- One micro-batch cycle reads a bounded number of granules, taken from the query log, and
-  finishes in a small fraction of the cycle interval, one tenth proposed, on the grown-history
-  fixture of `docs/plans/32-time-aware-identity-bindings-and-bounded-resolution-cost.md`.
-- The catalog's data-file count per dataset and the PostgreSQL catalog size stay within the
-  budgets EP-55 states at the default cycle and compaction cadence over a simulated
-  forty-eight-hour window.
-- Erasure cost is proportional to erased rows and retention drops are whole-file drops, shown
-  by catalog inspection in EP-56.
-
-Proposed figures are starting points. The first measurement either confirms them or replaces
-them with measured values and a reason, recorded in the owning child's plan and summarized in
-Outcomes & Retrospective. A budget that cannot be met changes the design before the dataset
-schema is frozen; it is never relaxed silently.
+child re-runs the harness for the behaviour it adds. Publisher resident memory stays under a
+fixed ceiling, 512 MiB proposed, independent of unit size, because reads stream block by block
+and the Parquet writer flushes row groups. No traffic-lock hold exceeds the ten-second ceiling,
+and the longest hold is a metric. A closed-day export of ten million events completes within a
+stated wall-clock budget under the publisher's ClickHouse profile, and the ninety-ninth
+percentile latency of the representative HTTP metric recipes measured during the export stays
+within a stated ratio of their idle latency, 1.5 proposed, while the writer's flush latency and
+queue depth are unchanged. One micro-batch cycle reads a bounded number of granules, taken from
+the query log, and finishes in a small fraction of the cycle interval, one tenth proposed, on
+the grown-history fixture of
+`docs/plans/32-time-aware-identity-bindings-and-bounded-resolution-cost.md`. The catalog's
+data-file count per dataset and the PostgreSQL catalog size stay within the budgets EP-55
+states at the default cycle and compaction cadence over a simulated forty-eight-hour window.
+Erasure cost is proportional to erased rows and retention drops are whole-file drops, shown by
+catalog inspection in EP-56. Proposed figures are starting points: the first measurement either
+confirms them or replaces them with measured values and a reason, recorded in the owning
+child's plan and summarized in Outcomes & Retrospective. A budget that cannot be met changes
+the design before the dataset schema is frozen; it is never relaxed silently.
 
 **Data-product contract — EP-54 owner, EP-55, EP-56 and EP-57 extend.** One structured Markdown
 document with stable sections: product identity and owner, catalog and storage location,
@@ -491,10 +494,10 @@ views of the same closed partitions and inherit their lifecycle through EP-56.
 Not started. The MasterPlan was authored on 2026-11-03 after the design discussion recorded in
 the Decision Log and revised the same day for child numbering, for the Haskell Parquet writer,
 and after a performance review that bounded the traffic-lock hold, replaced blind nightly
-rewrites with detected ones and added measured budgets. EP-54 is the next plan to author; its
-first milestone is the proof set in Surprises & Discoveries below, led by the writer spike and
-the performance harness, because the dataset schema cannot be frozen before those measurements
-exist.
+rewrites with detected ones and added measured budgets. EP-54 was authored on 2026-11-04 at its
+reserved path with eight milestones; its first milestone is the writer spike and read-side
+baseline, because the dataset schema cannot be frozen before those measurements exist. EP-55 to
+EP-57 remain to be authored once EP-54's interfaces are accepted.
 
 ## Surprises & Discoveries
 
@@ -563,6 +566,22 @@ Performance review findings on 2026-11-03, verified against the working tree:
 - The operational PostgreSQL database already carries the pgmq ingest queue and the
   administrative journal. A DuckLake catalog in the same database would add every consumer's
   attach and every micro-batch commit to the queue's connection and I/O budget. (EP-54)
+
+Authoring-time findings for EP-54 on 2026-11-04, verified upstream:
+
+- `wireform-parquet` is still unpublished and untagged; Hackage carries only `wireform-core`
+  0.2.0.1, `wireform-derive` 0.2.0.0 and `wireform-proto` 0.2.0.0. `dataframe-parquet` 1.5.1.0
+  is a released pure-Haskell Parquet writer and joins the writer spike as a second candidate
+  beside the ClickHouse fallback. (EP-54)
+- DuckDB v2.0.0 and DuckLake extension 2.0 (specification 1.1) were released on 2026-10-21.
+  New catalogs default to specification 1.1; `DUCKLAKE_VERSION '1.0'` at attach creates a 1.0
+  catalog that extension 1.0 consumers such as Kikan's DuckDB 1.5.4 connector can read, so
+  EP-54 creates catalogs at 1.0 by default. (EP-54)
+- The pinned nixpkgs carries DuckDB 1.5.5, not 2.0; the producer CLI and its extensions are
+  fetched as hash-verified official release artifacts, and the nixpkgs DuckDB serves as the
+  consumer floor in conformance. RustFS (Apache-2.0, 1.0.0-rc.5 in the pinned nixpkgs, 1.0.0
+  GA upstream) is the chosen S3-compatible emulator for the realistic gate, with garage as the
+  recorded fallback. (EP-54)
 
 ## Decision Log
 
