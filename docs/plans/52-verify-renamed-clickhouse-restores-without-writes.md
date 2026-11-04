@@ -10,6 +10,18 @@ provenance:
     model: "gpt-6.1-sol"
     harness: "codex-cli"
     at: 2026-11-03T15:42:12Z
+  reviews:
+    - model: "claude-fable-5-1"
+      harness: "claude-code"
+      at: 2026-11-04T05:38:58Z
+      verdict: "changes-requested"
+      note: "verify-restored did not name its executable; Command.hs is edited by EP-50 and EP-51 in parallel; local toolkit checkout lags the pinned commit"
+  revisions:
+    - model: "claude-fable-5-1"
+      harness: "claude-code"
+      at: 2026-11-04T05:38:58Z
+      mode: "update"
+      note: "Name kansoku-ch-migrate and parser isolation for verify-restored; note pinned commit versus local checkout; add ADR bundle validation"
 ---
 
 # Verify renamed ClickHouse restores without writes
@@ -81,7 +93,9 @@ packaged commands against owned databases with required cases that cannot skip.
 Inspection must honor all three without pretending to be a restore/adoption command.
 
 The toolkit source owner is `mori://shinzui/clickhouse-migrate`. Discover its public
-inspection/target/ledger APIs through Mori before designing an adapter. If a public
+inspection/target/ledger APIs through Mori before designing an adapter, reading the
+commit `00afa9fa` that `cabal.project` pins for 0.1.0.1; on 2026-11-03 the local Mori
+checkout was at the 0.1.0.0 release and did not contain that commit. If a public
 read-only API cannot inspect a restored namespace and original target safely, track
 upstream support there. Do not import private internals, disable identity checks or
 copy a second ledger implementation into Kansoku.
@@ -92,8 +106,11 @@ copy a second ledger implementation into Kansoku.
 ### M1: Add an isolated read-only restored-copy target
 
 
-Add a proposed `verify-restored` command in the administrative executable. Its name
-and flags describe new work, not syntax available today. Require explicit application
+Add a proposed `verify-restored` command to the `kansoku-ch-migrate` executable, whose
+parser is `kansoku-server/src/Kansoku/ClickHouseMigration/Command.hs`. It is a sibling
+of the toolkit's native commands and of the `maintenance` group; it must not change the
+`--predecessor` option or the `maintenance` subcommands, which EP-50 and EP-51 edit in
+parallel. Its name and flags describe new work, not syntax available today. Require explicit application
 and ledger database names, observed endpoint/server UUID, original target/ledger
 expectations, and expected compiled release/plan. Support an optional recovery-set
 reference from EP-51, but do not make that child a hard prerequisite: explicit
@@ -215,6 +232,12 @@ Each required native case must run and report an explicit nonzero count with zer
 failures and zero skips. Verify the installed Nix executable and extracted source
 artifact contain the expectation digest. Proposed `verify-restored` examples become
 executable guide fixtures once its actual CLI is implemented.
+
+After amending ADR-22, validate the bundle strictly and advance its log:
+
+```bash
+nix develop -c okf validate docs/adr --strict --profile docs/adr/profile.dhall --profile-enforce --log-enforce
+```
 
 
 ## Validation and Acceptance

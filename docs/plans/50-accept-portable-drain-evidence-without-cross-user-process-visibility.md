@@ -10,6 +10,18 @@ provenance:
     model: "gpt-6.1-sol"
     harness: "codex-cli"
     at: 2026-11-03T15:42:12Z
+  reviews:
+    - model: "claude-fable-5-1"
+      harness: "claude-code"
+      at: 2026-11-04T05:38:58Z
+      verdict: "changes-requested"
+      note: "Pointed at a nonexistent PostgreSQL migration directory; coordinator schema is kansoku-core/src/Kansoku/Migrations.hs; local toolkit checkout lags the pinned 0.1.0.1 commit"
+  revisions:
+    - model: "claude-fable-5-1"
+      harness: "claude-code"
+      at: 2026-11-04T05:38:58Z
+      mode: "update"
+      note: "Point coordinator schema work at Kansoku/Migrations.hs; note pinned commit versus local checkout; add ADR bundle validation"
 ---
 
 # Accept portable drain evidence without cross-user process visibility
@@ -86,8 +98,11 @@ The upstream owner is `mori://shinzui/clickhouse-migrate`; the package is
 `mori://shinzui/clickhouse-migrate/packages/clickhouse-migrate`. Its repair source
 looks up its recorded query IDs even though its comment calls absence diagnostic.
 Locate source with Mori before proposing an API. The currently pinned source cohort
-is in `cabal.project` and the Nix dependency configuration; do not infer released
-support from a local checkout. This plan selects no new package version.
+is only in `cabal.project`: `==0.1.0.1` constraints and a `source-repository-package`
+at commit `00afa9fa`. On 2026-11-03 the local Mori checkout was at the 0.1.0.0 release
+and lacked that commit, so read the pinned commit itself rather than the checkout's
+HEAD. Do not infer released support from a local checkout. This plan selects no new
+package version.
 
 Nagare's request records
 `mori://shinzui/nagare/okf/improvement-requests/concepts/IR-30` and
@@ -126,8 +141,11 @@ identity and fence without discovery or ClickHouse mutation, then returns that
 identity and next attempt. The operator drains and uses `resume` with matching
 evidence. Preserve previews. Existing confirmed commands without sufficient drain
 must retain a resumable fenced job and explain how to proceed. Add any durable
-attempt/evidence fields in a new PostgreSQL migration, located using the existing
-migration tree rather than guessing its next filename. Never edit applied SQL.
+attempt/evidence fields as a new step appended to the embedded PostgreSQL plan in
+`kansoku-core/src/Kansoku/Migrations.hs`, which already defines
+`kansoku.maintenance_fence`, `kansoku.maintenance_jobs` and
+`kansoku.clickhouse_migration_sessions`; there is no PostgreSQL migration directory.
+Never edit applied SQL.
 
 Before broad CLI work, prove one real owned flow: fence a job or native session,
 block the runtime's new connections using the fixture's operator principal, let/end
@@ -196,7 +214,7 @@ mori registry search clickhouse-migrate
 mori registry show shinzui/clickhouse-migrate --full
 mori registry docs shinzui/clickhouse-migrate
 rg -n 'quiesceRawWrites|executeJob|resumeJob' kansoku-core/src/Kansoku/Admin
-rg --files kansoku-server/migrations
+rg -n 'maintenance_fence|clickhouse_migration_sessions' kansoku-core/src/Kansoku/Migrations.hs
 nix develop -c just deterministic-test
 ```
 
@@ -214,6 +232,12 @@ If a dependency cohort changes, the source gate is required in that change; othe
 run it at the final integrated gate. Expected results include explicit nonzero case
 counts, zero failures and zero skipped required cases. A missing native prerequisite
 is a failure to accept the milestone, not a successful deterministic substitute.
+
+After amending ADR-17 or ADR-22, validate the bundle strictly and advance its log:
+
+```bash
+nix develop -c okf validate docs/adr --strict --profile docs/adr/profile.dhall --profile-enforce --log-enforce
+```
 
 
 ## Validation and Acceptance

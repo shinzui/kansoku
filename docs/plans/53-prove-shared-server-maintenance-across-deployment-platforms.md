@@ -10,6 +10,18 @@ provenance:
     model: "gpt-6.1-sol"
     harness: "codex-cli"
     at: 2026-11-03T15:42:12Z
+  reviews:
+    - model: "claude-fable-5-1"
+      harness: "claude-code"
+      at: 2026-11-04T05:38:58Z
+      verdict: "comments"
+      note: "All named files, recipes and Mori URIs resolve; IR-2 still declares IR-30/31 hard dependencies that resolution should restate"
+  revisions:
+    - model: "claude-fable-5-1"
+      harness: "claude-code"
+      at: 2026-11-04T05:38:58Z
+      mode: "update"
+      note: "Restate IR-2 dependency kinds when recording resolution"
 ---
 
 # Prove shared-server maintenance across deployment platforms
@@ -207,7 +219,10 @@ responsibility, and update relevant capability/terminology/guide evidence. Befor
 closing IR-2, map every acceptance criterion to executable results, actual Nagare
 evidence and documented commands. Use the existing improvement-request profile to
 record resolution/target plan and refresh its bundle log; do not claim independent
-verification merely because the author ran tests. Mark the parent/children complete
+verification merely because the author ran tests. IR-2's frontmatter still declares
+the Nagare requests IR-30 and IR-31 as hard dependencies; when recording resolution,
+restate them as the Nagare-deployment prerequisites this initiative decided they are,
+so the request's metadata matches the delivered platform-independent contract. Mark the parent/children complete
 only when their actual gates pass and distill durable findings into ADRs.
 
 

@@ -10,6 +10,18 @@ provenance:
     model: "gpt-6.1-sol"
     harness: "codex-cli"
     at: 2026-11-03T15:42:12Z
+  reviews:
+    - model: "claude-fable-5-1"
+      harness: "claude-code"
+      at: 2026-11-04T05:38:58Z
+      verdict: "changes-requested"
+      note: "Pointed at a nonexistent PostgreSQL migration directory; guide backup claim overstated; otherwise consistent with EP-50 M1 contract"
+  revisions:
+    - model: "claude-fable-5-1"
+      harness: "claude-code"
+      at: 2026-11-04T05:38:58Z
+      mode: "update"
+      note: "Point coordinator schema work at Kansoku/Migrations.hs after EP-50 steps; correct guide backup claim; add ADR bundle validation"
 ---
 
 # Establish consistent maintenance backups and restored-server identity recovery
@@ -70,8 +82,11 @@ a documented point. Independently timed snapshots are sufficient only if relevan
 state is stable through their capture or a qualified mechanism proves equivalent
 consistency. Nearby timestamps and matching server UUIDs alone do not establish it.
 
-`docs/guides/clickhouse-migrations.md` requires consistent backups and retains
-`KANSOKU_CH_MIGRATION_TARGET`, endpoint, server ID and ledger ID.
+`docs/guides/clickhouse-migrations.md` tells operators to back up both stores
+consistently before a rollout and to restore consistent backups for rollback, and it
+retains `KANSOKU_CH_MIGRATION_TARGET`, endpoint, server ID and ledger ID;
+`docs/guides/operations.md` requires backup and rehearsal of both stores before native
+upgrades. Neither guide yet defines what proves one recovery point.
 `kansoku-server/src/Kansoku/ClickHouseMigration/Config.hs` loads that binding;
 `Command.hs` owns `up`/repair/session entry paths. Native session state is managed
 by `kansoku-core/src/Kansoku/Admin/Coordination.hs`. Server identity also appears
@@ -210,7 +225,7 @@ beginning implementation, then inspect identity/persistence references:
 
 ```bash
 rg -n 'server_id|serverId|SERVER_ID|pending_entry|quiescence' kansoku-core/src/Kansoku/Admin kansoku-server/src/Kansoku/ClickHouseMigration
-rg --files kansoku-server/migrations
+rg -n 'clickhouse_migration_sessions|maintenance_fence' kansoku-core/src/Kansoku/Migrations.hs
 mori registry search clickhouse-migrate
 mori registry docs shinzui/clickhouse-migrate
 nix develop -c just deterministic-test
@@ -229,6 +244,12 @@ nix develop -c just check
 Require nonzero backup/restore/re-bind case counts, zero failures and no skipped
 required cases. Publish sanitized ordering/coverage results; keep raw artifacts,
 credentials, receipts and data in the harness's restricted evidence directory.
+
+After amending ADR-22, validate the bundle strictly and advance its log:
+
+```bash
+nix develop -c okf validate docs/adr --strict --profile docs/adr/profile.dhall --profile-enforce --log-enforce
+```
 
 
 ## Validation and Acceptance
@@ -257,7 +278,9 @@ Never overwrite a verified recovery set with a partial retry. Failed checks reta
 the fence; recover the same owner after a lost response. Re-bind transitions are
 compare-and-set and audited so replay cannot accept a different restored server.
 Rerun tests with fresh owned roots; never point restoration at ambient databases.
-Use additive coordinator migrations and preserve applied migration bytes.
+Add coordinator schema as new steps appended to the embedded PostgreSQL plan in
+`kansoku-core/src/Kansoku/Migrations.hs`, after any step EP-50 appended, and preserve
+applied migration bytes.
 
 Use Conventional Commits with this plan's `ExecPlan:` and parent `MasterPlan:` trailers
 if implementation commits are made. Record material plan revisions with the installed

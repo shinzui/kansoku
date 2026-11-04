@@ -9,6 +9,18 @@ provenance:
     model: "gpt-6.1-sol"
     harness: "codex-cli"
     at: 2026-11-03T15:41:55Z
+  reviews:
+    - model: "claude-fable-5-1"
+      harness: "claude-code"
+      at: 2026-11-04T05:38:58Z
+      verdict: "changes-requested"
+      note: "Toolkit pin is only in cabal.project, coordinator schema is the embedded plan in Kansoku/Migrations.hs, shared CLI parser and acceptance harness lacked owners; decomposition and dependencies sound"
+  revisions:
+    - model: "claude-fable-5-1"
+      harness: "claude-code"
+      at: 2026-11-04T05:38:58Z
+      mode: "update"
+      note: "Corrected toolkit pin location and coordinator schema location; added shared parser/harness ownership and local-checkout lag discovery"
 ---
 
 # Operate Kansoku ClickHouse safely across deployment platforms
@@ -86,8 +98,10 @@ The toolkit owner is `mori://shinzui/clickhouse-migrate`. Repair still queries r
 query IDs in `system.processes`; its source states that absence is diagnostic only.
 Upstream behavior needed by this plan belongs there. Kansoku must not patch a vendored
 copy or erase a failed observation into a successful drain result. The currently
-configured source cohort is recorded in `cabal.project` and `nix/haskell.nix`; this
-planning change chooses no new dependency version or compatibility workaround.
+configured source cohort is recorded only in `cabal.project`: exact `==0.1.0.1`
+constraints plus a `source-repository-package` pinned to commit `00afa9fa`. No Nix
+file repeats that pin. This planning change chooses no new dependency version or
+compatibility workaround.
 
 
 ## Decomposition Strategy
@@ -158,8 +172,20 @@ contract by the operator procedure and retained with it.
 `kansoku-server/src/Kansoku/ClickHouseMigration/Command.hs` enforce their existing
 owner kinds. A data job needs a prepared identity before job-bound external evidence
 can be produced. Preserve mutual exclusion between jobs and migration sessions.
-Add coordinator schema changes as new PostgreSQL migrations; never edit applied ones.
-EP-51 extends this boundary only for backup requirements and an audited re-bind.
+Coordinator schema lives in `kansoku-core/src/Kansoku/Migrations.hs` as an ordered
+embedded plan; there is no PostgreSQL migration directory. Add coordinator changes as
+new appended steps there and never edit applied ones. EP-50 appends first; EP-51's
+backup-requirement and re-bind audit steps follow EP-50's, which its hard dependency
+on EP-50 M1 already orders.
+
+**Shared CLI parser and acceptance harness — EP-50 owns shared changes.**
+`kansoku-server/src/Kansoku/ClickHouseMigration/Command.hs` gains evidence threading
+from EP-50, `--recovery-set` and `maintenance rebind` from EP-51, and `verify-restored`
+from EP-52. EP-52 runs in parallel with the other two, so it adds an isolated sibling
+subcommand and does not alter the `--predecessor` option or the `maintenance` group.
+`scripts/clickhouse_migrations_acceptance.py` is extended by EP-50, EP-51 and EP-52;
+each child adds its own scenario function, and shared fixture helpers change only in
+EP-50 while it is active.
 
 **Recovery set — EP-51 owns, EP-52 and EP-53 consume.** A retained manifest binds the
 three database snapshots to one fenced/quiesced interval, checksums/receipts, original
@@ -220,6 +246,12 @@ EP-50 M1 is next. Nagare prerequisites are recorded upstream as completed, but t
 Kansoku integration and the toolkit repair change remain unproven. All five IR criteria
 and the final deployment matrix remain open. IR-2 retains its proposed status.
 
+Reviewed on 2026-11-03 against the working tree; verified repository mismatches were
+corrected in the same pass (see the revision note below). No friction-log bundle exists
+yet; the first child implementation bootstraps `docs/friction-log/` through
+`agents/skills/exec-plan/record-friction.ts` as described in
+`agents/skills/exec-plan/FRICTION.md`.
+
 
 ## Surprises & Discoveries
 
@@ -237,6 +269,19 @@ MasterPlan 6 reserved uncreated ExecPlan numbers 50–53. Its provisional refere
 were changed to named lake workstreams without altering its scope, so script-assigned
 IDs for this initiative have one meaning in the repository.
 
+On 2026-11-03, the review found that the local Mori checkout of
+`mori://shinzui/clickhouse-migrate` is at the 0.1.0.0 release and does not contain the
+commit `00afa9fa` that `cabal.project` pins for 0.1.0.1. EP-50 M3 and EP-52 M1 inspect
+the toolkit's repair and inspection APIs; they must read the pinned commit, not the
+local checkout's HEAD. The Nagare checkout carries tags through v0.11.0, so "the
+adopted release" in EP-53 is a deliberate choice at or above 0.8.0, and its
+`nagarectl` quiesce option is `--users` with default `runtime`.
+
+Kansoku's PostgreSQL coordinator schema is an embedded ordered plan in
+`kansoku-core/src/Kansoku/Migrations.hs`; `kansoku-server/migrations/` holds only the
+ClickHouse plan. The children originally pointed at a PostgreSQL migration directory
+that does not exist.
+
 
 ## Decision Log
 
@@ -252,6 +297,12 @@ alternate path for live mutations.
 On 2026-11-03, retain four functional children and place final privilege/platform proof
 in EP-53. Changes to drain, recovery provenance and schema inspection can be verified
 individually; their combined release claim needs one explicit owner.
+
+Revision note, 2026-11-03: a review against the working tree corrected the toolkit pin
+location, named `Kansoku/Migrations.hs` as the coordinator schema plan, added shared
+ownership for the migration CLI parser and the migration acceptance harness, and
+recorded the lagging local toolkit checkout. Scope, children and dependencies are
+unchanged.
 
 
 ## Outcomes & Retrospective
