@@ -1,5 +1,8 @@
 # Bundle Update Log
 
+## 2026-11-05
+* **Add**: Propose IR-3 from `mori://shinzui/kansoku-ui/plans/11-add-a-chart-kind-registry-composed-chart-inputs-and-a-chart-options-panel`: the query guide names the experiment conversion measure `rate` where the compiler and its tests emit `conversion_rate`.
+
 ## 2026-10-20
 * **Update**: Withdraw IR-1 at the requesting operator's direction: startup queue provisioning stays, and the runtime's permission to create its queue moves to the platform as `mori://shinzui/nagare/okf/improvement-requests/concepts/IR-35`. IR-2 is unaffected.
 
