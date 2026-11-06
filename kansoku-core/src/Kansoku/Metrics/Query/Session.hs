@@ -1,7 +1,8 @@
 -- | Whole retained session attributes shared by sessions and acquisition.
-module Kansoku.Metrics.Query.Session (sessionProjection, materializedSessionProjection) where
+module Kansoku.Metrics.Query.Session (sessionProjection, materializedSessionProjection, attachSessionAttributes) where
 
 import Data.Text qualified as Text
+import Kansoku.Metrics.Query.Dimension (SessionAttribute, sessionAttributeColumn, sessionAttributeExpr)
 import Kansoku.Prelude hiding (index)
 
 attributes :: [Text]
@@ -54,3 +55,20 @@ materializedSessionProjection =
         "FROM analytics.sessions WHERE account_id={account_id:String}",
         "GROUP BY account_id,source_service,session_id"
       ]
+
+-- | Attach finalized retained state once, without changing event time or identity.
+-- The marker and nullable values are explicit even when join_use_nulls is false.
+attachSessionAttributes :: [SessionAttribute] -> Text -> Text
+attachSessionAttributes [] source = source
+attachSessionAttributes requested source =
+  "(SELECT event.*,ifNull(session.attached_session_present,0) AS attached_session_present,"
+    <> Text.intercalate "," ["if(ifNull(session.attached_session_present,0)=1,session." <> column <> ",NULL) AS " <> column | attribute <- attributes', let column = sessionAttributeColumn attribute]
+    <> " FROM "
+    <> source
+    <> " AS event LEFT JOIN (SELECT account_id,source_service,session_id,toUInt8(1) AS attached_session_present,"
+    <> Text.intercalate "," ["toNullable(" <> sessionAttributeExpr attribute <> ") AS " <> sessionAttributeColumn attribute | attribute <- attributes']
+    <> " FROM ("
+    <> materializedSessionProjection
+    <> ")) AS session ON event.account_id=session.account_id AND event.source_service=session.source_service AND event.session_id=session.session_id AND event.source='web' AND event.session_id!='')"
+  where
+    attributes' = foldr (\attribute rest -> if attribute `elem` rest then rest else attribute : rest) [] requested

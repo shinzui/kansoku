@@ -1,6 +1,7 @@
 # Bundle Update Log
 
 ## 2026-11-06
+* **Addition**: FRIC-10 records slowdown tooling friction with mori://shinzui/kansoku: Embedded migration build forces full recompilation during query iteration
 * **Update**: FRIC-9 accepted: Accept the documented preservation workaround, as also required by FRIC-7 in a previous plan
 * **Addition**: FRIC-9 records detour tooling friction with mori://shinzui/okf: OKF log append removes existing guide provenance table
 * **Update**: FRIC-8 resolved: Resolve the oversized replay fixture after packaged public acceptance verifies all preserved assertions

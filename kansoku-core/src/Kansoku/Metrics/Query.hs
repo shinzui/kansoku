@@ -108,7 +108,7 @@ import Kansoku.Metrics.Query.Property
     resolveOptionalProperty,
     resolveProperty,
   )
-import Kansoku.Metrics.Query.Session (materializedSessionProjection, sessionProjection)
+import Kansoku.Metrics.Query.Session (attachSessionAttributes, materializedSessionProjection, sessionProjection)
 import Kansoku.Metrics.Query.Traits qualified as Traits
 import Kansoku.Metrics.Query.Validate (QueryLimitError (..), SqlName, mkSqlName, renderSqlName, validateAcquisitionConversions, validateDateRange, validateObservationCutoff, validateOffsets, validateSteps)
 import Kansoku.Metrics.Registry (BuiltinMetric (..), activeUsers)
@@ -777,9 +777,10 @@ compileSimpleMetric registry def req = do
   defaults <- definitionFilters def
   let inputs = defaults <> req ^. #filters
       scope = Filters.filteredEventScope (definitionEvents def) (req ^. #filters)
-  grouping <- requestGrouping req registry scope (req ^. #groupBy) (def ^. #groupBy)
-  compiled <- first QueryCompileFilterError (requestFilters req "metric_filter" registry scope inputs)
-  compiledSQL <- buildSimpleSQL registry grouping (Filters.predicates compiled) def req
+  let sessionSupport = def ^. #name == "page_views"
+  grouping <- requestGroupingFor sessionSupport req registry scope (req ^. #groupBy) (def ^. #groupBy)
+  compiled <- first QueryCompileFilterError (requestFiltersFor sessionSupport req "metric_filter" registry scope inputs)
+  compiledSQL <- buildSimpleSQL registry grouping (Filters.predicates compiled) def req {filters = inputs}
   pure CompiledMetric {sql = compiledSQL, groupLabels = map dimensionLabel grouping, filterParameters = Filters.parameters compiled, ordering = BucketDimensions}
 
 definitionFilters :: MetricDefinition -> Either QueryCompileError [MetricFilter]
@@ -903,11 +904,15 @@ simpleAggregateSQL aggregationSQL source grouping predicates def req =
   Text.unlines
     [ "SELECT " <> bucketExpr (effectiveGrain def req) <> " AS bucket, " <> groupProjection grouping <> ",",
       "       " <> aggregationSQL <> " AS value",
-      "FROM " <> (if hasUserTraits req && source == "analytics.events_canonical" then resolvedSource req else source),
+      "FROM " <> eventSessionSource grouping req (if hasUserTraits req && source == "analytics.events_canonical" then resolvedSource req else source),
       "WHERE " <> accountPredicate,
       "  AND " <> timestampPredicate req <> eventNameClause "event_name" (validatedEventNames def) <> propertyFilterClause predicates,
       "GROUP BY bucket,sort_group_1,sort_group_2"
     ]
+
+-- Call only after the route's opt-in resolver has validated every dimension.
+eventSessionSource :: [GroupDimension] -> QueryRequest -> Text -> Text
+eventSessionSource grouping req = attachSessionAttributes (referencedSessionAttributes (map dimensionLabel grouping <> map WireFilter.dimension (concatMap WireFilter.filterTerms (req ^. #filters))))
 
 activityPredicate :: Text
 activityPredicate = "event_name NOT IN ('identify','identify_once','alias','group')"
@@ -1478,10 +1483,16 @@ cohortDimension req subject fallback label = case Text.stripPrefix "cohort:" lab
     replaceSubject = Text.replace "startsWith(canonical_user,'user:')" ("startsWith(" <> outerSubject <> ",'user:')") . Text.replace "canonical_user IN (SELECT" (outerSubject <> " IN (SELECT") . Text.replace "canonical_user NOT IN (SELECT" (outerSubject <> " NOT IN (SELECT")
 
 requestGrouping :: QueryRequest -> EventRegistry -> [EventName] -> Maybe [Text] -> [Text] -> Either QueryCompileError [GroupDimension]
-requestGrouping req registry scope = requestedGroupingWith (cohortDimension req "canonical_user" (resolveDimension registry scope))
+requestGrouping = requestGroupingFor False
+
+requestGroupingFor :: Bool -> QueryRequest -> EventRegistry -> [EventName] -> Maybe [Text] -> [Text] -> Either QueryCompileError [GroupDimension]
+requestGroupingFor sessionSupport req registry scope = requestedGroupingWith (cohortDimension req "canonical_user" ((if sessionSupport then resolveEventSessionDimension else resolveDimension) registry scope))
 
 requestFilters :: QueryRequest -> String -> EventRegistry -> [EventName] -> [MetricFilter] -> Either Text Filters.CompiledFilters
-requestFilters req prefix registry scope = Filters.compileFiltersWith prefix (cohortDimension req "canonical_user" (resolveDimension registry scope)) . normalizeCohortFilters
+requestFilters = requestFiltersFor False
+
+requestFiltersFor :: Bool -> QueryRequest -> String -> EventRegistry -> [EventName] -> [MetricFilter] -> Either Text Filters.CompiledFilters
+requestFiltersFor sessionSupport req prefix registry scope = Filters.compileFiltersWith prefix (cohortDimension req "canonical_user" ((if sessionSupport then resolveEventSessionDimension else resolveDimension) registry scope)) . normalizeCohortFilters
 
 normalizeCohortFilters :: [MetricFilter] -> [MetricFilter]
 normalizeCohortFilters = map (WireFilter.mapFilterTerms normalize)

@@ -210,6 +210,7 @@ test-suite kansoku-core-test
     Kansoku.Metrics.OrganizationSpec
     Kansoku.Metrics.PathsSpec
     Kansoku.Metrics.RoutingSpec
+    Kansoku.Metrics.SessionAttributeIntegrationSpec
     Kansoku.Metrics.SessionIntegrationSpec
     Kansoku.Metrics.TraitsSpec
     Kansoku.MigrationsSpec

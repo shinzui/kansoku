@@ -2,6 +2,11 @@
 module Kansoku.Metrics.Query.Dimension
   ( GroupDimension (..),
     DimensionError (..),
+    SessionAttribute (..),
+    resolveEventSessionDimension,
+    sessionAttributeColumn,
+    sessionAttributeExpr,
+    referencedSessionAttributes,
     resolveDimension,
     resolveSessionDimension,
     dimensionLabel,
@@ -19,7 +24,8 @@ import Kansoku.Metrics.Query.Property
 import Kansoku.Prelude hiding (index)
 
 data GroupDimension
-  = GroupByCohort !Text !Text
+  = GroupBySessionAttribute !SessionAttribute
+  | GroupByCohort !Text !Text
   | GroupByOrganization
   | GroupByOrganizationTrait !Text !ScalarType
   | GroupByEventName
@@ -44,6 +50,70 @@ data GroupDimension
   | GroupByUserTrait !Text !ScalarType
   | GroupByProperty !PropertyName
   deriving stock (Generic, Eq, Show)
+
+-- Intrinsic retained-session values. Identifiers come only from this closed type.
+data SessionAttribute
+  = SessionChannel
+  | SessionReferrerHost
+  | SessionUtmSource
+  | SessionUtmMedium
+  | SessionUtmCampaign
+  | SessionUtmContent
+  | SessionUtmTerm
+  | SessionEntryPage
+  | SessionExitPage
+  | SessionDeviceClass
+  | SessionBrowserFamily
+  | SessionOsFamily
+  | SessionCountryCode
+  | SessionEventName
+  | SessionSource
+  | SessionSourceService
+  | SessionHost
+  | SessionRoute
+  | SessionBot
+  deriving stock (Generic, Eq, Show, Enum, Bounded)
+
+sessionAttributeDimension :: SessionAttribute -> GroupDimension
+sessionAttributeDimension = \case
+  SessionChannel -> GroupByChannel
+  SessionReferrerHost -> GroupByReferrerHost
+  SessionUtmSource -> GroupByUtmSource
+  SessionUtmMedium -> GroupByUtmMedium
+  SessionUtmCampaign -> GroupByUtmCampaign
+  SessionUtmContent -> GroupByUtmContent
+  SessionUtmTerm -> GroupByUtmTerm
+  SessionEntryPage -> GroupByEntryPage
+  SessionExitPage -> GroupByExitPage
+  SessionDeviceClass -> GroupByDeviceClass
+  SessionBrowserFamily -> GroupByBrowserFamily
+  SessionOsFamily -> GroupByOsFamily
+  SessionCountryCode -> GroupByCountryCode
+  SessionEventName -> GroupByEventName
+  SessionSource -> GroupBySource
+  SessionSourceService -> GroupBySourceService
+  SessionHost -> GroupByHost
+  SessionRoute -> GroupByRoute
+  SessionBot -> GroupByBot
+
+sessionAttributeColumn :: SessionAttribute -> Text
+sessionAttributeColumn attribute = "attached_session_" <> dimensionLabel (sessionAttributeDimension attribute)
+
+sessionAttributeExpr :: SessionAttribute -> Text
+sessionAttributeExpr = dimensionExpr . sessionAttributeDimension
+
+-- Existing event and whole-session resolvers intentionally do not opt in.
+resolveEventSessionDimension :: EventRegistry -> [EventName] -> Text -> Either DimensionError GroupDimension
+resolveEventSessionDimension registry events name
+  | "session:" `Text.isPrefixOf` name =
+      maybe (Left (UnknownDimension name)) (Right . GroupBySessionAttribute) (lookup name sessionAttributeNames)
+  | otherwise = resolveDimension registry events name
+
+sessionAttributeNames :: [(Text, SessionAttribute)]
+sessionAttributeNames = [("session:" <> dimensionLabel (sessionAttributeDimension attribute), attribute) | attribute <- [minBound .. maxBound]]
+
+referencedSessionAttributes :: [Text] -> [SessionAttribute]
+referencedSessionAttributes names = [attribute | (name, attribute) <- sessionAttributeNames, name `elem` names]
 
 data DimensionError = UnknownDimension !Text | InvalidDimensionProperty !PropertyError
   deriving stock (Generic, Eq, Show)
@@ -90,6 +160,7 @@ resolveSessionDimension registry events name = resolveDimension registry events 
 
 dimensionLabel :: GroupDimension -> Text
 dimensionLabel = \case
+  GroupBySessionAttribute attribute -> "session:" <> dimensionLabel (sessionAttributeDimension attribute)
   GroupByCohort ident _ -> "cohort:" <> ident
   GroupByOrganization -> "organization"
   GroupByOrganizationTrait name _ -> "org:" <> name
@@ -116,6 +187,7 @@ dimensionLabel = \case
   GroupByProperty property -> "prop:" <> propertyNameText property
 
 dimensionType :: GroupDimension -> ScalarType
+dimensionType (GroupBySessionAttribute attribute) = dimensionType (sessionAttributeDimension attribute)
 dimensionType (GroupByOrganizationTrait _ kind) = kind
 dimensionType GroupByBot = ScalarBool
 dimensionType (GroupByUserTrait _ kind) = kind
@@ -124,6 +196,7 @@ dimensionType _ = ScalarString
 
 dimensionExpr :: GroupDimension -> Text
 dimensionExpr = \case
+  GroupBySessionAttribute attribute -> sessionAttributeColumn attribute
   GroupByCohort _ predicate -> "if(" <> predicate <> ", 'in', 'out')"
   GroupByOrganization -> "nullIf(organization_id, '')"
   GroupByOrganizationTrait name _ -> "org_trait_" <> name

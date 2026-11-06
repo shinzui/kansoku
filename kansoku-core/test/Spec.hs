@@ -40,6 +40,7 @@ import Kansoku.Metrics.LimitsSpec qualified
 import Kansoku.Metrics.OrganizationSpec qualified
 import Kansoku.Metrics.PathsSpec qualified
 import Kansoku.Metrics.RoutingSpec qualified
+import Kansoku.Metrics.SessionAttributeIntegrationSpec qualified
 import Kansoku.Metrics.SessionIntegrationSpec qualified
 import Kansoku.Metrics.TraitsSpec qualified
 import Kansoku.MigrationsSpec qualified
@@ -112,6 +113,7 @@ normalTests = hspec $ do
   Kansoku.Metrics.FilterSpec.spec
   Kansoku.Metrics.AcquisitionIntegrationSpec.spec
   Kansoku.Metrics.ActivityIntegrationSpec.spec
+  Kansoku.Metrics.SessionAttributeIntegrationSpec.spec
   Kansoku.Metrics.SessionIntegrationSpec.spec
   Kansoku.Metrics.FilterIntegrationSpec.spec
   Kansoku.Metrics.TraitsSpec.spec

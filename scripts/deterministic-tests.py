@@ -20,6 +20,7 @@ skips = [
     'Kansoku.Traits native',
     'Organization native',
     'Kansoku.Sessions native',
+    'Kansoku.Session attributes native',
     'Kansoku.Writer.Batch/native JSON shapes',
     'Kansoku.Writer.Batch/decodes a pgmq payload',
     'Kansoku.Writer.Batch/keeps a committed insert',

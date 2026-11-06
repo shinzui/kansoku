@@ -10,6 +10,12 @@ provenance:
     model: "gpt-6-astra"
     harness: "codex-cli"
     at: 2026-11-06T04:01:26Z
+  revisions:
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-11-06T14:17:30Z
+      mode: "implement"
+      note: "Implement session-scoped selection and grouping with native and public acceptance"
 ---
 
 # Filter and group events by their session attributes
@@ -28,7 +34,7 @@ The same session dimensions work in grouping, including `groupBy=route,session:r
 ## Progress
 
 
-- [ ] Milestone 1: Page-view filtering and grouping use whole retained session attributes, demonstrated through the real native query executor.
+- [x] Milestone 1 (2026-11-06): Page views attach finalized session attributes once; the owned runner passed three versus one page views, route/referrer grouping and replay at block sizes 65536 and 2. Adjacent sessions, acquisition and activity suites also passed.
 - [ ] Milestone 2: Calendar/rolling users and ad-hoc/saved custom metrics, including both ratio populations, accept the same dimensions without changing existing metric populations.
 - [ ] Milestone 3: Native and authenticated public acceptance prove isolation, missing-session behavior, attribution parity, replay safety, and unchanged result limits.
 - [ ] Milestone 4: Generated API documentation, query/enrichment guides, and ADRs describe the shipped behavior, and required checks pass.

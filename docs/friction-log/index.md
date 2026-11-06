@@ -9,6 +9,7 @@ okf_version: "0.2"
 # Friction Entry
 
 - [OKF log append removes existing guide provenance prose](1-okf-log-append-removes-existing-guide-provenance-prose.md) - The log appender rewrote historical guide log content and dropped the adoption provenance table, requiring restoration.
+- [Embedded migration build forces full recompilation during query iteration](10-embedded-migration-build-forces-full-recompilation-during-query-iteration.md) - The build-with-tests wrapper forces all components to recompile and changing to a focused Cabal build changes flags again, adding several minutes to a query-only iteration.
 - [Owned acceptance repeatedly fails fingerprint expiry fixture](2-owned-acceptance-repeatedly-fails-fingerprint-expiry-fixture.md) - The unchanged native identity cache fixture failed twice before packaged AI reporting could run, requiring diagnosis of its expiry boundary.
 - [OKF log add rewrites existing log prose](3-okf-log-add-rewrites-existing-log-prose.md) - The OKF log writer dropped historical prose and reformatted unrelated entries while adding an implementation entry.
 - [Focused acceptance helper discards ownership query output](4-focused-acceptance-helper-discards-ownership-query-output.md) - The owned custom acceptance harness failed before server startup because its command helper returned None.

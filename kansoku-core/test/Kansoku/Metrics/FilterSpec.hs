@@ -11,8 +11,9 @@ import Effectful (runEff)
 import Kansoku.Event (AccountId (..), EventName (..), EventSchema (..), PropertySpec (..), PropertyType (..), defaultRegistry, registerSchema)
 import Kansoku.Metrics.Filter qualified as Filter
 import Kansoku.Metrics.Query qualified as Query
+import Kansoku.Metrics.Query.Dimension
 import Kansoku.Metrics.Query.Filter qualified as Compile
-import Kansoku.Metrics.Registry (BuiltinMetric (..), events)
+import Kansoku.Metrics.Registry (BuiltinMetric (..), events, pageViews)
 import Kansoku.Metrics.RequestValidation (validateMetricRequest)
 import Kansoku.Prelude
 import Network.Wai (defaultRequest, pathInfo, queryString, rawPathInfo)
@@ -21,6 +22,29 @@ import Web.HttpApiData (toUrlPiece)
 
 spec :: Spec
 spec = describe "Kansoku.Metrics filters" $ do
+  it "parses session shorthand and guards only its own OR alternatives" $ do
+    input <- validFilter "session:country_code:unset|source:eq:service"
+    Filter.parseMetricFilter (toUrlPiece input) `shouldBe` Right input
+    compiled <- either (fail . Text.unpack) pure (Compile.compileFiltersWith "session_test" (resolveEventSessionDimension defaultRegistry []) [input])
+    Text.unlines (Compile.predicates compiled) `shouldSatisfy` Text.isInfixOf "(attached_session_present = 1 AND isNull(attached_session_country_code)) OR"
+    Compile.parameters compiled `shouldBe` [("session_test_1_or_2_1", "service")]
+    let operand = "literal':|value"
+    literal <- validFilter (jsonFilter "session:utm_campaign" "eq" (Aeson.String operand))
+    bound <- either (fail . Text.unpack) pure (Compile.compileFiltersWith "bound" (resolveEventSessionDimension defaultRegistry []) [literal])
+    map snd (Compile.parameters bound) `shouldBe` [operand]
+    Text.unlines (Compile.predicates bound) `shouldSatisfy` (not . Text.isInfixOf operand)
+    traverse_
+      ( \raw -> do
+          invalid <- validFilter raw
+          Query.buildSQL defaultRegistry (Simple pageViews) request {Query.filters = [invalid]} `shouldSatisfy` isLeft
+      )
+      ["session:unknown:set", "session::set", "session:channel:gt:1", "session:is_bot:contains:yes", "session:channel);DROP:set"]
+    traverse_
+      (\name -> resolveEventSessionDimension defaultRegistry [] name `shouldSatisfy` isLeft)
+      ["session:prop:amount", "session:user:plan", "session:org:tier", "session:cohort"]
+    resolveDimension defaultRegistry [] "session:channel" `shouldSatisfy` isLeft
+    resolveSessionDimension defaultRegistry [] "session:channel" `shouldSatisfy` isLeft
+
   it "compiles bounded OR groups with independent bindings and preserves safe event scope" $ do
     input <- validFilter "prop:plan:eq:pro|prop:plan:eq:enterprise"
     Filter.parseMetricFilter (toUrlPiece input) `shouldBe` Right input

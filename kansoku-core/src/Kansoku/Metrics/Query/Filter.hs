@@ -56,7 +56,7 @@ compileFiltersWith prefix resolve inputs = do
           comparison operator = case placeholders of
             [placeholder] -> Right ("coalesce((" <> expression <> " " <> operator <> " " <> placeholder <> "), false)", bindings)
             _ -> Left "filter requires one operand"
-      case Wire.op input of
+      (predicate, bound) <- case Wire.op input of
         Wire.FilterSet -> Right ("isNotNull(" <> expression <> ")", [])
         Wire.FilterUnset -> Right ("isNull(" <> expression <> ")", [])
         Wire.FilterEq -> comparison "="
@@ -69,6 +69,12 @@ compileFiltersWith prefix resolve inputs = do
               Right ("coalesce(positionUTF8(" <> expression <> ", " <> placeholder <> ") > 0, false)", bindings)
         Wire.FilterIn -> Right ("coalesce(" <> expression <> " IN (" <> Text.intercalate ", " placeholders <> "), false)", bindings)
         _ -> Left "operator requires a compatible declared scalar dimension"
+      pure
+        ( case dimension of
+            GroupBySessionAttribute _ -> "(attached_session_present = 1 AND " <> predicate <> ")"
+            _ -> predicate,
+          bound
+        )
     compatible ScalarString (Aeson.String _) = Right ()
     compatible ScalarNumber (Aeson.Number _) = Right ()
     compatible ScalarBool (Aeson.Bool _) = Right ()

@@ -210,3 +210,7 @@ ch-migrations-source:
 # Required first-touch conversion proof at normal and tiny native block sizes.
 acquisition-acceptance: build-with-tests
     python3 scripts/acquisition-acceptance.py
+
+# Session-scoped event metrics and adjacent native population proofs.
+session-attributes-acceptance: build-with-tests
+    python3 scripts/session-attributes-acceptance.py
