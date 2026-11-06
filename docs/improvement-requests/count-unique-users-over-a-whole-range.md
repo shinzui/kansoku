@@ -3,10 +3,11 @@ type: Improvement Request
 title: Count unique users over a whole query range
 description: Let the users, custom unique_count and acquisition users measures return one unbucketed answer per group for the whole from..to range, so a consumer can show exact visitors for a period instead of summing daily buckets that count returning users more than once.
 generated:
-  by: process:claude-code
-  at: "2026-11-05T21:06:04Z"
+  by: process:codex
+  at: "2026-11-06T04:07:22Z"
 requestId: IR-4
-status: proposed
+status: accepted
+targetPlan: docs/plans/60-count-unique-users-over-a-whole-query-range.md
 origin: mori://shinzui/kansoku-ui
 acceptanceCriteria:
   - id: AC-1
@@ -44,6 +45,9 @@ reviews:
 **Created:** 2026-11-05.
 
 This is part of the set filed with IR-5, IR-6, IR-7 and IR-8 for kansoku-ui's Reports page.
+
+**Implementation plan:** [ExecPlan 60: Count unique users over a whole query range](../plans/60-count-unique-users-over-a-whole-query-range.md).
+The request is accepted for implementation; implementation has not started.
 
 
 ## Why
