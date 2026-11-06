@@ -10,6 +10,12 @@ provenance:
     model: "gpt-6-astra"
     harness: "codex-cli"
     at: 2026-11-06T03:42:14Z
+  revisions:
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-11-06T04:08:25Z
+      mode: "implement"
+      note: "Implement version 2 assistant classification, preserved replay, public reporting and documentation"
 ---
 
 # Classify AI assistant referrals as a channel
@@ -38,15 +44,33 @@ record and still read `organic_search` with version 1.
 
 ## Progress
 
-- [ ] Milestone 1: Version 2 classification and queue compatibility pass deterministic cases for assistant signals, precedence, host boundaries, and preserved older enrichment.
-- [ ] Milestone 2: Native replay preserves version 1 channels, and packaged HTTP ingestion/reporting exposes new assistant sessions as `ai_assistant`.
-- [ ] Milestone 3: The guide and ADR describe the exact versioned contract, and the deterministic and owned acceptance gates pass for the final implementation.
+- [x] (2026-11-06) Milestone 1: Version 2 classification and queue compatibility pass deterministic cases for assistant signals, precedence, host boundaries, and preserved older enrichment. The focused enrichment suite passed 207 examples with zero failures; verified also by the deterministic gate: 472 core examples, 21 client examples and 4 probe tests, all passing without pending cases.
+- [x] (2026-11-06) Milestone 2: Native replay preserves version 1 channels, and packaged HTTP ingestion/reporting exposes new assistant sessions as `ai_assistant`. Owned acceptance passed 589 native examples with no failures or pending cases, preserved historical Gemini values, and verified six assistant/one organic/one paid sessions plus identical retries in all three telemetry modes.
+- [x] (2026-11-06) Milestone 3: The guide and ADR describe the exact versioned contract, and the deterministic and owned acceptance gates pass for the final implementation. `just check`, focused enrichment (207 examples), strict ADR/guide/friction validation and the owned `just acceptance` gate passed; `git diff --check` is clean.
 
 
 ## Surprises & Discoveries
 
-(None yet.)
+2026-11-06: The added deterministic suite ran against the original classifier and failed
+27 of 207 examples, including Gemini/version 2 and URL-only attribution. This confirms the
+fixtures distinguish the new behavior from the old implementation.
 
+2026-11-06: The first owned acceptance run passed 17 migration cases but failed native tests:
+the new replay assertion assumed global row order, while the reader returned the correct two
+rows in reverse order. Assert the canonical and resolved result multisets instead. The same
+run also failed the unchanged fingerprint-expiry cache test (expected anonymous, received
+identified); a fresh full gate rerun will distinguish a recurring failure from timing noise.
+
+
+2026-11-06: The fresh rerun passed the enrichment replay case but again failed the unchanged
+fingerprint test. An isolated reproduction showed UTC evidence expiring at `04:33:24Z` while
+the server's Pacific `now64()-INTERVAL 180 DAY` crossed a daylight-saving boundary and kept
+it eligible for another hour. Pin owned ClickHouse servers to UTC, matching the schema and
+fixture arithmetic. FRIC-2 records this acceptance-environment detour; production identity
+rules are unchanged. With UTC, all 589 native examples passed. The first HTTP attempt
+then correctly rejected the eight-event fixture request under the harness's 4 KiB cap;
+send and retry the fixture population in pairs while retaining the same expected counts. FRIC-1 records log serialization dropping historical prose, restored
+without altering the original evidence.
 
 ## Decision Log
 
@@ -72,7 +96,31 @@ tests must also cover a non-AI URL campaign so this effect is explicit.
 
 ## Outcomes & Retrospective
 
-(To be filled during and after implementation.)
+Implemented the version 2 bounded assistant policy and effective UTM fallback without public
+schema changes or historical reclassification. Stored version 0/1 enrichment remains readable;
+new version 2 data roundtrips through queue decoding and native storage. Historical Gemini
+remained `organic_search`/1 through two writer passes and resolved reads while equivalent
+new events became `ai_assistant`/2. Browser/device/OS/bot fixtures retained their categories.
+
+The focused suite passed 207 examples after failing 27 against the original implementation.
+`just check` passed on the corrected Haskell candidate, including 472 deterministic core
+examples, 21 client examples, four probes, generated artifacts, formatting, strict documents
+and telemetry lifecycle checks. Subsequent changes only fixed the owned server timezone,
+split HTTP fixture batches and maintained documentation; their relevant checks were rerun.
+The final owned acceptance run passed 589 native examples, 22 live client examples, 17
+migration cases with zero skips, Hurl, reader consumers, all seven administrative families
+and privacy/correlation in three telemetry modes. The AI-channel success message appeared
+in each mode with the exact six/one/one counts and unchanged retry counts. Evidence is in
+`.dev/acceptance/run-7rkfi8nh/`, with shareable logs under its `sanitized/` directory. Final
+strict ADR, guide and friction checks passed, as did the whitespace checks.
+
+[FRIC-1](../friction-log/1-okf-log-append-removes-existing-guide-provenance-prose.md) is accepted:
+retain the local restoration workaround for historical log prose until the upstream serializer
+preserves it. [FRIC-2](../friction-log/2-owned-acceptance-repeatedly-fails-fingerprint-expiry-fixture.md)
+is resolved: explicit UTC removes the host DST dependency from owned expiry fixtures. No
+friction remains logged under this plan. ADR-12 now preserves the versioned attribution
+contract and consumer-first upgrade requirement; ADR-10 preserves the owned UTC constraint.
+No deployment, history rewrite or database migration was needed.
 
 
 ## Context and Orientation

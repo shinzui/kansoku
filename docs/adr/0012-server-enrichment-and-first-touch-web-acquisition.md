@@ -5,7 +5,7 @@ description: Preserve categorical request enrichment in a private versioned queu
 docId: ADR-12
 status: Accepted
 date: 2026-10-15
-timestamp: 2026-10-15T22:39:48Z
+timestamp: 2026-11-06T04:09:28Z
 generated:
   by: process:codex
   at: 2026-10-15T22:09:28Z
@@ -33,8 +33,8 @@ Classification uses the bounded request user-agent, explicit Boolean producer bo
 validated public event URL/attribution inputs. Producer categorical claims cannot choose the
 authoritative stored columns. Non-web traffic keeps unknown browser/OS/device categories.
 
-Private queue version 1 wraps the validated public event and categorical enrichment with its
-rule version. New events are enriched before durable publication; equal acceptance retries
+Private queue version 2 wraps the validated public event and categorical enrichment with its
+rule version and independent trait eligibility. Envelope versions 1 and 2 remain readable. New events are enriched before durable publication; equal acceptance retries
 retain the first values. Native rows store browser family, OS family, device class, bot flag,
 channel, country code and enrichment version, plus bounded materialized context JSON. Every
 new queue producer emits the envelope. Earlier development messages remain readable with
@@ -44,9 +44,15 @@ not an implicit historical reclassification or aggregate backfill.
 Use a conservative ordered, versioned user-agent parser and explicit bot signature list.
 Boolean context.bot=true is ORed with server signatures; false cannot clear a match.
 Channel classification applies email before paid social, paid search, remaining campaign,
-organic search/social, external referral and direct/other. Complete host/suffix boundaries and
-self-referral suppression prevent substring attribution mistakes. The exact version-one rules
-and limitations live in [web enrichment](../guides/web-enrichment.md).
+AI assistant, organic search/social, external referral and direct/other. Complete host/suffix boundaries and
+self-referral suppression prevent substring attribution mistakes. Channel/enrichment version 2 recognizes the bounded assistant hosts and exact source aliases,
+using each nonblank explicit source/medium/campaign field before the first nonblank matching
+HTTP(S) URL query parameter. This fallback never mutates the public event. Browser/device/OS
+and bot algorithms remain version 1; queue envelope numbering is independent. Stored versions
+0 and 1 remain readable, while `ai_assistant` is valid only at version 2. Accepted historical
+channels are never recomputed: old Gemini organic-search records coexist with new assistant
+records. Upgraded consumers must precede version-2 producers; rollback must retain compatible
+readers. The exact host/alias lists, ordered rules and limitations live in [web enrichment](../guides/web-enrichment.md).
 
 Country is optional and off by default. Enabling it requires both an MMDB path and explicit
 trusted proxy CIDRs. Use the maintained released `mori://maxmind/libmaxminddb` reader through

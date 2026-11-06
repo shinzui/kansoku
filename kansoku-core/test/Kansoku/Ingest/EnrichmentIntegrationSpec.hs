@@ -2,6 +2,7 @@ module Kansoku.Ingest.EnrichmentIntegrationSpec (spec) where
 
 import ClickHaskell (ChString, ClickHaskell, Column, Connection, Select, select, unsafeMkSelect)
 import Control.Exception (bracket)
+import Control.Monad (forM_)
 import Data.Aeson qualified as Aeson
 import Data.Aeson.KeyMap qualified as KM
 import Data.ByteString qualified as BS
@@ -20,6 +21,7 @@ import Kansoku.Auth.Types (CredentialKind (WriteKey))
 import Kansoku.ClickHouse
 import Kansoku.ClickHouseTestSupport
 import Kansoku.Event
+import Kansoku.Ingest.Enrichment (Enrichment (..))
 import Kansoku.Ingest.GeoIPSpec qualified as GeoFixture
 import Kansoku.Ingest.Queue (eventsQueueName)
 import Kansoku.Ingest.Service (newIngestService)
@@ -77,35 +79,50 @@ spec metrics = describe "Kansoku.Enrichment native" $
       Warp.testWithApplication (pure app) $ \port -> do
         manager <- HTTP.newManager HTTP.defaultManagerSettings
         initial <- HTTP.parseRequest ("http://127.0.0.1:" <> show port <> "/v1/events")
-        let post agent address =
+        let post bodyValue agent address =
               HTTP.httpLbs
                 initial
                   { HTTP.method = "POST",
                     HTTP.requestHeaders = [("Authorization", "Bearer " <> Text.encodeUtf8 token), ("Content-Type", "application/json"), ("User-Agent", agent), ("X-Forwarded-For", address)],
-                    HTTP.requestBody = HTTP.RequestBodyLBS (Aeson.encode body)
+                    HTTP.requestBody = HTTP.RequestBodyLBS (Aeson.encode bodyValue)
                   }
                 manager
-        first <- post edge "81.2.69.160"
+        first <- post body edge "81.2.69.160"
         HTTP.responseStatus first `shouldBe` status202
-        retried <- post "Mozilla/5.0 Chrome/130.0" "2001:218::"
+        retried <- post body "Mozilla/5.0 Chrome/130.0" "2001:218::"
         HTTP.responseStatus retried `shouldBe` status202
+        let gemini = event & #eventId .~ EventId "gemini-new" & #sessionId ?~ SessionId "gemini-new" & #utmSource .~ Nothing & #utmMedium .~ Nothing & #referrer ?~ "https://gemini.google.com/"
+        fresh <- post (Aeson.toJSON gemini) edge "81.2.69.160"
+        HTTP.responseStatus fresh `shouldBe` status202
       payloads <- Pool.use pool (S.statement () queued) >>= either (fail . show) pure
-      length payloads `shouldBe` 1
-      payload <- case payloads of [single] -> pure single; _ -> fail "expected one accepted envelope"
+      length payloads `shouldBe` 2
+      payload <- case payloads of first : _ -> pure first; _ -> fail "expected accepted envelopes"
       let encoded = LBS.toStrict (Aeson.encode payload)
       mapM_ (\secret -> encoded `shouldSatisfy` (not . BS.isInfixOf secret)) ["81.2.69.160", "2001:218::", Text.encodeUtf8 token]
       heartbeat <- newWriterHeartbeat
-      let message = Message {envelope = Envelope {messageId = MessageId "enrichment-native-1", cursor = Nothing, partition = Nothing, enqueuedAt = Nothing, traceContext = Nothing, headers = Nothing, attempt = Nothing, attributes = HashMap.empty, payload}, lease = Nothing} :: Message '[IOE] Aeson.Value
+      let makeMessage value = Message {envelope = Envelope {messageId = MessageId "enrichment-native-1", cursor = Nothing, partition = Nothing, enqueuedAt = Nothing, traceContext = Nothing, headers = Nothing, attempt = Nothing, attributes = HashMap.empty, payload = value}, lease = Nothing} :: Message '[IOE] Aeson.Value
+          message = makeMessage payload
           info = BatchInfo {batchKey = defaultBatchKey, size = 1, trigger = TriggerSize, partition = Nothing}
           write = runEff (writerBatchHandler metrics heartbeat (insertQueuedEvents connection) info (message :| []))
       void write
       void write
-      raw <- values connection "SELECT toJSONString(tuple(browser_family,os_family,device_class,is_bot,channel,country_code,enrichment_version)) AS value FROM analytics.events_canonical WHERE account_id='enrichment-native'"
-      raw `shouldBe` [Aeson.toJSON ([Aeson.String "edge", Aeson.String "windows", Aeson.String "desktop", Aeson.Bool False, Aeson.String "paid_social", Aeson.String "GB", Aeson.Number 1] :: [Aeson.Value])]
+      let historicalEvent = event & #eventId .~ EventId "gemini-old" & #accountId ?~ account & #sessionId ?~ SessionId "gemini-old" & #utmSource .~ Nothing & #utmMedium .~ Nothing & #referrer ?~ "https://gemini.google.com/"
+          historical = Aeson.object ["queueVersion" Aeson..= (1 :: Int), "event" Aeson..= historicalEvent, "enrichment" Aeson..= Enrichment "unknown" "unknown" "unknown" False "organic_search" Nothing 1]
+          replay value = runEff (writerBatchHandler metrics heartbeat (insertQueuedEvents connection) info (makeMessage value :| []))
+      forM_ (historical : drop 1 payloads) $ \value -> do
+        void (replay value)
+        void (replay value)
+      raw <- values connection "SELECT toJSONString(tuple(browser_family,os_family,device_class,is_bot,channel,country_code,enrichment_version)) AS value FROM analytics.events_canonical WHERE account_id='enrichment-native' AND event_id='enriched-first'"
+      raw `shouldBe` [Aeson.toJSON ([Aeson.String "edge", Aeson.String "windows", Aeson.String "desktop", Aeson.Bool False, Aeson.String "paid_social", Aeson.String "GB", Aeson.Number 2] :: [Aeson.Value])]
       bracket (newQueryPool (clickHouseConfigFromConfig cfg) 1) closeQueryPool $ \queryPool ->
         withIdentityQueryConnection queryPool "enrichment-native" "2026-07-01" "2026-07-03" $ \reader -> do
-          rich <- values reader "SELECT toJSONString(tuple(browser_family,os_family,device_class,is_bot,channel,country_code,enrichment_version)) AS value FROM analytics.events_resolved_http(scope_all_accounts=0,scope_account='enrichment-native',scope_from=toDateTime64('2026-07-01',3,'UTC'),scope_to=toDateTime64('2026-07-03',3,'UTC'))"
+          rich <- values reader "SELECT toJSONString(tuple(browser_family,os_family,device_class,is_bot,channel,country_code,enrichment_version)) AS value FROM analytics.events_resolved_http(scope_all_accounts=0,scope_account='enrichment-native',scope_from=toDateTime64('2026-07-01',3,'UTC'),scope_to=toDateTime64('2026-07-03',3,'UTC')) WHERE event_id='enriched-first'"
           rich `shouldBe` raw
+          let expected = [Aeson.toJSON ([Aeson.String "gemini-new", Aeson.String "ai_assistant", Aeson.Number 2] :: [Aeson.Value]), Aeson.toJSON ([Aeson.String "gemini-old", Aeson.String "organic_search", Aeson.Number 1] :: [Aeson.Value])]
+          canonical <- values connection "SELECT toJSONString(tuple(event_id,channel,enrichment_version)) AS value FROM analytics.events_canonical WHERE account_id='enrichment-native' AND event_id IN ('gemini-old','gemini-new') ORDER BY event_id"
+          canonical `shouldMatchList` expected
+          resolved <- values reader "SELECT toJSONString(tuple(event_id,channel,enrichment_version)) AS value FROM analytics.events_resolved_http(scope_all_accounts=0,scope_account='enrichment-native',scope_from=toDateTime64('2026-07-01',3,'UTC'),scope_to=toDateTime64('2026-07-03',3,'UTC')) WHERE event_id IN ('gemini-old','gemini-new') ORDER BY event_id"
+          resolved `shouldMatchList` expected
   where
     edge = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/130.0 Safari/537.36 Edg/130.0"
     queued = Statement.preparable "SELECT message FROM pgmq.q_enrichment_native ORDER BY msg_id" E.noParams (D.rowList (D.column (D.nonNullable D.jsonb)))

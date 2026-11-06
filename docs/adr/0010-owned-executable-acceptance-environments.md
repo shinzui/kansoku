@@ -5,7 +5,7 @@ description: Gate service changes with deterministic checks and required integra
 docId: ADR-10
 status: Accepted
 date: 2026-10-15
-timestamp: 2026-10-16T22:55:08Z
+timestamp: 2026-11-06T04:34:23Z
 generated:
   by: process:codex
   at: 2026-10-16T17:56:53Z
@@ -30,7 +30,8 @@ existing artifact bytes, including uncommitted edits, rather than trusting git d
 
 `just acceptance` resolves Nix JSON outputs and executes the packaged server and migration
 binaries directly. It owns fresh PostgreSQL and ClickHouse data, ports, socket and child
-processes. It overrides ambient service/exporter/credential configuration, applies explicit
+processes. Owned ClickHouse servers explicitly use UTC, matching event timestamps and
+calendar-day expiry fixtures; host daylight-saving rules must not change acceptance results. It overrides ambient service/exporter/credential configuration, applies explicit
 migrations, runs destructive native tests before seeding HTTP fixtures, and issues disposable
 credentials through the actual CLI. Required mode turns absent database/schema/live SDK
 prerequisites into failures. Native watchdogs, small-block ordering, result bounds, complete

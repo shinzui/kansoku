@@ -10,7 +10,7 @@ import Data.Aeson qualified as Aeson
 import Data.Aeson.KeyMap qualified as KM
 import Data.Text qualified as Text
 import Kansoku.Event (AnalyticsEvent, EventSource (Web))
-import Kansoku.Ingest.Channel (classifyChannel)
+import Kansoku.Ingest.Channel (channelRuleVersion, classifyChannel)
 import Kansoku.Ingest.RequestContext (IngestRequestContext)
 import Kansoku.Ingest.UserAgent qualified as UA
 import Kansoku.Prelude
@@ -39,9 +39,10 @@ instance FromJSON Enrichment where
     unless (browserFamily `elem` ["unknown", "edge", "opera", "samsung_internet", "android_webview", "chrome", "firefox", "safari", "internet_explorer"]) (fail "unknown queued browser family")
     unless (osFamily `elem` ["unknown", "ios", "android", "chrome_os", "windows", "macos", "linux"]) (fail "unknown queued OS family")
     unless (deviceClass `elem` ["unknown", "desktop", "mobile", "tablet"]) (fail "unknown queued device class")
-    unless (channel `elem` ["unknown", "email", "paid_social", "paid_search", "other_campaign", "organic_search", "organic_social", "referral", "direct", "other"]) (fail "unknown queued channel")
+    unless (channel `elem` ["unknown", "email", "paid_social", "paid_search", "other_campaign", "ai_assistant", "organic_search", "organic_social", "referral", "direct", "other"]) (fail "unknown queued channel")
     unless (all (\country -> Text.length country == 2 && Text.all (\char -> char >= 'A' && char <= 'Z') country) countryCode) (fail "invalid queued country code")
-    unless (ruleVersion `elem` [0, 1]) (fail "unsupported enrichment rule version")
+    unless (ruleVersion `elem` [0, 1, 2]) (fail "unsupported enrichment rule version")
+    when (channel == "ai_assistant" && ruleVersion /= 2) (fail "AI assistant channel requires enrichment version 2")
     pure Enrichment {browserFamily, osFamily, deviceClass, isBot, channel, countryCode, ruleVersion}
 
 legacyEnrichment :: Enrichment
@@ -57,5 +58,5 @@ enrichEvent request event =
           isBot = info ^. #isBot || KM.lookup "bot" (event ^. #context) == Just (Aeson.Bool True),
           channel = if event ^. #source == Web then classifyChannel event else "unknown",
           countryCode = request ^. #countryCode,
-          ruleVersion = 1
+          ruleVersion = channelRuleVersion
         }

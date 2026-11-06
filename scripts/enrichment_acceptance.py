@@ -105,7 +105,40 @@ def verify_enrichment(base, write_key, service_token):
     send(base, write_key, bounce)
     assert sum(point['value'] for point in report(endpoint='sessions', filter=bounce_filter, measure='bounce_rate')) == 1
     print('EP-34 public workflow: cross-midnight counts, entry/exit, bots, positive-duration lifecycle bounce and replay passed.', flush=True)
+    verify_ai_channels(base, write_key, service_token)
     print('EP-33 public workflow: existing event JSON, retries, first-touch/device/country, bots and exact users passed.', flush=True)
+
+
+def verify_ai_channels(base, write_key, service_token):
+    prefix = 'ai_channels_' + uuid.uuid4().hex
+    population = json.dumps(dict(dimension='source_service', op='eq', value=prefix))
+    fixtures = []
+    for index, host in enumerate(('chatgpt.com', 'perplexity.ai', 'claude.ai',
+                                  'gemini.google.com', 'copilot.microsoft.com',
+                                  None, 'www.google.com', 'chatgpt.com')):
+        identifier = prefix + '_' + str(index)
+        value = event(identifier, identifier)
+        value['sourceService'] = prefix
+        if host:
+            value['referrer'] = 'https://' + host + '/'
+        else:
+            value['url'] = 'https://shop.example/entry?utm_source=chatgpt.com'
+            value['properties']['url'] = value['url']
+        if index == 7:
+            value['utmMedium'] = 'cpc'
+        fixtures.append(value)
+    def counts():
+        return {point['group']['channel']: point['value']
+                for point in query(base, service_token, groupBy='channel', filter=population)}
+    expected = {'ai_assistant': 6, 'organic_search': 1, 'paid_search': 1}
+    # The packaged perimeter uses a 4 KiB request cap; keep fixtures in small batches.
+    for start in range(0, len(fixtures), 2):
+        send(base, write_key, fixtures[start:start + 2])
+    eventually(lambda: counts() == expected)
+    for start in range(0, len(fixtures), 2):
+        send(base, write_key, fixtures[start:start + 2])
+    assert counts() == expected, 'identical delivery changed AI-channel session counts'
+    print('EP-58 AI-channel workflow: six assistant sessions, organic/paid precedence and identical retries passed.', flush=True)
 
 
 def verify_country_disabled(base, write_key, service_token):

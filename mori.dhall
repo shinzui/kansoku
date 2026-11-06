@@ -131,6 +131,13 @@ in  Schema.Project::{
         , description = Some "Controlled Kansoku vocabulary with stable TERM handles and evidence anchors"
         }
       , Schema.OkfBundle::{
+        , name = "friction-log"
+        , path = "docs/friction-log"
+        , profile = Some "docs/friction-log/profile.dhall"
+        , okfVersion = "0.2"
+        , description = Some "Implementation friction and triage with stable FRIC handles"
+        }
+      , Schema.OkfBundle::{
         , name = "guides"
         , path = "docs/guides"
         , profile = Some "docs/guides/profile.dhall"

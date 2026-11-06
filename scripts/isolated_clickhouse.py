@@ -48,7 +48,9 @@ def isolated_clickhouse(block_size=65536, directory=None, query_logging=False, a
         access = '<access_management>1</access_management>' if access_management else ''
         access_storage = f'<access_control_path>{root}/access/</access_control_path>' if access_management else ''
         query_log = '<query_log><database>system</database><table>query_log</table><flush_interval_milliseconds>100</flush_interval_milliseconds></query_log>' if query_logging else ''
+        # Match UTC event timestamps and keep calendar-day expiry independent of host DST.
         config.write_text(f'''<clickhouse>
+<timezone>UTC</timezone>
 {query_log}
 <path>{root}/data/</path>{access_storage}<tmp_path>{root}/tmp/</tmp_path>
 <tcp_port>{tcp}</tcp_port><http_port>{http}</http_port><listen_host>127.0.0.1</listen_host>

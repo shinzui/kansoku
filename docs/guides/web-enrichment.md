@@ -6,7 +6,7 @@ docId: DOC-12
 tags: ["web-analytics", "enrichment", "acquisition", "privacy"]
 generated:
   by: process:codex
-  at: "2026-10-15T22:32:50Z"
+  at: "2026-11-06T04:09:28Z"
 ---
 
 # Web enrichment and acquisition
@@ -49,7 +49,7 @@ routes exclude individual bot rows, including ungrouped daily queries. `includeB
 these three routes explicitly includes them. Other metric routes keep their documented population
 and reject that parameter. Existing raw rollups are bypassed when they cannot preserve the policy.
 
-# Classification version 1
+# Browser and bot classification version 1
 
 Browser rules are ordered: Edge, Opera, Samsung Internet, Android WebView, Chrome, Firefox,
 Safari and Internet Explorer, otherwise `unknown`. This ordering handles overlapping signatures
@@ -74,7 +74,7 @@ CCBot/Amazon/Meta crawlers, UptimeRobot and Pingdom. The exact case-insensitive 
 do not match. A Boolean `context.bot=true` also flags the event; false cannot clear a server
 match, and the string `"true"` is not Boolean true.
 
-Channel rule version 1 uses the following precedence. Host comparison is case-insensitive,
+Channel/enrichment rule version 2 uses the following precedence. Host comparison is case-insensitive,
 removes trailing dots/ports and respects full host or dot-suffix boundaries. Self-referrals
 are ignored. Source aliases and known search/social hosts are explicit versioned lists in
 `kansoku-core/src/Kansoku/Ingest/Channel.hs`.
@@ -84,14 +84,36 @@ are ignored. Source aliases and known search/social hosts are explicit versioned
 | 1 | Email medium (`email`, `e-mail`, `e_mail`) | `email` |
 | 2 | Known social source with a paid medium, or a campaign plus social medium | `paid_social` |
 | 3 | Nonempty `gclid`/`msclkid`, or CPC/PPC/search paid medium | `paid_search` |
-| 4 | Remaining explicit medium | `other_campaign` |
-| 5 | Known external search referrer | `organic_search` |
-| 6 | Known external social referrer or nonempty `fbclid` | `organic_social` |
-| 7 | Other external referrer | `referral` |
-| 8 | Source/campaign present without a matching rule | `other` |
-| 9 | No external referrer or campaign/source | `direct` |
+| 4 | Remaining effective medium | `other_campaign` |
+| 5 | Known external AI assistant referrer or exact assistant source | `ai_assistant` |
+| 6 | Known external search referrer | `organic_search` |
+| 7 | Known external social referrer or nonempty `fbclid` | `organic_social` |
+| 8 | Other external referrer | `referral` |
+| 9 | Source/campaign present without a matching rule | `other` |
+| 10 | No external referrer or campaign/source | `direct` |
 
-The social source uses explicit UTM source when present, otherwise the external social referrer.
+For each of source, medium and campaign independently, a nonblank explicit event field wins;
+otherwise the first nonblank matching URL query parameter (`utm_source`, `utm_medium`,
+`utm_campaign`) supplies the effective value. Keys are case-sensitive; values are percent-decoded,
+trimmed and lowercased. Only valid HTTP(S) destination URLs supply fallback tags. Classification
+does not fill in or rewrite the event fields. URL-only newsletter/email and assistant/CPC campaigns
+therefore retain email and paid-search precedence.
+
+The assistant host list is `chatgpt.com`, `chat.openai.com`, `perplexity.ai`, `claude.ai`,
+`gemini.google.com`, `copilot.microsoft.com`, `you.com` and `phind.com`. External referrers
+match complete hosts or dot-delimited subdomains. Effective sources match these host tokens
+exactly or the exact aliases `chatgpt`, `perplexity`, `claude`, `gemini`, `copilot`, `phind`.
+Sources containing URLs, paths, ports, user information or unlisted subdomains do not match.
+Generic `ai`, `you`, `google` and `microsoft` aliases are excluded. Parent hosts `google.com`,
+`microsoft.com` and `openai.com` are not assistant hosts; Google remains organic search.
+Lookalikes such as `notchatgpt.com`, `chatgpt.com.evil.example` and a referrer with
+`chatgpt.com@evil.example` cannot match. Same-host referrers alone supply no assistant signal;
+an independently matching source can still attribute them. Either an assistant source or an
+external assistant referrer suffices after the earlier campaign rules, ahead of organic signals
+including `fbclid` alone. Missing or stripped referrers/tags cannot establish assistant attribution.
+These lists recognize input signals; they do not guarantee assistants send those signals.
+
+The social source uses the effective UTM source when present, otherwise the external social referrer.
 Facebook CPC therefore reaches paid social before generic paid search. `fbclid` alone indicates
 social referral rather than paid traffic. A medium/campaign is still a producer claim about
 attribution, not evidence of spend.
@@ -120,8 +142,14 @@ The service stores the reader's two-letter country code or missing. It does not 
 addresses into events, queue messages, logs or spans. Country is an approximation of the request
 origin, not a person's citizenship or residence.
 
-Private queue version 1 records enrichment rule version 1. Earlier development queue records
-remain readable with unknown/version-zero categorical values. They are not silently reclassified.
+New private queue envelopes use queue version 2 and record enrichment version 2, including
+non-web events whose channel remains `unknown`. Queue envelope versions 1 and 2 remain readable;
+envelope numbering is independent of the stored enrichment rule version. Browser/device/OS and
+bot algorithms remain version 1. Bare earlier development events remain readable with
+unknown/version-zero categorical values. Accepted version 1 rows retain their original channels:
+Gemini stays `organic_search`, ChatGPT referrals stay `referral`, and source-only ChatGPT stays
+`other`, even though equivalent new events now classify as `ai_assistant`. Replay never reclassifies
+them. Upgrade queue consumers before producers; an older reader rejects enrichment version 2.
 Changing a classification rule or database does not rewrite accepted history. Any deliberate
 historical correction must rebuild affected derived state from canonical facts under the
 administrative maintenance boundary; queue replay preserves its original accepted enrichment.

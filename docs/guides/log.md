@@ -1,5 +1,8 @@
 # Bundle Update Log
 
+## 2026-11-06
+* **Update**: Describe assistant hosts and aliases, URL tag fallback, precedence and independent queue/enrichment versions.
+
 ## 2026-11-02
 * **Update**: Document the exact qualified native dependency source, artifact variants and existing-cluster staging gate.
 * **Update**: Add source-owned TAN container build, smoke and immutable publication guidance.

@@ -1,5 +1,9 @@
 # Bundle Update Log
 
+## 2026-11-06
+* **Update**: ADR-10: Fix owned ClickHouse timezone to UTC so calendar-day expiry fixtures do not depend on host daylight-saving rules.
+* **Update**: Document channel/enrichment version 2, bounded AI assistant attribution and immutable historical replay.
+
 ## 2026-11-02
 * **Update**: Pin the fully engine-qualified upstream source cohort for Altinity while preserving managed deployment acceptance.
 
