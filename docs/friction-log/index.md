@@ -12,4 +12,5 @@ okf_version: "0.2"
 - [Owned acceptance repeatedly fails fingerprint expiry fixture](2-owned-acceptance-repeatedly-fails-fingerprint-expiry-fixture.md) - The unchanged native identity cache fixture failed twice before packaged AI reporting could run, requiring diagnosis of its expiry boundary.
 - [OKF log add rewrites existing log prose](3-okf-log-add-rewrites-existing-log-prose.md) - The OKF log writer dropped historical prose and reformatted unrelated entries while adding an implementation entry.
 - [Focused acceptance helper discards ownership query output](4-focused-acceptance-helper-discards-ownership-query-output.md) - The owned custom acceptance harness failed before server startup because its command helper returned None.
+- [Custom metric validation specs were compiled but never executed](5-custom-metric-validation-specs-were-compiled-but-never-executed.md) - The explicit Hspec runner omitted CustomSpec, so deterministic checks passed without running the advertised custom-definition tests.
 

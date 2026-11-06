@@ -10,6 +10,12 @@ provenance:
     model: "gpt-6-astra"
     harness: "codex-cli"
     at: 2026-11-06T03:22:54Z
+  revisions:
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-11-06T12:34:20Z
+      mode: "implement"
+      note: "Implement percentile API, shared validation, native compilation and acceptance evidence"
 ---
 
 
@@ -27,11 +33,13 @@ This plan creates one scalar percentile per request. Histograms, multiple quanti
 ## Progress
 
 
-- [ ] Milestone 1: Ad-hoc percentile requests validate and return exact results through the public API and native database path.
+- [x] Milestone 1 (2026-11-06): Ad-hoc percentile requests validate and return exact results through the public API and native database path. `nix develop -c just build-with-tests` passed; the deterministic gate executed 485 core and 21 client examples plus four probes without failures. The early owned custom acceptance passed four native examples and the public p75=32.5 proof on ClickHouse 26.8.28 (`.dev/acceptance/cohort-b18dgm5y`).
 - [ ] Milestone 2: Saved percentile definitions roundtrip and execute with existing defaults, filters, and isolation guarantees.
 - [ ] Milestone 3: Grouped and bucketed percentile/count parity, edge cases, generated contracts, and user documentation pass the required gates.
 
 ## Surprises & Discoveries
+
+Discovery (2026-11-06): `CustomSpec` was declared in Cabal but absent from the explicit Hspec runner. Registered it in `kansoku-core/test/Spec.hs`; the deterministic transcript now includes the existing and new custom-definition examples. See FRIC-5 in `docs/friction-log/`.
 
 
 ## Decision Log

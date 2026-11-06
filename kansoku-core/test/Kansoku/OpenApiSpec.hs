@@ -44,6 +44,17 @@ spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
     let encoded = BSL.toStrict (Aeson.encode kansokuOpenApi)
     encoded `shouldSatisfy` BS8.isInfixOf "\"none\""
     encoded `shouldSatisfy` (not . BS8.isInfixOf "notimebucket")
+  it "publishes percentile and optional numeric quantile without requiring it on legacy definitions" $ do
+    let operation = fromMaybe Aeson.Null (valueAt ["paths", "/metrics/custom", "get"] documentValue)
+    operationParameterNames operation `shouldContain` ["quantile"]
+    let parameters = fromMaybe [] (valueAt ["parameters"] operation >>= \case Aeson.Array xs -> Just (Foldable.toList xs); _ -> Nothing)
+        quantiles = filter ((== Just "quantile") . lookupText ["name"]) parameters
+    length quantiles `shouldBe` 1
+    traverse_ (\parameter -> lookupText ["schema", "type"] parameter `shouldBe` Just "number") quantiles
+    lookupTextArray ["components", "schemas", "Aggregation", "enum"] documentValue `shouldSatisfy` maybe False (elem "percentile")
+    lookupText ["components", "schemas", "MetricDefinition", "properties", "quantile", "type"] documentValue `shouldBe` Just "number"
+    lookupTextArray ["components", "schemas", "MetricDefinition", "required"] documentValue `shouldSatisfy` maybe True (notElem "quantile")
+    lookupText ["description"] operation `shouldSatisfy` maybe False (Text.isInfixOf "strictly between zero and one")
   it "reports OpenAPI 3.1 and keeps lowercase enum wire tags" $ do
     lookupText ["openapi"] documentValue `shouldSatisfy` maybe False (Text.isPrefixOf "3.1")
     lookupTextArray ["components", "schemas", "EventSource", "enum"] documentValue

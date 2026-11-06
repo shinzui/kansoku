@@ -2,7 +2,7 @@
 
 module Kansoku.Auth.HandlerSpec (spec) where
 
-import Control.Monad (void)
+import Control.Monad (forM_, void)
 import Data.Aeson qualified as Aeson
 import Data.ByteString (ByteString)
 import Data.Map.Strict qualified as Map
@@ -80,6 +80,16 @@ spec = describe "Kansoku.Auth.Handler" $ do
     unknown <- run [("X-Api-Key", serviceToken)] [("typo", Just "value")]
     unknownError <- expectServerError 400 unknown
     code <$> decodeEnvelope unknownError `shouldReturn` "unsupported_query_parameter"
+
+  it "validates duplicate and valueless quantiles only after authentication" $ do
+    let handler = metricsAuthHandlerWith fixtureLookup
+        run headers query = runHandler (unAuthHandler handler defaultRequest {requestHeaders = headers, rawPathInfo = "/metrics/custom", queryString = query})
+    forM_ [[("quantile", Nothing)], [("quantile", Just "0.5"), ("quantile", Just "0.75")]] $ \query -> do
+      run [] query >>= void . expectServerError 401
+      run [("X-Api-Key", writeToken)] query >>= void . expectServerError 403
+      result <- run [("X-Api-Key", serviceToken)] query
+      err <- expectServerError 400 result
+      code <$> decodeEnvelope err `shouldReturn` "invalid_query_parameter"
 
   it "maps credential-store failure to retryable 503" $ do
     let failingLookup _ = pure (Left (AuthStoreUsageError Pool.AcquisitionTimeoutUsageError))

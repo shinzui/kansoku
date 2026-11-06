@@ -25,7 +25,13 @@ spec = describe "Kansoku.Metrics.Handler" $ do
       manager <- HTTP.newManager HTTP.defaultManagerSettings
       traverse_
         (\suffix -> assertBadRequest manager port ("/metrics/custom?from=2026-07-01&to=2026-07-02&" <> suffix) "invalid_metric" "")
-        ["events=payment_completed&aggregation=sum&property=plan", "aggregation=count", "events=bad%27name&aggregation=count", "events=payment_completed&aggregation=ratio", "metric=x&events=payment_completed"]
+        ["events=payment_completed&aggregation=sum&property=plan", "aggregation=count", "events=bad%27name&aggregation=count", "events=payment_completed&aggregation=ratio", "metric=x&events=payment_completed", "metric=x&quantile=0.75"]
+      traverse_
+        (\suffix -> assertBadRequest manager port ("/metrics/custom?from=2026-07-01&to=2026-07-02&" <> suffix) "invalid_metric" "")
+        ["events=payment_completed&aggregation=percentile&property=amount" <> q | q <- ["", "&quantile=0", "&quantile=1", "&quantile=-0.1", "&quantile=1.1"]]
+      traverse_
+        (\suffix -> assertBadRequest manager port ("/metrics/custom?from=2026-07-01&to=2026-07-02&" <> suffix) "invalid_metric" "")
+        ["events=payment_completed&aggregation=count&quantile=0.75", "events=payment_completed&aggregation=percentile&property=plan&quantile=0.75", "events=payment_completed&aggregation=percentile&property=amount&quantile=0.75&denominatorEvents=feature_used"]
 
   it "rejects invalid funnel counting and attribution before storage on both routes" $
     Warp.testWithApplication (pure validationApplication) $ \port -> do

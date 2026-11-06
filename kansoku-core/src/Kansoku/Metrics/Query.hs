@@ -133,6 +133,7 @@ data QueryCompileError
   | QueryCompileMultipleGroupBy ![Text]
   | QueryCompileMissingAggregationProperty !Text
   | QueryCompileUnsupportedPropertyGrouping !Text
+  | QueryCompileInvalidQuantile
   | QueryCompileInvalidTimeGrain
   | QueryCompileFilterError !Text
   deriving stock (Generic, Eq, Show)
@@ -742,6 +743,11 @@ definitionFilters def = first QueryCompileFilterError (traverse WireFilter.parse
 
 buildSimpleSQL :: EventRegistry -> [GroupDimension] -> [Text] -> MetricDefinition -> QueryRequest -> Either QueryCompileError Text
 buildSimpleSQL registry grouping predicates def req
+  | aggregation def /= Percentile && isJust (quantile def) = Left QueryCompileInvalidQuantile
+  | aggregation def == Percentile = do
+      q <- maybe (Left QueryCompileInvalidQuantile) Right (quantile def)
+      unless (not (isNaN q || isInfinite q) && q > 0 && q < 1) (Left QueryCompileInvalidQuantile)
+      aggregate ("quantileExactInclusive(" <> Text.pack (show q) <> ")")
   | aggregation def == UniqueCount = Right (uniqueUsersSQL grouping predicates def req)
   | aggregation def == Sum = aggregate "sum"
   | aggregation def == Average = aggregate "avg"
@@ -789,12 +795,14 @@ rawResolvedSource req =
 
 ratioAggregate :: EventRegistry -> MetricDefinition -> Text -> [Text] -> Either QueryCompileError Text
 ratioAggregate registry def prefix filters = do
+  unless (isNothing (quantile def)) (Left QueryCompileInvalidQuantile)
   let predicate = Text.intercalate " AND " (eventNamePredicate prefix (validatedEventNames def) : filters)
   case aggregation def of
     Count -> pure ("uniqExactIf(event_id," <> predicate <> ")")
     UniqueCount -> pure ("uniqExactIf(canonical_user,(canonical_user != '') AND " <> predicate <> ")")
     Sum -> numeric "sumIf" predicate
     Average -> numeric "avgIf" predicate
+    Percentile -> Left (QueryCompileFilterError "percentile is unsupported in ratios")
     Ratio -> Left (QueryCompileFilterError "nested ratios are unsupported")
   where
     numeric function predicate = do
@@ -1289,6 +1297,7 @@ propertyFilterClause = foldMap ("\n  AND " <>)
 
 queryCompileErrorCode :: QueryCompileError -> Text
 queryCompileErrorCode = \case
+  QueryCompileInvalidQuantile -> "invalid_metric_definition"
   QueryCompileInvalidTimeGrain -> "invalid_time_grain"
   QueryCompilePropertyError PropertyErrorUndeclared {} -> "unknown_property"
   QueryCompilePropertyError {} -> "invalid_property"
@@ -1300,6 +1309,7 @@ queryCompileErrorCode = \case
 
 queryCompileErrorMessage :: QueryCompileError -> Text
 queryCompileErrorMessage = \case
+  QueryCompileInvalidQuantile -> "percentile requires a finite quantile strictly between zero and one; other aggregations cannot specify quantile"
   QueryCompileInvalidTimeGrain -> "timeGrain none is unsupported for this metric"
   QueryCompilePropertyError (PropertyErrorBadName property) ->
     "invalid property name: " <> property

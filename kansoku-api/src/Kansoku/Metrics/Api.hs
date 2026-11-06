@@ -367,7 +367,7 @@ data MetricsRoutes mode = MetricsRoutes
     lifecycle :: mode :- MetricsAuth :> "metrics" :> "lifecycle" :> DailyActivityQuery,
     revenue :: mode :- MetricsAuth :> "metrics" :> "revenue" :> MetricQuery,
     organizations :: mode :- MetricsAuth :> "metrics" :> "organizations" :> OrganizationMetricQuery,
-    custom :: mode :- MetricsAuth :> "metrics" :> "custom" :> MetricParameters (QueryParam "metric" Text :> QueryParam "events" Text :> QueryParam "aggregation" Text :> QueryParam "property" Text :> QueryParam "denominatorEvents" Text :> QueryParam "denominatorAggregation" Text :> MetricResponse),
+    custom :: mode :- MetricsAuth :> "metrics" :> "custom" :> Description "Ad-hoc or saved account-scoped metrics. Percentile requires a declared numeric property and finite quantile strictly between zero and one; exact inclusive (R-7) interpolation over canonical finite samples, independently per group/bucket. Empty populations emit no points. Quantile is forbidden on other aggregations, ratios and saved execution overrides. Existing resource limits apply." :> MetricParameters (QueryParam "metric" Text :> QueryParam "events" Text :> QueryParam "aggregation" Text :> QueryParam "property" Text :> QueryParam "quantile" Double :> QueryParam "denominatorEvents" Text :> QueryParam "denominatorAggregation" Text :> MetricResponse),
     experiments ::
       mode
         :- MetricsAuth

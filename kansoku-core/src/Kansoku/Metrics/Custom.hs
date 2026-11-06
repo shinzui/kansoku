@@ -17,15 +17,16 @@ import Kansoku.Metrics.Query.Validate (mkSqlName)
 import Kansoku.Metrics.Registry (BuiltinMetric (..))
 import Kansoku.Prelude
 
-adHocDefinition :: Maybe Text -> Maybe Text -> Maybe Text -> Maybe Text -> Maybe Text -> Either Text CustomDefinition
-adHocDefinition events aggregation property denominatorEvents denominatorAggregation = do
+adHocDefinition :: Maybe Text -> Maybe Text -> Maybe Text -> Maybe Double -> Maybe Text -> Maybe Text -> Either Text CustomDefinition
+adHocDefinition events aggregation property quantile denominatorEvents denominatorAggregation = do
   names <- maybe (Left "events is required") (Right . T.splitOn ",") events
   kind <- maybe (Left "aggregation is required") (maybe (Left "unknown aggregation") Right . parseAggregationText) aggregation
-  let component es agg = MetricDefinition "custom" Nothing (map T.strip es) agg property [] [] Nothing
+  let component es agg = MetricDefinition "custom" Nothing (map T.strip es) agg property quantile [] [] Nothing
   if kind == Ratio || isJust denominatorEvents
     then do
       denominator <- maybe (Left "ratio requires denominatorEvents") (Right . T.splitOn ",") denominatorEvents
       denominatorKind <- maybe (Right UniqueCount) (maybe (Left "unknown denominatorAggregation") Right . parseAggregationText) denominatorAggregation
+      unless (kind /= Percentile && denominatorKind /= Percentile && isNothing quantile) (Left "percentile and quantile are unsupported in ratios")
       let numeratorKind = if kind == Ratio then UniqueCount else kind
           componentWithProperty es agg = (component es agg) {aggregationProperty = if agg `elem` [Sum, Average] then property else Nothing}
       unless (isNothing property || any (`elem` [Sum, Average]) [numeratorKind, denominatorKind]) (Left "property requires a numeric aggregation")
@@ -41,6 +42,7 @@ validateCustom registry definition = do
   case definition of
     CustomSimple def -> validate def
     CustomRatio RatioMetric {numerator, denominator} -> do
+      unless (all ((/= Percentile) . aggregation) [numerator, denominator]) (Left "percentile is unsupported in ratios")
       validate numerator
       validate denominator
       unless (all (\d -> null (groupBy d) && isNothing (timeGrain d)) [numerator, denominator]) (Left "ratio components cannot specify grouping or timeGrain")
@@ -50,10 +52,14 @@ validateCustom registry definition = do
       unless (not (null (eventNames def)) && length (eventNames def) <= 100) (Left "events requires 1..100 event names")
       void (traverse mkSqlName (eventNames def))
       unless (aggregation def /= Ratio) (Left "use numerator and denominator for ratios")
+      if aggregation def == Percentile
+        then unless (maybe False (\q -> not (isNaN q || isInfinite q) && q > 0 && q < 1) (quantile def)) (Left "percentile requires a finite quantile strictly between zero and one")
+        else unless (isNothing (quantile def)) (Left "quantile is only supported for percentile")
       case aggregation def of
         Sum -> numeric def
         Average -> numeric def
-        _ -> unless (isNothing (aggregationProperty def)) (Left "property is only supported for sum/average")
+        Percentile -> numeric def
+        _ -> unless (isNothing (aggregationProperty def)) (Left "property is only supported for sum/average/percentile")
       inputs <- traverse F.parseMetricFilter (filters def) >>= F.validateMetricFilters
       -- Cohort membership is loaded at execution. Its shape is still checked on write.
       let resolve label
@@ -68,7 +74,7 @@ validateCustom registry definition = do
       traverse_ validateCohort [x | x <- concatMap F.filterTerms inputs, F.dimension x == "cohort"]
     numeric :: MetricDefinition -> Either Text ()
     numeric def = do
-      property <- maybe (Left "sum/average require property") Right (aggregationProperty def)
+      property <- maybe (Left "sum/average/percentile require property") Right (aggregationProperty def)
       void (first (T.pack . show) (resolveNumericProperty registry (map EventName (eventNames def)) property))
     nubText = foldr (\x xs -> if x `elem` xs then xs else x : xs) []
     validateCohort input = unless (F.op input `elem` [F.FilterEq, F.FilterNeq] && case F.value input of Just (A.String ident) -> isJust (UUID.fromText ident); _ -> False) (Left "cohort requires eq/neq and a UUID")

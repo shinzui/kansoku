@@ -475,7 +475,7 @@ instance O.ToSchema Aggregation where
 instance O.ToSchema MetricDefinition where
   declareNamedSchema proxy = do
     named <- O.genericDeclareNamedSchema O.defaultSchemaOptions proxy
-    pure (named & O.schema . O.description ?~ "Simple custom metric: name has 1..200 characters; eventNames has 1..100 validated names; aggregation is count, unique_count, sum or average. Sum/average require a numeric aggregationProperty declared across every listed event. Filters are grammar strings: at most eight AND groups, each with up to eight OR terms and 16384 decoded UTF-8 bytes combined with request filters. groupBy uses up to two distinct full dimension names. Day is the default grain; request grouping/grain override saved defaults. No SQL is accepted.")
+    pure (named & O.schema . O.description ?~ "Simple custom metric: name has 1..200 characters; eventNames has 1..100 validated names; aggregation is count, unique_count, sum, average or percentile. Percentile requires a finite quantile strictly between zero and one, using exact inclusive (R-7) interpolation on finite Float64 samples; empty groups emit no point. Quantile is forbidden for other aggregations and ratio components. Sum/average/percentile require a numeric aggregationProperty declared across every listed event. Filters are grammar strings: at most eight AND groups, each with up to eight OR terms and 16384 decoded UTF-8 bytes combined with request filters. groupBy uses up to two distinct full dimension names. Day is the default grain; request grouping/grain override saved defaults. No SQL is accepted.")
 
 instance O.ToSchema RatioMetric where
   declareNamedSchema proxy = do

@@ -85,12 +85,12 @@ metricsServerUsing pg pool =
           Nothing -> pure (KansokuNotFound (notFound "metric_not_found" key))
           Just metric -> metricEffToHandler (withCohorts pg (queryRequest (principal ^. #accountId) fromDay toDay groupBy grain filters) (\request -> Query.run defaultRegistry pool metric request {Query.aggregateOrganizations = org, Query.userOrganization = current}))
 
-    customHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> [MetricFilter] -> Maybe Text -> Maybe Text -> Maybe Text -> Maybe Text -> Maybe Text -> Maybe Text -> Handler (KansokuResult MetricResult)
-    customHandler (MetricsPrincipal principal) fromDay toDay group grain filters savedName events aggregation property denominatorEvents denominatorAggregation =
+    customHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> [MetricFilter] -> Maybe Text -> Maybe Text -> Maybe Text -> Maybe Text -> Maybe Double -> Maybe Text -> Maybe Text -> Handler (KansokuResult MetricResult)
+    customHandler (MetricsPrincipal principal) fromDay toDay group grain filters savedName events aggregation property quantile denominatorEvents denominatorAggregation =
       withDateRange fromDay toDay $ case savedName of
-        Nothing -> either invalid execute (adHocDefinition events aggregation property denominatorEvents denominatorAggregation)
+        Nothing -> either invalid execute (adHocDefinition events aggregation property quantile denominatorEvents denominatorAggregation)
         Just name
-          | any isJust [events, aggregation, property, denominatorEvents, denominatorAggregation] -> invalid "metric cannot be combined with ad-hoc definition parameters"
+          | isJust quantile || any isJust [events, aggregation, property, denominatorEvents, denominatorAggregation] -> invalid "metric cannot be combined with ad-hoc definition parameters"
           | otherwise -> case pg of
               Nothing -> pure (KansokuUnavailable (unavailable "metric_store_unavailable" "metric definition store unavailable"))
               Just store -> do

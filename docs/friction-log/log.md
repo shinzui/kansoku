@@ -1,6 +1,8 @@
 # Bundle Update Log
 
 ## 2026-11-06
+* **Update**: FRIC-5 resolved: Registered the omitted custom metric test group and verified it in the passing deterministic transcript.
+* **Addition**: FRIC-5 records detour tooling friction with mori://shinzui/kansoku: Custom metric validation specs were compiled but never executed
 * **Update**: FRIC-4 resolved: Fixed focused acceptance command output handling
 * **Update**: FRIC-3 accepted: Accepted log writer limitation with preservation workaround
 * **Addition**: FRIC-4 records detour tooling friction with mori://shinzui/kansoku: Focused acceptance helper discards ownership query output

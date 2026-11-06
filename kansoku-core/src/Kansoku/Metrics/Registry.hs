@@ -129,6 +129,7 @@ metric name description eventNames aggregation groupBy timeGrain =
       eventNames,
       aggregation,
       aggregationProperty = Nothing,
+      quantile = Nothing,
       filters = [],
       groupBy,
       timeGrain

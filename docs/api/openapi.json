@@ -10,6 +10,7 @@
           "unique_count",
           "sum",
           "average",
+          "percentile",
           "ratio"
         ],
         "type": "string"
@@ -497,7 +498,7 @@
         "type": "object"
       },
       "MetricDefinition": {
-        "description": "Simple custom metric: name has 1..200 characters; eventNames has 1..100 validated names; aggregation is count, unique_count, sum or average. Sum/average require a numeric aggregationProperty declared across every listed event. Filters are grammar strings: at most eight AND groups, each with up to eight OR terms and 16384 decoded UTF-8 bytes combined with request filters. groupBy uses up to two distinct full dimension names. Day is the default grain; request grouping/grain override saved defaults. No SQL is accepted.",
+        "description": "Simple custom metric: name has 1..200 characters; eventNames has 1..100 validated names; aggregation is count, unique_count, sum, average or percentile. Percentile requires a finite quantile strictly between zero and one, using exact inclusive (R-7) interpolation on finite Float64 samples; empty groups emit no point. Quantile is forbidden for other aggregations and ratio components. Sum/average/percentile require a numeric aggregationProperty declared across every listed event. Filters are grammar strings: at most eight AND groups, each with up to eight OR terms and 16384 decoded UTF-8 bytes combined with request filters. groupBy uses up to two distinct full dimension names. Day is the default grain; request grouping/grain override saved defaults. No SQL is accepted.",
         "properties": {
           "aggregation": {
             "$ref": "#/components/schemas/Aggregation"
@@ -528,6 +529,10 @@
           },
           "name": {
             "type": "string"
+          },
+          "quantile": {
+            "format": "double",
+            "type": "number"
           },
           "timeGrain": {
             "$ref": "#/components/schemas/TimeGrain"
@@ -3639,7 +3644,7 @@
     },
     "/metrics/custom": {
       "get": {
-        "description": "Explicit timeGrain=none returns one null bucket per populated group on calendar users, simple custom metrics, acquisition, events, page views and sessions. Other routes reject none. Omission preserves defaults. Every metric requires a positive half-open from/to range of at most 366 days and returns at most 10000 complete points. groupBy accepts one or two distinct dimensions: event_name, source, source_service, host, route, enrichment/acquisition fields prop:<declared scalar property>, current user:<governed trait>, organization, or org:<governed organization trait> on event sources. Repeated filter parameters are AND-combined JSON terms, JSON {or:[term,...]} groups, or shorthand dimension:op:value terms separated by | for OR (literal | requires JSON; omit value for set/unset): at most 8 groups of at most 8 terms, 100 in values, 1024 UTF-8 bytes per string and 16384 decoded bytes combined. Missing/null values are unset; comparisons including neq do not match unset values. Group keys keep full dimension names and null differs from an empty string. Unsupported parameters are errors. See the documented route matrix.",
+        "description": "Ad-hoc or saved account-scoped metrics. Percentile requires a declared numeric property and finite quantile strictly between zero and one; exact inclusive (R-7) interpolation over canonical finite samples, independently per group/bucket. Empty populations emit no points. Quantile is forbidden on other aggregations, ratios and saved execution overrides. Existing resource limits apply.Explicit timeGrain=none returns one null bucket per populated group on calendar users, simple custom metrics, acquisition, events, page views and sessions. Other routes reject none. Omission preserves defaults. Every metric requires a positive half-open from/to range of at most 366 days and returns at most 10000 complete points. groupBy accepts one or two distinct dimensions: event_name, source, source_service, host, route, enrichment/acquisition fields prop:<declared scalar property>, current user:<governed trait>, organization, or org:<governed organization trait> on event sources. Repeated filter parameters are AND-combined JSON terms, JSON {or:[term,...]} groups, or shorthand dimension:op:value terms separated by | for OR (literal | requires JSON; omit value for set/unset): at most 8 groups of at most 8 terms, 100 in values, 1024 UTF-8 bytes per string and 16384 decoded bytes combined. Missing/null values are unset; comparisons including neq do not match unset values. Group keys keep full dimension names and null differs from an empty string. Unsupported parameters are errors. See the documented route matrix.",
         "operationId": "getMetricsCustom",
         "parameters": [
           {
@@ -3728,6 +3733,15 @@
           },
           {
             "in": "query",
+            "name": "quantile",
+            "required": false,
+            "schema": {
+              "format": "double",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
             "name": "denominatorEvents",
             "required": false,
             "schema": {
@@ -3767,7 +3781,7 @@
                 }
               }
             },
-            "description": "Malformed request or `denominatorAggregation` or `denominatorEvents` or `property` or `aggregation` or `events` or `metric` or `filter` or `timeGrain` or `groupBy` or `to` or `from`"
+            "description": "Malformed request or `denominatorAggregation` or `denominatorEvents` or `quantile` or `property` or `aggregation` or `events` or `metric` or `filter` or `timeGrain` or `groupBy` or `to` or `from`"
           },
           "401": {
             "content": {

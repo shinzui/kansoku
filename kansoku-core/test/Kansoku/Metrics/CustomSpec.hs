@@ -2,6 +2,7 @@ module Kansoku.Metrics.CustomSpec (spec) where
 
 import Control.Monad (forM_)
 import Data.Aeson qualified as A
+import Data.Aeson.KeyMap qualified as KeyMap
 import Data.Either (isLeft, isRight)
 import Data.Text qualified as T
 import Data.Time (fromGregorian)
@@ -39,6 +40,35 @@ spec = describe "Custom metrics" $ do
         adhoc "payment_completed" "count" (Just "amount"),
         adhoc "payment_completed" "unknown" Nothing
       ]
+  it "validates percentile quantiles and rejects ratio components and irrelevant quantiles" $ do
+    let percentile = base {aggregation = Percentile, aggregationProperty = Just "amount", quantile = Just 0.75}
+    validateCustom defaultRegistry (CustomSimple percentile) `shouldBe` Right ()
+    forM_ [Nothing, Just 0, Just 1, Just (-0.1), Just 1.1, Just (0 / 0), Just (1 / 0), Just (-1 / 0)] $ \q -> do
+      let def = CustomSimple percentile {quantile = q}
+      validateCustom defaultRegistry def `shouldSatisfy` isLeft
+      Q.buildSQL defaultRegistry (customBuiltin def) request `shouldSatisfy` isLeft
+    forM_ [Count, UniqueCount, Sum, Average] $ \kind -> do
+      let def = CustomSimple percentile {aggregation = kind}
+      validateCustom defaultRegistry def `shouldSatisfy` isLeft
+      Q.buildSQL defaultRegistry (customBuiltin def) request `shouldSatisfy` isLeft
+    forM_ [percentile {aggregationProperty = Nothing}, percentile {aggregationProperty = Just "plan"}] $ \def ->
+      validateCustom defaultRegistry (CustomSimple def) `shouldSatisfy` isLeft
+    forM_ [(percentile, base), (base, percentile)] $ \(n, d) -> do
+      let def = CustomRatio (RatioMetric "rate" Nothing n d)
+      validateCustom defaultRegistry def `shouldSatisfy` isLeft
+      Q.buildSQL defaultRegistry (customBuiltin def) request `shouldSatisfy` isLeft
+    adHocDefinition (Just "payment_completed") (Just "percentile") (Just "amount") (Just 0.75) (Just "feature_used") Nothing `shouldSatisfy` isLeft
+    adHocDefinition (Just "payment_completed") (Just "count") (Just "amount") Nothing (Just "feature_used") (Just "percentile") `shouldSatisfy` isLeft
+  it "roundtrips percentile and legacy JSON and compiles the exact native aggregate" $ do
+    let percentile = base {aggregation = Percentile, aggregationProperty = Just "amount", quantile = Just 0.75}
+    forM_ [base, base {aggregation = Sum, aggregationProperty = Just "amount"}, base {aggregation = Average, aggregationProperty = Just "amount"}, percentile] $ \def ->
+      A.eitherDecode (A.encode (CustomSimple def)) `shouldBe` Right (CustomSimple def)
+    A.toJSON base `shouldSatisfy` (\case A.Object fields -> not (KeyMap.member "quantile" fields); _ -> False)
+    sql <- either (fail . show) pure (Q.buildSQL defaultRegistry (customBuiltin (CustomSimple percentile)) request)
+    sql `shouldSatisfy` T.isInfixOf "quantileExactInclusive(0.75)("
+    sql `shouldSatisfy` T.isInfixOf "isNotNull("
+    sql `shouldSatisfy` T.isInfixOf "analytics.events_canonical"
+    sql `shouldSatisfy` T.isInfixOf "account_id = {account_id:String}"
   it "keeps saved defaults, conjoins filters and honors request overrides within the combined bound" $ do
     let def = CustomSimple base {filters = ["source:eq:web|source:eq:app"], groupBy = ["prop:plan"], timeGrain = Just Day}
     validateCustom defaultRegistry def `shouldBe` Right ()
@@ -74,10 +104,10 @@ spec = describe "Custom metrics" $ do
         ratio = CustomRatio (RatioMetric "rate" Nothing base base)
     mapM_ (\def -> A.eitherDecode (A.encode def) `shouldBe` Right def) [simple, ratio]
   where
-    adhoc events aggregation property = adHocDefinition (Just events) (Just aggregation) property Nothing Nothing >>= \def -> def <$ validateCustom defaultRegistry def
+    adhoc events aggregation property = adHocDefinition (Just events) (Just aggregation) property Nothing Nothing Nothing >>= \def -> def <$ validateCustom defaultRegistry def
 
 base :: MetricDefinition
-base = MetricDefinition "payments" Nothing ["payment_completed"] Count Nothing [] [] Nothing
+base = MetricDefinition "payments" Nothing ["payment_completed"] Count Nothing Nothing [] [] Nothing
 
 request :: Q.QueryRequest
 request = Q.QueryRequest (AccountId "custom") (fromGregorian 2026 7 1) (fromGregorian 2026 7 2) Nothing Nothing [] [] False False False

@@ -142,8 +142,8 @@ spec = describe "Kansoku analytics route dispatch" $ do
       let client = genericClient @Api.KansokuAPI @ClientM
           credential = mkAuthenticatedRequest @MetricsAuth () (const id)
           environment = mkClientEnv manager url
-          definition = Definition.CustomSimple (Definition.MetricDefinition "client" Nothing ["payment_completed"] Definition.Count Nothing [] [] Nothing)
-      result <- runClientM (Metrics.custom (Api.metrics client) credential (fromGregorian 2026 7 1) (fromGregorian 2026 7 2) Nothing Nothing [] Nothing (Just "payment_completed") (Just "count") Nothing Nothing Nothing) environment
+          definition = Definition.CustomSimple (Definition.MetricDefinition "client" Nothing ["payment_completed"] Definition.Count Nothing Nothing [] [] Nothing)
+      result <- runClientM (Metrics.custom (Api.metrics client) credential (fromGregorian 2026 7 1) (fromGregorian 2026 7 2) Nothing Nothing [] Nothing (Just "payment_completed") (Just "count") Nothing Nothing Nothing Nothing) environment
       result `shouldBe` Right (Response.KansokuOk (sentinelResult "custom"))
       saved <- runClientM (Definition.createDefinition (Api.metricDefinitions client) credential definition) environment
       case saved of
@@ -305,7 +305,7 @@ sentinelMetricsServer =
       Metrics.lifecycle = webSentinel "lifecycle",
       Metrics.revenue = standardSentinel "revenue",
       Metrics.organizations = organizationSentinel "organizations",
-      Metrics.custom = \p f t g grain fs _ _ _ _ _ _ -> standardSentinel "custom" p f t g grain fs,
+      Metrics.custom = \p f t g grain fs _ _ _ _ _ _ _ -> standardSentinel "custom" p f t g grain fs,
       Metrics.experiments = \principal fromDay toDay experiment grain _measure _group _filters -> metricSentinel "experiments" principal fromDay toDay experiment grain,
       Metrics.experimentConversion = experimentConversionSentinel,
       Metrics.experimentFunnel = experimentFunnelSentinel
@@ -365,5 +365,5 @@ sentinelDefinitions =
       Definition.deleteDefinition = \_ _ -> pure (Response.KansokuOk True)
     }
   where
-    definition = Definition.CustomSimple (Definition.MetricDefinition "sample" Nothing ["payment_completed"] Definition.Count Nothing [] [] Nothing)
+    definition = Definition.CustomSimple (Definition.MetricDefinition "sample" Nothing ["payment_completed"] Definition.Count Nothing Nothing [] [] Nothing)
     sample def = Definition.SavedMetric UUID.nil def (read "2026-07-01 00:00:00 UTC") (read "2026-07-01 00:00:00 UTC")
