@@ -6,6 +6,7 @@ import Data.Foldable (traverse_)
 import Data.Map.Strict qualified as Map
 import Data.Text qualified as Text
 import Data.Time (fromGregorian)
+import Effectful (runEff)
 import Kansoku.Event
   ( AccountId (..),
     EventName (..),
@@ -15,18 +16,38 @@ import Kansoku.Event
     defaultRegistry,
     latestSchema,
   )
-import Kansoku.Metrics.Api (MetricPoint (..), SessionMeasure (..), TimeGrain (..))
+import Kansoku.Metrics.Api (AcquisitionMeasure (..), MetricPoint (..), SessionMeasure (..), TimeGrain (..))
 import Kansoku.Metrics.Definition (Aggregation (Average, Sum), MetricDefinition)
 import Kansoku.Metrics.Query hiding (buildExperimentConversionSQL, buildExperimentExposuresSQL, buildExperimentFunnelSQL, buildSQL)
 import Kansoku.Metrics.Query qualified as Query
 import Kansoku.Metrics.Query.Property (PropertyError (..))
-import Kansoku.Metrics.Query.Validate (SqlName, mkSqlName)
+import Kansoku.Metrics.Query.Validate (SqlName, mkSqlName, validateAcquisitionConversions)
 import Kansoku.Metrics.Registry
 import Kansoku.Prelude
 import Test.Hspec
 
 spec :: Spec
 spec = describe "Kansoku.Query.buildSQL" $ do
+  it "validates acquisition conversion options identically at compiler and executor boundaries" $ do
+    let compile = Query.buildAcquisitionSQLWithConversions defaultRegistry
+        invalid measure names = do
+          fmap (const ()) (compile measure names dayRequest) `shouldSatisfy` either ((== "invalid_conversion_events") . queryCompileErrorCode) (const False)
+          result <- runEff (Query.runAcquisitionWithConversions defaultRegistry (error "conversion validation forced the query pool") measure names dayRequest)
+          result `shouldSatisfy` \case
+            Left (QueryCompileFailure failure) -> queryCompileErrorCode failure == "invalid_conversion_events"
+            _ -> False
+    forM_ [AcquisitionConvertedUsers, AcquisitionConversionRate] $ \measure -> do
+      forM_ [Nothing, Just [], Just [""], Just ["ok", " "], Just ["bad'name"], Just [Text.replicate 129 "a"], Just (replicate 21 "ok")] (invalid measure)
+      Query.buildAcquisitionSQL defaultRegistry measure dayRequest `shouldSatisfy` either ((== "invalid_conversion_events") . queryCompileErrorCode) (const False)
+      compile measure (Just (replicate 20 " ok ")) dayRequest `shouldSatisfy` isRight
+      validateAcquisitionConversions measure (Just [" ok ", "ok"]) `shouldBe` Right [sqlName "ok"]
+      sql <- either (fail . show) pure (compile measure (Just ["private_conversion"]) dayRequest)
+      sql `shouldContainText` "{acquisition_conversion_event_1:String}"
+      sql `shouldNotContainText` "private_conversion"
+    forM_ [AcquisitionSessions, AcquisitionUsers] $ \measure -> do
+      invalid measure (Just ["ok"])
+      compile measure Nothing dayRequest `shouldSatisfy` isRight
+
   it "rejects explicit none at internal experiment SQL boundaries" $ do
     let req = dayRequest {timeGrain = Just NoTimeBucket}
         experiment = sqlName "test"

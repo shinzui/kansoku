@@ -206,3 +206,7 @@ ch-migrations-acceptance:
 ch-migrations-source:
     python3 scripts/check_clickhouse_embedding.py
     python3 scripts/check_clickhouse_sdist.py
+
+# Required first-touch conversion proof at normal and tiny native block sizes.
+acquisition-acceptance: build-with-tests
+    python3 scripts/acquisition-acceptance.py

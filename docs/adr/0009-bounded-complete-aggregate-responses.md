@@ -5,7 +5,7 @@ description: Bound metric inputs and final aggregate cardinality, returning a co
 docId: ADR-9
 status: Accepted
 date: 2026-10-15
-timestamp: 2026-10-16T11:28:35Z
+timestamp: 2026-11-06T13:13:28Z
 generated:
   by: process:codex
   at: 2026-10-15T04:44:00Z
@@ -35,7 +35,11 @@ range of at most 366 days, at most 20 non-empty ordered funnel steps, and at mos
 32 distinct retention offsets between 1 and 365. Repeated funnel names retain
 ordered repetition semantics; retention values normalize to ascending unique order,
 with offset zero added implicitly for cohort size. The existing 90-day funnel window
-remains. Public constants live in the API package and are not deployment settings.
+remains. Acquisition conversion measures require 1..20 raw conversion-event names of
+1..128 lowercase ASCII letters, digits, underscore, dot, colon or hyphen. Trim entries,
+reject empty names and bound before deduplication. Legacy acquisition measures reject
+the list. Shared compiler and HTTP validation reject invalid combinations before
+cohort loading or query-pool acquisition with invalid_conversion_events. Public constants live in the API package and are not deployment settings.
 
 Each complete aggregate query projects the three native result fields, orders them
 explicitly and transfers at most 10,001 rows. Exactly 10,000 succeeds; an extra row

@@ -117,6 +117,10 @@ spec = describe "Kansoku.Metrics filters" $ do
     input <- validFilter (jsonFilter "source" "eq" (Aeson.String "web"))
     let req endpoint query = defaultRequest {pathInfo = [], rawPathInfo = Text.encodeUtf8 ("/metrics/" <> endpoint), queryString = query}
         encoded = Just (Text.encodeUtf8 (toUrlPiece input))
+    validateMetricRequest (req "acquisition" [("measure", Just "converted_users"), ("conversionEvents", Just "one,two")]) `shouldBe` Right ()
+    traverse_
+      (\query -> validateMetricRequest (req "acquisition" query) `shouldSatisfy` either ((== "invalid_query_parameter") . fst) (const False))
+      [[("conversionEvents", Just "a"), ("conversionEvents", Just "b")], [("conversionEvents", Nothing)]]
     validateMetricRequest (req "events" [("filter", encoded), ("filter", encoded)]) `shouldBe` Right ()
     validateMetricRequest (req "custom" [("events", Just "payment_completed"), ("aggregation", Just "count")]) `shouldBe` Right ()
     validateMetricRequest (req "custom" [("filter", Just "source:eq:a|b")]) `shouldSatisfy` isLeft

@@ -2,6 +2,9 @@
 
 ## 2026-11-06
 
+* **Update**: ADR-9: Bound acquisition conversion lists before normalization and reject invalid combinations before storage
+* **Update**: ADR-12: Document first-selected-session conversion population, timing, source and bot policies
+
 * **Update**: ADR-20 records exact R-7 percentile compilation, quantile validation, legacy JSON compatibility and sample-count pairing.
 
 * **Update**: ADR-13, ADR-14 and ADR-20 define explicit whole-range grouping and saved override semantics

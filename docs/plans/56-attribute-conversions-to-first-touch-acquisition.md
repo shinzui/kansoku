@@ -10,6 +10,12 @@ provenance:
     model: "gpt-6-astra"
     harness: "codex-cli"
     at: 2026-11-06T03:24:27Z
+  revisions:
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-11-06T13:10:03Z
+      mode: "implement"
+      note: "Implement first-session conversion measures, public validation and acceptance coverage"
 ---
 
 # Attribute conversions to first-touch acquisition
@@ -29,17 +35,17 @@ For example, two people first arrive through organic search and one through emai
 ## Progress
 
 
-- [ ] Milestone 1: Native acquisition conversion queries assign each canonical person to one selected first session and return exact counts and rates, demonstrated with an anonymous visit, alias, and service-side conversion.
+- [x] Milestone 1 (2026-11-06): Native queries assign each canonical person to one selected first session; anonymous alias plus service conversion returns organic_search=1/email=1 and rates 0.5/1. `just acquisition-acceptance` passed at block sizes 65536 and 2: acquisition 5, sessions 4, traits 6 examples per size, all with zero failures/pending; replay and both conversion measures at 10,000/10,001 points passed.
 - [ ] Milestone 2: The authenticated acquisition route accepts the new measures and bounded event list, rejects invalid inputs before storage, and exposes the contract through OpenAPI and the typed client.
 - [ ] Milestone 3: Timing, filters, bots, replay, account isolation, and response bounds pass native and public acceptance; the guide and ADRs explain the exact population and compatibility rules.
 
-Planning is complete; implementation has not started. The intention was created with `mina ci --json 'Attribute conversions to first-touch acquisition'` and is recorded in frontmatter. No parent MasterPlan is required.
+Milestone 1 is verified. The expanded owned native runner passed 9 acquisition, 4 session and 6 trait examples at each of block sizes 65536 and 2, with zero failures/pending. This additionally proves timing, account/namespace boundaries, ambiguous aliases, full-row tie selection, acquisition dimensions, bots, current traits and behavioural cohorts. Public contract implementation, generated OpenAPI, public fixtures and documentation are written. Strict ADR/guide validation passed. Full `just check` and packaged public acceptance are running; Milestones 2 and 3 remain pending their results. The intention was created with `mina ci --json 'Attribute conversions to first-touch acquisition'` and is recorded in frontmatter. No parent MasterPlan is required.
 
 
 ## Surprises & Discoveries
 
 
-(None yet.)
+2026-11-06: IR-4 has landed: `TimeGrain.NoTimeBucket` and `timeGrain=none` already support acquisition. Both conversion measures compose with its existing constant-bucket/null response path; the native multi-day fixture passes in daily and whole-range mode.
 
 
 ## Decision Log

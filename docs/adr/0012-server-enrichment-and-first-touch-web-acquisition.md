@@ -5,7 +5,7 @@ description: Preserve categorical request enrichment in a private versioned queu
 docId: ADR-12
 status: Accepted
 date: 2026-10-15
-timestamp: 2026-11-06T04:09:28Z
+timestamp: 2026-11-06T13:13:28Z
 generated:
   by: process:codex
   at: 2026-10-15T22:09:28Z
@@ -70,6 +70,25 @@ attributes. Attribute it to the first page_view, otherwise earliest web event, w
 counts keys; users counts each selected session's first canonical user subject, otherwise its
 earliest anonymous subject, excluding empty identity. A subject may occur in multiple channels.
 The exact users measure shares the bounded identity snapshot and query limits from ADR-4/9.
+
+Acquisition converted_users and conversion_rate select one first session per nonempty
+canonical subject across the full requested range, after whole-session filters, current traits,
+cohorts and any-bot selection. Choose the minimum (session_start_at,source_service,session_id)
+and carry the complete attribution row before grouping or bucketing. This means first selected
+touch in this range, not lifetime first visit. Legacy users retains distinct subjects within
+each bucket/group and may count a person in several groups; it is not the new rate's denominator.
+
+A required bounded conversionEvents list selects canonical resolved facts from any supported
+source in the same account and half-open occurrence range, with no session-ID requirement.
+Session filters do not restrict conversion attributes or source service. Reduce to one latest
+eligible timestamp per canonical subject with an explicit match marker before a left join.
+A person converts when that timestamp is at or after their chosen session start. This avoids
+join-default timestamps, replay inflation and repeated conversion multiplication. Counts and
+rates use the same first-session population; zero-conversion groups survive. Individually bot
+conversion events are excluded by default; includeBots restores those and any-bot sessions.
+Both branches share retained-history identity resolution, native limits and complete result bounds.
+All supported grains, including explicit none with null buckets, assign output to the chosen
+session start; whole-range rates are computed directly rather than averaged from buckets.
 
 Page-view and active-user routes exclude individual bot rows by default; acquisition excludes
 any session containing a bot event. Their explicit includeBots option controls this policy

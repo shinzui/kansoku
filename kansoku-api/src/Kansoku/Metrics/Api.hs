@@ -127,17 +127,21 @@ data MetricResult = MetricResult
   deriving stock (Generic, Eq, Show)
   deriving anyclass (FromJSON, ToJSON)
 
-data AcquisitionMeasure = AcquisitionSessions | AcquisitionUsers
+data AcquisitionMeasure = AcquisitionSessions | AcquisitionUsers | AcquisitionConvertedUsers | AcquisitionConversionRate
   deriving stock (Generic, Eq, Show)
 
 instance FromHttpApiData AcquisitionMeasure where
   parseUrlPiece "sessions" = Right AcquisitionSessions
   parseUrlPiece "users" = Right AcquisitionUsers
-  parseUrlPiece _ = Left "measure must be sessions or users"
+  parseUrlPiece "converted_users" = Right AcquisitionConvertedUsers
+  parseUrlPiece "conversion_rate" = Right AcquisitionConversionRate
+  parseUrlPiece _ = Left "measure must be sessions, users, converted_users or conversion_rate"
 
 instance ToHttpApiData AcquisitionMeasure where
   toUrlPiece AcquisitionSessions = "sessions"
   toUrlPiece AcquisitionUsers = "users"
+  toUrlPiece AcquisitionConvertedUsers = "converted_users"
+  toUrlPiece AcquisitionConversionRate = "conversion_rate"
 
 data SessionMeasure = SessionCount | SessionBounceRate | SessionAverageDuration
   deriving stock (Generic, Eq, Show)
@@ -306,7 +310,7 @@ type DailyActivityQuery =
   Description "Exact canonical daily activity with retained-history lookback; identity/profile-only events are excluded throughout. Day grain only. Filters and one/two group dimensions define the same population throughout lookback; each group is a separate population. Bot rows are excluded unless includeBots=true. Positive half-open range at most 366 days; to no later than the current UTC day; at most 10000 complete points. Stickiness emits daily_active, rolling30_active and ratio (0..1) in group.measure. Lifecycle emits nonnegative new, returning, resurrecting and dormant in group.status; first means first retained matching activity. Empty ungrouped days return zero measures."
     :> MetricArguments (QueryParam "includeBots" Bool :> MetricResponse)
 
-type AcquisitionQuery = MetricParameters (QueryParam "measure" AcquisitionMeasure :> QueryParam "includeBots" Bool :> MetricResponse)
+type AcquisitionQuery = Description "Acquisition conversions select one first session per resolved person before grouping. converted_users and conversion_rate require conversionEvents: a single comma-separated list of 1..20 event names (1..128 lowercase ASCII letters, digits, underscore, dot, colon or hyphen); trim entries, reject empty entries, deduplicate after the raw bound. Legacy measures reject the list. Rates use the selected first-session population, not legacy users. Conversions may come from any source in the range at or after session start. includeBots controls whole sessions and individual conversion events. " :> MetricParameters (QueryParam "measure" AcquisitionMeasure :> QueryParam "conversionEvents" Text :> QueryParam "includeBots" Bool :> MetricResponse)
 
 -- | Metric routes keyed by field name. Six fields deliberately share
 -- 'MetricQuery'; their runtime path-to-handler guard lives in RoutingSpec.

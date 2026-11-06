@@ -35,7 +35,7 @@ import Kansoku.Metrics.DefinitionStore qualified as DefinitionStore
 import Kansoku.Metrics.Filter (MetricFilter)
 import Kansoku.Metrics.Filter qualified as Filter
 import Kansoku.Metrics.Query qualified as Query
-import Kansoku.Metrics.Query.Validate (QueryLimitError (..), SqlName, mkSqlName, renderSqlName, validateDateRange)
+import Kansoku.Metrics.Query.Validate (QueryLimitError (..), SqlName, mkSqlName, renderSqlName, validateAcquisitionConversions, validateDateRange)
 import Kansoku.Metrics.Registry (builtinMetric)
 import Kansoku.Prelude
 import Servant (Handler)
@@ -136,9 +136,13 @@ metricsServerUsing pg pool =
     lifecycleHandler (MetricsPrincipal principal) fromDay toDay groupBy timeGrain filters bots =
       effToHandler (withCohorts pg (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain filters) (\request -> Query.runLifecycle defaultRegistry pool request {Query.includeBots = fromMaybe False bots}))
 
-    acquisitionHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> [MetricFilter] -> Maybe AcquisitionMeasure -> Maybe Bool -> Handler (KansokuResult MetricResult)
-    acquisitionHandler (MetricsPrincipal principal) fromDay toDay groupBy timeGrain filters measure bots =
-      effToHandler (withCohorts pg (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain filters) (\request -> Query.runAcquisition defaultRegistry pool (fromMaybe AcquisitionSessions measure) request {Query.includeBots = fromMaybe False bots}))
+    acquisitionHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> [MetricFilter] -> Maybe AcquisitionMeasure -> Maybe Text -> Maybe Bool -> Handler (KansokuResult MetricResult)
+    acquisitionHandler (MetricsPrincipal principal) fromDay toDay groupBy timeGrain filters measure conversions bots =
+      let selected = fromMaybe AcquisitionSessions measure
+          names = fmap (Text.splitOn ",") conversions
+       in case validateAcquisitionConversions selected names of
+            Left (QueryLimitError code message) -> pure (KansokuBadRequest (badRequest code message))
+            Right _ -> effToHandler (withCohorts pg (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain filters) (\request -> Query.runAcquisitionWithConversions defaultRegistry pool selected names request {Query.includeBots = fromMaybe False bots}))
 
     sessionsHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> [MetricFilter] -> Maybe SessionMeasure -> Maybe Bool -> Handler (KansokuResult MetricResult)
     sessionsHandler (MetricsPrincipal principal) fromDay toDay groupBy timeGrain filters measure bots =

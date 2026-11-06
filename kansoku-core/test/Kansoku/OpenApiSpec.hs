@@ -40,6 +40,14 @@ import Test.Hspec
 
 spec :: Spec
 spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
+  it "documents acquisition conversion measures, event list and first-session denominator" $ do
+    let operation = fromMaybe Aeson.Null (valueAt ["paths", "/metrics/acquisition", "get"] documentValue)
+    operationParameterNames operation `shouldContain` ["conversionEvents"]
+    operation `shouldSatisfy` containsEnumValue "converted_users"
+    operation `shouldSatisfy` containsEnumValue "conversion_rate"
+    lookupText ["description"] operation `shouldSatisfy` maybe False (Text.isInfixOf "1..20")
+    lookupText ["description"] operation `shouldSatisfy` maybe False (Text.isInfixOf "first session")
+
   it "publishes none rather than the Haskell constructor spelling" $ do
     let encoded = BSL.toStrict (Aeson.encode kansokuOpenApi)
     encoded `shouldSatisfy` BS8.isInfixOf "\"none\""

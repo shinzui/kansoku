@@ -1,6 +1,10 @@
 # Bundle Update Log
 
 ## 2026-11-06
+* **Update**: FRIC-7 accepted: Retain all prior prose evidence and accept a preservation step around log appends
+* **Update**: FRIC-6 accepted: Accept the existing rebuild cost without expanding this feature into build-tool changes
+* **Addition**: FRIC-7 records detour tooling friction with mori://shinzui/okf: Bundle log appends discard existing prose evidence
+* **Addition**: FRIC-6 records slowdown tooling friction with mori://shinzui/kansoku: OpenAPI generation reconfigures the test-enabled build
 * **Update**: FRIC-5 resolved: Registered the omitted custom metric test group and verified it in the passing deterministic transcript.
 * **Addition**: FRIC-5 records detour tooling friction with mori://shinzui/kansoku: Custom metric validation specs were compiled but never executed
 * **Update**: FRIC-4 resolved: Fixed focused acceptance command output handling

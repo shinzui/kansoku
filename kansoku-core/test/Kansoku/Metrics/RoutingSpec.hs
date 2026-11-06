@@ -100,6 +100,36 @@ spec = describe "Kansoku analytics route dispatch" $ do
       HTTP.responseStatus schemaResponse `shouldBe` status200
       decodeBody (HTTP.responseBody schemaResponse) `shouldReturn` schemaCatalog defaultRegistry
 
+  it "forwards acquisition conversion controls independently of query parameter order" $ do
+    let shouldEqual actual expected = if actual == expected then pure () else fail "acquisition control was not forwarded"
+        server =
+          sentinelKansokuServer
+            { Api.metrics =
+                sentinelMetricsServer
+                  { Metrics.acquisition = \_ _ _ _ _ _ measure events bots -> do
+                      measure `shouldEqual` Just Metrics.AcquisitionConvertedUsers
+                      events `shouldEqual` Just "one, two "
+                      bots `shouldEqual` Just True
+                      pure (Response.KansokuOk (sentinelResult "conversion-controls"))
+                  }
+            }
+        application = serveWithContext Api.kansokuAPI sentinelContext server
+    Warp.testWithApplication (pure application) $ \port -> do
+      manager <- HTTP.newManager HTTP.defaultManagerSettings
+      traverse_
+        ( \controls -> do
+            request <- HTTP.parseRequest (baseUrl port <> "/metrics/acquisition?from=2026-07-01&to=2026-07-03&" <> controls)
+            response <- HTTP.httpLbs request manager
+            HTTP.responseStatus response `shouldBe` status200
+            decodeBody (HTTP.responseBody response) `shouldReturn` sentinelResult "conversion-controls"
+        )
+        ["measure=converted_users&conversionEvents=one,%20two%20&includeBots=true", "includeBots=true&conversionEvents=one,%20two%20&measure=converted_users"]
+      url <- parseBaseUrl (baseUrl port)
+      let client = genericClient @Api.KansokuAPI @ClientM
+          credential = mkAuthenticatedRequest @MetricsAuth () (const id)
+      result <- runClientM (Metrics.acquisition (Api.metrics client) credential (fromGregorian 2026 7 1) (fromGregorian 2026 7 3) Nothing Nothing [] (Just Metrics.AcquisitionConvertedUsers) (Just "one, two ") (Just True)) (mkClientEnv manager url)
+      result `shouldBe` Right (Response.KansokuOk (sentinelResult "conversion-controls"))
+
   it "wraps malformed bodies and unknown paths in the shared error envelope" $
     Warp.testWithApplication (pure sentinelApplication) $ \port -> do
       manager <- HTTP.newManager HTTP.defaultManagerSettings
@@ -297,7 +327,7 @@ sentinelMetricsServer =
       Metrics.paths = \_ _ _ _ _ _ _ _ _ _ _ _ -> pure (Response.KansokuOk (sentinelResult "paths")),
       Metrics.funnel = funnelSentinel,
       Metrics.retention = retentionSentinel,
-      Metrics.acquisition = \principal fromDay toDay groupBy grain filters _measure _bots -> standardSentinel "acquisition" principal fromDay toDay groupBy grain filters,
+      Metrics.acquisition = \principal fromDay toDay groupBy grain filters _measure _conversions _bots -> standardSentinel "acquisition" principal fromDay toDay groupBy grain filters,
       Metrics.featureAdoption = organizationSentinel "feature-adoption",
       Metrics.conversion = organizationSentinel "conversion",
       Metrics.users = \principal fromDay toDay groupBy grain filters _window _bots _aggregate _attribution -> standardSentinel "users" principal fromDay toDay groupBy grain filters,

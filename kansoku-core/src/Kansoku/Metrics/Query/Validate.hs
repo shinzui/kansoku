@@ -1,12 +1,13 @@
 -- | Validation for names that can participate in metric SQL.
 --
--- Funnel steps are the only raw 'Text' HTTP input that reaches metric SQL.
+-- Caller-supplied event names are validated before native parameter binding.
 -- Other query inputs are parsed values or select from closed SQL fragments.
 module Kansoku.Metrics.Query.Validate
   ( QueryLimitError (..),
     validateDateRange,
     validateObservationCutoff,
     validateSteps,
+    validateAcquisitionConversions,
     validateOffsets,
     SqlName,
     mkSqlName,
@@ -18,6 +19,7 @@ import Data.Char (isAsciiLower, isDigit)
 import Data.List qualified as List
 import Data.Text qualified as Text
 import Data.Time (Day, diffDays)
+import Kansoku.Metrics.Api (AcquisitionMeasure (..))
 import Kansoku.Metrics.Limits
 import Kansoku.Prelude
 
@@ -78,3 +80,18 @@ validateOffsets offsets
   | otherwise = Right unique
   where
     unique = List.sort (List.nub offsets)
+
+-- | Bound the supplied list before normalization; duplicate names have OR semantics.
+validateAcquisitionConversions :: AcquisitionMeasure -> Maybe [Text] -> Either QueryLimitError [SqlName]
+validateAcquisitionConversions measure supplied =
+  case (measure `elem` [AcquisitionConvertedUsers, AcquisitionConversionRate], supplied) of
+    (False, Nothing) -> Right []
+    (True, Just names)
+      | not (null names),
+        length names <= maxAcquisitionConversionEvents ->
+          case traverse (mkSqlName . Text.strip) names of
+            Right valid -> Right (List.nub valid)
+            Left _ -> Left invalid
+    _ -> Left invalid
+  where
+    invalid = QueryLimitError "invalid_conversion_events" "converted_users and conversion_rate require conversionEvents with 1..20 names of 1..128 lowercase ASCII letters, digits, underscore, dot, colon or hyphen; empty entries and lists on sessions/users are invalid"

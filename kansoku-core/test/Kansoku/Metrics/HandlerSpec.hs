@@ -20,6 +20,14 @@ import Test.Hspec
 
 spec :: Spec
 spec = describe "Kansoku.Metrics.Handler" $ do
+  it "rejects invalid acquisition conversion options before cohort loading or storage" $
+    Warp.testWithApplication (pure validationApplication) $ \port -> do
+      manager <- HTTP.newManager HTTP.defaultManagerSettings
+      let request suffix code = assertBadRequest manager port ("/metrics/acquisition?from=2026-07-01&to=2026-07-03&" <> suffix) code ""
+      traverse_
+        (\suffix -> request suffix "invalid_conversion_events")
+        ["measure=converted_users", "measure=conversion_rate", "measure=converted_users&conversionEvents=", "measure=converted_users&conversionEvents=,a", "measure=converted_users&conversionEvents=a,", "measure=conversion_rate&conversionEvents=a,,b", "measure=converted_users&conversionEvents=bad%27name", "measure=conversion_rate&conversionEvents=" <> replicate 129 'a', "measure=converted_users&conversionEvents=" <> concat (replicate 20 "a,") <> "a", "conversionEvents=a", "measure=users&conversionEvents=a", "measure=converted_users&conversionEvents=&filter=cohort:eq:missing"]
+
   it "rejects invalid Custom definitions before forcing the query pool" $
     Warp.testWithApplication (pure validationApplication) $ \port -> do
       manager <- HTTP.newManager HTTP.defaultManagerSettings

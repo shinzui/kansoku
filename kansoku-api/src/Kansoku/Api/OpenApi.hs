@@ -181,7 +181,7 @@ instance O.ToSchema TimeGrain where
     O.genericDeclareNamedSchema lowerEnumOptions {O.constructorTagModifier = \name -> if name == "NoTimeBucket" then "none" else map toLower name}
 
 instance O.ToParamSchema AcquisitionMeasure where
-  toParamSchema _ = O.toParamSchema (Proxy @Text) & O.enum_ ?~ ["sessions", "users"]
+  toParamSchema _ = O.toParamSchema (Proxy @Text) & O.enum_ ?~ ["sessions", "users", "converted_users", "conversion_rate"]
 
 instance O.ToParamSchema SessionMeasure where
   toParamSchema _ = O.toParamSchema (Proxy @Text) & O.enum_ ?~ ["count", "bounce_rate", "average_duration_seconds"]

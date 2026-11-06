@@ -1,6 +1,7 @@
 """Public producer/reporting workflow and address-privacy proof for EP-33."""
 import json
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
@@ -111,6 +112,7 @@ def verify_enrichment(base, write_key, service_token):
     assert len(selected) == 2 and all(point['bucket'] is None for point in selected), selected
     assert report(timeGrain='none', from_='2026-07-02', filter='entry_page:eq:/entry') == []
     print('EP-34 public workflow: cross-midnight counts, entry/exit, bots, positive-duration lifecycle bounce and replay passed.', flush=True)
+    verify_acquisition_conversions(base, write_key, service_token)
     verify_ai_channels(base, write_key, service_token)
     print('EP-33 public workflow: existing event JSON, retries, first-touch/device/country, bots and exact users passed.', flush=True)
 
@@ -156,3 +158,83 @@ def verify_country_disabled(base, write_key, service_token):
     expected = [{'bucket': '2026-07-01', 'group': {'country_code': None}, 'value': 1}]
     eventually(lambda: query(base, service_token, groupBy='country_code', filter=population) == expected)
     print('EP-33 packaged default: geography off, spoofed body/header country ignored, normal ingest/reporting passed.', flush=True)
+
+
+def verify_acquisition_conversions(base, write_key, service_token):
+    prefix = 'acq_conversion_' + uuid.uuid4().hex
+    population = json.dumps(dict(dimension='source_service', op='eq', value=prefix))
+    fixtures = []
+    for person, hour, channel in [('a', '09', 'organic_search'), ('b', '10', 'organic_search'), ('c', '11', 'email')]:
+        value = event(prefix + '_' + person, prefix + '_' + person,
+                      timestamp='2026-07-01T' + hour + ':00:00Z')
+        value['sourceService'] = prefix
+        value['userId'] = prefix + '_' + person
+        value['anonymousId'] = prefix + '_cookie_' + person
+        if person == 'a':
+            del value['userId']
+        if channel == 'organic_search':
+            value['referrer'] = 'https://www.google.com/'
+        else:
+            value['utmMedium'] = 'email'
+        fixtures.append(value)
+    alias = event(prefix + '_alias', '', name='alias', timestamp='2026-07-01T09:01:00Z')
+    alias.update(source='service', sourceService=prefix + '_identity', userId=prefix + '_a',
+                 anonymousId=prefix + '_cookie_a',
+                 properties={'previousId': prefix + '_cookie_a', 'newId': prefix + '_a'})
+    fixtures.append(alias)
+    for person, timestamp in [('a', '2026-07-02T08:00:00Z'), ('c', '2026-07-01T12:00:00Z')]:
+        value = event(prefix + '_convert_' + person, '', name=('signup_completed' if person == 'a' else 'payment_completed'), timestamp=timestamp)
+        value.update(source='service', sourceService=prefix + '_backend', userId=prefix + '_' + person,
+                     properties=({} if person == 'a' else {'amount': 1}))
+        del value['anonymousId']
+        del value['sessionId']
+        fixtures.append(value)
+    returning = event(prefix + '_return', prefix + '_return', timestamp='2026-07-02T09:00:00Z', utmMedium='email')
+    returning.update(sourceService=prefix, userId=prefix + '_a', anonymousId=prefix + '_cookie_a')
+    fixtures.append(returning)
+    for value in fixtures:
+        send(base, write_key, [value])
+    def report(measure, **extra):
+        return query(base, service_token, filter=population, measure=measure,
+                     conversionEvents=' signup_completed , payment_completed , signup_completed ', **extra)
+    def expected(organic, bucket='2026-07-01'):
+        return [{'bucket': bucket, 'group': {'channel': 'email'}, 'value': 1},
+                {'bucket': bucket, 'group': {'channel': 'organic_search'}, 'value': organic}]
+    eventually(lambda: report('converted_users') == expected(1))
+    assert report('conversion_rate') == expected(.5)
+    assert report('converted_users', timeGrain='none') == expected(1, None)
+    assert report('conversion_rate', timeGrain='none') == expected(.5, None)
+    # Single-name requests and the exact raw list bound run through the real handler.
+    assert query(base, service_token, filter=population, measure='converted_users',
+                 conversionEvents='signup_completed') == [
+                     {'bucket': '2026-07-01', 'group': {'channel': 'email'}, 'value': 0},
+                     {'bucket': '2026-07-01', 'group': {'channel': 'organic_search'}, 'value': 1}]
+    assert query(base, service_token, filter=population, measure='conversion_rate',
+                 conversionEvents=','.join(['signup_completed', 'payment_completed'] * 10)) == expected(.5)
+    for value in reversed(fixtures):
+        send(base, write_key, [value])
+    assert report('converted_users') == expected(1)
+    invalid = [
+        ('measure=converted_users', 'invalid_conversion_events'),
+        ('measure=conversion_rate&conversionEvents=', 'invalid_conversion_events'),
+        ('measure=converted_users&conversionEvents=a,,b', 'invalid_conversion_events'),
+        ('measure=converted_users&conversionEvents=,a', 'invalid_conversion_events'),
+        ('measure=converted_users&conversionEvents=a,', 'invalid_conversion_events'),
+        ('measure=converted_users&conversionEvents=bad%27name', 'invalid_conversion_events'),
+        ('measure=converted_users&conversionEvents=' + 'a' * 129, 'invalid_conversion_events'),
+        ('measure=conversion_rate&conversionEvents=' + ','.join(['a'] * 21), 'invalid_conversion_events'),
+        ('measure=sessions&conversionEvents=a', 'invalid_conversion_events'),
+        ('measure=users&conversionEvents=a', 'invalid_conversion_events'),
+        ('measure=converted_users&conversionEvents=a&conversionEvents=b', 'invalid_query_parameter'),
+        ('measure=converted_users&conversionEvents', 'invalid_query_parameter')]
+    for controls, code in invalid:
+        request = urllib.request.Request(base + '/metrics/acquisition?from=2026-07-01&to=2026-07-03&' + controls,
+                                         headers={'Authorization': 'Bearer ' + service_token})
+        try:
+            urllib.request.urlopen(request, timeout=5)
+        except urllib.error.HTTPError as error:
+            result = json.load(error)
+            assert error.code == 400 and result['code'] == code, result
+        else:
+            raise AssertionError('invalid acquisition controls succeeded: ' + controls)
+    print('EP-56 public workflow: anonymous alias, backend conversion, first-session counts/rates, whole range and replay passed.', flush=True)

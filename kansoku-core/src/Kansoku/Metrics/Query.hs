@@ -21,6 +21,7 @@ module Kansoku.Metrics.Query
     buildLifecycleSQL,
     buildSQL,
     buildAcquisitionSQL,
+    buildAcquisitionSQLWithConversions,
     activityPredicate,
     buildSessionsSQL,
     buildSessionMetricSQL,
@@ -48,6 +49,7 @@ module Kansoku.Metrics.Query
     runSessions,
     runSessionMetric,
     runAcquisition,
+    runAcquisitionWithConversions,
   )
 where
 
@@ -108,7 +110,7 @@ import Kansoku.Metrics.Query.Property
   )
 import Kansoku.Metrics.Query.Session (materializedSessionProjection, sessionProjection)
 import Kansoku.Metrics.Query.Traits qualified as Traits
-import Kansoku.Metrics.Query.Validate (QueryLimitError (..), SqlName, mkSqlName, renderSqlName, validateDateRange, validateObservationCutoff, validateOffsets, validateSteps)
+import Kansoku.Metrics.Query.Validate (QueryLimitError (..), SqlName, mkSqlName, renderSqlName, validateAcquisitionConversions, validateDateRange, validateObservationCutoff, validateOffsets, validateSteps)
 import Kansoku.Metrics.Registry (BuiltinMetric (..), activeUsers)
 import Kansoku.Prelude
 import System.Timeout (timeout)
@@ -136,6 +138,7 @@ data QueryCompileError
   | QueryCompileInvalidQuantile
   | QueryCompileInvalidTimeGrain
   | QueryCompileFilterError !Text
+  | QueryCompileConversionEvents !QueryLimitError
   deriving stock (Generic, Eq, Show)
 
 data CompiledMetric = CompiledMetric
@@ -194,11 +197,14 @@ run registry pool metric req =
           (boundedSQL (compiled ^. #ordering) (compiled ^. #sql))
 
 -- Session date predicates apply to the retained session's start, never its input rows.
--- Only the users measure needs the exact identity snapshot over those retained rows.
+-- User and conversion measures share the exact identity snapshot over retained rows.
 runAcquisition :: (IOE :> es) => EventRegistry -> QueryPool -> AcquisitionMeasure -> QueryRequest -> Eff es (Either QueryExecutionError MetricResult)
-runAcquisition registry pool measure req =
+runAcquisition registry pool measure = runAcquisitionWithConversions registry pool measure Nothing
+
+runAcquisitionWithConversions :: (IOE :> es) => EventRegistry -> QueryPool -> AcquisitionMeasure -> Maybe [Text] -> QueryRequest -> Eff es (Either QueryExecutionError MetricResult)
+runAcquisitionWithConversions registry pool measure conversions req =
   case first QueryLimitFailure (validateDateRange (req ^. #from) (req ^. #to))
-    >> first QueryCompileFailure (compileAcquisition registry measure req) of
+    >> first QueryCompileFailure (compileAcquisition registry measure conversions req) of
     Left failure -> pure (Left failure)
     Right compiled ->
       liftIO $
@@ -210,29 +216,67 @@ runAcquisition registry pool measure req =
           (boundedSQL BucketDimensions (compiled ^. #sql))
 
 buildAcquisitionSQL :: EventRegistry -> AcquisitionMeasure -> QueryRequest -> Either QueryCompileError Text
-buildAcquisitionSQL registry measure req = boundedSQL BucketDimensions . view #sql <$> compileAcquisition registry measure req
+buildAcquisitionSQL registry measure = buildAcquisitionSQLWithConversions registry measure Nothing
+
+buildAcquisitionSQLWithConversions :: EventRegistry -> AcquisitionMeasure -> Maybe [Text] -> QueryRequest -> Either QueryCompileError Text
+buildAcquisitionSQLWithConversions registry measure conversions req = boundedSQL BucketDimensions . view #sql <$> compileAcquisition registry measure conversions req
 
 retainedScope :: QueryRequest -> QueryRequest
 retainedScope req = req {from = fromGregorian 1970 1 1, to = fromGregorian 2100 1 1}
 
-compileAcquisition :: EventRegistry -> AcquisitionMeasure -> QueryRequest -> Either QueryCompileError CompiledMetric
-compileAcquisition registry measure req = do
+compileAcquisition :: EventRegistry -> AcquisitionMeasure -> Maybe [Text] -> QueryRequest -> Either QueryCompileError CompiledMetric
+compileAcquisition registry measure conversions req = do
+  names <- first QueryCompileConversionEvents (validateAcquisitionConversions measure conversions)
   let scope = Filters.filteredEventScope [] (req ^. #filters)
   grouping <- requestedGroupingWith (cohortDimension req "primary_subject" (resolveSessionDimension registry scope)) (req ^. #groupBy) ["channel"]
   filters <- first QueryCompileFilterError (Filters.compileFiltersWith "metric_filter" (cohortDimension req "primary_subject" (resolveSessionDimension registry scope)) (normalizeCohortFilters (req ^. #filters)))
-  let resolved = measure == AcquisitionUsers || hasUserTraits req
+  let converting = measure `elem` [AcquisitionConvertedUsers, AcquisitionConversionRate]
+      resolved = measure /= AcquisitionSessions || hasUserTraits req
       source = if resolved then rawResolvedSource (retainedScope req) else "analytics.events_canonical"
       aggregate = if measure == AcquisitionUsers then "uniqExactIf(primary_subject,primary_subject!='')" else "count()"
       predicates = [timestampPredicate req] <> ["NOT is_bot" | not (req ^. #includeBots)] <> Filters.predicates filters
       sessions = if resolved || any isPropertyDimension grouping || any (Text.isPrefixOf "prop:" . WireFilter.dimension) (concatMap WireFilter.filterTerms (req ^. #filters)) then sessionProjection source resolved else materializedSessionProjection
       sql =
-        Text.unlines
-          [ "SELECT " <> bucketExpr (req ^. #timeGrain) <> " AS bucket," <> groupProjection grouping <> ",toFloat64(" <> aggregate <> ") AS value",
-            "FROM (" <> Traits.sessionSource (queryTraits req) sessions <> ")",
-            "WHERE " <> accountPredicate <> " AND " <> Text.intercalate " AND " predicates,
-            "GROUP BY bucket,sort_group_1,sort_group_2"
-          ]
-  pure CompiledMetric {sql, groupLabels = map dimensionLabel grouping, filterParameters = Filters.parameters filters, ordering = BucketDimensions}
+        if converting
+          then acquisitionConversionsSQL req measure names grouping filters sessions
+          else
+            Text.unlines
+              [ "SELECT " <> bucketExpr (req ^. #timeGrain) <> " AS bucket," <> groupProjection grouping <> ",toFloat64(" <> aggregate <> ") AS value",
+                "FROM (" <> Traits.sessionSource (queryTraits req) sessions <> ")",
+                "WHERE " <> accountPredicate <> " AND " <> Text.intercalate " AND " predicates,
+                "GROUP BY bucket,sort_group_1,sort_group_2"
+              ]
+  pure CompiledMetric {sql, groupLabels = map dimensionLabel grouping, filterParameters = namedParameters "acquisition_conversion_event" names <> Filters.parameters filters, ordering = BucketDimensions}
+
+-- Choose the whole attribution row before grouping, then join one conversion per person.
+acquisitionConversionsSQL :: QueryRequest -> AcquisitionMeasure -> [SqlName] -> [GroupDimension] -> Filters.CompiledFilters -> Text -> Text
+acquisitionConversionsSQL req measure names grouping filters sessions =
+  Text.unlines
+    [ "WITH selected AS (SELECT * FROM ("
+        <> Traits.sessionSource (queryTraits req) sessions
+        <> ") WHERE "
+        <> accountPredicate
+        <> " AND "
+        <> Text.intercalate " AND " ([timestampPredicate req, "primary_subject!=''"] <> ["NOT is_bot" | not (req ^. #includeBots)] <> Filters.predicates filters)
+        <> "),",
+      "first_sessions AS (SELECT * FROM selected ORDER BY occurred_at,source_service,session_id LIMIT 1 BY primary_subject),",
+      "conversions AS (SELECT canonical_user AS conversion_subject,max(occurred_at) AS converted_at,toUInt8(1) AS matched FROM "
+        <> rawResolvedSource (retainedScope req)
+        <> " WHERE "
+        <> accountPredicate
+        <> " AND "
+        <> timestampPredicate req
+        <> " AND canonical_user!='' AND "
+        <> eventNamePredicate "acquisition_conversion_event" names
+        <> (if req ^. #includeBots then "" else " AND NOT is_bot")
+        <> " GROUP BY canonical_user)",
+      "SELECT " <> bucketExpr (req ^. #timeGrain) <> " AS bucket," <> groupProjection grouping <> ",toFloat64(" <> aggregate <> ") AS value",
+      "FROM first_sessions LEFT JOIN conversions ON primary_subject=conversion_subject",
+      "GROUP BY bucket,sort_group_1,sort_group_2"
+    ]
+  where
+    converted = "countIf(matched=1 AND converted_at>=occurred_at)"
+    aggregate = if measure == AcquisitionConvertedUsers then converted else "if(count()=0,0.,toFloat64(" <> converted <> ")/count())"
 
 runSessions :: (IOE :> es) => QueryPool -> QueryRequest -> Eff es (Either QueryExecutionError MetricResult)
 runSessions pool = runSessionMetric pool SessionCount
@@ -1297,6 +1341,7 @@ propertyFilterClause = foldMap ("\n  AND " <>)
 
 queryCompileErrorCode :: QueryCompileError -> Text
 queryCompileErrorCode = \case
+  QueryCompileConversionEvents failure -> limitCode failure
   QueryCompileInvalidQuantile -> "invalid_metric_definition"
   QueryCompileInvalidTimeGrain -> "invalid_time_grain"
   QueryCompilePropertyError PropertyErrorUndeclared {} -> "unknown_property"
@@ -1309,6 +1354,7 @@ queryCompileErrorCode = \case
 
 queryCompileErrorMessage :: QueryCompileError -> Text
 queryCompileErrorMessage = \case
+  QueryCompileConversionEvents failure -> limitMessage failure
   QueryCompileInvalidQuantile -> "percentile requires a finite quantile strictly between zero and one; other aggregations cannot specify quantile"
   QueryCompileInvalidTimeGrain -> "timeGrain none is unsupported for this metric"
   QueryCompilePropertyError (PropertyErrorBadName property) ->

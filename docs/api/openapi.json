@@ -3186,7 +3186,7 @@
     },
     "/metrics/acquisition": {
       "get": {
-        "description": "Explicit timeGrain=none returns one null bucket per populated group on calendar users, simple custom metrics, acquisition, events, page views and sessions. Other routes reject none. Omission preserves defaults. Every metric requires a positive half-open from/to range of at most 366 days and returns at most 10000 complete points. groupBy accepts one or two distinct dimensions: event_name, source, source_service, host, route, enrichment/acquisition fields prop:<declared scalar property>, current user:<governed trait>, organization, or org:<governed organization trait> on event sources. Repeated filter parameters are AND-combined JSON terms, JSON {or:[term,...]} groups, or shorthand dimension:op:value terms separated by | for OR (literal | requires JSON; omit value for set/unset): at most 8 groups of at most 8 terms, 100 in values, 1024 UTF-8 bytes per string and 16384 decoded bytes combined. Missing/null values are unset; comparisons including neq do not match unset values. Group keys keep full dimension names and null differs from an empty string. Unsupported parameters are errors. See the documented route matrix.",
+        "description": "Acquisition conversions select one first session per resolved person before grouping. converted_users and conversion_rate require conversionEvents: a single comma-separated list of 1..20 event names (1..128 lowercase ASCII letters, digits, underscore, dot, colon or hyphen); trim entries, reject empty entries, deduplicate after the raw bound. Legacy measures reject the list. Rates use the selected first-session population, not legacy users. Conversions may come from any source in the range at or after session start. includeBots controls whole sessions and individual conversion events. Explicit timeGrain=none returns one null bucket per populated group on calendar users, simple custom metrics, acquisition, events, page views and sessions. Other routes reject none. Omission preserves defaults. Every metric requires a positive half-open from/to range of at most 366 days and returns at most 10000 complete points. groupBy accepts one or two distinct dimensions: event_name, source, source_service, host, route, enrichment/acquisition fields prop:<declared scalar property>, current user:<governed trait>, organization, or org:<governed organization trait> on event sources. Repeated filter parameters are AND-combined JSON terms, JSON {or:[term,...]} groups, or shorthand dimension:op:value terms separated by | for OR (literal | requires JSON; omit value for set/unset): at most 8 groups of at most 8 terms, 100 in values, 1024 UTF-8 bytes per string and 16384 decoded bytes combined. Missing/null values are unset; comparisons including neq do not match unset values. Group keys keep full dimension names and null differs from an empty string. Unsupported parameters are errors. See the documented route matrix.",
         "operationId": "getMetricsAcquisition",
         "parameters": [
           {
@@ -3248,8 +3248,18 @@
             "schema": {
               "enum": [
                 "sessions",
-                "users"
+                "users",
+                "converted_users",
+                "conversion_rate"
               ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "conversionEvents",
+            "required": false,
+            "schema": {
               "type": "string"
             }
           },
@@ -3286,7 +3296,7 @@
                 }
               }
             },
-            "description": "Malformed request or `includeBots` or `measure` or `filter` or `timeGrain` or `groupBy` or `to` or `from`"
+            "description": "Malformed request or `includeBots` or `conversionEvents` or `measure` or `filter` or `timeGrain` or `groupBy` or `to` or `from`"
           },
           "401": {
             "content": {

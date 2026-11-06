@@ -2,6 +2,8 @@
 
 ## 2026-11-06
 
+* **Update**: DOC-10: Document first-session acquisition conversion counts and rates, event-list limits, whole-range mode and legacy users compatibility
+
 * **Update**: DOC-10 documents exact percentile interpolation, quantile validation, saved definitions and non-atomic numeric sample-count pairing.
 
 * **Update**: DOC-10 names the experiment conversion measures as `exposed`, `converted`, and `conversion_rate`.

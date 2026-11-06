@@ -1,6 +1,7 @@
 -- | Fixed public limits for complete aggregate answers.
 module Kansoku.Metrics.Limits
-  ( maxQueryDays,
+  ( maxAcquisitionConversionEvents,
+    maxQueryDays,
     maxFunnelSteps,
     maxRetentionDays,
     maxRetentionOffset,
@@ -26,3 +27,6 @@ maxPathSteps = 10
 maxPathTop = 20
 maxPathWindowSeconds = 7776000
 maxPathEvents = 100
+
+maxAcquisitionConversionEvents :: Int
+maxAcquisitionConversionEvents = 20

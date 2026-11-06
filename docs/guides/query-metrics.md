@@ -6,7 +6,7 @@ docId: DOC-10
 tags: ["metrics", "queries", "identity", "cohorts"]
 generated:
   by: process:codex
-  at: "2026-11-06T12:36:47Z"
+  at: "2026-11-06T13:13:28Z"
 ---
 
 # Query metrics
@@ -26,7 +26,7 @@ once in each, so group totals can overlap.
 | --- | --- |
 | `/metrics/users` | `window=calendar` only; `to` must be a closed UTC day |
 | `/metrics/custom` | count, unique_count, sum, average and percentile; ratios require omitted grain |
-| `/metrics/acquisition` | users and sessions; default grouping remains channel |
+| `/metrics/acquisition` | sessions, users, converted_users and conversion_rate; default grouping remains channel |
 | `/metrics/events` | distinct canonical events |
 | `/metrics/page-views` | canonical page views |
 | `/metrics/sessions` | count, bounce_rate and average_duration_seconds |
@@ -59,6 +59,7 @@ The public limits are fixed:
 | Date range | Positive, at most 366 days |
 | Paths | 1..10 transitions; top 1..20 per step; window 1..7776000 seconds |
 | Funnels | 1..20 non-empty steps; repeated names retain their meaning |
+| Acquisition conversion events | 1..20 supplied names, validated before deduplication |
 | Retention offsets | At most 32 distinct values in 1..365, normalized to ascending unique order |
 | Complete metric answer | At most 10,000 points |
 | AND-combined filters | At most 8 JSON objects |
@@ -72,7 +73,7 @@ is still 90 days within the bounded query interval.
 
 All bounds fail with HTTP 400, `application/problem+json`, and `retryable: false`.
 Stable codes are `invalid_date_range`, `query_range_too_large`,
-`invalid_path_options`, `too_many_funnel_steps`, `invalid_retention_days`, `too_many_retention_days`, and
+`invalid_path_options`, `invalid_conversion_events`, `too_many_funnel_steps`, `invalid_retention_days`, `too_many_retention_days`, and
 `metric_result_too_large`. A result overflow returns no partial metric payload:
 
 ```json
@@ -143,7 +144,7 @@ Invalid JSON/filter grammar or incompatible filter types return `invalid_filter`
 | --- | --- |
 | events, feature-adoption, revenue | `groupBy`, `timeGrain`, repeatable `filter` |
 | page-views | `groupBy`, `timeGrain`, repeatable `filter`, `includeBots` (default false) |
-| acquisition | `groupBy` (default channel), `timeGrain`, repeatable session-attribute `filter`, `measure` (sessions/users), `includeBots` (default false) |
+| acquisition | `groupBy` (default channel), `timeGrain`, repeatable session-attribute `filter`, `measure` (sessions/users/converted_users/conversion_rate), `conversionEvents` (required only for conversion measures), `includeBots` (default false) |
 | sessions | `groupBy`, `timeGrain`, repeatable session-attribute `filter`, `measure` (count/bounce_rate/average_duration_seconds), `includeBots` (default false) |
 | conversion | `groupBy` (no prop), repeatable `filter`; timeGrain rejected |
 | paths | optional `start` or `end`, `by`, `steps`, `top`, `window`, CSV `events`, CSV `exclude`, repeatable `filter`; event mode requires an anchor |
@@ -928,3 +929,77 @@ resolved in the current account at execution time; deleting a cohort makes its r
 fail with `cohort_not_found`. Trait and cohort selection uses resolved event paths even
 for event counts, sums, averages and percentiles. The typed client exposes `Metrics.custom metricsClient` and
 `metricDefinitionsClient` from `Kansoku.Client.Metrics`.
+
+
+## Acquisition conversions
+
+Use `/metrics/acquisition` to attribute converting people to their first selected web
+session in the requested range. Omitted `measure` still means `sessions`; omitted `groupBy`
+still means `channel`; omitted `timeGrain` still means daily UTC buckets.
+
+| Measure | `conversionEvents` | Value |
+| --- | --- | --- |
+| `sessions` | Must be absent | Selected complete sessions |
+| `users` | Must be absent | Distinct primary resolved subjects in each bucket/group |
+| `converted_users` | Required | Selected people with at least one eligible conversion |
+| `conversion_rate` | Required | Converted people divided by the selected first-session population in the same bucket/group |
+
+`conversionEvents` is one comma-separated scalar parameter with 1..20 raw entries. Entries
+are trimmed, then must contain 1..128 ASCII lowercase letters, digits, underscore, dot,
+colon or hyphen. Empty entries (including leading/trailing commas) are invalid. Duplicate
+names have OR semantics and normalize only after the raw count limit; matching repeated
+conversions still counts a person once. Well-formed unregistered names are valid and may
+match no facts. Invalid combinations or lists return HTTP 400 `invalid_conversion_events`;
+repeated or valueless parameters return `invalid_query_parameter`.
+
+For example:
+
+```http
+GET /metrics/acquisition?from=2026-07-01&to=2026-07-03&measure=converted_users&conversionEvents=signup_completed,payment_completed
+Authorization: Bearer ksk_s_…
+```
+
+Suppose two people first arrive through organic search on July 1, one through email, and
+one organic visitor and the email visitor later convert. The organic visitor first visits
+anonymously, aliases to a known user, converts from a backend service on July 2, and returns
+through email. The response is:
+
+```json
+{"metric":"acquisition","points":[
+  {"bucket":"2026-07-01","group":{"channel":"email"},"value":1},
+  {"bucket":"2026-07-01","group":{"channel":"organic_search"},"value":1}
+]}
+```
+
+Changing `measure` to `conversion_rate` produces email=1 and organic_search=0.5 in those
+same buckets. `timeGrain=none` computes those whole-range rates directly with null buckets.
+
+Selection first assembles each complete retained web session by account, source service
+and nonempty session ID. The start must lie in `[from,to)`. Session attributes come from
+its first page view, falling back to its first event. Apply session filters, current traits,
+cohort selection and any-bot exclusion before choosing one session per nonempty canonical
+subject across the entire range. Equal starts choose the lower `(source_service,session_id)`
+tuple. Only then group and bucket by that session's start. Narrowing a filter may select a
+later session. First touch means first selected session in this range, not lifetime first visit.
+
+Conversion facts use the same current identity resolution over retained account history.
+Later alias evidence may therefore join an anonymous session to a known user; ambiguity,
+erasure and retention follow the shared identity policy. A conversion may originate from any
+supported source or service and needs no session ID. Session channel, service, page, property,
+trait and cohort filters select the acquisition population; they do not filter conversion
+event attributes. Occurrence must be in `[from,to)` and at or after the selected session start.
+Equality at session start counts; an earlier conversion or one at exclusive `to` does not.
+A conversion on a later day belongs to the selected session's earlier bucket.
+
+By default, any bot event in the complete retained session excludes that session, even
+outside the request dates. Individually bot-marked conversion events are excluded too.
+`includeBots=true` restores both. Empty session subjects never enter the denominator.
+Existing populated groups with no matching conversion return zero; absent groups have no points.
+
+Legacy `users` may count the same person in several session channels or buckets. Its output
+is therefore not generally the denominator of the new rate. Each person has exactly one
+assignment within a fixed conversion query, so converted-user counts can be summed across
+its buckets/groups. Separate date-window queries select their own first sessions and may
+overlap. Rates must not be summed or averaged across buckets; use `timeGrain=none` for an
+exact whole-range rate. All measures retain the 10,000-point complete-or-error bound and
+native resource limits; no sessions or conversions are truncated before final grouping.
