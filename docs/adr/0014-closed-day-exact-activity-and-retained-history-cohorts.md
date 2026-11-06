@@ -27,7 +27,7 @@ owns complete bounded answers and query work limits.
 Users, stickiness, retention and lifecycle capture the UTC date at request start and reject
 an exclusive `to` later than that date with permanent `unclosed_observation_window`. All
 included days are complete; no separate as-of response metadata is required. The public range
-stays positive and at most 366 days. Calendar users retain their exact hour/day/week/month
+stays positive and at most 366 days. Calendar users support exact hour/day/week/month buckets and explicit whole-range `none`
 semantics. Rolling users, stickiness, retention and lifecycle require day grain.
 
 Use current exact canonical subjects, excluding empty subjects and identify, identify_once,

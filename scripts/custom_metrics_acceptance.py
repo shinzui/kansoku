@@ -134,8 +134,9 @@ def verify_custom_metrics(base, write_key, token, other_token, after_membership=
             profile.update(userId=matrix+str(index), anonymousId=matrix+'cookie'+str(index), sourceService=matrix,
                            schemaVersion=2, properties={'plan':'pro' if index == 0 else ''})
             matrix_rows.append(profile)
-        send(base, write_key, matrix_rows)
-        send(base, write_key, list(reversed(matrix_rows)))
+        for delivery in (matrix_rows, list(reversed(matrix_rows))):
+            for offset in range(0, len(delivery), 3):
+                send(base, write_key, delivery[offset:offset+3])
         def matrix_query(route, **params):
             return api('/metrics/'+route, **period, filter=['source_service:eq:'+matrix, 'entry_page:set' if route == 'acquisition' else 'event_name:eq:page_view'], timeGrain='none', **params)['points']
         eventually(lambda: sum(p['value'] for p in matrix_query('events')) == 30)
@@ -168,6 +169,7 @@ def verify_custom_metrics(base, write_key, token, other_token, after_membership=
         assert excluded == [], excluded
         for dimension in ('channel,country_code', 'route,device_class'):
             points = matrix_query('users', groupBy=dimension)
+            assert len(points) == (1 if dimension == 'channel,country_code' else 2), points
             assert all(p['bucket'] is None and p['value'] == 2 for p in points), points
         api('/metrics/custom', **period, events='page_view', aggregation='count', includeBots='true', timeGrain='none', expected=400)
 

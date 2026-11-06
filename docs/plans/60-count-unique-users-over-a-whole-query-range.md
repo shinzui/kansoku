@@ -33,14 +33,15 @@ The required routes are `/metrics/users` with `window=calendar`, `/metrics/custo
 ## Progress
 
 
-- [ ] Milestone 1: Explicit whole-range users, simple custom metrics and acquisition return correct null-bucket results; saved grain overrides and unsupported combinations are verified.
-- [ ] Milestone 2: Events, page views and sessions support the same option; native and public fixtures prove grouping, filtering, exact identities, replay safety and empty-result semantics.
-- [ ] Milestone 3: Published API and guides explain the supported route matrix; deterministic and owned packaged acceptance pass with existing request behavior preserved.
+- [x] (2026-11-06) Milestone 1: Exact whole-range users, simple custom metrics and acquisition return null-bucket results; saved overrides, omitted/null definitions and unsupported combinations pass deterministic tests and `nix develop -c just custom-metrics-acceptance` (4 native examples, no failures, plus all public assertions).
+- [x] (2026-11-06) Milestone 2: Events, page views and all session measures support none. Owned packaged acceptance passes 592 core examples with no failures or pending cases, the independent thirty-day public identity sets, native replay/bot/trait/limit cases, empty-result checks and shared-store fixture cleanup.
+- [x] (2026-11-06) Milestone 3: Generated OpenAPI, guides, capabilities and ADRs document the route matrix and unchanged defaults. `just check`, `just custom-metrics-acceptance` and `just acceptance` pass; all three telemetry modes and seven required administrative families execute successfully.
 
-Implementation is in progress (2026-11-06). The explicit grain, constant SQL bucket, session calendar, route guards, saved override regressions, thirty-day independent identity sets, native bot/trait/replay/limit coverage, client serialization and documentation are implemented. Focused and packaged acceptance are running; no milestone is accepted until its required gates pass. This plan has no parent MasterPlan or prerequisite implementation in another repository.
+Completed on 2026-11-06. All three milestones are verified. This plan has no parent MasterPlan or prerequisite implementation in another repository.
 
 ## Surprises & Discoveries
 
+The existing acquisition native fixture has one resolved subject active on both selected days. Its daily users sum is 11 (12 including bots), while whole-range exact users are 10 (11 including bots). The first native run correctly exposed the old daily expectation copied into the new grain case; the assertion now distinguishes the ten-subject set from daily sums.
 
 ## Decision Log
 
@@ -54,6 +55,14 @@ On 2026-11-05, preserve existing populations and sparse-result conventions. Entr
 On 2026-11-06, return `Either QueryCompileError Text` from the three exported experiment SQL builders so direct callers can reject explicit none before producing SQL. Runtime experiment guards reject it before acquiring storage. Existing supported formatter tests unwrap successful results; public route and client wire types remain unchanged.
 
 ## Outcomes & Retrospective
+
+Completed on 2026-11-06. Callers can select explicit whole-range aggregation on all six supported routes, override saved simple grains in both directions, and receive exact null-bucket results without combining daily distinct counts, rates or averages. Omitted parameters preserve route defaults. Unsupported modes fail before storage execution. The Haskell client serializes none and the generated schema and all fourteen query enums publish the five exact wire values.
+
+Final verification passed `nix develop -c just check` (475 deterministic core examples, 21 client examples, production probes, all telemetry semantic modes, generated contracts, OpenAPI lint and documentation profiles), `nix develop -c just custom-metrics-acceptance` (4 native filter examples and all public assertions), and `nix develop -c just acceptance` (592 core examples, live client examples, 17 migration cases, recovery/resource/replay/identity checks, Hurl, three telemetry modes and seven required administrative families, with no required skips). The final packaged run also exercised the thirty-day fixture repeatedly under its 4096-byte ingest-body limit; small replay batches preserve that stricter environment. `nix fmt`, strict ADR validation and `git diff --check` pass.
+
+The existing native fixture's returning subject demonstrated the essential distinction: eleven daily user counts represent ten whole-range subjects. Independent expected identity sets and unequal daily session counts catch both distinct-count summation and daily-average mistakes. Durable temporal grouping, observation and zero-fill decisions are recorded in [ADR-20](../adr/0020-custom-metric-definitions-and-bounded-or-filters.md), [ADR-14](../adr/0014-closed-day-exact-activity-and-retained-history-cohorts.md) and [ADR-13](../adr/0013-whole-retained-replay-safe-web-sessions.md). The distillation review found no additional project-level decision requiring a new ADR.
+
+FRIC-3 in `docs/friction-log/` is accepted: preserve historical log prose around entries produced by the current OKF log writer. FRIC-4 in `docs/friction-log/` is resolved: the owned acceptance command helper returns captured stdout so its database ownership check succeeds. No implementation work remains within this plan's scope.
 
 
 ## Context and Orientation

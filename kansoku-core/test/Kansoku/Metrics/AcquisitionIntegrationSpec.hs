@@ -62,8 +62,8 @@ spec = describe "Kansoku.Acquisition native" $ do
       forM_ [Nothing, Just Day, Just NoTimeBucket] $ \grain -> do
         metric pool "page_views" request {Query.timeGrain = grain} `shouldReturn` 10
         metric pool "page_views" request {Query.timeGrain = grain, Query.includeBots = True} `shouldReturn` 12
-        metric pool "active_users" request {Query.timeGrain = grain} `shouldReturn` 11
-        metric pool "active_users" request {Query.timeGrain = grain, Query.includeBots = True} `shouldReturn` 12
+        metric pool "active_users" request {Query.timeGrain = grain} `shouldReturn` (if grain == Just NoTimeBucket then 10 else 11)
+        metric pool "active_users" request {Query.timeGrain = grain, Query.includeBots = True} `shouldReturn` (if grain == Just NoTimeBucket then 11 else 12)
       allSources <- input "source" Filter.FilterIn (Just (Aeson.toJSON (["web", "service"] :: [Text])))
       metric pool "active_users" request {Query.filters = [allSources]} `shouldReturn` 11
 
