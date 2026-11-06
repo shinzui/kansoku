@@ -3,10 +3,11 @@ type: Improvement Request
 title: Declare client error and web vital events
 description: Declare client_error and web_vital event schemas in the registry, and ask the browser SDK to capture them, so a consumer can report JavaScript errors and Core Web Vitals by page next to product analytics.
 generated:
-  by: process:claude-code
-  at: "2026-11-05T21:06:04Z"
+  by: process:codex
+  at: "2026-11-06T03:59:17Z"
 requestId: IR-8
-status: proposed
+status: accepted
+targetPlan: docs/plans/57-declare-client-error-and-web-vital-events.md
 origin: mori://shinzui/kansoku-ui
 dependencies:
   - ref: mori://shinzui/kansoku/okf/improvement-requests/concepts/IR-7
@@ -48,6 +49,9 @@ reviews:
 **Created:** 2026-11-05.
 
 Part of the set filed with IR-4; that request lists the others.
+
+**Implementation plan:** [ExecPlan 57: Declare client error and web vital events](../plans/57-declare-client-error-and-web-vital-events.md).
+The request is accepted for implementation; implementation has not started.
 
 
 ## Why
