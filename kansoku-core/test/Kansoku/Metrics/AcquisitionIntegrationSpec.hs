@@ -15,7 +15,7 @@ import Kansoku.ClickHouseTestSupport
 import Kansoku.Event
 import Kansoku.Ingest.QueuedEvent (QueuedEvent, enrichedQueuedEvent)
 import Kansoku.Ingest.RequestContext (IngestRequestContext (..))
-import Kansoku.Metrics.Api (AcquisitionMeasure (..), MetricResult, TimeGrain (Day))
+import Kansoku.Metrics.Api (AcquisitionMeasure (..), MetricResult, TimeGrain (..))
 import Kansoku.Metrics.Filter qualified as Filter
 import Kansoku.Metrics.Query qualified as Query
 import Kansoku.Metrics.Registry (builtinMetric)
@@ -59,7 +59,7 @@ spec = describe "Kansoku.Acquisition native" $ do
       amount <$> acquisition pool AcquisitionSessions request {Query.includeBots = True} `shouldReturn` 8
       bot <- input "is_bot" Filter.FilterEq (Just (Aeson.Bool True))
       amount <$> acquisition pool AcquisitionSessions request {Query.includeBots = True, Query.filters = [bot]} `shouldReturn` 2
-      forM_ [Nothing, Just Day] $ \grain -> do
+      forM_ [Nothing, Just Day, Just NoTimeBucket] $ \grain -> do
         metric pool "page_views" request {Query.timeGrain = grain} `shouldReturn` 10
         metric pool "page_views" request {Query.timeGrain = grain, Query.includeBots = True} `shouldReturn` 12
         metric pool "active_users" request {Query.timeGrain = grain} `shouldReturn` 11
@@ -69,7 +69,7 @@ spec = describe "Kansoku.Acquisition native" $ do
 
   it "enforces complete-or-error point limits on acquisition itself" $ withClickHouse $ \connection -> do
     let insertSql offset count = "INSERT INTO analytics.events_raw(event_id,event_name,source,source_service,occurred_at,received_at,user_id,account_id,session_id,properties,context) SELECT concat('acq-cap-',toString(number)),'custom','web',concat('svc',toString(number)),toDateTime64('2026-07-01',3,'UTC'),toDateTime64('2026-07-01',3,'UTC'),concat('u',toString(number)),'acquisition-cap','session','{}','{}' FROM numbers(" <> show offset <> "," <> show count <> ")"
-        req = request {Query.accountId = AccountId "acquisition-cap", Query.groupBy = Just ["source_service"]}
+        req = request {Query.accountId = AccountId "acquisition-cap", Query.groupBy = Just ["source_service"], Query.timeGrain = Just NoTimeBucket}
     command connection (fromString (insertSql (0 :: Int) (10000 :: Int)))
     withPool $ \pool -> do
       result <- acquisition pool AcquisitionSessions req

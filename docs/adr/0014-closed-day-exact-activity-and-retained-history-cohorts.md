@@ -5,7 +5,7 @@ description: Use exact canonical activity populations across rolling users, stic
 docId: ADR-14
 status: Accepted
 date: 2026-10-15
-timestamp: 2026-10-15T23:44:28Z
+timestamp: 2026-11-06T05:10:00Z
 generated:
   by: process:codex
   at: 2026-10-15T23:17:08Z
@@ -81,3 +81,7 @@ There is no permanent acquisition-history guarantee. Resource exhaustion asks cl
 work and returns a complete error rather than partial sequences or counts. Native functional, public packaged, pinned consumer and ten-million-event retained-history
 performance acceptance pass. The final MasterPlan gate must repeat the expanded performance
 workload with later identity/trait/funnel changes and joint SDK/browser adoption.
+
+## Whole-range temporal grouping
+
+Calendar users also accept explicit `timeGrain=none`: exact resolved subjects are counted once per group across the whole selected range and returned with bucket null. Closed-day observation, activity selection and bot rules remain unchanged. Rolling users, stickiness, lifecycle and retention reject this explicit grain.

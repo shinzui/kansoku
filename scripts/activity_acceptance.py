@@ -57,6 +57,8 @@ def verify_activity(base, write_key, service_token):
     exact = retention_values(query('retention', days='1,7', mode='on', cohort='window'))
     assert exact == {('2026-07-01', '0'): 3, ('2026-07-01', '1'): 1,
                      ('2026-07-01', '7'): 0, ('2026-07-08', '0'): 1, ('2026-07-08', '1'): 1}, exact
+    whole = query('users', window='calendar', timeGrain='none')
+    assert len(whole) == 1 and whole[0]['bucket'] is None and whole[0]['value'] == 4, whole
     rolling = {point['bucket']: point['value'] for point in query('users', window='rolling7')}
     assert rolling['2026-07-07'] == 3 and rolling['2026-07-09'] == 2, rolling
     sticky = query('stickiness', from_='2026-07-09')

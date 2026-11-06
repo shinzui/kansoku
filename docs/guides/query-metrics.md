@@ -15,6 +15,37 @@ Kansoku exposes account-scoped analytics at `GET /metrics/*`. Every request requ
 token (`ksk_s_…`) in `Authorization: Bearer` or `X-Api-Key`. A write key can ingest but receives
 HTTP 403 on metrics routes.
 
+## Whole-range totals
+
+Use `timeGrain=none` to aggregate the entire half-open UTC range into one `bucket: null`
+point per populated group. Exact distinct users are resolved across the whole range;
+adding daily distinct counts overcounts returning visitors. A person in two groups counts
+once in each, so group totals can overlap.
+
+| Route | Whole-range support |
+| --- | --- |
+| `/metrics/users` | `window=calendar` only; `to` must be a closed UTC day |
+| `/metrics/custom` | count, unique_count, sum and average; ratios require omitted grain |
+| `/metrics/acquisition` | users and sessions; default grouping remains channel |
+| `/metrics/events` | distinct canonical events |
+| `/metrics/page-views` | canonical page views |
+| `/metrics/sessions` | count, bounce_rate and average_duration_seconds |
+
+For example, request `/metrics/users?from=2026-07-01&to=2026-08-01&timeGrain=none`,
+`/metrics/custom?from=2026-07-01&to=2026-08-01&events=page_view&aggregation=unique_count&timeGrain=none`,
+or `/metrics/acquisition?from=2026-07-01&to=2026-08-01&measure=users&timeGrain=none`.
+Omitting grain preserves existing route defaults. An explicit request overrides a saved
+simple definition in either direction: none overrides day and day overrides none. Saved
+JSON `timeGrain: null` (or an absent field) supplies no override; `"none"` is explicit.
+
+Session rates and durations use all selected sessions, rather than averages of daily
+results. Empty ungrouped session queries return one null-bucket zero for every measure;
+empty grouped sessions and other supported routes return no points. Existing filters,
+current traits, cohorts, account isolation and limits apply. Users/page views exclude bot
+rows by default, whereas acquisition/sessions exclude any session containing a bot event;
+custom keeps its existing event population and does not accept includeBots. Entry/exit
+page dimensions remain specific to sessions/acquisition. Other routes reject explicit none.
+
 ## Common query contract
 
 Every implemented metric route requires `from` and `to` dates in `YYYY-MM-DD` format. Ranges are half-open in
@@ -304,7 +335,7 @@ be no later than the current UTC date. A later value returns permanent HTTP 400
 `unclosed_observation_window`. Query through today's date to include yesterday; a partially
 observed day is not a mature zero. The ordinary date, filter, work and point limits still apply.
 
-Users defaults to `window=calendar` and supports normal hour/day/week/month grains. `rolling7`
+Users defaults to `window=calendar` and supports hour/day/week/month and explicit none grains. `rolling7`
 and `rolling30` require day grain (default): day d counts exact distinct subjects active in
 `[d-(N-1) days,d+1 day)`. Only requested output days are returned. Three different users active
 on days 1,3,9 yield rolling7=2 on days 7 and 9. `/metrics/stickiness` emits separate points with

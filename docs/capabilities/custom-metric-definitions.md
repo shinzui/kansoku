@@ -50,3 +50,7 @@ Numeric aggregates require compatible declared properties; event scopes have at 
 
 - [custom_metrics_acceptance.py](../../scripts/custom_metrics_acceptance.py) — Checks aggregation values, immutable replay, OR selection, saved defaults, cohorts/traits, CRUD and pages.
 - [CustomSpec.hs](../../kansoku-core/test/Kansoku/Metrics/CustomSpec.hs) — Checks definition validation, wire shapes and saved/request composition.
+
+## Whole-range queries
+
+Explicit `timeGrain=none` returns one null-bucket point per populated group on calendar users, simple custom metrics, acquisition, events, page views and sessions. Exact distinct identities are counted over the whole range; session rates and averages use selected sessions directly. Omission preserves defaults; saved simple grains can be overridden explicitly. See [query metrics](../guides/query-metrics.md#whole-range-totals) for the route matrix and empty-result semantics.

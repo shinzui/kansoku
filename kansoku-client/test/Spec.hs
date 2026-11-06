@@ -282,7 +282,7 @@ spec = describe "Kansoku.Client" $ do
       base <- parseBaseUrl ("http://127.0.0.1:" <> show port)
       result <-
         runClientM
-          (Metrics.events metricsClient (kansokuMetricsCredential "test-service-token") (read "2026-07-01") (read "2026-07-02") (Just "source,prop:plan") Nothing [input, secondInput])
+          (Metrics.events metricsClient (kansokuMetricsCredential "test-service-token") (read "2026-07-01") (read "2026-07-02") (Just "source,prop:plan") (Just Metrics.NoTimeBucket) [input, secondInput])
           (mkClientEnv manager base)
       case result of
         Right (KansokuOk payload) -> case points payload of
@@ -290,6 +290,7 @@ spec = describe "Kansoku.Client" $ do
           other -> expectationFailure (show other)
         other -> expectationFailure (show other)
       parameters <- readTVarIO captured
+      lookup "timeGrain" parameters `shouldBe` Just (Just "none")
       let encodedFilters = [bytes | ("filter", Just bytes) <- parameters]
       traverse Aeson.eitherDecodeStrict' encodedFilters `shouldBe` Right [input, secondInput]
 

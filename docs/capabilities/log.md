@@ -1,5 +1,9 @@
 # Bundle Update Log
 
+## 2026-11-06
+
+* **Update**: Document explicit whole-range metric capabilities.
+
 ## 2026-10-16
 
 * **Adoption**: Bootstrap OKF 0.2 with the frozen v0.20.0 [capabilities profile](mori://shinzui/okf-profiles/profiles/capabilities).

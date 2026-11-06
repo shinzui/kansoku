@@ -10,6 +10,12 @@ provenance:
     model: "gpt-6-astra"
     harness: "codex-cli"
     at: 2026-11-06T04:03:23Z
+  revisions:
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-11-06T05:04:10Z
+      mode: "implement"
+      note: "Implement explicit whole-range grain and route policy with regression coverage"
 ---
 
 # Count unique users over a whole query range
@@ -31,7 +37,7 @@ The required routes are `/metrics/users` with `window=calendar`, `/metrics/custo
 - [ ] Milestone 2: Events, page views and sessions support the same option; native and public fixtures prove grouping, filtering, exact identities, replay safety and empty-result semantics.
 - [ ] Milestone 3: Published API and guides explain the supported route matrix; deterministic and owned packaged acceptance pass with existing request behavior preserved.
 
-Implementation has not started. This plan has no parent MasterPlan or prerequisite implementation in another repository.
+Implementation is in progress (2026-11-06). The explicit grain, constant SQL bucket, session calendar, route guards, saved override regressions, thirty-day independent identity sets, native bot/trait/replay/limit coverage, client serialization and documentation are implemented. Focused and packaged acceptance are running; no milestone is accepted until its required gates pass. This plan has no parent MasterPlan or prerequisite implementation in another repository.
 
 ## Surprises & Discoveries
 
@@ -44,6 +50,8 @@ On 2026-11-05, choose the public spelling `timeGrain=none`, represented by an ex
 On 2026-11-05, include the additive routes suggested by IR-4 and both acquisition measures. All session measures share selection and calendar generation, so calculate each directly over the selected sessions at the new grain. Limit acceptance of the new value to these six public routes and calendar users; other routes retain their existing supported grains. This makes the public surface deliberate despite the shared `TimeGrain` type.
 
 On 2026-11-05, preserve existing populations and sparse-result conventions. Entry/exit page dimensions remain session/acquisition dimensions. Custom metrics do not gain an `includeBots` parameter; they retain their existing event population, including bot rows unless filtered explicitly. Whole-range mode changes temporal grouping only. This avoids conflating IR-4 with the separate request to expose session attributes on event metrics.
+
+On 2026-11-06, return `Either QueryCompileError Text` from the three exported experiment SQL builders so direct callers can reject explicit none before producing SQL. Runtime experiment guards reject it before acquiring storage. Existing supported formatter tests unwrap successful results; public route and client wire types remain unchanged.
 
 ## Outcomes & Retrospective
 

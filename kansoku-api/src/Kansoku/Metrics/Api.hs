@@ -77,7 +77,7 @@ type OrganizationOptions result =
 
 type OrganizationMetricQuery = MetricParameters (OrganizationOptions MetricResponse)
 
-data TimeGrain = Hour | Day | Week | Month
+data TimeGrain = Hour | Day | Week | Month | NoTimeBucket
   deriving stock (Generic, Eq, Ord, Show)
 
 timeGrainText :: TimeGrain -> Text
@@ -86,6 +86,7 @@ timeGrainText = \case
   Day -> "day"
   Week -> "week"
   Month -> "month"
+  NoTimeBucket -> "none"
 
 parseTimeGrainText :: Text -> Maybe TimeGrain
 parseTimeGrainText = \case
@@ -93,6 +94,7 @@ parseTimeGrainText = \case
   "day" -> Just Day
   "week" -> Just Week
   "month" -> Just Month
+  "none" -> Just NoTimeBucket
   _ -> Nothing
 
 instance ToJSON TimeGrain where
@@ -275,7 +277,7 @@ instance ToHttpApiData ExperimentMeasure where
   toUrlPiece ExperimentDiagnostics = "diagnostics"
 
 type MetricParameters result =
-  Description "Every metric requires a positive half-open from/to range of at most 366 days and returns at most 10000 complete points. groupBy accepts one or two distinct dimensions: event_name, source, source_service, host, route, enrichment/acquisition fields prop:<declared scalar property>, current user:<governed trait>, organization, or org:<governed organization trait> on event sources. Repeated filter parameters are AND-combined JSON terms, JSON {or:[term,...]} groups, or shorthand dimension:op:value terms separated by | for OR (literal | requires JSON; omit value for set/unset): at most 8 groups of at most 8 terms, 100 in values, 1024 UTF-8 bytes per string and 16384 decoded bytes combined. Missing/null values are unset; comparisons including neq do not match unset values. Group keys keep full dimension names and null differs from an empty string. Unsupported parameters are errors. See the documented route matrix."
+  Description "Explicit timeGrain=none returns one null bucket per populated group on calendar users, simple custom metrics, acquisition, events, page views and sessions. Other routes reject none. Omission preserves defaults. Every metric requires a positive half-open from/to range of at most 366 days and returns at most 10000 complete points. groupBy accepts one or two distinct dimensions: event_name, source, source_service, host, route, enrichment/acquisition fields prop:<declared scalar property>, current user:<governed trait>, organization, or org:<governed organization trait> on event sources. Repeated filter parameters are AND-combined JSON terms, JSON {or:[term,...]} groups, or shorthand dimension:op:value terms separated by | for OR (literal | requires JSON; omit value for set/unset): at most 8 groups of at most 8 terms, 100 in values, 1024 UTF-8 bytes per string and 16384 decoded bytes combined. Missing/null values are unset; comparisons including neq do not match unset values. Group keys keep full dimension names and null differs from an empty string. Unsupported parameters are errors. See the documented route matrix."
     :> MetricArguments result
 
 type MetricArguments result =
@@ -293,11 +295,11 @@ type MetricQuery = MetricParameters MetricResponse
 type WebMetricQuery = MetricParameters (QueryParam "includeBots" Bool :> MetricResponse)
 
 type SessionQuery =
-  Description "Whole retained web sessions keyed by account/source_service/nonempty session_id; assemble before selecting the start date or UTC bucket. Defaults: measure=count, day grain, no grouping, includeBots=false. bounce_rate is exactly one page_view and no engagement divided by all selected sessions; lifecycle/identity/exposure events are not engagement. average_duration_seconds includes every selected session, including zero-duration visits, and measures last minus first observed event including page_leave. Attribute grouping/filters select first page_view, else earliest event; entry_page/exit_page come from page views. Arbitrary prop: filters/grouping are rejected. Any bot event excludes the whole session unless includeBots=true. Empty ungrouped buckets return zero; nonexistent groups are omitted. One/two dimensions, at most 8 AND filter groups with up to 8 OR terms each (100 in values, 1024 UTF-8 bytes per string, 16384 decoded bytes), positive half-open range at most 366 days, at most 10000 complete points. Late arrivals and retained-history changes can change start/attribution/duration."
+  Description "Whole retained web sessions keyed by account/source_service/nonempty session_id; assemble before selecting the start date or UTC bucket. timeGrain=none aggregates selected sessions directly, including rates and averages; ungrouped empty whole ranges return one zero point. Defaults: measure=count, day grain, no grouping, includeBots=false. bounce_rate is exactly one page_view and no engagement divided by all selected sessions; lifecycle/identity/exposure events are not engagement. average_duration_seconds includes every selected session, including zero-duration visits, and measures last minus first observed event including page_leave. Attribute grouping/filters select first page_view, else earliest event; entry_page/exit_page come from page views. Arbitrary prop: filters/grouping are rejected. Any bot event excludes the whole session unless includeBots=true. Empty ungrouped buckets return zero; nonexistent groups are omitted. One/two dimensions, at most 8 AND filter groups with up to 8 OR terms each (100 in values, 1024 UTF-8 bytes per string, 16384 decoded bytes), positive half-open range at most 366 days, at most 10000 complete points. Late arrivals and retained-history changes can change start/attribution/duration."
     :> MetricArguments (QueryParam "measure" SessionMeasure :> QueryParam "includeBots" Bool :> MetricResponse)
 
 type UserQuery =
-  Description "Exact canonical active subjects; identity/profile-only events are excluded. window=calendar (default), rolling7 or rolling30. Rolling windows require day grain and count [d-(N-1),d+1) UTC for each returned day d. Filters/grouping apply to the same activity population; up to two dimensions and eight bounded repeated JSON filters. Bot rows are excluded unless includeBots=true. Positive half-open range at most 366 days, to no later than the current UTC day (only closed days), at most 10000 complete points."
+  Description "Exact canonical active subjects; identity/profile-only events are excluded. window=calendar (default), rolling7 or rolling30. Calendar supports timeGrain=none for exact distinct subjects across the whole range. Rolling windows require day grain and count [d-(N-1),d+1) UTC for each returned day d. Filters/grouping apply to the same activity population; up to two dimensions and eight bounded repeated JSON filters. Bot rows are excluded unless includeBots=true. Positive half-open range at most 366 days, to no later than the current UTC day (only closed days), at most 10000 complete points."
     :> MetricArguments (QueryParam "window" UserWindow :> QueryParam "includeBots" Bool :> OrganizationOptions MetricResponse)
 
 type DailyActivityQuery =
@@ -371,7 +373,7 @@ data MetricsRoutes mode = MetricsRoutes
         :- MetricsAuth
           :> "metrics"
           :> "experiments"
-          :> Description "Current user: filters/grouping select exact canonical populations; segmented exposures bypass the raw sketch. measure=exposures (default without segmentation) returns daily-rollup uniqCombined raw-identity exposure counts (~0.8% sketch error at scale); it differs from exact stitched users. measure=diagnostics uses exact canonical subjects and valid experiment/variant exposures, assigning each user once per experiment/requested bucket to earliest occurred_at,event_id. group.measure emits exposed_users, multiple_exposure (>1 observed variant), assigned_users and variant_share; per-variant shares sum to one when nonempty. Repeated exposures do not increase assignment. Zero users emit zero totals and no variant rows; missing/invalid names are excluded. All observed variants remain visible, including zero assignments. Day/week/month or whole range; hour rejected. First observed exposure is not an authoritative randomization log; contamination invalidates naive sample-ratio interpretation. Positive half-open range at most 366 days; at most 10000 complete points and bounded native work."
+          :> Description "Current user: filters/grouping select exact canonical populations; segmented exposures bypass the raw sketch. measure=exposures (default without segmentation) returns daily-rollup uniqCombined raw-identity exposure counts (~0.8% sketch error at scale); it differs from exact stitched users. measure=diagnostics uses exact canonical subjects and valid experiment/variant exposures, assigning each user once per experiment/requested bucket to earliest occurred_at,event_id. group.measure emits exposed_users, multiple_exposure (>1 observed variant), assigned_users and variant_share; per-variant shares sum to one when nonempty. Repeated exposures do not increase assignment. Zero users emit zero totals and no variant rows; missing/invalid names are excluded. All observed variants remain visible, including zero assignments. Day/week/month or whole range by omission; explicit hour and none rejected. First observed exposure is not an authoritative randomization log; contamination invalidates naive sample-ratio interpretation. Positive half-open range at most 366 days; at most 10000 complete points and bounded native work."
           :> QueryParam' '[Required] "from" Day
           :> QueryParam' '[Required] "to" Day
           :> QueryParam "experiment" Text

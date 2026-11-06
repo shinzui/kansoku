@@ -5,7 +5,7 @@ description: Compile account-scoped saved and ad-hoc metric definitions through 
 docId: ADR-20
 status: Accepted
 date: 2026-10-16
-timestamp: 2026-10-16T12:30:07Z
+timestamp: 2026-11-06T05:10:00Z
 generated:
   by: process:codex
   at: 2026-10-16T12:30:07Z
@@ -78,3 +78,7 @@ identity, trait, cohort or definition updates. Builtin filters use the same stri
 shape. Public native roundtrips exercise all aggregations, replay, saved overrides, both
 cursor directions, cohorts/traits and account isolation; deterministic compiler checks
 cover OR scope safety, invalid definitions and native parameterization.
+
+## Whole-range temporal grouping
+
+Explicit `timeGrain=none` is distinct from omission/null and is persisted as the string none. Request grain overrides saved grain in either direction. Simple custom aggregates, calendar users, acquisition, events, page views and sessions support a constant null bucket per populated group. Exact identities are aggregated over the whole selected population; per-group counts can overlap. Custom ratios still reject explicit grain. Existing sparse results, population rules and complete-result bounds apply; sessions alone retain ungrouped zero-fill.

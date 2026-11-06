@@ -1,5 +1,6 @@
 module Kansoku.QuerySpec (spec) where
 
+import Control.Monad (forM_)
 import Data.Either (isRight)
 import Data.Foldable (traverse_)
 import Data.Map.Strict qualified as Map
@@ -14,9 +15,9 @@ import Kansoku.Event
     defaultRegistry,
     latestSchema,
   )
-import Kansoku.Metrics.Api (MetricPoint (..), TimeGrain (..))
+import Kansoku.Metrics.Api (MetricPoint (..), SessionMeasure (..), TimeGrain (..))
 import Kansoku.Metrics.Definition (Aggregation (Average, Sum), MetricDefinition)
-import Kansoku.Metrics.Query hiding (buildSQL)
+import Kansoku.Metrics.Query hiding (buildExperimentConversionSQL, buildExperimentExposuresSQL, buildExperimentFunnelSQL, buildSQL)
 import Kansoku.Metrics.Query qualified as Query
 import Kansoku.Metrics.Query.Property (PropertyError (..))
 import Kansoku.Metrics.Query.Validate (SqlName, mkSqlName)
@@ -26,6 +27,23 @@ import Test.Hspec
 
 spec :: Spec
 spec = describe "Kansoku.Query.buildSQL" $ do
+  it "rejects explicit none at internal experiment SQL boundaries" $ do
+    let req = dayRequest {timeGrain = Just NoTimeBucket}
+        experiment = sqlName "test"
+    Query.buildExperimentExposuresSQL req Nothing `shouldBe` Left QueryCompileInvalidTimeGrain
+    Query.buildExperimentConversionSQL req experiment (sqlName "purchase") `shouldBe` Left QueryCompileInvalidTimeGrain
+    Query.buildExperimentFunnelSQL req experiment 60 [sqlName "start"] `shouldBe` Left QueryCompileInvalidTimeGrain
+  it "groups supported whole-range metrics on a constant with complete result bounds" $ do
+    let request = dayRequest {timeGrain = Just NoTimeBucket}
+    forM_ [events, pageViews, activeUsers] $ \metric -> do
+      let sql = buildSQL (Simple metric) request
+      sql `shouldContainText` "'' AS bucket"
+      sql `shouldContainText` "LIMIT 10001"
+    forM_ [SessionCount, SessionBounceRate, SessionAverageDuration] $ \measure -> do
+      sql <- either (fail . show) pure (Query.buildSessionMetricSQL measure request)
+      sql `shouldContainText` "arrayJoin([''])"
+    forM_ ["new_users", "returning_users", "feature_adoption", "revenue"] $ \name ->
+      traverse (\metric -> Query.buildSQL defaultRegistry metric request) (builtinMetric name) `shouldBe` Left QueryCompileInvalidTimeGrain
   it "keeps day/week users exact, resolved and restricted to activity" $
     traverse_
       ( \request -> do
@@ -339,3 +357,12 @@ sessionSQL = either (error . show) id . buildSessionsSQL
 
 retentionSQL :: QueryRequest -> [Int] -> Text
 retentionSQL req = either (error . show) id . buildRetentionSQL req
+
+buildExperimentExposuresSQL :: QueryRequest -> Maybe SqlName -> Text
+buildExperimentExposuresSQL req experiment = either (error . show) id (Query.buildExperimentExposuresSQL req experiment)
+
+buildExperimentConversionSQL :: QueryRequest -> SqlName -> SqlName -> Text
+buildExperimentConversionSQL req experiment event = either (error . show) id (Query.buildExperimentConversionSQL req experiment event)
+
+buildExperimentFunnelSQL :: QueryRequest -> SqlName -> Int -> [SqlName] -> Text
+buildExperimentFunnelSQL req experiment window steps = either (error . show) id (Query.buildExperimentFunnelSQL req experiment window steps)

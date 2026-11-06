@@ -362,6 +362,7 @@ def main(verify=verify_cohorts, *, pass_environment=False):
         result=subprocess.run(command,env=env,capture_output=True,text=True,timeout=60)
         (ROOT/(name+'.log')).write_text(result.stdout+result.stderr)
         result.check_returncode()
+        return result.stdout
     def wait_for(process,check,label):
         for _ in range(300):
             assert process.poll() is None,(label,'exited')

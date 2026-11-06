@@ -50,6 +50,10 @@ spec = describe "Kansoku.Sessions native" $ do
     withPool $ \pool -> do
       bounce <- sessions pool SessionBounceRate request
       buckets bounce `shouldBe` [(Just "2026-07-01", 3 / 7), (Just "2026-07-02", 1)]
+      let whole = request {Query.timeGrain = Just NoTimeBucket}
+      buckets <$> sessions pool SessionCount whole `shouldReturn` [(Nothing, 8)]
+      buckets <$> sessions pool SessionBounceRate whole `shouldReturn` [(Nothing, 0.5)]
+      buckets <$> sessions pool SessionAverageDuration whole `shouldReturn` [(Nothing, 30)]
       duration <- sessions pool SessionAverageDuration request
       buckets duration `shouldBe` [(Just "2026-07-01", 240 / 7), (Just "2026-07-02", 0)]
       entry <- input "entry_page" Filter.FilterEq (Just (Aeson.String "/bounce"))
@@ -85,7 +89,7 @@ spec = describe "Kansoku.Sessions native" $ do
         buckets empty `shouldBe` [(Just (Text.pack (show year) <> "-01-01"), 0)]
       hourly <- sessions pool SessionCount request {Query.accountId = AccountId "sessions-empty", Query.timeGrain = Just Hour}
       length (hourly ^. #points) `shouldBe` 48
-      forM_ [Week, Month] $ \grain -> do
+      forM_ [Week, Month, NoTimeBucket] $ \grain -> do
         empty <- sessions pool SessionAverageDuration request {Query.accountId = AccountId "sessions-empty", Query.timeGrain = Just grain}
         length (empty ^. #points) `shouldBe` 1
         amount empty `shouldBe` 0

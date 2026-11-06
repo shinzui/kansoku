@@ -17,7 +17,7 @@ import Effectful (runEff)
 import Kansoku.ClickHouse
 import Kansoku.ClickHouseTestSupport
 import Kansoku.Event
-import Kansoku.Metrics.Api (TimeGrain (Day))
+import Kansoku.Metrics.Api (TimeGrain (..))
 import Kansoku.Metrics.Definition (Aggregation (Average))
 import Kansoku.Metrics.Query qualified as Query
 import Kansoku.Metrics.Query.Validate (SqlName, mkSqlName)
@@ -50,6 +50,11 @@ spec = describe "Kansoku.Query integration" $ do
           insertEvents conn rows
           initial <- snapshot pool
           initial `shouldBe` [7, 10, 2, 1, 1, 1, 5]
+          forM_ [("events", 7), ("page_views", 2), ("active_users", 1)] $ \(name, expected) -> do
+            metric <- requireBuiltinMetric name
+            whole <- runEff (Query.run defaultRegistry pool metric req {Query.timeGrain = Just NoTimeBucket}) >>= expectCompiled
+            map (view #bucket) (whole ^. #points) `shouldBe` [Nothing]
+            sum (map (view #value) (whole ^. #points)) `shouldBe` expected
           -- Simulate restart/rebatching and old archive replays: every copy is
           -- byte-identical to its first queued payload, in different blocks.
           insertEvents conn (reverse rows)

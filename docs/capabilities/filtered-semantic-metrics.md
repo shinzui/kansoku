@@ -56,3 +56,7 @@ Ranges are positive, half-open UTC intervals of at most 366 days; answers contai
 - [FilterIntegrationSpec.hs](../../kansoku-core/test/Kansoku/Metrics/FilterIntegrationSpec.hs) — Exercises native typed filters and grouping.
 - [LimitsSpec.hs](../../kansoku-core/test/Kansoku/Metrics/LimitsSpec.hs) — Checks public input and complete-answer limits.
 - [query-metrics.md](../../docs/guides/query-metrics.md) — Defines scalar declarations, AND/OR selection and analytical units.
+
+## Whole-range queries
+
+Explicit `timeGrain=none` returns one null-bucket point per populated group on calendar users, simple custom metrics, acquisition, events, page views and sessions. Exact distinct identities are counted over the whole range; session rates and averages use selected sessions directly. Omission preserves defaults; saved simple grains can be overridden explicitly. See [query metrics](../guides/query-metrics.md#whole-range-totals) for the route matrix and empty-result semantics.

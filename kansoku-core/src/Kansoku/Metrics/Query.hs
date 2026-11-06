@@ -133,6 +133,7 @@ data QueryCompileError
   | QueryCompileMultipleGroupBy ![Text]
   | QueryCompileMissingAggregationProperty !Text
   | QueryCompileUnsupportedPropertyGrouping !Text
+  | QueryCompileInvalidTimeGrain
   | QueryCompileFilterError !Text
   deriving stock (Generic, Eq, Show)
 
@@ -445,6 +446,7 @@ attributionLimits _ _ = Right ()
 -- filtering would change exposure/assignment denominators and is not implied.
 experimentSelection :: QueryRequest -> Either QueryCompileError ([GroupDimension], Filters.CompiledFilters)
 experimentSelection req = do
+  when (req ^. #timeGrain == Just NoTimeBucket) (Left QueryCompileInvalidTimeGrain)
   unless
     (all (\d -> Text.isPrefixOf "user:" d || d == "cohort" || Text.isPrefixOf "cohort:" d) (fromMaybe [] (req ^. #groupBy) <> map WireFilter.dimension (concatMap WireFilter.filterTerms (req ^. #filters))))
     (Left (QueryCompileFilterError "experiment selection supports only governed user: dimensions"))
@@ -457,7 +459,7 @@ hasExperimentSelection req = isJust (req ^. #groupBy) || not (null (req ^. #filt
 
 runSelectedExperiment :: (IOE :> es) => QueryPool -> Text -> QueryRequest -> [QueryParameter] -> Either QueryCompileError CompiledMetric -> Eff es (Either QueryExecutionError MetricResult)
 runSelectedExperiment pool name req parameters compiled =
-  case first QueryLimitFailure (validateDateRange (req ^. #from) (req ^. #to) >> unless (req ^. #timeGrain /= Just Hour) (Left (QueryLimitError "invalid_experiment_time_grain" "hour is unsupported for experiments")))
+  case first QueryLimitFailure (validateDateRange (req ^. #from) (req ^. #to) >> unless (req ^. #timeGrain `notElem` [Just Hour, Just NoTimeBucket]) (Left (QueryLimitError "invalid_experiment_time_grain" "hour is unsupported for experiments")))
     >> first QueryCompileFailure compiled of
     Left failure -> pure (Left failure)
     Right result ->
@@ -534,25 +536,25 @@ runExperimentExposures :: (IOE :> es) => QueryPool -> QueryRequest -> Maybe SqlN
 runExperimentExposures pool req experiment
   | hasExperimentSelection req = runSelectedExperiment pool "experiment_exposures" req (maybe [] (pure . experimentParameter) experiment) (compileTraitExposures req experiment)
   | otherwise =
-      checked req (Right ()) $
+      checked req (unless (req ^. #timeGrain `notElem` [Just Hour, Just NoTimeBucket]) (Left (QueryLimitError "invalid_experiment_time_grain" "unsupported experiment grain"))) $
         runSQLWith
           pool
           "experiment_exposures"
           experimentExposuresAggPoint
           (accountParameter req <> maybe [] (pure . experimentParameter) experiment)
-          (buildExperimentExposuresSQL req experiment)
+          (boundedSQL ExperimentExposureOrder (buildExperimentExposuresSQLAggregate req experiment))
 
 runExperimentConversion :: (IOE :> es) => QueryPool -> QueryRequest -> SqlName -> SqlName -> Eff es (Either QueryExecutionError MetricResult)
 runExperimentConversion pool req experiment conversionEvent
   | hasExperimentSelection req = runSelectedExperiment pool "experiment_conversion" req [experimentParameter experiment, conversionEventParameter conversionEvent] (compileTraitExperimentConversion req)
   | otherwise =
-      checked req (Right ()) $
+      checked req (unless (req ^. #timeGrain `notElem` [Just Hour, Just NoTimeBucket]) (Left (QueryLimitError "invalid_experiment_time_grain" "unsupported experiment grain"))) $
         runSQLWith
           pool
           "experiment_conversion"
           (experimentConversionAggPoint experiment)
           (accountParameter req <> [experimentParameter experiment, conversionEventParameter conversionEvent])
-          (buildExperimentConversionSQL req experiment conversionEvent)
+          (boundedSQL ExperimentConversionOrder (buildExperimentConversionSQLAggregate req experiment conversionEvent))
 
 runExperimentFunnel :: (IOE :> es) => QueryPool -> QueryRequest -> SqlName -> Int -> [SqlName] -> Eff es (Either QueryExecutionError MetricResult)
 runExperimentFunnel pool req experiment = runFunnelMetric defaultRegistry pool req (Just experiment) defaultFunnelOptions
@@ -699,6 +701,7 @@ compileMetric registry metric req = case metric of
   Simple def -> compileSimpleMetric registry def req
   Ratioed ratio | ratio ^. #name == "conversion_rate" -> compileOrderedConversion registry req
   Ratioed ratio -> do
+    when (req ^. #timeGrain == Just NoTimeBucket) (Left QueryCompileInvalidTimeGrain)
     let scope = Filters.filteredEventScope (definitionEvents (ratio ^. #numerator) <> definitionEvents (ratio ^. #denominator)) (req ^. #filters)
     when (any (Text.isPrefixOf "prop:") (fromMaybe [] (req ^. #groupBy))) (Left (QueryCompileUnsupportedPropertyGrouping (ratio ^. #name)))
     grouping <- requestGrouping req registry scope (req ^. #groupBy) []
@@ -725,6 +728,7 @@ compileOrderedConversion registry req = do
 
 compileSimpleMetric :: EventRegistry -> MetricDefinition -> QueryRequest -> Either QueryCompileError CompiledMetric
 compileSimpleMetric registry def req = do
+  when (effectiveGrain def req == Just NoTimeBucket && def ^. #name `notElem` ["active_users", "custom", "events", "page_views"]) (Left QueryCompileInvalidTimeGrain)
   defaults <- definitionFilters def
   let inputs = defaults <> req ^. #filters
       scope = Filters.filteredEventScope (definitionEvents def) (req ^. #filters)
@@ -901,6 +905,7 @@ sessionCalendar req = "SELECT arrayJoin([" <> Text.intercalate "," (map (\label 
   where
     days = [addDays offset (req ^. #from) | offset <- [0 .. diffDays (req ^. #to) (req ^. #from) - 1]]
     labels = case req ^. #timeGrain of
+      Just NoTimeBucket -> [""]
       Just Hour -> [date day <> " " <> (if hour < 10 then "0" else "") <> Text.pack (show hour) <> ":00:00" | day <- days, hour <- [0 .. 23 :: Int]]
       Just Week -> map date (List.nub [addDays (1 - fromIntegral (fromEnum (dayOfWeek day))) day | day <- days])
       Just Month -> map date (List.nub [fromGregorian year month 1 | day <- days, let (year, month, _) = toGregorian day])
@@ -928,6 +933,7 @@ compileUsers registry window req = compileRolling registry (windowDays window) F
 
 activityPopulation :: EventRegistry -> QueryRequest -> QueryRequest -> Either QueryCompileError ([GroupDimension], Filters.CompiledFilters, Text)
 activityPopulation registry req scope = do
+  when (req ^. #timeGrain == Just NoTimeBucket) (Left QueryCompileInvalidTimeGrain)
   let events = Filters.filteredEventScope [] (req ^. #filters)
   grouping <- requestGrouping req registry events (req ^. #groupBy) []
   filters <- first QueryCompileFilterError (requestFilters req "metric_filter" registry events (req ^. #filters))
@@ -1136,8 +1142,10 @@ validExposurePredicate = "event_name='experiment_viewed' AND match(CAST(toString
 -- | Exposure sketches are daily, but merging them across days computes a set
 -- union. With no grain, a user exposed on several days therefore still counts
 -- once for the whole requested range.
-buildExperimentExposuresSQL :: QueryRequest -> Maybe SqlName -> Text
-buildExperimentExposuresSQL req experiment = boundedSQL ExperimentExposureOrder (buildExperimentExposuresSQLAggregate req experiment)
+buildExperimentExposuresSQL :: QueryRequest -> Maybe SqlName -> Either QueryCompileError Text
+buildExperimentExposuresSQL req experiment = do
+  when (req ^. #timeGrain == Just NoTimeBucket) (Left QueryCompileInvalidTimeGrain)
+  pure (boundedSQL ExperimentExposureOrder (buildExperimentExposuresSQLAggregate req experiment))
 
 buildExperimentExposuresSQLAggregate :: QueryRequest -> Maybe SqlName -> Text
 buildExperimentExposuresSQLAggregate req experiment =
@@ -1160,8 +1168,10 @@ buildExperimentExposuresSQLAggregate req experiment =
 -- when the user's latest conversion is at or after their first exposure for
 -- that variant. With ClickHouse's default join_use_nulls = 0, a LEFT JOIN miss
 -- supplies the zero DateTime64, which correctly fails that comparison.
-buildExperimentConversionSQL :: QueryRequest -> SqlName -> SqlName -> Text
-buildExperimentConversionSQL req experiment conversionEvent = boundedSQL ExperimentConversionOrder (buildExperimentConversionSQLAggregate req experiment conversionEvent)
+buildExperimentConversionSQL :: QueryRequest -> SqlName -> SqlName -> Either QueryCompileError Text
+buildExperimentConversionSQL req experiment conversionEvent = do
+  when (req ^. #timeGrain == Just NoTimeBucket) (Left QueryCompileInvalidTimeGrain)
+  pure (boundedSQL ExperimentConversionOrder (buildExperimentConversionSQLAggregate req experiment conversionEvent))
 
 buildExperimentConversionSQLAggregate :: QueryRequest -> SqlName -> SqlName -> Text
 buildExperimentConversionSQLAggregate req _experiment _conversionEvent =
@@ -1218,6 +1228,7 @@ buildExperimentConversionSQLAggregate req _experiment _conversionEvent =
 
 experimentBucketExpr :: Maybe TimeGrain -> Text
 experimentBucketExpr = \case
+  Just NoTimeBucket -> "''"
   Nothing -> "''"
   Just Day -> "toString(day)"
   Just Week -> "toString(toMonday(day))"
@@ -1227,6 +1238,7 @@ experimentBucketExpr = \case
 
 experimentGroupBy :: Maybe TimeGrain -> Text
 experimentGroupBy = \case
+  Just NoTimeBucket -> "GROUP BY experiment, variant"
   Nothing -> "GROUP BY experiment, variant"
   Just Day -> "GROUP BY day, experiment, variant"
   Just Week -> "GROUP BY toMonday(day), experiment, variant"
@@ -1239,8 +1251,10 @@ experimentFilterClause = \case
   Just _ -> "\n  AND experiment = {experiment:String}"
 
 -- | Exposure gating precedes the shared chain evaluation.
-buildExperimentFunnelSQL :: QueryRequest -> SqlName -> Int -> [SqlName] -> Text
-buildExperimentFunnelSQL req experiment window steps = boundedSQL FunnelDimensionsOrder (funnelAggregate req (Just experiment) defaultFunnelOptions window steps [] [])
+buildExperimentFunnelSQL :: QueryRequest -> SqlName -> Int -> [SqlName] -> Either QueryCompileError Text
+buildExperimentFunnelSQL req experiment window steps = do
+  when (req ^. #timeGrain == Just NoTimeBucket) (Left QueryCompileInvalidTimeGrain)
+  pure (boundedSQL FunnelDimensionsOrder (funnelAggregate req (Just experiment) defaultFunnelOptions window steps [] []))
 
 effectiveGrain :: MetricDefinition -> QueryRequest -> Maybe TimeGrain
 effectiveGrain MetricDefinition {timeGrain = defaultGrain} QueryRequest {timeGrain = requestedGrain} =
@@ -1248,6 +1262,7 @@ effectiveGrain MetricDefinition {timeGrain = defaultGrain} QueryRequest {timeGra
 
 bucketExpr :: Maybe TimeGrain -> Text
 bucketExpr = \case
+  Just NoTimeBucket -> "''"
   Just Hour -> "toString(toStartOfHour(occurred_at))"
   Just Week -> "toString(toMonday(occurred_at))"
   Just Month -> "toString(toStartOfMonth(occurred_at))"
@@ -1274,6 +1289,7 @@ propertyFilterClause = foldMap ("\n  AND " <>)
 
 queryCompileErrorCode :: QueryCompileError -> Text
 queryCompileErrorCode = \case
+  QueryCompileInvalidTimeGrain -> "invalid_time_grain"
   QueryCompilePropertyError PropertyErrorUndeclared {} -> "unknown_property"
   QueryCompilePropertyError {} -> "invalid_property"
   QueryCompileInvalidGroupBy {} -> "invalid_group_by"
@@ -1284,6 +1300,7 @@ queryCompileErrorCode = \case
 
 queryCompileErrorMessage :: QueryCompileError -> Text
 queryCompileErrorMessage = \case
+  QueryCompileInvalidTimeGrain -> "timeGrain none is unsupported for this metric"
   QueryCompilePropertyError (PropertyErrorBadName property) ->
     "invalid property name: " <> property
   QueryCompilePropertyError (PropertyErrorUnscopedMetric property) ->

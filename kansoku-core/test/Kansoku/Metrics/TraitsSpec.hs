@@ -17,7 +17,7 @@ import Kansoku.ClickHouseTestSupport
 import Kansoku.Event
 import Kansoku.Ingest.QueuedEvent (QueuedEvent (..), enrichedQueuedEvent, legacyQueuedEvent)
 import Kansoku.Ingest.RequestContext (emptyRequestContext)
-import Kansoku.Metrics.Api (AcquisitionMeasure (..), CohortMode (..), FunnelAttribution (..), FunnelCounting (..), FunnelMeasure (..), FunnelMode (..), MetricPoint, MetricResult, RetentionMode (..), SessionMeasure (..), UserWindow (..))
+import Kansoku.Metrics.Api (AcquisitionMeasure (..), CohortMode (..), FunnelAttribution (..), FunnelCounting (..), FunnelMeasure (..), FunnelMode (..), MetricPoint, MetricResult, RetentionMode (..), SessionMeasure (..), TimeGrain (..), UserWindow (..))
 import Kansoku.Metrics.Filter qualified as Filter
 import Kansoku.Metrics.Query qualified as Query
 import Kansoku.Metrics.Query.Validate (mkSqlName)
@@ -143,6 +143,9 @@ spec = do
       steps <- either (fail . Text.unpack) pure (traverse mkSqlName ["signup_started", "signup_completed"])
       withPool $ \pool -> do
         let req = (request account) {Query.filters = [pro, large]}
+        let whole = req {Query.timeGrain = Just NoTimeBucket}
+        pointValues <$> builtin pool "page_views" whole `shouldReturn` [1]
+        sum . pointValues <$> metric (Query.runUsers defaultRegistry pool CalendarWindow whole) `shouldReturn` 1
         pointValues <$> builtin pool "page_views" req `shouldReturn` [1]
         sum . pointValues <$> metric (Query.runUsers defaultRegistry pool CalendarWindow req) `shouldReturn` 1
         pointValues <$> builtin pool "conversion_rate" req `shouldReturn` [1]

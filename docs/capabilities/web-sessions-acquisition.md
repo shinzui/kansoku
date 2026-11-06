@@ -52,3 +52,7 @@ The producer supplies session IDs; the server does not create sessions or add an
 - [enrichment_acceptance.py](../../scripts/enrichment_acceptance.py) — Exercises request enrichment and acquisition against owned stores.
 - [AcquisitionIntegrationSpec.hs](../../kansoku-core/test/Kansoku/Metrics/AcquisitionIntegrationSpec.hs) — Checks native whole-session acquisition semantics.
 - [web-enrichment.md](../../docs/guides/web-enrichment.md) — Defines device, bot, channel and optional country rules.
+
+## Whole-range queries
+
+Explicit `timeGrain=none` returns one null-bucket point per populated group on calendar users, simple custom metrics, acquisition, events, page views and sessions. Exact distinct identities are counted over the whole range; session rates and averages use selected sessions directly. Omission preserves defaults; saved simple grains can be overridden explicitly. See [query metrics](../guides/query-metrics.md#whole-range-totals) for the route matrix and empty-result semantics.

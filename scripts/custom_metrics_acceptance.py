@@ -53,6 +53,8 @@ def verify_custom_metrics(base, write_key, token, other_token, after_membership=
         assert total(events='payment_completed,feature_used', aggregation='count') == 5
         assert total(events='payment_completed', aggregation='sum', property='amount') == 12
         assert total(events='payment_completed', aggregation='average', property='amount') == 4
+        assert total(events='payment_completed', aggregation='sum', property='amount', timeGrain='none') == 12
+        assert total(events='payment_completed', aggregation='average', property='amount', timeGrain='none') == 4
         ratio = metric(events='payment_completed', aggregation='ratio', denominatorEvents='feature_used')
         assert len(ratio['points']) == 1 and ratio['points'][0]['bucket'] is None and ratio['points'][0]['value'] == 1
         assert total(events='payment_completed', aggregation='count', denominatorEvents='feature_used', denominatorAggregation='count') == 1.5
@@ -81,6 +83,127 @@ def verify_custom_metrics(base, write_key, token, other_token, after_membership=
         api('/metric-definitions/'+ident, updated, 'PUT')
         assert sum(p['value'] for p in metric(metric=prefix, groupBy='source')['points']) == 4
 
+        # Whole-range mode counts returning subjects once across a month boundary.
+        whole_prefix = prefix + '_range'
+        period = {'from': '2026-06-30', 'to': '2026-07-30'}
+        range_rows = []
+        for day, count in [('2026-06-30', 1), ('2026-07-01', 3)]:
+            for i in range(count):
+                row = event(whole_prefix+day+str(i), whole_prefix+day+str(i),
+                            timestamp=day+'T00:00:00Z')
+                row.update(userId=whole_prefix, sourceService=whole_prefix)
+                range_rows.append(row)
+        send(base, write_key, range_rows)
+        send(base, write_key, list(reversed(range_rows)))
+        send(base, other_token, [dict(range_rows[0], eventId=whole_prefix+'foreign')])
+        def ranged(route, **params):
+            return api('/metrics/'+route, **period, filter='source_service:eq:'+whole_prefix, **params)['points']
+        eventually(lambda: sum(p['value'] for p in ranged('events')) == 4)
+        for route, params, expected in [
+                ('users', {'window':'calendar'}, 1),
+                ('custom', {'events':'page_view','aggregation':'unique_count'}, 1),
+                ('acquisition', {'measure':'users'}, 1),
+                ('events', {}, 4), ('page-views', {}, 4),
+                ('sessions', {'measure':'count'}, 4),
+                ('sessions', {'measure':'bounce_rate'}, 1),
+                ('sessions', {'measure':'average_duration_seconds'}, 0),
+                ('acquisition', {'measure':'sessions'}, 4)]:
+            points = ranged(route, timeGrain='none', **params)
+            assert len(points) == 1 and points[0]['bucket'] is None and points[0]['value'] == expected, (route, points)
+            legacy = ranged(route, **params)
+            assert all(p['bucket'] is not None for p in legacy), (route, legacy)
+            if route in ('users', 'custom', 'acquisition'):
+                assert len(legacy) == 2, (route, legacy)
+        # Independent sets define expected per-route identities across thirty days.
+        from datetime import date, timedelta
+        matrix = whole_prefix + '_matrix'
+        matrix_rows, expected_sets = [], {}
+        for offset in range(30):
+            day = date(2026, 6, 30) + timedelta(days=offset)
+            subject = matrix + str(offset % 2)
+            route = '/a' if offset % 3 else '/b'
+            row = event(matrix+str(offset), matrix+'session'+str(offset), timestamp=day.isoformat()+'T00:00:00Z')
+            row.update(userId=subject, anonymousId=matrix+'cookie'+str(offset % 2), sourceService=matrix,
+                       url='https://shop.example'+route, properties={'url':'https://shop.example'+route})
+            if offset < 2:
+                row['userId'] = None  # Later evidence resolves these two cookies.
+            matrix_rows.append(row)
+            expected_sets.setdefault(route, set()).add(subject)
+        for index in range(2):
+            profile = event(matrix+'identify'+str(index), matrix+'profile'+str(index), name='identify', timestamp='2026-07-29T00:00:00Z')
+            profile.update(userId=matrix+str(index), anonymousId=matrix+'cookie'+str(index), sourceService=matrix,
+                           schemaVersion=2, properties={'plan':'pro' if index == 0 else ''})
+            matrix_rows.append(profile)
+        send(base, write_key, matrix_rows)
+        send(base, write_key, list(reversed(matrix_rows)))
+        def matrix_query(route, **params):
+            return api('/metrics/'+route, **period, filter=['source_service:eq:'+matrix, 'entry_page:set' if route == 'acquisition' else 'event_name:eq:page_view'], timeGrain='none', **params)['points']
+        eventually(lambda: sum(p['value'] for p in matrix_query('events')) == 30)
+        eventually(lambda: sum(p['value'] for p in matrix_query('users')) == 2)
+        for route, params, dimension in [('users', {}, 'route'), ('custom', {'events':'page_view','aggregation':'unique_count'}, 'route'),
+                                          ('acquisition', {'measure':'users'}, 'entry_page')]:
+            points = matrix_query(route, groupBy=dimension, **params)
+            actual = {p['group'][dimension]: p['value'] for p in points}
+            assert actual == {key:len(subjects) for key, subjects in expected_sets.items()}, (route, points)
+            assert all(p['bucket'] is None for p in points)
+            assert sum(actual.values()) == 4  # Distinct group counts intentionally overlap.
+        for route, params in [('users', {}), ('custom', {'events':'page_view','aggregation':'unique_count'}), ('acquisition', {'measure':'users'})]:
+            points = matrix_query(route, groupBy='user:plan', **params)
+            assert {p['group']['user:plan']:p['value'] for p in points} == {'pro':1, '':1}, (route, points)
+        for route, params in [('events', {}), ('page-views', {}), ('users', {}), ('custom', {'events':'page_view','aggregation':'count'}), ('acquisition', {})]:
+            points = api('/metrics/'+route, **period, filter='source_service:eq:'+matrix+'missing', timeGrain='none', **params)['points']
+            assert points == [], (route, points)
+        for measure in ('count', 'bounce_rate', 'average_duration_seconds'):
+            points = api('/metrics/sessions', **period, filter='source_service:eq:'+matrix+'missing', timeGrain='none', measure=measure)['points']
+            assert points == [{'bucket':None, 'group':{}, 'value':0}], points
+
+        # Boundaries and retained-session selection use the full session start.
+        assert sum(p['value'] for p in api('/metrics/events', **period, timeGrain='none',
+                   filter=['source_service:eq:'+matrix, 'event_name:eq:page_view'])['points']) == 30
+        tail = api('/metrics/users', **{'from':'2026-07-29','to':'2026-07-30'},
+                   timeGrain='none', filter='source_service:eq:'+matrix)['points']
+        assert len(tail) == 1 and tail[0]['value'] == 1, tail
+        excluded = api('/metrics/events', **{'from':'2026-06-29','to':'2026-06-30'},
+                       timeGrain='none', filter='source_service:eq:'+matrix)['points']
+        assert excluded == [], excluded
+        for dimension in ('channel,country_code', 'route,device_class'):
+            points = matrix_query('users', groupBy=dimension)
+            assert all(p['bucket'] is None and p['value'] == 2 for p in points), points
+        api('/metrics/custom', **period, events='page_view', aggregation='count', includeBots='true', timeGrain='none', expected=400)
+
+        numeric_rows = []
+        for index, amount in enumerate((2, 4, 10, None)):
+            row = event(matrix+'number'+str(index), matrix+'number'+str(index), name='subscription_started',
+                        timestamp=('2026-06-30' if index < 2 else '2026-07-01')+'T00:00:00Z')
+            row.update(sourceService=matrix+'numeric', properties={'plan':'pro'})
+            if amount is not None:
+                row['properties']['amount'] = amount
+            numeric_rows.append(row)
+        send(base, write_key, numeric_rows)
+        def numeric(aggregation):
+            return api('/metrics/custom', **period, events='subscription_started', aggregation=aggregation,
+                       property='amount', filter='source_service:eq:'+matrix+'numeric', timeGrain='none')['points']
+        eventually(lambda: numeric('sum') == [{'bucket':None, 'group':{}, 'value':16}])
+        assert numeric('average') == [{'bucket':None, 'group':{}, 'value':16/3}]
+
+        for value in ('day', 'none', None):
+            saved_range = dict(definition, name=whole_prefix+str(value), eventNames=['page_view'], aggregation='unique_count',
+                               aggregationProperty=None, filters=['source_service:eq:'+whole_prefix], groupBy=[], timeGrain=value)
+            post_body = {key:value for key,value in saved_range.items() if key != 'timeGrain'} if value is None else saved_range
+            record = api('/metric-definitions', post_body, 'POST')
+            assert api('/metric-definitions/'+record['id'])['definition'] == saved_range
+            points = api('/metrics/custom', **period, metric=saved_range['name'], timeGrain='none')['points']
+            assert len(points) == 1 and points[0]['value'] == 1 and points[0]['bucket'] is None
+            points = api('/metrics/custom', **period, metric=saved_range['name'], timeGrain='day')['points']
+            assert len(points) == 2 and sum(p['value'] for p in points) == 2
+            saved_range['timeGrain'] = 'none'
+            api('/metric-definitions/'+record['id'], saved_range, 'PUT')
+            assert api('/metrics/custom', **period, metric=saved_range['name'])['points'][0]['bucket'] is None
+        for route in ('feature-adoption', 'revenue', 'conversion', 'stickiness', 'lifecycle', 'retention', 'experiments'):
+            api('/metrics/'+route, **period, timeGrain='none', expected=400)
+        api('/metrics/users', **period, window='rolling7', timeGrain='none', expected=400)
+        api('/metrics/custom', **period, events='page_view', aggregation='ratio', denominatorEvents='page_view', timeGrain='none', expected=400)
+
         def component(aggregation='count', filters=None):
             return dict(definition, name='component', aggregation=aggregation, aggregationProperty=None,
                         filters=filters or [], groupBy=[], timeGrain=None)
@@ -92,6 +215,7 @@ def verify_custom_metrics(base, write_key, token, other_token, after_membership=
         cohort_def = dict(definition,name=prefix+'cohort',filters=[selection,'cohort:eq:'+cohort['id']])
         api('/metric-definitions',cohort_def,'POST')
         assert total(metric=cohort_def['name']) == 6
+        assert total(metric=cohort_def['name'], timeGrain='none') == 6
         # Cohort OR terms must be discovered and loaded on either side.
         rate['numerator']['filters'] = ['cohort:eq:'+cohort['id']+'|prop:plan:eq:enterprise']
         rate['name'] += '_cohort'
@@ -112,7 +236,9 @@ def verify_custom_metrics(base, write_key, token, other_token, after_membership=
         while page['pageInfo']['hasNextPage']:
             page = api('/metric-definitions',first=2,after=page['pageInfo']['endCursor'])
             nodes.extend(page['edges'])
-        assert len(nodes) == 5 and len({e['node']['id'] for e in nodes}) == 5
+        expected_names = {prefix, rate['name'], prefix+'rate', cohort_def['name'], trait_def['name']} | {whole_prefix+str(value) for value in ('day', 'none', None)}
+        assert len(nodes) == len(expected_names) and len({e['node']['id'] for e in nodes}) == len(expected_names)
+        assert {e['node']['definition']['name'] for e in nodes} == expected_names
         backwards = api('/metric-definitions',last=2)
         reverse_nodes = list(backwards['edges'])
         while backwards['pageInfo']['hasPreviousPage']:

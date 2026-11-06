@@ -44,7 +44,7 @@ spec = do
 
     it "rejects non-daily rolling, retention and lifecycle inputs before acquiring storage" $ do
       let unused = error "grain validation acquired storage"
-          req = (request "unused") {Query.timeGrain = Just Week}
+          req = (request "unused") {Query.timeGrain = Just NoTimeBucket}
       results <-
         sequence
           [ runEff (Query.runUsers defaultRegistry unused Rolling30 req),

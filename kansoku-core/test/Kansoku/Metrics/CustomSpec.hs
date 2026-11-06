@@ -1,20 +1,31 @@
 module Kansoku.Metrics.CustomSpec (spec) where
 
+import Control.Monad (forM_)
 import Data.Aeson qualified as A
 import Data.Either (isLeft, isRight)
 import Data.Text qualified as T
 import Data.Time (fromGregorian)
 import Kansoku.Event (AccountId (..), defaultRegistry)
-import Kansoku.Metrics.Api (TimeGrain (Day))
+import Kansoku.Metrics.Api (TimeGrain (..))
 import Kansoku.Metrics.Custom
 import Kansoku.Metrics.Definition
 import Kansoku.Metrics.Filter qualified as F
 import Kansoku.Metrics.Query qualified as Q
 import Kansoku.Prelude
 import Test.Hspec
+import Web.HttpApiData (parseUrlPiece, toUrlPiece)
 
 spec :: Spec
 spec = describe "Custom metrics" $ do
+  it "roundtrips exact grain spellings in JSON and URLs" $ do
+    forM_ [Hour, Day, Week, Month, NoTimeBucket] $ \grain -> do
+      A.eitherDecode (A.encode grain) `shouldBe` Right grain
+      parseUrlPiece (toUrlPiece grain) `shouldBe` Right grain
+    toUrlPiece NoTimeBucket `shouldBe` "none"
+    A.toJSON NoTimeBucket `shouldBe` A.String "none"
+    forM_ ["None", "notimebucket", "unknown", ""] $ \bad -> do
+      (parseUrlPiece bad :: Either Text TimeGrain) `shouldSatisfy` isLeft
+      (A.fromJSON (A.String bad) :: A.Result TimeGrain) `shouldSatisfy` (\case A.Error _ -> True; _ -> False)
   it "validates every aggregation, finite event scopes and declared numeric properties" $ do
     mapM_ (\kind -> adhoc "payment_completed" kind Nothing `shouldSatisfy` isRight) ["count", "unique_count"]
     mapM_ (\kind -> adhoc "payment_completed" kind (Just "amount") `shouldSatisfy` isRight) ["sum", "average"]
@@ -40,6 +51,16 @@ spec = describe "Custom metrics" $ do
     sql <- either (fail . show) pure (Q.buildSQL defaultRegistry (customBuiltin def) result)
     sql `shouldSatisfy` T.isInfixOf " OR "
     sql `shouldSatisfy` T.isInfixOf "account_id = {account_id:String}"
+  it "preserves explicit whole-range grains and saved override precedence" $ do
+    forM_ [Nothing, Just Day, Just NoTimeBucket] $ \saved -> do
+      let def = CustomSimple base {timeGrain = saved}
+      A.eitherDecode (A.encode def) `shouldBe` Right def
+      forM_ [Nothing, Just Day, Just NoTimeBucket] $ \requested -> do
+        result <- either (fail . T.unpack) pure (customRequest def request {Q.timeGrain = requested})
+        Q.timeGrain result `shouldBe` (requested <|> saved)
+    let ratio = CustomRatio (RatioMetric "rate" Nothing base base)
+    customRequest ratio request {Q.timeGrain = Just NoTimeBucket} `shouldSatisfy` isLeft
+    validateCustom defaultRegistry (CustomRatio (RatioMetric "rate" Nothing base {timeGrain = Just NoTimeBucket} base)) `shouldSatisfy` isLeft
   it "does not dispatch custom names through builtin sessions/conversion special cases" $ do
     let def = CustomSimple base {name = "sessions"}
     sql <- either (fail . show) pure (Q.buildSQL defaultRegistry (customBuiltin def) request)

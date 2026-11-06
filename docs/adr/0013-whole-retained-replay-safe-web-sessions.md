@@ -5,7 +5,7 @@ description: Merge idempotent session state before date and attribute selection 
 docId: ADR-13
 status: Accepted
 date: 2026-10-15
-timestamp: 2026-10-15T23:01:06Z
+timestamp: 2026-11-06T05:10:00Z
 generated:
   by: process:codex
   at: 2026-10-15T22:46:52Z
@@ -77,3 +77,7 @@ The browser SDK supplies its inactivity rotation; other producers must supply a 
 Native canonical-state equality, repeated replay/rebuilds, packaged public workflow in three
 telemetry modes and the pinned generated SDK consumer all pass. The final MasterPlan gate
 still owns joint browser adoption and capacity regression with the enlarged derived schema.
+
+## Whole-range temporal grouping
+
+Explicit `timeGrain=none` computes every session measure over the selected complete sessions in one null bucket. The ungrouped empty calendar has one zero point; grouped empty sessions remain absent. Rates and durations are never combined from daily results.

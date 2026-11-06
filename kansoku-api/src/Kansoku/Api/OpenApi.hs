@@ -178,7 +178,7 @@ instance O.ToSchema SourceEventId where
 
 instance O.ToSchema TimeGrain where
   declareNamedSchema =
-    O.genericDeclareNamedSchema lowerEnumOptions
+    O.genericDeclareNamedSchema lowerEnumOptions {O.constructorTagModifier = \name -> if name == "NoTimeBucket" then "none" else map toLower name}
 
 instance O.ToParamSchema AcquisitionMeasure where
   toParamSchema _ = O.toParamSchema (Proxy @Text) & O.enum_ ?~ ["sessions", "users"]
@@ -220,8 +220,7 @@ instance O.ToParamSchema CohortMode where
   toParamSchema _ = O.toParamSchema (Proxy @Text) & O.enum_ ?~ ["window", "lifetime"]
 
 instance O.ToParamSchema TimeGrain where
-  toParamSchema =
-    O.genericToParamSchema lowerEnumOptions
+  toParamSchema _ = O.toParamSchema (Proxy @Text) & O.enum_ ?~ ["hour", "day", "week", "month", "none"]
 
 instance O.ToSchema UserId where
   declareNamedSchema =

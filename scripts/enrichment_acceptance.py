@@ -104,6 +104,12 @@ def verify_enrichment(base, write_key, service_token):
     assert sum(point['value'] for point in report(endpoint='sessions', filter=bounce_filter, measure='average_duration_seconds')) == 60
     send(base, write_key, bounce)
     assert sum(point['value'] for point in report(endpoint='sessions', filter=bounce_filter, measure='bounce_rate')) == 1
+    for measure, expected_value in [('count', 2), ('bounce_rate', .5), ('average_duration_seconds', 150)]:
+        whole = report(endpoint='sessions', timeGrain='none', measure=measure)
+        assert whole == [{'bucket': None, 'group': {}, 'value': expected_value}], whole
+    selected = report(timeGrain='none', groupBy='entry_page,exit_page')
+    assert len(selected) == 2 and all(point['bucket'] is None for point in selected), selected
+    assert report(timeGrain='none', from_='2026-07-02', filter='entry_page:eq:/entry') == []
     print('EP-34 public workflow: cross-midnight counts, entry/exit, bots, positive-duration lifecycle bounce and replay passed.', flush=True)
     verify_ai_channels(base, write_key, service_token)
     print('EP-33 public workflow: existing event JSON, retries, first-touch/device/country, bots and exact users passed.', flush=True)

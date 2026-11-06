@@ -194,11 +194,12 @@ metricsServerUsing pg pool =
     experimentsHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> Maybe ExperimentMeasure -> Maybe Text -> [MetricFilter] -> Handler (KansokuResult MetricResult)
     experimentsHandler (MetricsPrincipal principal) fromDay toDay experimentParam timeGrain measure groupBy filters =
       case timeGrain of
-        Just Hour ->
-          pure
-            ( KansokuBadRequest
-                (badRequest "invalid_experiment_time_grain" "timeGrain hour not supported for experiments (rollup is daily)")
-            )
+        grain
+          | grain `elem` [Just Hour, Just NoTimeBucket] ->
+              pure
+                ( KansokuBadRequest
+                    (badRequest "invalid_experiment_time_grain" (if grain == Just Hour then "timeGrain hour not supported for experiments (rollup is daily)" else "timeGrain none not supported for experiments; omit it for whole range"))
+                )
         _ ->
           case traverse mkSqlName experimentParam of
             Left invalid ->

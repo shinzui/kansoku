@@ -40,6 +40,10 @@ import Test.Hspec
 
 spec :: Spec
 spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
+  it "publishes none rather than the Haskell constructor spelling" $ do
+    let encoded = BSL.toStrict (Aeson.encode kansokuOpenApi)
+    encoded `shouldSatisfy` BS8.isInfixOf "\"none\""
+    encoded `shouldSatisfy` (not . BS8.isInfixOf "notimebucket")
   it "reports OpenAPI 3.1 and keeps lowercase enum wire tags" $ do
     lookupText ["openapi"] documentValue `shouldSatisfy` maybe False (Text.isPrefixOf "3.1")
     lookupTextArray ["components", "schemas", "EventSource", "enum"] documentValue
@@ -134,6 +138,7 @@ spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
     conforms "MetricPoint" sampleMetricPoint
     conforms "MetricResult" Metrics.MetricResult {Metrics.metric = "events", Metrics.points = [sampleMetricPoint]}
     conforms "TimeGrain" Metrics.Hour
+    conforms "TimeGrain" Metrics.NoTimeBucket
     conforms "ProblemDetails" (problem 404 "not_found" "no such endpoint")
     conforms "SchemaCatalog" (schemaCatalog defaultRegistry)
     conforms "EventId" (EventId "evt_openapi")
