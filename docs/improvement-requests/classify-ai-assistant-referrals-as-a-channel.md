@@ -3,10 +3,11 @@ type: Improvement Request
 title: Classify AI assistant referrals as their own channel
 description: Add channel rule version 2 with an ai_assistant channel for visits referred by ChatGPT, Perplexity, Claude, Gemini, Copilot and similar assistants, which version 1 splits across organic_search, referral and other.
 generated:
-  by: process:claude-code
-  at: "2026-11-05T21:06:04Z"
+  by: process:codex
+  at: "2026-11-06T03:57:44Z"
 requestId: IR-6
-status: proposed
+status: accepted
+targetPlan: docs/plans/58-classify-ai-assistant-referrals-as-a-channel.md
 origin: mori://shinzui/kansoku-ui
 acceptanceCriteria:
   - id: AC-1
@@ -42,6 +43,9 @@ reviews:
 **Created:** 2026-11-05.
 
 Part of the set filed with IR-4; that request lists the others.
+
+**Implementation plan:** [ExecPlan 58: Classify AI assistant referrals as a channel](../plans/58-classify-ai-assistant-referrals-as-a-channel.md).
+The request is accepted for implementation; implementation has not started.
 
 
 ## Why

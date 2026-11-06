@@ -1,6 +1,7 @@
 # Bundle Update Log
 
 ## 2026-11-06
+* **Update**: Accept IR-6 for implementation and link targetPlan to docs/plans/58-classify-ai-assistant-referrals-as-a-channel.md; implementation has not started.
 * **Add**: Propose IR-9 from `mori://shinzui/kansoku-ui/masterplans/3-build-the-reports-page`: session-scoped dimensions on page-views, users and custom metrics, so events can be filtered and grouped by the first-touch attributes of the session they belong to.
 
 ## 2026-11-05
