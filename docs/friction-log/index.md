@@ -15,4 +15,5 @@ okf_version: "0.2"
 - [Custom metric validation specs were compiled but never executed](5-custom-metric-validation-specs-were-compiled-but-never-executed.md) - The explicit Hspec runner omitted CustomSpec, so deterministic checks passed without running the advertised custom-definition tests.
 - [OpenAPI generation reconfigures the test-enabled build](6-openapi-generation-reconfigures-the-test-enabled-build.md) - Running cabal run through the documented OpenAPI target changes component flags and makes the next test-enabled build recompile much of the workspace.
 - [Bundle log appends discard existing prose evidence](7-bundle-log-appends-discard-existing-prose-evidence.md) - okf log add rewrote the guides log and removed its adoption provenance table, requiring preservation of the original body.
+- [Percentile replay fixture exceeds the packaged request cap](8-percentile-replay-fixture-exceeds-the-packaged-request-cap.md) - The existing percentile replay sends its complete sample population in one batch despite the packaged 4 KiB cap, blocking full acceptance after acquisition HTTP succeeds.
 

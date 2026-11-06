@@ -154,7 +154,9 @@ def verify_custom_metrics(base, write_key, token, other_token, after_membership=
             assert_values(sample_metric(quantile=quantile, timeGrain='hour'),
                           {(day+' 00:00:00',plan):value for (day,plan),value in expected.items()})
         # Replay invariance after the first result, independently of background merges.
-        send(base, write_key, list(reversed(sample_rows)))
+        replay = list(reversed(sample_rows))
+        for start in range(0, len(replay), 3):
+            send(base, write_key, replay[start:start+3])
         assert_values(sample_metric(), expected_daily[0.75])
         assert point_map(sample_metric('count')) == expected_counts
         assert_values(sample_metric(filter=sample_filters+['prop:plan:eq:enterprise']),

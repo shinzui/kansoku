@@ -36,16 +36,19 @@ For example, two people first arrive through organic search and one through emai
 
 
 - [x] Milestone 1 (2026-11-06): Native queries assign each canonical person to one selected first session; anonymous alias plus service conversion returns organic_search=1/email=1 and rates 0.5/1. `just acquisition-acceptance` passed at block sizes 65536 and 2: acquisition 5, sessions 4, traits 6 examples per size, all with zero failures/pending; replay and both conversion measures at 10,000/10,001 points passed.
-- [ ] Milestone 2: The authenticated acquisition route accepts the new measures and bounded event list, rejects invalid inputs before storage, and exposes the contract through OpenAPI and the typed client.
-- [ ] Milestone 3: Timing, filters, bots, replay, account isolation, and response bounds pass native and public acceptance; the guide and ADRs explain the exact population and compatibility rules.
+- [x] Milestone 2 (2026-11-06): Authenticated HTTP passed the explicit acquisition counts/rates, distinct event names, 20-entry list, malformed/repeated/valueless inputs, whole-range mode and replay in all three telemetry modes. The generated Haskell client forwards the expanded route; `just check` passed 489 deterministic core examples, 21 client examples and 4 probes, OpenAPI generation/freshness/lint, strict metadata validation and telemetry. The packaged client passed all 22 examples, including live integration.
+- [x] Milestone 3 (2026-11-06): Timing, namespace/account isolation, ambiguous aliases, deterministic full-row attribution, dimensions, filters, bots, traits/cohorts, replay and 10,000/10,001-point bounds passed. The owned normal/tiny-block runner passed 9 acquisition, 4 session and 6 trait examples per size, with zero failures/pending. `just check` and full packaged `just acceptance` exited zero; the latter passed 612 core examples including native cases, 22 client examples including live integration, acquisition HTTP in all three telemetry modes, 17 migration cases and 7 administrative scenario families. The guide and ADR-12/9 document the population and bounds; all implementation friction is triaged.
 
-Milestone 1 is verified. The expanded owned native runner passed 9 acquisition, 4 session and 6 trait examples at each of block sizes 65536 and 2, with zero failures/pending. This additionally proves timing, account/namespace boundaries, ambiguous aliases, full-row tie selection, acquisition dimensions, bots, current traits and behavioural cohorts. Public contract implementation, generated OpenAPI, public fixtures and documentation are written. Strict ADR/guide validation passed. Full `just check` and packaged public acceptance are running; Milestones 2 and 3 remain pending their results. The intention was created with `mina ci --json 'Attribute conversions to first-touch acquisition'` and is recorded in frontmatter. No parent MasterPlan is required.
+Implementation is complete. All required acceptance gates passed on 2026-11-06. The feature requires no migration or dependency change and composes with the existing whole-range acquisition mode. The intention was created with `mina ci --json 'Attribute conversions to first-touch acquisition'` and is recorded in frontmatter. No parent MasterPlan is required.
 
 
 ## Surprises & Discoveries
 
 
 2026-11-06: IR-4 has landed: `TimeGrain.NoTimeBucket` and `timeGrain=none` already support acquisition. Both conversion measures compose with its existing constant-bucket/null response path; the native multi-day fixture passes in daily and whole-range mode.
+
+
+2026-11-06: The new public acquisition scenario passed, but the global acceptance workflow subsequently failed in the existing percentile fixture: its final replay submitted every sample at once, exceeding the configured 4096-byte HTTP request cap. Preserve the cap, data and assertions, and replay in the same three-event batches as initial delivery (FRIC-8 in docs/friction-log/). This is a required acceptance-fixture repair, not a change to metric semantics.
 
 
 ## Decision Log
@@ -63,13 +66,19 @@ Milestone 1 is verified. The expanded owned native runner passed 9 acquisition, 
 ## Outcomes & Retrospective
 
 
-(To be filled during implementation.)
+All three milestones are implemented and verified. `/metrics/acquisition` now supports exact `converted_users` and `conversion_rate` with strict conversion-event validation, shared retained identity resolution, one selected session per person and complete bounded results. Daily and `timeGrain=none` examples pass through native execution and authenticated HTTP, including anonymous alias evidence and backend conversions. Legacy session/user meanings remain intact; no storage migration, dependency pin or external SDK/UI change was needed.
+
+The final `nix develop --no-write-lock-file -c just check` exited zero, including formatting, 489 deterministic core examples, 21 client examples, 4 probes, fresh OpenAPI/contracts, OpenAPI lint, strict documentation/friction validation and telemetry lifecycle checks. `just acquisition-acceptance` passed all 19 examples at each of block sizes 65536 and 2. The final `just acceptance` run reached “Acceptance passed: required native/live tests, Hurl, packaged administration/startup and three telemetry modes.” It passed 612 core examples including native cases, 22 client examples including live integration, the EP-56 workflow three times, all 17 migration cases and all 7 required administrative scenario families. Private evidence is retained under `.dev/acceptance/run-7j10lrid/`, with sanitized output in its `sanitized/` directory.
+
+Durable first-session selection, denominator compatibility, conversion timing/source/bot rules and whole-range semantics are distilled in [ADR-12](../adr/0012-server-enrichment-and-first-touch-web-acquisition.md); [ADR-9](../adr/0009-bounded-complete-aggregate-responses.md) records the raw event-list bound and storage-free validation. The query guide and generated API describe the same contract. No required work remains.
+
+FRIC-6 in `docs/friction-log/` is accepted: the existing Cabal generation/check workflow incurs flag-related recompilation, and build-tool changes remain outside this feature. FRIC-7 is accepted: preserving the original log body around CLI appends retains existing adoption provenance. FRIC-8 is resolved: the pre-existing percentile replay fixture now uses bounded batches, preserving its population, assertions and packaged request cap; the full fixture-isolation and packaged acceptance workflows passed.
 
 
 ## Context and Orientation
 
 
-The request is `docs/improvement-requests/attribute-conversions-to-first-touch-acquisition.md`, originating from `mori://shinzui/kansoku-ui`. The API is defined by Haskell Servant types in `kansoku-api/src/Kansoku/Metrics/Api.hs`. `AcquisitionMeasure` currently has `AcquisitionSessions` and `AcquisitionUsers`; `AcquisitionQuery` adds measure and includeBots to the shared date/group/filter parameters. `kansoku-core/src/Kansoku/Metrics/RequestValidation.hs` maintains an explicit parameter allowlist and rejects repeated scalar parameters. `kansoku-core/src/Kansoku/Metrics/Handler.hs`, particularly `acquisitionHandler`, converts authenticated input into a `QueryRequest` and loads requested cohorts before execution.
+The request is `docs/improvement-requests/attribute-conversions-to-first-touch-acquisition.md`, originating from `mori://shinzui/kansoku-ui`. The API is defined by Haskell Servant types in `kansoku-api/src/Kansoku/Metrics/Api.hs`. `AcquisitionMeasure` has `AcquisitionSessions`, `AcquisitionUsers`, `AcquisitionConvertedUsers` and `AcquisitionConversionRate`; `AcquisitionQuery` adds measure, conversionEvents and includeBots to the shared date/group/filter parameters. `kansoku-core/src/Kansoku/Metrics/RequestValidation.hs` maintains an explicit parameter allowlist and rejects repeated scalar parameters. `kansoku-core/src/Kansoku/Metrics/Handler.hs`, particularly `acquisitionHandler`, converts authenticated input into a `QueryRequest` and loads requested cohorts before execution.
 
 The compiler and executor are `kansoku-core/src/Kansoku/Metrics/Query.hs`: `compileAcquisition`, `runAcquisition`, `buildAcquisitionSQL`, `retainedScope`, and `rawResolvedSource`. `QueryRequest` carries account, date range, grouping, grain, filters, cohort definitions, and bot policy. A canonical subject is the identity system's resolved person key, such as `user:alice` or `anonymous:cookie-a`; empty means no usable identity. The prefix prevents a user ID and an anonymous ID with the same text from colliding. Do not join raw user_id and anonymous_id values directly.
 
