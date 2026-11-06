@@ -217,8 +217,9 @@ metric. CLS may exceed one. There is no separate unit property.
 
 This contract establishes names and units, not browser measurement algorithms. Unsupported or
 missing measurements are absent samples, never invented zeros. Merely declaring the events
-starts no browser capture. Explicit opt-in capture is planned separately at
-`mori://shinzui/kansoku-ts/plans/7-capture-client-errors-and-web-vitals-with-explicit-opt-in`.
+starts no browser capture. `kansoku-js` 0.1.0 and later capture both only when the application
+opts in with `autocapture.clientErrors` or `autocapture.webVitals`
+(`mori://shinzui/kansoku-ts/plans/7-capture-client-errors-and-web-vitals-with-explicit-opt-in`).
 Under current session rules both names count as engagement: automatic collection can remove
 bounces and extend observed duration. Decide deliberately before enabling it in a product;
 changing retained session semantics would require separate migration/rebuild work.
@@ -419,6 +420,14 @@ Do not automatically retry HTTP 400, 401, 403, 404, or 413, or per-event batch r
 
 Browser CORS applies to `/v1/*`. The default allows every origin; production deployments should
 set an exact allowlist with `KANSOKU_CORS_ORIGINS`. This is browser policy, not authentication.
+
+## Browser producers
+
+Browser and React applications should use [`kansoku-js`](https://www.npmjs.com/package/kansoku-js)
+and [`kansoku-react`](https://www.npmjs.com/package/kansoku-react) from `mori://shinzui/kansoku-ts`
+rather than calling these routes directly. They implement this contract, including immutable
+event IDs across retries, persistent batching and beacon exit delivery. Start with
+`mori://shinzui/kansoku-ts/docs/getting-started`.
 
 ## Haskell producers
 

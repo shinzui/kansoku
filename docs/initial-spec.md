@@ -456,14 +456,16 @@ The core project provides generic analytics infrastructure. Product-specific met
 - `kansoku-client`: the buffered Haskell producer and typed metrics client.
 
 The server process contains the collector, writer, and query surface. PostgreSQL and ClickHouse
-remain external durable services. A browser SDK, React SDK, and dashboard UI have not shipped;
-browser and non-Haskell producers currently use HTTP directly.
+remain external durable services. Browser and React SDKs ship separately from
+`mori://shinzui/kansoku-ts` as the npm packages
+[`kansoku-js`](https://www.npmjs.com/package/kansoku-js) and
+[`kansoku-react`](https://www.npmjs.com/package/kansoku-react). A dashboard UI has not shipped;
+other non-Haskell producers use HTTP directly.
 
 ## Later Scope
 
 Possible future additions:
 
-* browser and React SDKs
 * dashboard UI and deployment/container examples
 * implemented acquisition, organization, and custom metric routes
 * statistical significance and sample-adequacy policy for experiments

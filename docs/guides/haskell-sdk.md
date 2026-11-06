@@ -13,8 +13,11 @@ generated:
 
 `kansoku-client` is the currently supported producer SDK. It derives its HTTP routes and wire
 types from `kansoku-api`, buffers events in memory, sends batches in a background worker, retries
-delivery, and exposes typed metric clients. Browser, React, and other language SDKs are not yet
-shipped; use the [HTTP ingestion guide](send-events.md) from those environments.
+delivery, and exposes typed metric clients. Browser and React applications use the npm packages
+[`kansoku-js`](https://www.npmjs.com/package/kansoku-js) and
+[`kansoku-react`](https://www.npmjs.com/package/kansoku-react) from `mori://shinzui/kansoku-ts`;
+start with its quickstart at `mori://shinzui/kansoku-ts/docs/getting-started`. Other languages
+use the [HTTP ingestion guide](send-events.md).
 
 ## Add the packages
 

@@ -42,6 +42,7 @@ Browser and React SDKs are implemented in the separate
 [kansoku-js](mori://shinzui/kansoku-ts/packages/kansoku-js) handles browser capture, identity,
 sessions, batching, retries, and exit delivery;
 [kansoku-react](mori://shinzui/kansoku-ts/packages/kansoku-react) adds a provider and hooks.
+Both are published to npm: `npm install kansoku-js kansoku-react`.
 Follow its [quickstart](mori://shinzui/kansoku-ts/docs/getting-started) for workspace setup and
 examples. Other producers can use the documented HTTP API. A built-in dashboard UI,
 experiment significance engine, and hosted/container distributions remain outside the shipped surface.

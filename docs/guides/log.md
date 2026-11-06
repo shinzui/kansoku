@@ -2,6 +2,8 @@
 
 ## 2026-11-06
 
+* **Update**: DOC-8 and DOC-11: Point browser and React producers at the published `kansoku-js` and `kansoku-react` 0.1.0 packages and record that opt-in client error and web vital capture has shipped
+
 * **Update**: DOC-10 and DOC-12: Document session-scoped event filters, grouping, saved ratios and event population semantics
 
 * **Update**: DOC-11: Publish bounded client errors, vital units, privacy and authenticated site-health recipes
