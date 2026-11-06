@@ -326,7 +326,7 @@ def main():
                     if sdk:
                         verify_sdk_protocol(server,admin,env,ROOT / 'sdk-protocol',sdk,TOKENS)
                         verify_identity_browser(server,admin,env,ROOT / 'identity-browser',sdk,TOKENS)
-                        (SAFE / 'identity-summary.log').write_text('Required SDK live: 9 cases; Chromium identity/handoff/bots: 8 cases; 0 skipped, passed.\n')
+                        (SAFE / 'identity-summary.log').write_text('Required SDK live: 10 cases; Chromium identity/handoff/bots: 8 cases; 0 skipped, passed.\n')
                         verify_beacon_browser(server, admin, env, ROOT / 'beacon-browser', sdk, TOKENS)
                         (SAFE / 'beacon-summary.log').write_text('Required Chromium beacon acceptance: 6 cases, 0 skipped, passed.\n')
                     reader_env=dict(env,**consumers,KANSOKU_READER_SERVER=server,KANSOKU_READER_ADMIN=admin,KANSOKU_READER_MIGRATE=migrate)
