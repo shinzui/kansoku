@@ -34,7 +34,7 @@ This work declares the server contracts and records an opt-in browser SDK captur
 
 - [x] Milestone 1 (2026-11-06): Published catalog v5 and generated OpenAPI enforce bounded error labels, the closed vital vocabulary and nonnegative values. Build and deterministic gates passed, including Unicode boundaries, legacy decoding, version behavior and indexed batch rejection; earlier event schemas remain unchanged.
 - [x] Milestone 2 (2026-11-06): Owned `just custom-metrics-acceptance` exited zero with five native examples and the complete public scenario. Exact route/message/handled filters, global and per-page affected users, all five vital p75/sample counts on both days, replay and foreign-account isolation passed without skipped prerequisites.
-- [ ] Milestone 3: Sending/reporting documentation, generated contracts, durable contract decisions, and a linked opt-in SDK follow-up are complete and validated.
+- [x] Milestone 3 (2026-11-06): Sending/query recipes, regenerated event/OpenAPI artifacts and ADR-7 are published. The unimplemented opt-in SDK follow-up exists at `mori://shinzui/kansoku-ts/plans/7-capture-client-errors-and-web-vitals-with-explicit-opt-in` (SDK commits 1d1d39c and 79ad836). `nix fmt`, `just check`, strict guide/ADR/friction validation and full packaged `just acceptance` passed; IR-8 AC-1 through AC-4 are delivered.
 
 ## Surprises & Discoveries
 
@@ -58,15 +58,40 @@ Decision (2026-11-05): Keep current session engagement classification in this de
 
 ## Outcomes & Retrospective
 
+Completed 2026-11-06. Both immutable v1 contracts are enforced and published in catalog v5;
+`maxLength` remains optional for older catalog payloads. All earlier event versions are
+unchanged. Public/native fixtures prove exact error counts and affected subjects, typed label
+filters, per-metric/per-page p75 and paired sample counts, daily singleton behavior, replay
+and account isolation. The guide documents producer sanitation, metric units, missing samples,
+query recipes and the current session-engagement consequence. Browser capture is future work
+in the actual unimplemented SDK plan linked above; its creation completes AC-4.
+
+The final `nix develop -c just check` exited zero, including 497 core and 21 client deterministic
+examples, generated-artifact drift checks, OpenAPI lint, strict documentation checks and HTTP
+telemetry lifecycle checks. The standalone custom acceptance gate passed five native examples
+and the new public fixture. Full `nix develop -c just acceptance` exited zero with 620 core
+examples, 22 client examples, four probe cases, 17 non-skipped migration cases, Hurl schema and
+ingestion checks, repeated site-health/fixture-isolation proofs, native recovery/limits/replay/
+identity, seven administrative families and three telemetry modes. Private run evidence is in
+`.dev/acceptance/run-l9e0r072`; sanitized evidence is in its `sanitized` directory. Final formatting
+and `git diff --check` also passed.
+
+FRIC-9 in `docs/friction-log/` is accepted: preserve existing log prose and adoption tables
+around generated appends. No friction entries for this plan remain logged. The declaration
+uses existing storage and percentile paths; no dependency selection or database migration was
+needed. Reviewing the decisions and discoveries distilled the durable contract, privacy,
+compatibility and engagement constraints into ADR-7; no additional ADR is needed. All work
+within this plan's scope is complete.
+
 
 ## Context and Orientation
 
 
 The source request is `docs/improvement-requests/declare-client-error-and-web-vital-events.md`, handle IR-8. Its hard dependency IR-7 is planned in [plan 55](55-add-percentile-aggregation-to-custom-metrics.md), `docs/plans/55-add-percentile-aggregation-to-custom-metrics.md`. At plan creation that work was unfinished; implementation verified on 2026-11-06 that plan 55 is complete and `GET /metrics/custom` accepts percentile aggregation. Plan 55 specifies `aggregation=percentile`, `property=value`, and `quantile=0.75`, with exact inclusive interpolation: sorted samples 10, 20, 30, 40 yield 32.5. Do not mark this plan complete using average or client-side substitutes.
 
-`kansoku-api/src/Kansoku/Event/Registry.hs` owns `defaultRegistry`, `EventSchema`, `PropertySpec`, and the closed Haskell `PropertyPattern` type. Neither requested event is declared. Existing patterns cover SQL-style names, nonempty strings, nonnegative numbers and nonnegative integers; they cannot currently express bounded free text or vital names. `kansoku-api/src/Kansoku/Event/Validation.hs` enforces those patterns in `propertyPatternMatches` after checking JSON types. Unknown names and undeclared extra properties remain permissive. Omitted `schemaVersion` means version 1; a declared name with an unavailable version fails validation.
+`kansoku-api/src/Kansoku/Event/Registry.hs` owns `defaultRegistry`, `EventSchema`, `PropertySpec`, and the closed Haskell `PropertyPattern` type. It now declares both requested v1 events. Alongside the original SQL-style names, nonempty strings, nonnegative numbers and nonnegative integers, BoundedStringPattern enforces nonempty Unicode code-point bounds and WebVitalMetricPattern accepts exactly the five vital names. `kansoku-api/src/Kansoku/Event/Validation.hs` enforces those patterns in `propertyPatternMatches` after checking JSON types. Unknown names and undeclared extra properties remain permissive. Omitted `schemaVersion` means version 1; a declared name with an unavailable version fails validation.
 
-`kansoku-api/src/Kansoku/Event/Contract.hs` converts the registry to `SchemaCatalog` and `ContractProperty`. Catalog version 4 currently publishes optional `pattern`, `minimum`, `minLength`, and `multipleOf`; it has no `maxLength`. Numeric predicates are published as numeric constraints, not regular expressions. `docs/contracts/events.json` and public `GET /v1/schemas` expose the same catalog. `kansoku-api/src/Kansoku/Api/OpenApi.hs` derives the catalog's public schema, with field-name mappings for `type` and `pattern`; regenerate `docs/api/openapi.json` when the catalog property type changes.
+`kansoku-api/src/Kansoku/Event/Contract.hs` converts the registry to `SchemaCatalog` and `ContractProperty`. Catalog version 5 publishes optional `pattern`, `minimum`, `minLength`, `maxLength`, and `multipleOf`; absent constraints remain omitted and old properties without `maxLength` still decode. Numeric predicates are published as numeric constraints, not regular expressions. `docs/contracts/events.json` and public `GET /v1/schemas` expose the same catalog. `kansoku-api/src/Kansoku/Api/OpenApi.hs` derives the catalog's public schema, with field-name mappings for `type` and `pattern`; the regenerated `docs/api/openapi.json` includes the added optional constraint.
 
 `kansoku-core/test/Kansoku/ContractSpec.hs` contains the registry/artifact golden comparison, metadata invariants, and catalog roundtrip tests. `kansoku-core/test/Kansoku/EventSpec.hs` tests schema validation. `kansoku-core/test/Kansoku/Ingest/HandlerSpec.hs` covers batch partitioning. `kansoku-core/src/Kansoku/Metrics/Query/Property.hs` governs which declared scalar properties can be grouped or filtered. A scalar is one string, number, or Boolean rather than an object or array. Declaring `message` and `metric` is what makes `prop:message` and `prop:metric` queryable without a new database column.
 

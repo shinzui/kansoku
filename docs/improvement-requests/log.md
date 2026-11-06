@@ -1,6 +1,7 @@
 # Bundle Update Log
 
 ## 2026-11-06
+* **Update**: Complete IR-8: enforced client_error/web_vital v1, public error/user/p75 query evidence, sending recipes and actual opt-in SDK plan; all required gates passed.
 * **Update**: Accept IR-3 for implementation and link targetPlan to docs/plans/61-name-the-experiment-conversion-rate-measure-correctly-in-the-query-guide.md; implementation has not started.
 * **Update**: Accept IR-9 for implementation and link targetPlan to docs/plans/59-filter-and-group-events-by-their-session-attributes.md; implementation has not started.
 * **Update**: Accept IR-4 for implementation and link targetPlan to docs/plans/60-count-unique-users-over-a-whole-query-range.md; implementation has not started.

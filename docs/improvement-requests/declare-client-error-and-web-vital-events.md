@@ -4,9 +4,15 @@ title: Declare client error and web vital events
 description: Declare client_error and web_vital event schemas in the registry, and ask the browser SDK to capture them, so a consumer can report JavaScript errors and Core Web Vitals by page next to product analytics.
 generated:
   by: process:codex
-  at: "2026-11-06T03:59:17Z"
+  at: "2026-11-06T14:09:01Z"
 requestId: IR-8
-status: accepted
+status: completed
+completedAt: "2026-11-06T14:09:01Z"
+resolution: >-
+  AC-1 through AC-4 delivered by plan 57: catalog v5 and enforced v1 contracts,
+  public/native error and p75 report proofs, sending/query documentation, and
+  mori://shinzui/kansoku-ts/plans/7-capture-client-errors-and-web-vitals-with-explicit-opt-in.
+  Deterministic, custom-metrics and full packaged acceptance gates passed on 2026-11-06.
 targetPlan: docs/plans/57-declare-client-error-and-web-vital-events.md
 origin: mori://shinzui/kansoku-ui
 dependencies:
@@ -51,7 +57,13 @@ reviews:
 Part of the set filed with IR-4; that request lists the others.
 
 **Implementation plan:** [ExecPlan 57: Declare client error and web vital events](../plans/57-declare-client-error-and-web-vital-events.md).
-The request is accepted for implementation; implementation has not started.
+Completed 2026-11-06. Catalog v5 publishes and ingestion enforces both v1 contracts. The
+sending guide and `scripts/site_health_scenario.py` prove the error, affected-user and vital
+p75 recipes through the public API on owned databases. Deterministic, custom-metric and full
+packaged acceptance gates pass. The unimplemented browser follow-up is
+`mori://shinzui/kansoku-ts/plans/7-capture-client-errors-and-web-vitals-with-explicit-opt-in`;
+its independent flags default off and its acceptance covers privacy, bounded labels,
+deduplication/rate limits, final measurements, attribution and reversible lifecycle behavior.
 
 
 ## Why
