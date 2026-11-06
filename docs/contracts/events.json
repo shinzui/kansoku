@@ -1,5 +1,5 @@
 {
-  "catalogVersion": 4,
+  "catalogVersion": 5,
   "events": {
     "alias": {
       "versions": [
@@ -19,6 +19,38 @@
               "name": "newId",
               "required": true,
               "type": "string"
+            }
+          ],
+          "version": 1
+        }
+      ]
+    },
+    "client_error": {
+      "versions": [
+        {
+          "note": "Short sanitized client error labels only; do not send stack traces or personal data.",
+          "properties": [
+            {
+              "description": "Sanitized error message, 1–256 Unicode code points; do not send stack traces or personal data.",
+              "maxLength": 256,
+              "minLength": 1,
+              "name": "message",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "description": "Sanitized error class/category such as TypeError or UnhandledRejection, 1–128 Unicode code points; do not send stack traces or personal data.",
+              "maxLength": 128,
+              "minLength": 1,
+              "name": "type",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "description": "False for uncaught errors or unhandled rejections; explicit application reports may set true. Do not send stack traces or personal data.",
+              "name": "handled",
+              "required": true,
+              "type": "bool"
             }
           ],
           "version": 1
@@ -310,6 +342,30 @@
               "name": "userId",
               "required": true,
               "type": "string"
+            }
+          ],
+          "version": 1
+        }
+      ]
+    },
+    "web_vital": {
+      "versions": [
+        {
+          "note": "One page-performance measurement; milliseconds for LCP, INP, FCP and TTFB, unitless for CLS.",
+          "properties": [
+            {
+              "description": "LCP (Largest Contentful Paint), INP (Interaction to Next Paint), CLS (Cumulative Layout Shift), FCP (First Contentful Paint), or TTFB (Time to First Byte).",
+              "name": "metric",
+              "pattern": "^(LCP|INP|CLS|FCP|TTFB)$",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "description": "Nonnegative measurement: milliseconds for LCP, INP, FCP and TTFB; unitless for CLS, which may exceed one. Zero is valid.",
+              "minimum": 0,
+              "name": "value",
+              "required": true,
+              "type": "number"
             }
           ],
           "version": 1

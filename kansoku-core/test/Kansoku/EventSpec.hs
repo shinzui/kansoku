@@ -86,6 +86,51 @@ spec = describe "Kansoku.Event" $ do
       validateEvent (page (Aeson.Number (-1))) `shouldSatisfy` isLeft
       validateEvent (page (Aeson.String "100")) `shouldSatisfy` isLeft
 
+  describe "client error and web vital contracts" $ do
+    let make name props = expectedSample & #eventName .~ EventName name & #properties .~ KeyMap.fromList props
+        errorProps = [("message", Aeson.String "Cannot read property"), ("type", Aeson.String "TypeError"), ("handled", Aeson.Bool False)]
+        vitalProps = [("metric", Aeson.String "LCP"), ("value", Aeson.Number 0)]
+        replace key value props = (key, value) : filter ((/= key) . fst) props
+    it "accepts both handled states and Unicode code-point length boundaries" $ do
+      forM_ [False, True] $ \handled -> do
+        let ev = make "client_error" (replace "handled" (Aeson.Bool handled) errorProps)
+        validateEvent ev `shouldBe` Right ev
+      forM_ [("message", 256), ("type", 128)] $ \(key, limit) ->
+        forM_ ["a", "é", "😀"] $ \char -> do
+          forM_ [1, limit] $ \size -> do
+            let ev = make "client_error" (replace key (Aeson.String (Text.replicate size char)) errorProps)
+            validateEvent ev `shouldBe` Right ev
+          forM_ [0, limit + 1] $ \size ->
+            validateEvent (make "client_error" (replace key (Aeson.String (Text.replicate size char)) errorProps)) `shouldSatisfy` isLeft
+    it "requires all error fields with their exact types" $ do
+      forM_ errorProps $ \(key, _) -> do
+        validateEvent (make "client_error" (filter ((/= key) . fst) errorProps)) `shouldSatisfy` isLeft
+        forM_ [Aeson.Null, Aeson.Number 1, Aeson.object []] $ \wrong ->
+          validateEvent (make "client_error" (replace key wrong errorProps)) `shouldSatisfy` isLeft
+      validateEvent (make "client_error" (replace "handled" (Aeson.String "false") errorProps)) `shouldSatisfy` isLeft
+      validateEvent (make "client_error" (replace "message" (Aeson.Bool False) errorProps)) `shouldSatisfy` isLeft
+      validateEvent (make "client_error" (replace "type" (Aeson.Bool True) errorProps)) `shouldSatisfy` isLeft
+    it "accepts all vital names, zero, fractions, and CLS above one" $ do
+      forM_ ["LCP", "INP", "CLS", "FCP", "TTFB"] $ \metric ->
+        forM_ [0, 0.03, 1.5] $ \value -> do
+          let ev = make "web_vital" [("metric", Aeson.String metric), ("value", Aeson.Number value)]
+          validateEvent ev `shouldBe` Right ev
+    it "rejects invalid vital names and missing or mistyped fields" $ do
+      forM_ ["", "lcp", "FID", "XLCP", "LCPX", "LCP\n"] $ \metric ->
+        validateEvent (make "web_vital" (replace "metric" (Aeson.String metric) vitalProps)) `shouldSatisfy` isLeft
+      forM_ [Aeson.Number (-1), Aeson.Null, Aeson.String "1", Aeson.Bool False] $ \value ->
+        validateEvent (make "web_vital" (replace "value" value vitalProps)) `shouldSatisfy` isLeft
+      forM_ vitalProps $ \(key, _) -> do
+        validateEvent (make "web_vital" (filter ((/= key) . fst) vitalProps)) `shouldSatisfy` isLeft
+        validateEvent (make "web_vital" (replace key (Aeson.object []) vitalProps)) `shouldSatisfy` isLeft
+      validateEvent (make "web_vital" (replace "metric" Aeson.Null vitalProps)) `shouldSatisfy` isLeft
+    it "preserves version and permissive-extra-property behavior" $ do
+      forM_ [("client_error", errorProps), ("web_vital", vitalProps)] $ \(name, props) -> do
+        let ev = make name (("extra", Aeson.object []) : props)
+        validateEvent ev `shouldBe` Right ev
+        validateEvent (ev & #schemaVersion ?~ 1) `shouldSatisfy` isRight
+        validateEvent (ev & #schemaVersion ?~ 2) `shouldSatisfy` hasError (UnknownSchemaVersion (EventName name) 2 [1])
+
   describe "schema registry" $ do
     it "finds seeded versions and reports them in ascending order" $ do
       lookupSchemaVersion (EventName "page_view") 1 defaultRegistry `shouldSatisfy` isJust

@@ -10,6 +10,12 @@ provenance:
     model: "gpt-6-astra"
     harness: "codex-cli"
     at: 2026-11-06T03:41:41Z
+  revisions:
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-11-06T13:49:18Z
+      mode: "implement"
+      note: "Implement contracts, public site-health reports, and SDK capture follow-up"
 ---
 
 # Declare client error and web vital events
@@ -26,11 +32,15 @@ This work declares the server contracts and records an opt-in browser SDK captur
 ## Progress
 
 
-- [ ] Milestone 1: Published v1 contracts and ingestion enforce bounded error fields, the closed vital vocabulary, and nonnegative values while preserving existing event schemas.
+- [x] Milestone 1 (2026-11-06): Published catalog v5 and generated OpenAPI enforce bounded error labels, the closed vital vocabulary and nonnegative values. Build and deterministic gates passed, including Unicode boundaries, legacy decoding, version behavior and indexed batch rejection; earlier event schemas remain unchanged.
 - [ ] Milestone 2: Public report queries return independently calculated error counts, affected-user counts, and per-metric/per-route p75 values from accepted fixture events.
 - [ ] Milestone 3: Sending/reporting documentation, generated contracts, durable contract decisions, and a linked opt-in SDK follow-up are complete and validated.
 
 ## Surprises & Discoveries
+
+Plan 55 is now complete: exact percentile support and its passing public/native evidence are present, so the full report proof can run without a skipped prerequisite.
+
+The SDK follow-up is allocated as `mori://shinzui/kansoku-ts/plans/7-capture-client-errors-and-web-vitals-with-explicit-opt-in`. `mori path` currently reports artifact not found for this newly allocated unregistered plan; the file exists in the Mori-resolved SDK checkout and the canonical URI remains the durable reference.
 
 
 ## Decision Log
@@ -50,7 +60,7 @@ Decision (2026-11-05): Keep current session engagement classification in this de
 ## Context and Orientation
 
 
-The source request is `docs/improvement-requests/declare-client-error-and-web-vital-events.md`, handle IR-8. Its hard dependency IR-7 is planned in [plan 55](55-add-percentile-aggregation-to-custom-metrics.md), `docs/plans/55-add-percentile-aggregation-to-custom-metrics.md`. At plan creation, that work is unfinished and `GET /metrics/custom` does not yet accept percentile aggregation. Plan 55 specifies `aggregation=percentile`, `property=value`, and `quantile=0.75`, with exact inclusive interpolation: sorted samples 10, 20, 30, 40 yield 32.5. Do not mark this plan complete using average or client-side substitutes.
+The source request is `docs/improvement-requests/declare-client-error-and-web-vital-events.md`, handle IR-8. Its hard dependency IR-7 is planned in [plan 55](55-add-percentile-aggregation-to-custom-metrics.md), `docs/plans/55-add-percentile-aggregation-to-custom-metrics.md`. At plan creation that work was unfinished; implementation verified on 2026-11-06 that plan 55 is complete and `GET /metrics/custom` accepts percentile aggregation. Plan 55 specifies `aggregation=percentile`, `property=value`, and `quantile=0.75`, with exact inclusive interpolation: sorted samples 10, 20, 30, 40 yield 32.5. Do not mark this plan complete using average or client-side substitutes.
 
 `kansoku-api/src/Kansoku/Event/Registry.hs` owns `defaultRegistry`, `EventSchema`, `PropertySpec`, and the closed Haskell `PropertyPattern` type. Neither requested event is declared. Existing patterns cover SQL-style names, nonempty strings, nonnegative numbers and nonnegative integers; they cannot currently express bounded free text or vital names. `kansoku-api/src/Kansoku/Event/Validation.hs` enforces those patterns in `propertyPatternMatches` after checking JSON types. Unknown names and undeclared extra properties remain permissive. Omitted `schemaVersion` means version 1; a declared name with an unavailable version fails validation.
 

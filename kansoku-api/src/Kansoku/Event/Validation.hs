@@ -274,6 +274,8 @@ propertyMatches expected value =
 
 propertyPatternMatches :: Maybe PropertyPattern -> Value -> Bool
 propertyPatternMatches Nothing _ = True
+propertyPatternMatches (Just (BoundedStringPattern limit)) (String value) = not (Text.null value) && Text.length value <= limit
+propertyPatternMatches (Just WebVitalMetricPattern) (String value) = value `elem` ["LCP", "INP", "CLS", "FCP", "TTFB"]
 propertyPatternMatches (Just NonEmptyStringPattern) (String value) = not (Text.null value)
 propertyPatternMatches (Just NonNegativeNumberPattern) (Number value) = value >= 0
 propertyPatternMatches (Just NonNegativeIntegerPattern) (Number value) =

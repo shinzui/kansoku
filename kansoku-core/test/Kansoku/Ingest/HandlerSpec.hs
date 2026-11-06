@@ -48,6 +48,15 @@ spec = describe "Kansoku.Ingest.Handler" $ do
         good = event "good" "custom-valid"
     partitionBatch [good, bad] `shouldBe` ([good], [RejectedEvent 1 (Just "bad") [renderValidationError (IncompatibleJsonPaths "properties")]])
 
+  it "rejects an invalid vital by index while accepting valid siblings" $ do
+    let vital ident metric = event ident "web_vital" & #properties .~ KeyMap.fromList [("metric", Aeson.String metric), ("value", Aeson.Number 0)]
+        good = vital "good" "CLS"
+        bad = vital "bad" "FID"
+        sibling = event "other" "custom-valid"
+        (accepted, rejected) = partitionBatch [good, bad, sibling]
+    accepted `shouldBe` [good, sibling]
+    rejected `shouldBe` [RejectedEvent 1 (Just "bad") [renderValidationError (InvalidPropertyValue (EventName "web_vital") "metric" "expected ^(LCP|INP|CLS|FCP|TTFB)$")]]
+
   it "handles all-invalid and empty batches" $ do
     partitionBatch [event "" "", event "" "custom-valid"]
       `shouldBe` ( [],

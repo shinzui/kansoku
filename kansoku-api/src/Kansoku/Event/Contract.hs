@@ -24,6 +24,7 @@ data ContractProperty = ContractProperty
     description :: !(Maybe Text),
     minimum :: !(Maybe Int),
     minLength :: !(Maybe Int),
+    maxLength :: !(Maybe Int),
     multipleOf :: !(Maybe Int)
   }
   deriving stock (Generic, Eq, Show)
@@ -79,7 +80,7 @@ propertyTypeText = \case
 schemaCatalog :: EventRegistry -> SchemaCatalog
 schemaCatalog (EventRegistry registry) =
   SchemaCatalog
-    { catalogVersion = 4,
+    { catalogVersion = 5,
       service = "kansoku",
       identifierKinds = allowedIdentifierKindNames,
       events =
@@ -103,9 +104,10 @@ toContractProperty PropertySpec {name, propertyType, required, validationPattern
     { name = name,
       propertyType = propertyTypeText propertyType,
       required = required,
-      validationPattern = case validationPattern of Just SqlNamePattern -> Just (propertyPatternText SqlNamePattern); _ -> Nothing,
+      validationPattern = case validationPattern of Just SqlNamePattern -> Just (propertyPatternText SqlNamePattern); Just WebVitalMetricPattern -> Just (propertyPatternText WebVitalMetricPattern); _ -> Nothing,
       description = description,
       minimum = case validationPattern of Just NonNegativeNumberPattern -> Just 0; Just NonNegativeIntegerPattern -> Just 0; _ -> Nothing,
-      minLength = case validationPattern of Just NonEmptyStringPattern -> Just 1; _ -> Nothing,
+      minLength = case validationPattern of Just NonEmptyStringPattern -> Just 1; Just (BoundedStringPattern _) -> Just 1; _ -> Nothing,
+      maxLength = case validationPattern of Just (BoundedStringPattern limit) -> Just limit; _ -> Nothing,
       multipleOf = case validationPattern of Just NonNegativeIntegerPattern -> Just 1; _ -> Nothing
     }

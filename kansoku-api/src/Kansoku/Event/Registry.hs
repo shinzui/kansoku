@@ -24,6 +24,7 @@ import Data.List (find, sortOn)
 import Data.List.NonEmpty qualified as NonEmpty
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
+import Data.Text qualified as Text
 import Kansoku.Event.Types (EventName (..))
 import Kansoku.Prelude
 
@@ -32,13 +33,15 @@ data PropertyType = PTString | PTNumber | PTBool | PTObject | PTArray | PTAny
   deriving stock (Generic, Eq, Show)
 
 -- | A syntactic constraint applied after a property's JSON type is validated.
-data PropertyPattern = SqlNamePattern | NonEmptyStringPattern | NonNegativeNumberPattern | NonNegativeIntegerPattern
+data PropertyPattern = SqlNamePattern | NonEmptyStringPattern | NonNegativeNumberPattern | NonNegativeIntegerPattern | BoundedStringPattern Int | WebVitalMetricPattern
   deriving stock (Generic, Eq, Show)
 
 propertyPatternText :: PropertyPattern -> Text
 propertyPatternText = \case
   SqlNamePattern -> "[a-z0-9_.:-]{1,128}"
   NonEmptyStringPattern -> "nonempty string"
+  BoundedStringPattern limit -> "string of 1–" <> Text.pack (show limit) <> " Unicode code points"
+  WebVitalMetricPattern -> "^(LCP|INP|CLS|FCP|TTFB)$"
   NonNegativeNumberPattern -> "number >= 0"
   NonNegativeIntegerPattern -> "finite integer >= 0"
 
@@ -110,6 +113,21 @@ defaultRegistry =
         "Bind an anonymous identifier to a user; top-level IDs must match. Works with SDK alias helpers."
         [ PropertySpec "previousId" PTString True (Just NonEmptyStringPattern) (Just "Anonymous identifier; must equal anonymousId."),
           PropertySpec "newId" PTString True (Just NonEmptyStringPattern) (Just "User identifier; must equal userId.")
+        ],
+      EventSchema
+        (EventName "client_error")
+        1
+        "Short sanitized client error labels only; do not send stack traces or personal data."
+        [ PropertySpec "message" PTString True (Just (BoundedStringPattern 256)) (Just "Sanitized error message, 1–256 Unicode code points; do not send stack traces or personal data."),
+          PropertySpec "type" PTString True (Just (BoundedStringPattern 128)) (Just "Sanitized error class/category such as TypeError or UnhandledRejection, 1–128 Unicode code points; do not send stack traces or personal data."),
+          plainProperty "handled" PTBool True "False for uncaught errors or unhandled rejections; explicit application reports may set true. Do not send stack traces or personal data."
+        ],
+      EventSchema
+        (EventName "web_vital")
+        1
+        "One page-performance measurement; milliseconds for LCP, INP, FCP and TTFB, unitless for CLS."
+        [ PropertySpec "metric" PTString True (Just WebVitalMetricPattern) (Just "LCP (Largest Contentful Paint), INP (Interaction to Next Paint), CLS (Cumulative Layout Shift), FCP (First Contentful Paint), or TTFB (Time to First Byte)."),
+          PropertySpec "value" PTNumber True (Just NonNegativeNumberPattern) (Just "Nonnegative measurement: milliseconds for LCP, INP, FCP and TTFB; unitless for CLS, which may exceed one. Zero is valid.")
         ],
       EventSchema (EventName "group") 1 "Stamp organization context; requires a nonempty top-level organizationId." [],
       EventSchema (EventName "group") 2 "Set current organization traits; omitted traits remain unchanged." organizationTraits,

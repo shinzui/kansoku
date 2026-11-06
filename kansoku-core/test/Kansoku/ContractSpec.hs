@@ -53,6 +53,33 @@ spec = describe "Kansoku event schema contract" $ do
     identifierKinds `shouldBe` allowedIdentifierKindNames
     identifierKinds `shouldContain` ["email_hmac"]
 
+  it "publishes bounded error labels, privacy guidance, vital vocabulary and units" $ do
+    let SchemaCatalog {catalogVersion, events} = schemaCatalog defaultRegistry
+        schema name = case Map.lookup name events of
+          Just (EventVersions (value :| [])) -> pure value
+          _ -> expectationFailure "expected exactly version 1" >> fail "missing schema"
+    catalogVersion `shouldBe` 5
+    VersionedEventSchema {version, note, properties} <- schema "client_error"
+    version `shouldBe` 1
+    note `shouldSatisfy` Text.isInfixOf "do not send stack traces or personal data"
+    [(name, propertyType, required, minLength, maxLength) | ContractProperty {name, propertyType, required, minLength, maxLength} <- properties]
+      `shouldBe` [("message", "string", True, Just 1, Just 256), ("type", "string", True, Just 1, Just 128), ("handled", "bool", True, Nothing, Nothing)]
+    forM_ properties $ \ContractProperty {description} ->
+      description `shouldSatisfy` maybe False (Text.isInfixOf "Do not send stack traces or personal data" . Text.replace "do not" "Do not")
+    VersionedEventSchema {properties = vitals} <- schema "web_vital"
+    [(name, propertyType, required, validationPattern, minimum, maxLength) | ContractProperty {name, propertyType, required, validationPattern, minimum, maxLength} <- vitals]
+      `shouldBe` [("metric", "string", True, Just "^(LCP|INP|CLS|FCP|TTFB)$", Nothing, Nothing), ("value", "number", True, Nothing, Just 0, Nothing)]
+    [description | ContractProperty {name = "value", description} <- vitals]
+      `shouldSatisfy` all (maybe False (\value -> Text.isInfixOf "milliseconds for LCP, INP, FCP and TTFB" value && Text.isInfixOf "unitless for CLS" value))
+
+  it "decodes legacy catalog properties without maxLength and omits absent bounds" $ do
+    let payload = "{\"name\":\"url\",\"type\":\"string\",\"required\":true}"
+    case Aeson.eitherDecode payload of
+      Left err -> expectationFailure err
+      Right property@ContractProperty {maxLength} -> do
+        maxLength `shouldBe` Nothing
+        Aeson.toJSON property `shouldBe` Aeson.object ["name" Aeson..= ("url" :: Text), "type" Aeson..= ("string" :: Text), "required" Aeson..= True]
+
   it "round-trips the SDK-facing catalog JSON" $ do
     let catalog = schemaCatalog defaultRegistry
     Aeson.decode (Aeson.encode catalog) `shouldBe` Just catalog
