@@ -26,7 +26,7 @@ This ExecPlan is a living document. Keep Progress, Surprises & Discoveries, Deci
 ## Purpose / Big Picture
 
 
-Implement [IR-9](../improvement-requests/filter-and-group-events-by-their-session-attributes.md). A consumer should be able to select visits from organic search and report every page viewed, active person, and custom event inside those visits. On `/metrics/page-views`, `/metrics/users`, and `/metrics/custom`, `session:channel` will describe the event's web session, while existing `channel` continues to describe the individual event. A search visit with three pages must produce three page views for `session:channel:eq:organic_search` and only its landing view for the ordinary channel filter.
+Implement [IR-9](../improvement-requests/filter-and-group-events-by-their-session-attributes.md). A consumer should be able to select visits from organic search and report every page viewed, active person, and custom event inside those visits. On `/metrics/page-views`, `/metrics/users`, and `/metrics/custom`, `session:channel` describes the event's web session, while existing `channel` continues to describe the individual event. A search visit with three pages must produce three page views for `session:channel:eq:organic_search` and only its landing view for the ordinary channel filter.
 
 The same session dimensions work in grouping, including `groupBy=route,session:referrer_host`, and in saved custom definitions and either population of a custom ratio. The feature uses existing retained session facts; it needs no ingestion changes, new timeout, storage migration, or backfill. Funnels, paths, retention, and other routes are outside this plan.
 
@@ -36,8 +36,8 @@ The same session dimensions work in grouping, including `groupBy=route,session:r
 
 - [x] Milestone 1 (2026-11-06): Page views attach finalized session attributes once; the owned runner passed three versus one page views, route/referrer grouping and replay at block sizes 65536 and 2. Adjacent sessions, acquisition and activity suites also passed.
 - [x] Milestone 2 (2026-11-06): Calendar/rolling users and ad-hoc/saved custom metrics, including both ratio populations and the already-shipped percentile aggregate, use the same attachment. Eight native examples passed at both block sizes, including traits/cohorts/organization options, numeric samples and component-only filters; deterministic suites passed.
-- [ ] Milestone 3: Native and authenticated public acceptance prove isolation, missing-session behavior, attribution parity, replay safety, and unchanged result limits.
-- [ ] Milestone 4: Generated API documentation, query/enrichment guides, and ADRs describe the shipped behavior, and required checks pass.
+- [x] Milestone 3 (2026-11-06): Nine session-attribute native examples passed at block sizes 65536 and 2, together with adjacent suites. Authenticated page/user/grouping and saved custom/ratio workflows passed, including replay, isolation, missing sessions, attribution parity, 10,000/10,001-point bounds and owned-resource cleanup. The packaged workflow passed in all three telemetry modes.
+- [x] Milestone 4 (2026-11-06): Regenerated OpenAPI, both guides and ADR-12/13/20 publish the contract. Build, deterministic tests, native/custom acceptance, just check, full packaged acceptance, Dhall/ADR/guide validation, formatting and diff checks passed. IR-9 is completed and both friction entries are triaged.
 
 
 ## Surprises & Discoveries
@@ -61,6 +61,19 @@ The same session dimensions work in grouping, including `groupBy=route,session:r
 ## Outcomes & Retrospective
 
 
+2026-11-06: All four milestones and IR-9 AC-1 through AC-4 are complete. Page views, calendar/rolling users and every supported simple custom aggregation, plus both ratio populations, filter and group by 19 intrinsic retained-session attributes. Event dates, resolved identities, row-level bot policies, unprefixed dimensions, excluded routes and result bounds retain their existing behavior. There is no ingestion, schema, dependency or backfill change.
+
+The required owned session runner passed nine feature examples plus the sessions/acquisition/activity families at both native block sizes, with positive counts and no failures or pending cases. Replay proofs stop background merges explicitly. The authenticated custom runner passed saved/ad-hoc aggregations, defaults/overrides, side-local ratios, CRUD, account isolation and exact bidirectional pagination; its temporary definitions are removed before the existing inventory assertions, with failure cleanup still owned by `OwnedResources`.
+
+`just check` passed 500 core and 21 client deterministic examples, four production probes, generated-contract drift checks, OpenAPI lint, strict documentation validation and HTTP telemetry/lifecycle checks. The full packaged gate passed 632 core and 22 live client examples, 17 migration scenarios without skips, both Hurl groups, the new public workflow in three telemetry modes and all seven administrative scenario families. Its final output was:
+
+```text
+Acceptance passed: required native/live tests, Hurl, packaged administration/startup and three telemetry modes.
+```
+
+`dhall type --file docs/adr/profile.dhall`, strict ADR validation and `just guides-check` also passed separately. ADR-12, ADR-13 and ADR-20 now retain the attachment, population and Boolean-presence decisions; the guides explain the attribution/count distinctions and generated OpenAPI documents all three routes.
+
+[FRIC-10](../friction-log/10-embedded-migration-build-forces-full-recompilation-during-query-iteration.md) is accepted: retain the migration embed contract and share final Just builds while using stable focused flags during iteration. [FRIC-11](../friction-log/11-okf-log-append-rewrites-historical-adoption-evidence.md) is accepted: preserve original log bytes and adoption inventories when adding entries until the external log parser can retain them. Neither leaves implementation work outstanding for this plan.
 
 
 ## Context and Orientation
@@ -70,7 +83,7 @@ Kansoku is a Haskell service. `kansoku-api` defines HTTP types and shared filter
 
 `kansoku-core/src/Kansoku/Metrics/Query/Session.hs` already exports `sessionProjection` and `materializedSessionProjection`. The first assembles canonical events; the second merges `analytics.sessions` aggregate states into one row per session key. Both expose first-touch event/enrichment values, entry/exit URLs, session times, and the maximum bot flag. The state was established by `db/clickhouse/migrations/0020_replay_safe_sessions.sql`. Reuse it; never join raw aggregate-state rows directly, since a session can span several inserts and parts.
 
-`kansoku-core/src/Kansoku/Metrics/Query/Dimension.hs` owns `GroupDimension`, type/label/expression rendering, `resolveDimension`, and `resolveSessionDimension`. The event resolver has no `session:` namespace; the whole-session resolver adds entry/exit pages and excludes organization dimensions. `kansoku-core/src/Kansoku/Metrics/Query/Filter.hs` compiles AND groups containing OR alternatives, binds every operand, and determines finite event scopes for property validation. Its current `unset` uses `isNull(expression)` without a session-presence guard. `kansoku-api/src/Kansoku/Metrics/Filter.hs` parses shorthand prefixes `prop`, `user`, and `org`; it must recognize `session` too. JSON filters already carry dimension names as text.
+`kansoku-core/src/Kansoku/Metrics/Query/Dimension.hs` owns `GroupDimension`, the closed `SessionAttribute` type, type/label/expression rendering, and the resolvers. `resolveDimension` intentionally has no `session:` namespace; `resolveSessionDimension` adds unprefixed entry/exit pages and excludes organization dimensions. The opt-in `resolveEventSessionDimension` adds the intrinsic prefixed attributes only for eligible event metrics. `kansoku-core/src/Kansoku/Metrics/Query/Filter.hs` compiles AND groups containing OR alternatives, binds every operand, and determines finite event scopes for property validation. Session terms carry their own presence guard, including `unset`, without changing the generic null predicate. `kansoku-api/src/Kansoku/Metrics/Filter.hs` recognizes shorthand prefixes `prop`, `user`, `org`, and `session`; JSON filters carry dimension names as text.
 
 `kansoku-core/src/Kansoku/Metrics/Query.hs` connects dimensions to event sources. `compileSimpleMetric`, `simpleAggregateSQL`, `countEventsSQL`, `uniqueUsersSQL`, and `propertyAggregateSQL` cover simple metrics. `compileMetric` compiles ratio component predicates; `buildRatioSQL` executes them over a resolved event source. `compileUsers` handles calendar users directly and rolling users through `compileRolling` and `activityPopulation`. That activity helper is also used by excluded routes, so support must be explicitly selected by the users caller. `resolvedSource` adds current user/organization traits to the identity-resolved event relation. Preserve those enrichments and the existing canonical event identity when adding session columns.
 
@@ -120,20 +133,20 @@ The native runner must reject missing prerequisites, zero examples, and pending 
 
 Update the three route descriptions in `kansoku-api/src/Kansoku/Metrics/Api.hs` and shared filter documentation as needed, then regenerate `docs/api/openapi.json`. The wire result remains unchanged: prefixed keys are ordinary keys in each point's `group` map. Update `docs/guides/query-metrics.md` and `docs/guides/web-enrichment.md` with the complete allowed suffixes, event versus session attribution examples, missing-session/operator behavior, saved ratios, rolling users, and date/bot distinctions. Show both JSON and shorthand filters and `groupBy=route,session:referrer_host`. State that people can occur in multiple session-channel groups, so summing grouped distinct-user counts is not a whole-range distinct-user total.
 
-Update ADR-13 to record event attachment, its key/eligibility rules, and unchanged event time/identity populations. Update ADR-12's explanation of source attribution and ADR-20's namespace support where needed. Preserve ADR handles and maintain guide/ADR metadata and logs under their existing profiles. Do not mark IR-9 implemented until all four acceptance criteria actually pass. At completion, record concise evidence in this plan, triage recorded implementation friction, and run the required checks below. No runtime behavior is implemented by this create-mode task.
+Update ADR-13 to record event attachment, its key/eligibility rules, and unchanged event time/identity populations. Update ADR-12's explanation of source attribution and ADR-20's namespace support where needed. Preserve ADR handles and maintain guide/ADR metadata and logs under their existing profiles. Do not mark IR-9 implemented until all four acceptance criteria actually pass. At completion, record concise evidence in this plan, triage recorded implementation friction, and run the required checks below. No storage migration or attribution backfill is required.
 
 
 ## Concrete Steps
 
 
-All commands run from the repository root, `/Users/shinzui/Keikaku/bokuno/kansoku-project/kansoku`. These are future implementation/acceptance commands, not claims that acceptance ran during plan creation. Use the locked Nix development environment and owned service helpers. Never inspect or traverse `/nix/store` or target an ambient database.
+All commands run from the repository root, `/Users/shinzui/Keikaku/bokuno/kansoku-project/kansoku`. These repeatable implementation/acceptance commands use the locked Nix development environment and owned service helpers; verified results are recorded in Progress and Outcomes & Retrospective. Never inspect or traverse `/nix/store` or target an ambient database.
 
 ```bash
 nix develop --no-write-lock-file -c just build-with-tests
 nix develop --no-write-lock-file -c just deterministic-test
 ```
 
-Create `scripts/session-attributes-acceptance.py` using this existing helper contract, and add `session-attributes-acceptance: build-with-tests` to `justfile`, executing that script. The adjacent session/acquisition suites guard unchanged projection semantics.
+`scripts/session-attributes-acceptance.py` uses the following existing helper contract, and `session-attributes-acceptance: build-with-tests` in `justfile` executes that script. The adjacent session/acquisition suites guard unchanged projection semantics.
 
 ```python
 from isolated_clickhouse import isolated_clickhouse, apply_migrations

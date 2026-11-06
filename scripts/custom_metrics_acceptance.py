@@ -13,6 +13,78 @@ from cohorts_acceptance import main
 from site_health_scenario import verify_site_health
 
 
+def verify_session_custom(base, write_key, token, other_token, api):
+    prefix = 'custom_session_' + uuid.uuid4().hex
+    rows = []
+    for person, amounts, referrer in [('a', [2, 4], 'https://www.google.com/'),
+                                      ('b', [6], 'https://news.ycombinator.com/')]:
+        landing = event(prefix + person + 'landing', prefix + person,
+                        timestamp='2026-07-01T00:00:00Z')
+        landing.update(sourceService=prefix, userId=prefix + person, referrer=referrer)
+        rows.append(landing)
+        for index, amount in enumerate(amounts):
+            payment = event(prefix + person + str(index), prefix + person, name='payment_completed',
+                            timestamp='2026-07-01T00:01:00Z')
+            payment.update(sourceService=prefix, userId=prefix + person, properties={'amount': amount})
+            rows.append(payment)
+    for row in rows:
+        send(base, write_key, [row])
+    send(base, other_token, [dict(rows[-1], eventId=prefix + 'foreign', properties={'amount': 1000})])
+    dates = {'from': '2026-07-01', 'to': '2026-07-02'}
+    selection = 'source_service:eq:' + prefix
+    organic = 'session:channel:eq:organic_search'
+    def run(**params):
+        return api('/metrics/custom', **dict(dates, **params))['points']
+    def total(**params):
+        return sum(point['value'] for point in run(**params))
+    eventually(lambda: total(events='payment_completed', aggregation='count', filter=[selection, organic]) == 2)
+    for kind, expected in [('count', 2), ('unique_count', 1), ('sum', 6), ('average', 3), ('percentile', 3)]:
+        options = dict(events='payment_completed', aggregation=kind, filter=[selection, organic])
+        if kind in ('sum', 'average', 'percentile'):
+            options['property'] = 'amount'
+        if kind == 'percentile':
+            options['quantile'] = .5
+        assert total(**options) == expected, (kind, options)
+    definition = dict(name=prefix, description=None, eventNames=['payment_completed'],
+                      aggregation='sum', aggregationProperty='amount', filters=[selection, organic],
+                      groupBy=['session:channel'], timeGrain='day')
+    saved = api('/metric-definitions', definition, 'POST')
+    ident = saved['id']
+    assert api('/metric-definitions/' + ident)['definition'] == definition
+    assert run(metric=prefix) == run(events='payment_completed', aggregation='sum', property='amount',
+                                      filter=[selection, organic], groupBy='session:channel')
+    assert total(metric=prefix, groupBy='source') == 6
+    updated = dict(definition, aggregation='average')
+    assert api('/metric-definitions/' + ident, updated, 'PUT')['definition'] == updated
+    assert total(metric=prefix, groupBy='session:referrer_host') == 3
+    component = dict(definition, aggregation='count', aggregationProperty=None, groupBy=[], timeGrain=None)
+    numerator = dict(component, filters=[organic])
+    denominator = dict(component, filters=['session:channel:eq:referral'])
+    ratio = dict(name=prefix + '_ratio', description=None, numerator=numerator, denominator=denominator)
+    stored_ratio = api('/metric-definitions', ratio, 'POST')
+    ratio_id = stored_ratio['id']
+    assert api('/metric-definitions/' + ratio_id)['definition'] == ratio
+    assert total(metric=ratio['name'], filter=selection) == 2
+    assert total(metric=ratio['name'], filter=[selection, organic]) == 0
+    grouped = run(metric=ratio['name'], filter=selection, groupBy='session:channel')
+    assert {p['group']['session:channel']: p['value'] for p in grouped} == {'organic_search': 0, 'referral': 0}
+    # Request JSON and shorthand share the same ad-hoc compiler population.
+    assert total(events='payment_completed', aggregation='count', filter=[selection, json.dumps(
+        dict(dimension='session:channel', op='eq', value='organic_search'))]) == 2
+    for resource, body in [(ident, updated), (ratio_id, ratio)]:
+        for method in ('GET', 'PUT', 'DELETE'):
+            assert api('/metric-definitions/' + resource, body if method == 'PUT' else None,
+                       method, credential=other_token, expected=404)['code'] == 'metric_not_found'
+        assert api('/metrics/custom', **dates, metric=body['name'], credential=other_token,
+                   expected=404)['code'] == 'metric_not_found'
+    for row in reversed(rows):
+        send(base, write_key, [row])
+    assert total(metric=ratio['name'], filter=selection) == 2
+    for resource in (ratio_id, ident):
+        api('/metric-definitions/' + resource, method='DELETE')
+    print('EP-59 saved/ad-hoc custom workflow: session populations, numeric aggregates, grouping overrides, side-local ratios, CRUD, isolation and replay passed.', flush=True)
+
+
 def verify_custom_metrics(base, write_key, token, other_token, after_membership=None, env=None, **_):
     verify_site_health(base, write_key, token, other_token)
     prefix = 'custom_' + uuid.uuid4().hex
@@ -30,6 +102,7 @@ def verify_custom_metrics(base, write_key, token, other_token, after_membership=
         return value
 
     with OwnedResources(api, token, after_membership) as api:
+        verify_session_custom(base, write_key, token, other_token, api)
         rows = []
         for user, amounts in [('A', [2, 4]), ('B', [6])]:
             for i, amount in enumerate(amounts):

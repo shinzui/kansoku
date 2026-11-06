@@ -5,7 +5,7 @@ description: Merge idempotent session state before date and attribute selection 
 docId: ADR-13
 status: Accepted
 date: 2026-10-15
-timestamp: 2026-11-06T05:10:00Z
+timestamp: 2026-11-06T14:31:34Z
 generated:
   by: process:codex
   at: 2026-10-15T22:46:52Z
@@ -40,7 +40,7 @@ the maintenance fence; raw-row mutation does not update incremental views.
 
 Attribution remains the first page_view, otherwise earliest web event. Entry/exit routes come
 specifically from the first/last page_view. Lifecycle events with an empty URL cannot replace
-those routes. Session filters apply to complete session attributes. Entry/exit dimension names
+those routes. Session filters apply to complete session attributes. Unprefixed entry/exit dimension names
 are scoped to session/acquisition queries. Arbitrary event-property filters/grouping are rejected
 on sessions because selecting constituent events would require a separate population contract.
 Acquisition may use the equivalent canonical projection for finite property selection, and
@@ -81,3 +81,22 @@ still owns joint browser adoption and capacity regression with the enlarged deri
 ## Whole-range temporal grouping
 
 Explicit `timeGrain=none` computes every session measure over the selected complete sessions in one null bucket. The ungrouped empty calendar has one zero point; grouped empty sessions remain absent. Rates and durations are never combined from daily results.
+
+## Session attributes attached to events
+
+Page views, calendar/rolling users and custom metrics opt into a closed `session:` namespace.
+Attach the finalized materialized projection once to the existing raw/resolved canonical event
+relation by account, source service and nonempty session ID, requiring event source web. An
+explicit presence marker and nullable attribute columns make left-join misses independent of
+join_use_nulls. The right relation merges all retained states to one row per key before joining;
+no event date or bot predicate narrows session assembly. This prevents insert-block multiplication
+and preserves first-page/first-event ordering and replay safety without a migration or backfill.
+
+Event timestamps, property samples, canonical people and organization options keep their existing
+meaning. Rolling users restrict activity lookback, not session history. Clean page/user events
+remain eligible even if another session event is a bot; session:is_bot still reports the maximum
+retained flag. Custom metrics retain their existing bot policy. Missing/non-web sessions yield
+null groups and never satisfy session predicates, even unset/neq. Real missing attributes can
+satisfy unset. Presence guards belong inside each OR term so event alternatives remain valid.
+The unprefixed event and whole-session resolvers remain restricted to their existing callers;
+entry_page/exit_page suffixes require pages and session:route uses the attribution event URL.

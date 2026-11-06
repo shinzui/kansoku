@@ -6,7 +6,7 @@ docId: DOC-10
 tags: ["metrics", "queries", "identity", "cohorts"]
 generated:
   by: process:codex
-  at: "2026-11-06T13:13:28Z"
+  at: "2026-11-06T14:31:34Z"
 ---
 
 # Query metrics
@@ -43,8 +43,73 @@ results. Empty ungrouped session queries return one null-bucket zero for every m
 empty grouped sessions and other supported routes return no points. Existing filters,
 current traits, cohorts, account isolation and limits apply. Users/page views exclude bot
 rows by default, whereas acquisition/sessions exclude any session containing a bot event;
-custom keeps its existing event population and does not accept includeBots. Entry/exit
-page dimensions remain specific to sessions/acquisition. Other routes reject explicit none.
+custom keeps its existing event population and does not accept includeBots. Unprefixed
+entry_page/exit_page remain specific to sessions/acquisition. Other routes reject explicit none.
+
+## Events selected by session attributes
+
+`/metrics/page-views`, `/metrics/users` (calendar, rolling7 and rolling30), and
+`/metrics/custom` accept `session:<attribute>` in filters and grouping. Unprefixed
+`channel` describes each event; `session:channel` describes its retained web visit.
+For an organic-search landing followed by two direct pages,
+`filter=channel:eq:organic_search` selects one page view, while
+`filter=session:channel:eq:organic_search` selects all three. Combine event and
+session dimensions with `groupBy=route,session:referrer_host`; response group keys
+retain the full prefix.
+
+The complete allowed suffixes are `channel`, `referrer_host`, `utm_source`,
+`utm_medium`, `utm_campaign`, `utm_content`, `utm_term`, `entry_page`, `exit_page`,
+`device_class`, `browser_family`, `os_family`, `country_code`, `event_name`, `source`,
+`source_service`, `host`, `route`, and `is_bot`. Only `is_bot` is Boolean; all others
+are nullable strings. Nested properties, traits, organizations and cohorts are not
+session attributes. Other routes reject this namespace.
+
+```bash
+curl --get "$KANSOKU_URL/metrics/page-views" \
+  --header "Authorization: Bearer $KANSOKU_SERVICE_TOKEN" \
+  --data-urlencode 'from=2026-07-01' --data-urlencode 'to=2026-07-02' \
+  --data-urlencode 'filter=session:channel:eq:organic_search' \
+  --data-urlencode 'groupBy=route,session:referrer_host'
+```
+
+The equivalent JSON filter is:
+
+```json
+{"dimension":"session:channel","op":"eq","value":"organic_search"}
+```
+
+A session contains all retained web events with the same account, source service and
+nonempty session ID. Its first page view supplies attribution; absent page views, its
+first event does. Ties use event ID after timestamp. `session:route` comes from that
+attribution event, while entry/exit pages require actual page views. Later campaign,
+device or country changes do not replace the first touch. Events can inherit a later
+first page even when that page is outside the event query interval.
+
+Event dates, properties and identities retain their existing meaning. A session landing
+before `from` still supplies attributes to later in-range events, unlike `/metrics/sessions`
+and acquisition, which select the session start date. Rolling users retain their activity
+lookback and closed-day/day-grain rules, while session attribution uses whole retained
+history. Page views/users still exclude individual bot rows by default; `includeBots=true`
+restores them. `session:is_bot` reflects any bot in the retained session, including one
+outside the query dates. Custom metrics retain their existing bot population. Whole-session
+routes retain whole-session bot exclusion.
+
+Events without an eligible web session group under null and cannot satisfy any session
+filter, including `unset`, `neq` or `in`. A real session with missing country can satisfy
+`session:country_code:unset`. Comparisons, including `neq`, do not match a missing attribute.
+The presence rule applies to each OR alternative: `session:channel:eq:organic_search|source:eq:service`
+can select a service event through its ordinary source alternative. Repeated filters remain
+AND conditions; all ordinary operator types and query/result bounds remain in force.
+
+Saved simple custom definitions can supply session filters and default grouping; request
+grouping overrides the default and request filters are conjoined. Both saved ratio components
+can independently filter session attributes, even without a common filter or session group.
+For example, count payments in organic-search sessions in the numerator and referral sessions
+in the denominator; common request filters apply to both. Ratios remain unbucketed and reject
+property grouping. Numeric aggregates, including exact percentiles for simple metrics, retain
+their declared-property rules. Users still count event-resolved people or the requested
+organizations. A person may appear in several session-channel groups, so summing grouped
+distinct-user counts does not produce a whole-range distinct-user total.
 
 ## Common query contract
 

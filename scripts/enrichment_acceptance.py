@@ -39,7 +39,7 @@ def query(base, token, endpoint='acquisition', **parameters):
     request = urllib.request.Request(base + path, headers={'Authorization': 'Bearer ' + token})
     with urllib.request.urlopen(request, timeout=5) as response:
         result = json.load(response)
-        assert result['metric'] == endpoint
+        assert result['metric'] == {'page-views': 'page_views', 'users': 'active_users'}.get(endpoint, endpoint)
         return result['points']
 
 
@@ -114,6 +114,7 @@ def verify_enrichment(base, write_key, service_token):
     print('EP-34 public workflow: cross-midnight counts, entry/exit, bots, positive-duration lifecycle bounce and replay passed.', flush=True)
     verify_acquisition_conversions(base, write_key, service_token)
     verify_ai_channels(base, write_key, service_token)
+    verify_session_attributes(base, write_key, service_token)
     print('EP-33 public workflow: existing event JSON, retries, first-touch/device/country, bots and exact users passed.', flush=True)
 
 
@@ -238,3 +239,46 @@ def verify_acquisition_conversions(base, write_key, service_token):
         else:
             raise AssertionError('invalid acquisition controls succeeded: ' + controls)
     print('EP-56 public workflow: anonymous alias, backend conversion, first-session counts/rates, whole range and replay passed.', flush=True)
+
+
+def verify_session_attributes(base, write_key, service_token):
+    prefix = 'session_attrs_' + uuid.uuid4().hex
+    fixtures = []
+    for person, routes, referrer in [('a', ['/landing', '/pricing', '/checkout'], 'https://www.google.com/search'),
+                                      ('b', ['/landing', '/pricing'], 'https://news.ycombinator.com/')]:
+        for index, route in enumerate(routes):
+            value = event(prefix + person + str(index), prefix + person,
+                          timestamp='2026-07-01T12:0' + str(index) + ':00Z')
+            value.update(sourceService=prefix, userId=prefix + person,
+                         url='https://shop.example' + route,
+                         properties={'url': 'https://shop.example' + route},
+                         referrer=referrer if index == 0 else 'https://shop.example/landing')
+            fixtures.append(value)
+    for value in fixtures:
+        send(base, write_key, [value])
+    def report(endpoint='page-views', **params):
+        extra = params.pop('filter', [])
+        if isinstance(extra, str):
+            extra = [extra]
+        return query(base, service_token, endpoint=endpoint, to='2026-07-02',
+                     filter=['source_service:eq:' + prefix] + extra, **params)
+    def total(**params):
+        return sum(point['value'] for point in report(**params))
+    eventually(lambda: total(filter='session:channel:eq:organic_search') == 3)
+    assert total(filter='channel:eq:organic_search') == 1
+    assert total(endpoint='users', filter=json.dumps(dict(dimension='session:channel', op='eq', value='organic_search'))) == 1
+    actual = {(p['group']['route'], p['group']['session:referrer_host']): p['value']
+              for p in report(groupBy='route,session:referrer_host')}
+    expected = {(route, host): 1 for host, routes in [
+        ('www.google.com', ['/landing', '/pricing', '/checkout']),
+        ('news.ycombinator.com', ['/landing', '/pricing'])] for route in routes}
+    assert actual == expected, actual
+    sessions = report(endpoint='sessions', groupBy='referrer_host')
+    assert {p['group']['referrer_host']: p['value'] for p in sessions} == {
+        'www.google.com': 1, 'news.ycombinator.com': 1}
+    acquisition = report(endpoint='acquisition', groupBy='referrer_host')
+    assert acquisition == sessions
+    for value in reversed(fixtures):
+        send(base, write_key, [value])
+    assert total(filter='session:channel:eq:organic_search') == 3
+    print('EP-59 public workflow: visit-wide versus landing pages, users, route/referrer groups, session/acquisition parity and replay passed.', flush=True)

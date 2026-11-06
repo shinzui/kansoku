@@ -5,7 +5,7 @@ description: Compile account-scoped saved and ad-hoc metric definitions through 
 docId: ADR-20
 status: Accepted
 date: 2026-10-16
-timestamp: 2026-11-06T12:36:47Z
+timestamp: 2026-11-06T14:31:34Z
 generated:
   by: process:codex
   at: 2026-10-16T12:30:07Z
@@ -104,3 +104,15 @@ Sample-count pairing uses separate existing count requests and identical explici
 property set filters on both requests, plus matching events, dates, grouping, grain and
 other filters. No new count field or atomic snapshot is introduced; writes or changes to
 current identity/trait/cohort state between requests can change either population.
+
+## Session-scoped custom populations
+
+Ad-hoc and saved definitions accept the closed intrinsic session namespace from
+[ADR-13](0013-whole-retained-replay-safe-web-sessions.md). Simple saved filters/default groups,
+request overrides/common filters and both ratio component predicates participate in session
+attachment discovery. One finalized left join supplies deduplicated requested attributes per
+event relation, including for percentile samples. A component-only predicate triggers attachment
+without a common session filter or group; side predicates stay inside their own aggregates.
+Common filters still select both sides. Missing-session guards apply per Boolean term, preserving
+mixed event/session OR alternatives and existing bound operands, types and query/result limits.
+Nested session properties/traits/cohorts remain excluded; definitions retain their wire shape.

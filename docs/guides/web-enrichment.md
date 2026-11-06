@@ -6,7 +6,7 @@ docId: DOC-12
 tags: ["web-analytics", "enrichment", "acquisition", "privacy"]
 generated:
   by: process:codex
-  at: "2026-11-06T04:09:28Z"
+  at: "2026-11-06T14:31:34Z"
 ---
 
 # Web enrichment and acquisition
@@ -153,3 +153,32 @@ them. Upgrade queue consumers before producers; an older reader rejects enrichme
 Changing a classification rule or database does not rewrite accepted history. Any deliberate
 historical correction must rebuild affected derived state from canonical facts under the
 administrative maintenance boundary; queue replay preserves its original accepted enrichment.
+
+## Visit-wide event selection
+
+On page views, calendar/rolling users and custom metrics, `session:channel` selects
+events by their retained web session's first touch. Existing `channel` selects the
+event's own attribution. Thus `session:channel:eq:organic_search` includes subsequent
+direct pages in a search visit; `channel:eq:organic_search` includes its search landing.
+Use `groupBy=route,session:referrer_host` to report each viewed route by visit referrer.
+The equivalent JSON filter is `{"dimension":"session:channel","op":"eq","value":"organic_search"}`.
+
+Allowed suffixes are `channel`, `referrer_host`, `utm_source`, `utm_medium`, `utm_campaign`,
+`utm_content`, `utm_term`, `entry_page`, `exit_page`, `device_class`, `browser_family`,
+`os_family`, `country_code`, `event_name`, `source`, `source_service`, `host`, `route` and
+Boolean `is_bot`. Other values are nullable strings. First page wins, otherwise first event;
+entry/exit require pages. Account/service/session keys isolate attachment. Missing or non-web
+sessions group under null and fail every session predicate, including `unset` and `neq`;
+a real session's missing attribute can satisfy `unset`. OR alternatives apply this rule
+independently. Nested session properties/traits/cohorts and other metric routes are excluded.
+
+Session assembly uses all retained history; event dates and rolling activity lookback still
+select events. A landing before `from` can attribute later pages although the session route
+excludes that start. Page views/users apply their individual-row bot policy, while
+`session:is_bot` sees bots anywhere in the retained session. Custom populations retain their
+existing policy; session/acquisition routes exclude entire bot-containing visits by default.
+Saved custom filters and both ratio populations use the same namespace. Request filters apply
+to both ratio sides, with component filters local to their side. Distinct people can appear
+in multiple session-channel groups; group counts cannot be summed into a distinct-person total.
+See [the event session query contract](query-metrics.md#events-selected-by-session-attributes)
+for commands, saved-definition behavior and rolling-user constraints.

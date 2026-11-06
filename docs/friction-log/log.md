@@ -1,6 +1,9 @@
 # Bundle Update Log
 
 ## 2026-11-06
+* **Update**: FRIC-11 accepted: Accept byte-preserving local log edits as the current workaround and retain the original adoption evidence.
+* **Update**: FRIC-10 accepted: Accept the full-recompile cost for the required migration-aware final gate; keep focused iterations on stable flags.
+* **Addition**: FRIC-11 records detour tooling friction with mori://shinzui/okf: OKF log append rewrites historical adoption evidence
 * **Addition**: FRIC-10 records slowdown tooling friction with mori://shinzui/kansoku: Embedded migration build forces full recompilation during query iteration
 * **Update**: FRIC-9 accepted: Accept the documented preservation workaround, as also required by FRIC-7 in a previous plan
 * **Addition**: FRIC-9 records detour tooling friction with mori://shinzui/okf: OKF log append removes existing guide provenance table

@@ -6,12 +6,17 @@ generated:
   by: "codex-cli/gpt-6.1-sol"
   at: "2026-11-06T14:22:31Z"
 frictionId: FRIC-10
-status: logged
+status: "accepted"
 impact: slowdown
 kind: tooling
 origin: "mori://shinzui/kansoku"
 affects: "mori://shinzui/kansoku"
 plan: "docs/plans/59-filter-and-group-events-by-their-session-attributes.md"
+resolution: "Preserve the migration embed build contract; use a stable focused Cabal configuration during iteration and share the final build across Just targets."
+amended:
+  - by: "codex-cli/gpt-6.1-sol"
+    at: "2026-11-06T14:35:51Z"
+    change: "Accept the full-recompile cost for the required migration-aware final gate; keep focused iterations on stable flags."
 ---
 # Embedded migration build forces full recompilation during query iteration
 

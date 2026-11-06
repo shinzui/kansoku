@@ -4,9 +4,16 @@ title: Filter and group events by the attributes of their session
 description: Add session-scoped dimensions (for example session:channel, session:referrer_host, session:utm_campaign, session:entry_page) that page-views, users and custom metrics can filter and group by, selecting each event by the first-touch attributes of the web session it belongs to, so a consumer can report the pages viewed and the people seen during visits from one source.
 generated:
   by: process:codex
-  at: "2026-11-06T04:19:06Z"
+  at: "2026-11-06T14:53:29Z"
 requestId: IR-9
-status: accepted
+status: completed
+completedAt: "2026-11-06T14:53:29Z"
+resolution: >-
+  AC-1 through AC-4 delivered by plan 59: 19 intrinsic session dimensions on
+  page views, calendar/rolling users and custom metrics/ratios; canonical/materialized
+  attribution parity, missing-session guards and unchanged event populations;
+  guides and generated OpenAPI. Native, authenticated custom, deterministic and
+  full packaged acceptance gates passed on 2026-11-06.
 targetPlan: docs/plans/59-filter-and-group-events-by-their-session-attributes.md
 origin: mori://shinzui/kansoku-ui/masterplans/3-build-the-reports-page
 acceptanceCriteria:
@@ -49,7 +56,13 @@ reviews:
 Follows the set IR-4 to IR-8, filed for the same page.
 
 **Implementation plan:** [ExecPlan 59: Filter and group events by their session attributes](../plans/59-filter-and-group-events-by-their-session-attributes.md).
-The request is accepted for implementation; implementation has not started.
+Completed 2026-11-06. Session-scoped filters/grouping select events by whole retained
+web-session attribution on all three requested routes, including rolling users and saved
+ratio components. [The query guide](../guides/query-metrics.md#events-selected-by-session-attributes)
+and [enrichment guide](../guides/web-enrichment.md#visit-wide-event-selection) describe the
+shipped contract. Native attribution/key comparisons, authenticated page/user/custom workflows,
+complete-result bounds, replay and account isolation pass; all required checks and packaged
+acceptance in three telemetry modes pass.
 
 
 ## Why

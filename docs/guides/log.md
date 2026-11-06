@@ -2,6 +2,8 @@
 
 ## 2026-11-06
 
+* **Update**: DOC-10 and DOC-12: Document session-scoped event filters, grouping, saved ratios and event population semantics
+
 * **Update**: DOC-11: Publish bounded client errors, vital units, privacy and authenticated site-health recipes
 
 * **Update**: DOC-10: Document first-session acquisition conversion counts and rates, event-list limits, whole-range mode and legacy users compatibility

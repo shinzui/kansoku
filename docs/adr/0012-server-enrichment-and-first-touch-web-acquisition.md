@@ -5,7 +5,7 @@ description: Preserve categorical request enrichment in a private versioned queu
 docId: ADR-12
 status: Accepted
 date: 2026-10-15
-timestamp: 2026-11-06T13:13:28Z
+timestamp: 2026-11-06T14:31:34Z
 generated:
   by: process:codex
   at: 2026-10-15T22:09:28Z
@@ -114,3 +114,14 @@ materialized session state for ordinary session counts and acquisition.
 Packaged runtime, pinned generated consumer and country observability acceptance pass for
 the whole enrichment child. The final MasterPlan gate still owns joint SDK/browser adoption
 and the enlarged pipeline capacity regression.
+
+## Event and session attribution dimensions
+
+Page views, users and custom metrics distinguish event `channel` from retained-session
+`session:channel` (and the other intrinsic session dimensions). The latter inherits the same
+first-page, otherwise first-event attributes as session/acquisition routes for equal keys.
+Attachment follows [ADR-13](0013-whole-retained-replay-safe-web-sessions.md). Attribution equality
+does not imply equal route counts: events retain their occurrence-date and individual-row bot
+policy, while session/acquisition select session starts and exclude any-bot sessions by default.
+A landing before from can still attribute later event rows. No enrichment is recomputed, no
+new timeout is introduced and current identity resolution remains event-owned.
