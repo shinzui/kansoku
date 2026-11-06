@@ -1,5 +1,8 @@
 # Bundle Update Log
 
+## 2026-11-06
+* **Add**: Propose IR-9 from `mori://shinzui/kansoku-ui/masterplans/3-build-the-reports-page`: session-scoped dimensions on page-views, users and custom metrics, so events can be filtered and grouped by the first-touch attributes of the session they belong to.
+
 ## 2026-11-05
 * **Add**: Propose IR-4 to IR-8 from `mori://shinzui/kansoku-ui` while planning its Reports page, modelled on the reports of an open-source web-analytics product. IR-4 counts unique users over a whole range. IR-5 attributes conversions to first-touch acquisition (soft dependency on IR-4). IR-6 adds an ai_assistant channel in a new channel rule version. IR-7 adds a percentile aggregation to custom metrics. IR-8 declares client_error and web_vital events, with a browser SDK follow-up for `mori://shinzui/kansoku-ts` (hard dependency on IR-7).
 * **Add**: Propose IR-3 from `mori://shinzui/kansoku-ui/plans/11-add-a-chart-kind-registry-composed-chart-inputs-and-a-chart-options-panel`: the query guide names the experiment conversion measure `rate` where the compiler and its tests emit `conversion_rate`.
