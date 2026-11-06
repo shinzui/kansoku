@@ -43,6 +43,8 @@ reviews:
 **Addressed to:** `shinzui/kansoku` agents.
 **Created:** 2026-11-05.
 
+**Implementation plan:** [ExecPlan 55: Add percentile aggregation to custom metrics](../plans/55-add-percentile-aggregation-to-custom-metrics.md).
+
 Part of the set filed with IR-4; that request lists the others. IR-8 depends on it.
 
 
