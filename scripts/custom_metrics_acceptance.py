@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Custom metric and OR-filter public roundtrips on owned stores."""
 import json
+import math
+import subprocess
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -10,7 +12,7 @@ from enrichment_acceptance import event, eventually, send
 from cohorts_acceptance import main
 
 
-def verify_custom_metrics(base, write_key, token, other_token, after_membership=None, **_):
+def verify_custom_metrics(base, write_key, token, other_token, after_membership=None, env=None, **_):
     prefix = 'custom_' + uuid.uuid4().hex
 
     def api(path, body=None, method='GET', credential=token, expected=200, **params):
@@ -65,6 +67,21 @@ def verify_custom_metrics(base, write_key, token, other_token, after_membership=
         assert sum(p['value'] for p in filtered([alternative])) == sum(sum(p['value'] for p in filtered(['prop:plan:eq:'+plan])) for plan in ['pro','enterprise']) == 3
         assert sum(p['value'] for p in filtered([alternative, 'prop:amount:gt:3'])) == 2
 
+        # Early native/public proof of exact inclusive interpolation and decoding.
+        percentile_prefix = prefix + '_percentile'
+        percentile_rows = []
+        for index, amount in enumerate([10, 20, 30, 40]):
+            row = event(percentile_prefix+str(index), percentile_prefix+str(index), name='payment_completed', timestamp='2026-07-01T00:00:01Z')
+            row.update(userId=percentile_prefix+str(index), sourceService=percentile_prefix, properties={'amount':amount, 'plan':'pro'})
+            percentile_rows.append(row)
+        send(base, write_key, percentile_rows)
+        def percentile_points(**params):
+            options = dict(dates, events='payment_completed', aggregation='percentile', property='amount',
+                           quantile=0.75, filter='source_service:eq:'+percentile_prefix)
+            options.update(params)
+            return api('/metrics/custom', **options)['points']
+        eventually(lambda: percentile_points() == [{'bucket':'2026-07-01', 'group':{}, 'value':32.5}])
+
         definition = dict(name=prefix, description='payments', eventNames=['payment_completed'], aggregation='sum',
                           aggregationProperty='amount', filters=[selection, alternative], groupBy=['prop:plan'], timeGrain='day')
         saved = api('/metric-definitions', definition, 'POST')
@@ -82,6 +99,123 @@ def verify_custom_metrics(base, write_key, token, other_token, after_membership=
         updated = dict(definition, aggregation='average')
         api('/metric-definitions/'+ident, updated, 'PUT')
         assert sum(p['value'] for p in metric(metric=prefix, groupBy='source')['points']) == 4
+
+        # Independent expected maps: quantiles are never combined across buckets.
+        samples_prefix = prefix + '_samples'
+        sample_rows = []
+        populations = {('2026-07-01','pro'):[10,20,30,40], ('2026-07-01','enterprise'):[-10,0,0,10],
+                       ('2026-07-02','pro'):[100], ('2026-07-02','enterprise'):[5,5]}
+        for (day, plan), amounts in populations.items():
+            for index, amount in enumerate(amounts):
+                row = event(samples_prefix+day+plan+str(index), samples_prefix+day+plan+str(index),
+                            name='subscription_started', timestamp=day+'T00:00:01Z')
+                row.update(sourceService=samples_prefix, properties={'amount':amount, 'plan':plan})
+                sample_rows.append(row)
+        for index, properties in enumerate([{'plan':'unset'}, {'plan':'pro'}]):
+            row = event(samples_prefix+'unset'+str(index), samples_prefix+'unset'+str(index),
+                        name='subscription_started', timestamp='2026-07-01T00:00:01Z')
+            row.update(sourceService=samples_prefix, properties=properties)
+            sample_rows.append(row)
+        sample_dates = {'from':'2026-07-01', 'to':'2026-07-03'}
+        sample_filters = ['source_service:eq:'+samples_prefix, 'prop:amount:set']
+        def sample_metric(aggregation='percentile', **params):
+            options = dict(sample_dates, events='subscription_started', aggregation=aggregation, groupBy='prop:plan',
+                           filter=sample_filters, timeGrain='day')
+            if aggregation == 'percentile':
+                options.update(property='amount', quantile=0.75)
+            options.update(params)
+            return api('/metrics/custom', **options)['points']
+        def point_map(points):
+            return {(p['bucket'],p['group'].get('prop:plan')):p['value'] for p in points}
+        def assert_values(points, expected):
+            actual = point_map(points)
+            assert actual.keys() == expected.keys(), (actual,expected)
+            assert all(math.isclose(actual[key], value, rel_tol=0, abs_tol=1e-9) for key,value in expected.items()), (actual,expected)
+        expected_daily = {
+            0.5:{('2026-07-01','pro'):25, ('2026-07-01','enterprise'):0, ('2026-07-02','pro'):100, ('2026-07-02','enterprise'):5},
+            0.75:{('2026-07-01','pro'):32.5, ('2026-07-01','enterprise'):2.5, ('2026-07-02','pro'):100, ('2026-07-02','enterprise'):5},
+            0.95:{('2026-07-01','pro'):38.5, ('2026-07-01','enterprise'):8.5, ('2026-07-02','pro'):100, ('2026-07-02','enterprise'):5}}
+        expected_whole = {0.5:{'pro':30,'enterprise':2.5}, 0.75:{'pro':40,'enterprise':5}, 0.95:{'pro':88,'enterprise':8.75}}
+        expected_counts = {key:len(values) for key,values in populations.items()}
+        for delivery in (sample_rows, list(reversed(sample_rows))):
+            for start in range(0, len(delivery), 3):
+                send(base, write_key, delivery[start:start+3])
+        send(base, other_token, [dict(sample_rows[0], eventId=samples_prefix+'foreign', properties={'amount':10000,'plan':'pro'})])
+        eventually(lambda: point_map(sample_metric('count')) == expected_counts)
+        for quantile, expected in expected_daily.items():
+            points = sample_metric(quantile=quantile)
+            assert_values(points, expected)
+            assert point_map(sample_metric('count')) == expected_counts
+            assert point_map(points).keys() == expected_counts.keys()
+            for grain,bucket in [('week','2026-06-29'), ('month','2026-07-01'), ('none',None)]:
+                points = sample_metric(quantile=quantile, timeGrain=grain)
+                assert_values(points, {(bucket,plan):value for plan,value in expected_whole[quantile].items()})
+                assert point_map(sample_metric('count', timeGrain=grain)) == {(bucket,'pro'):5,(bucket,'enterprise'):6}
+            assert_values(sample_metric(quantile=quantile, timeGrain='hour'),
+                          {(day+' 00:00:00',plan):value for (day,plan),value in expected.items()})
+        # Replay invariance after the first result, independently of background merges.
+        send(base, write_key, list(reversed(sample_rows)))
+        assert_values(sample_metric(), expected_daily[0.75])
+        assert point_map(sample_metric('count')) == expected_counts
+        assert_values(sample_metric(filter=sample_filters+['prop:plan:eq:enterprise']),
+                      {key:value for key,value in expected_daily[0.75].items() if key[1]=='enterprise'})
+        for extra in [dict(filter=sample_filters+['prop:plan:eq:absent']),
+                      dict(filter=sample_filters+['prop:plan:eq:unset']), dict(**{'from':'2026-07-03','to':'2026-07-04'})]:
+            for aggregation in ('percentile','count'):
+                assert sample_metric(aggregation, **extra) == []
+                assert sample_metric(aggregation, timeGrain='none', **extra) == []
+        # Exclusion is intrinsic to percentile as well as the explicit pairing filter.
+        assert_values(sample_metric(filter=sample_filters[:1]), expected_daily[0.75])
+
+        for bad in (None, '0', '1', '-0.1', '1.1'):
+            args = dict(dates, events='payment_completed', aggregation='percentile', property='amount')
+            if bad is not None:
+                args['quantile'] = bad
+            assert api('/metrics/custom', expected=400, **args)['code'] == 'invalid_metric'
+        for kind in ('count','unique_count','sum','average'):
+            assert api('/metrics/custom', **dates, events='payment_completed', aggregation=kind, quantile=0.75, expected=400)['code'] == 'invalid_metric'
+
+        # Saved percentile CRUD uses the same population and immutable quantile.
+        percentile_def = dict(definition, name=percentile_prefix, aggregation='percentile', quantile=0.75,
+                              filters=['source_service:eq:'+percentile_prefix, 'prop:amount:set'])
+        percentile_saved = api('/metric-definitions', percentile_def, 'POST')
+        percentile_id = percentile_saved['id']
+        assert percentile_saved['definition'] == percentile_def
+        assert api('/metric-definitions/'+percentile_id)['definition'] == percentile_def
+        percentile_adhoc = percentile_points(groupBy='prop:plan')
+        assert api('/metrics/custom', **dates, metric=percentile_prefix)['points'] == percentile_adhoc
+        assert api('/metrics/custom', **dates, metric=percentile_prefix, groupBy='source', timeGrain='none')['points'] == percentile_points(groupBy='source', timeGrain='none')
+        assert api('/metrics/custom', **dates, metric=percentile_prefix, quantile=0.95, expected=400)['code'] == 'invalid_metric'
+        for method in ('GET', 'PUT', 'DELETE'):
+            assert api('/metric-definitions/'+percentile_id, percentile_def if method == 'PUT' else None,
+                       method, credential=other_token, expected=404)['code'] == 'metric_not_found'
+        assert api('/metrics/custom', **dates, metric=percentile_prefix, credential=other_token, expected=404)['code'] == 'metric_not_found'
+        for changes in [dict(quantile=None), dict(quantile=0), dict(quantile=1), dict(quantile=-0.5), dict(quantile=1.5),
+                        dict(aggregation='sum'), dict(aggregationProperty='plan')]:
+            invalid = dict(percentile_def, **changes)
+            assert api('/metric-definitions', invalid, 'POST', expected=400)['code'] == 'invalid_metric'
+            assert api('/metric-definitions/'+percentile_id, invalid, 'PUT', expected=400)['code'] == 'invalid_metric'
+        scalar = dict(percentile_def, groupBy=[], timeGrain=None)
+        count_component = dict(scalar, aggregation='count', aggregationProperty=None)
+        count_component.pop('quantile')
+        for numerator, denominator in [(scalar,count_component), (count_component,scalar)]:
+            invalid_ratio = dict(name=prefix+'invalid_ratio', description=None, numerator=numerator, denominator=denominator)
+            assert api('/metric-definitions', invalid_ratio, 'POST', expected=400)['code'] == 'invalid_metric'
+        updated_percentile = dict(percentile_def, quantile=0.95)
+        assert api('/metric-definitions/'+percentile_id, updated_percentile, 'PUT')['definition'] == updated_percentile
+        actual = api('/metrics/custom', **dates, metric=percentile_prefix)['points']
+        assert actual == percentile_points(quantile=0.95, groupBy='prop:plan')
+        assert math.isclose(actual[0]['value'], 38.5, abs_tol=1e-9)
+        if env is not None:
+            # Corrupt only the explicitly owned row to prove loaded-state validation.
+            uuid.UUID(percentile_id)
+            subprocess.run(['psql', '-X', '-v', 'ON_ERROR_STOP=1', '-c',
+                            "UPDATE kansoku.metric_definitions SET definition=jsonb_set(definition,'{quantile}','1'::jsonb) WHERE id='"+percentile_id+"'::uuid"],
+                           env=env, check=True, capture_output=True, text=True, timeout=10)
+            assert api('/metrics/custom', **dates, metric=percentile_prefix, expected=400)['code'] == 'invalid_metric'
+            api('/metric-definitions/'+percentile_id, updated_percentile, 'PUT')
+        api('/metric-definitions/'+percentile_id, method='DELETE')
+        assert api('/metrics/custom', **dates, metric=percentile_prefix, expected=404)['code'] == 'metric_not_found'
 
         # Whole-range mode counts returning subjects once across a month boundary.
         whole_prefix = prefix + '_range'
@@ -231,6 +365,21 @@ def verify_custom_metrics(base, write_key, token, other_token, after_membership=
         api('/metric-definitions',trait_def,'POST')
         eventually(lambda: total(metric=trait_def['name']) == 6)
 
+        for extra_filters, grouping in [(['cohort:eq:'+cohort['id']], 'prop:plan'),
+                                         ([], 'cohort:'+cohort['id']), (['user:plan:eq:pro'], 'source')]:
+            selected_percentile = dict(definition, name=prefix+'p75_selected', aggregation='percentile', quantile=0.75,
+                                       filters=[selection, 'prop:amount:set']+extra_filters, groupBy=[grouping])
+            record = api('/metric-definitions', selected_percentile, 'POST')
+            expected = api('/metrics/custom', **dates, events='payment_completed', aggregation='percentile', property='amount',
+                           quantile=0.75, filter=selected_percentile['filters'], groupBy=grouping)['points']
+            assert api('/metrics/custom', **dates, metric=selected_percentile['name'])['points'] == expected
+            assert expected
+            counts = api('/metrics/custom', **dates, events='payment_completed', aggregation='count',
+                         filter=selected_percentile['filters'], groupBy=grouping)['points']
+            assert [(p['bucket'],p['group']) for p in counts] == [(p['bucket'],p['group']) for p in expected]
+            assert sum(p['value'] for p in counts) == (3 if not extra_filters else 2)
+            api('/metric-definitions/'+record['id'], method='DELETE')
+
         # Walk UUID keysets both ways in canonical order, without skips or duplicates.
         first = api('/metric-definitions',first=2)
         nodes = list(first['edges'])
@@ -260,7 +409,7 @@ def verify_custom_metrics(base, write_key, token, other_token, after_membership=
         assert api('/metric-definitions',dict(definition,name=prefix+'invalid',aggregationProperty='plan'),'POST',expected=400)['code']=='invalid_metric'
         api('/metric-definitions/'+ident,method='DELETE')
         assert api('/metrics/custom',metric=prefix,expected=404,**dates)['code']=='metric_not_found'
-        print('Custom metrics: all aggregations, replay, OR groups, saved defaults, cohorts/traits, CRUD, bidirectional pages and account isolation passed.',flush=True)
+        print('Custom metrics: exact p50/p75/p95, numeric sample counts, replay, OR groups, saved CRUD/defaults/validation, cohorts/traits, bidirectional pages and account isolation passed.',flush=True)
 
 
 if __name__ == '__main__':
@@ -269,4 +418,4 @@ if __name__ == '__main__':
     with isolated_clickhouse(block_size=2) as native:
         apply_migrations(native)
         hspec([binary('kansoku-core:test:kansoku-core-test'), '--match=Kansoku.Metrics filters native'], env=native)
-    main(verify=verify_custom_metrics)
+    main(verify=verify_custom_metrics, pass_environment=True)

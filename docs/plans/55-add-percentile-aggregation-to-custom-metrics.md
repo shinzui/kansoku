@@ -34,13 +34,15 @@ This plan creates one scalar percentile per request. Histograms, multiple quanti
 
 
 - [x] Milestone 1 (2026-11-06): Ad-hoc percentile requests validate and return exact results through the public API and native database path. `nix develop -c just build-with-tests` passed; the deterministic gate executed 485 core and 21 client examples plus four probes without failures. The early owned custom acceptance passed four native examples and the public p75=32.5 proof on ClickHouse 26.8.28 (`.dev/acceptance/cohort-b18dgm5y`).
-- [ ] Milestone 2: Saved percentile definitions roundtrip and execute with existing defaults, filters, and isolation guarantees.
-- [ ] Milestone 3: Grouped and bucketed percentile/count parity, edge cases, generated contracts, and user documentation pass the required gates.
+- [x] Milestone 2 (2026-11-06): Saved percentile POST/GET/PUT/DELETE and execution roundtrip exactly against ad-hoc points, including saved defaults, request overrides, trait/cohort selection, foreign-account rejection and invalid writes/loaded state. The expanded public owned scenario and final `nix develop -c just custom-metrics-acceptance` both passed; all temporary percentile definitions were registered and deleted before the unchanged eight-definition pagination walk.
+- [x] Milestone 3 (2026-11-06): Independent p50/p75/p95 maps pass for two groups/two days and hour/week/month/whole-range grains; matching numeric-set counts, singleton/repeated/negative/zero values, sparse empty results, replay before merges, historical null/incompatible values and non-finite extraction pass. `nix develop -c just openapi`, `nix fmt`, `nix develop -c just check`, final `nix develop -c just custom-metrics-acceptance` (five native examples, no failures/pending, complete public scenario), and `git diff --check` passed. Final owned evidence: `.dev/acceptance/cohort-kqn_omj0`. The full check included 485 core examples, 21 client examples, four probes, generated artifact drift, OpenAPI lint, document profiles/strict ADR validation and telemetry lifecycle checks.
 
 ## Surprises & Discoveries
 
 Discovery (2026-11-06): `CustomSpec` was declared in Cabal but absent from the explicit Hspec runner. Registered it in `kansoku-core/test/Spec.hs`; the deterministic transcript now includes the existing and new custom-definition examples. See FRIC-5 in `docs/friction-log/`.
 
+
+Discovery (2026-11-06): Public schema validation rejects null numeric values and the pinned native JSON parser rejects overflowing/non-finite literals. Historical null/string/bool samples therefore use native fixtures; the shared numeric extraction guard is separately exercised through native Dynamic subcolumns containing inf, -inf, nan and 3.5, with exactly one eligible value. No ingestion rules were relaxed.
 
 ## Decision Log
 
@@ -53,11 +55,17 @@ Decision (2026-11-05): Preserve the result shape and pair with existing count re
 
 ## Outcomes & Retrospective
 
+Completed 2026-11-06. All four IR-7 acceptance criteria are implemented and verified: exact per-population percentiles through the public/native path, saved quantile validation and roundtrips, published interpolation/eligibility/empty-result semantics, and same-population sample-count pairing. The result shape, legacy definitions and database storage remain compatible; no dependency, migration or backfill was needed. Both required final gates exit zero, with no pending integration cases.
+
+The first native/public proof confirmed the pinned ClickHouse 26.8.28 aggregate and Float64 decoding before extending the scenarios. Independent expected maps demonstrate why weekly results must aggregate underlying samples. Temporary saved percentile resources preserve strict pagination and scenario cleanup. ADR-20 now retains the quantile contract, numeric source/eligibility rules, exact resource behavior and non-atomic count pairing; no separate ADR was needed after reviewing the decisions and discoveries.
+
+FRIC-5 in `docs/friction-log/` is resolved: registering the previously omitted CustomSpec made its eight examples part of every deterministic run. No friction entries under this plan remain logged. No implementation work remains within this plan's scope; exact sample retention remains governed by existing query budgets, and separate percentile/count requests do not provide an atomic snapshot.
+
 
 ## Context and Orientation
 
 
-`kansoku-api/src/Kansoku/Metrics/Definition.hs` owns `Aggregation`, `MetricDefinition`, and the untagged simple/ratio JSON union. Simple definitions currently have eight fields, including `aggregationProperty`; the union parser explicitly rejects unknown top-level fields. Saved definitions are JSON in PostgreSQL, managed by `kansoku-core/src/Kansoku/Metrics/DefinitionStore.hs` and `kansoku-core/src/Kansoku/Metrics/DefinitionHandler.hs`. No storage migration is expected.
+`kansoku-api/src/Kansoku/Metrics/Definition.hs` owns `Aggregation`, `MetricDefinition`, and the untagged simple/ratio JSON union. Simple definitions now have nine fields, including `aggregationProperty` and optional `quantile`; the union parser explicitly rejects unknown top-level fields. Saved definitions are JSON in PostgreSQL, managed by `kansoku-core/src/Kansoku/Metrics/DefinitionStore.hs` and `kansoku-core/src/Kansoku/Metrics/DefinitionHandler.hs`. No storage migration is expected.
 
 `kansoku-core/src/Kansoku/Metrics/Custom.hs` constructs ad-hoc definitions, validates both ad-hoc and saved inputs, and merges saved filters/defaults into execution requests. `kansoku-core/src/Kansoku/Metrics/Handler.hs` rejects mixed saved/ad-hoc selectors and validates loaded definitions again. `kansoku-api/src/Kansoku/Metrics/Api.hs` declares the custom route, while `kansoku-core/src/Kansoku/Metrics/RequestValidation.hs` maintains its authenticated parameter allowlist. Both must recognize the new parameter.
 
@@ -65,7 +73,7 @@ Decision (2026-11-05): Preserve the result shape and pair with existing count re
 
 Relevant consulted decisions are [ADR-4](../adr/0004-queryable-event-properties-and-identity-resolved-projection.md), which owns declared properties, finite numeric extraction and replay-safe canonical facts; [ADR-9](../adr/0009-bounded-complete-aggregate-responses.md), which requires bounded inputs and complete results or an error; [ADR-10](../adr/0010-owned-executable-acceptance-environments.md), which requires disposable owned databases for native tests; and [ADR-20](../adr/0020-custom-metric-definitions-and-bounded-or-filters.md), which owns shared validation, saved defaults, account isolation and bounded AND/OR filters. [ADR-18](../adr/0018-stable-reader-sql-and-real-consumer-conformance.md) was also consulted: this work leaves the separate stable SQL reader interfaces unchanged.
 
-`kansoku-core/test/Kansoku/Metrics/CustomSpec.hs` covers definition validation and compiler behavior. `kansoku-core/test/Kansoku/Metrics/HandlerSpec.hs` covers HTTP boundaries, and `kansoku-core/test/Kansoku/OpenApiSpec.hs` covers public schema. `scripts/custom_metrics_acceptance.py` already exercises public custom metrics, saved CRUD, replay, cohorts, traits and foreign accounts on owned stores. Extend this existing proof; its pagination assertions currently expect exactly five saved definitions, so explicitly account for new owned resources rather than weakening completeness assertions.
+`kansoku-core/test/Kansoku/Metrics/CustomSpec.hs` covers definition validation and compiler behavior. `kansoku-core/test/Kansoku/Metrics/HandlerSpec.hs` covers HTTP boundaries, and `kansoku-core/test/Kansoku/OpenApiSpec.hs` covers public schema. `scripts/custom_metrics_acceptance.py` already exercises public custom metrics, saved CRUD, replay, cohorts, traits and foreign accounts on owned stores. Extend this existing proof; its pagination assertions expect exactly eight persistent scenario definitions. New percentile definitions are registered with `OwnedResources` and explicitly deleted before the full walk, preserving those completeness assertions.
 
 ## Plan of Work
 

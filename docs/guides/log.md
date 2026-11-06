@@ -2,6 +2,8 @@
 
 ## 2026-11-06
 
+* **Update**: DOC-10 documents exact percentile interpolation, quantile validation, saved definitions and non-atomic numeric sample-count pairing.
+
 * **Update**: DOC-10 names the experiment conversion measures as `exposed`, `converted`, and `conversion_rate`.
 * **Update**: DOC-10 documents whole-range routes, defaults, populations and empty results
 * **Update**: Describe assistant hosts and aliases, URL tag fallback, precedence and independent queue/enrichment versions.

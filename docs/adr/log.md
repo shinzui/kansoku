@@ -2,6 +2,8 @@
 
 ## 2026-11-06
 
+* **Update**: ADR-20 records exact R-7 percentile compilation, quantile validation, legacy JSON compatibility and sample-count pairing.
+
 * **Update**: ADR-13, ADR-14 and ADR-20 define explicit whole-range grouping and saved override semantics
 * **Update**: ADR-10: Fix owned ClickHouse timezone to UTC so calendar-day expiry fixtures do not depend on host daylight-saving rules.
 * **Update**: Document channel/enrichment version 2, bounded AI assistant attribution and immutable historical replay.

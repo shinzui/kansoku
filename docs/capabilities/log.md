@@ -2,6 +2,8 @@
 
 ## 2026-11-06
 
+* **Update**: CAP-14 includes exact custom percentiles, saved quantiles and numeric sample eligibility.
+
 * **Update**: Document explicit whole-range metric capabilities.
 
 ## 2026-10-16

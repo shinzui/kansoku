@@ -1,10 +1,10 @@
 ---
 type: Capability
 title: "Custom and saved metric definitions"
-description: "Compute ad-hoc counts, unique users, numeric sums, averages and ratios, or save typed account-scoped definitions for reuse."
+description: "Compute ad-hoc counts, unique users, numeric sums, averages, exact percentiles and ratios, or save typed account-scoped definitions for reuse."
 generated:
   by: process:codex
-  at: "2026-10-16T13:11:11Z"
+  at: "2026-11-06T12:36:47Z"
 capabilityId: CAP-14
 provider: mori://shinzui/kansoku
 status: shipped
@@ -54,3 +54,13 @@ Numeric aggregates require compatible declared properties; event scopes have at 
 ## Whole-range queries
 
 Explicit `timeGrain=none` returns one null-bucket point per populated group on calendar users, simple custom metrics, acquisition, events, page views and sessions. Exact distinct identities are counted over the whole range; session rates and averages use selected sessions directly. Omission preserves defaults; saved simple grains can be overridden explicitly. See [query metrics](../guides/query-metrics.md#whole-range-totals) for the route matrix and empty-result semantics.
+
+## Exact percentiles
+
+Select `aggregation=percentile`, a declared numeric `property`, and finite
+`quantile` strictly between zero and one. Saved simple definitions persist the same
+optional quantile; legacy definitions remain valid. Exact inclusive (R-7) interpolation
+uses finite Float64 samples independently per group/bucket, with sparse empty results.
+Percentile and quantile are unsupported in ratios. Pair a count with the same explicit
+numeric property set filter; separate reads are non-atomic. Existing query resource
+limits apply. See [percentiles and sample counts](../guides/query-metrics.md#percentiles-and-sample-counts).

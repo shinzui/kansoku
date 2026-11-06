@@ -6,7 +6,7 @@ docId: DOC-10
 tags: ["metrics", "queries", "identity", "cohorts"]
 generated:
   by: process:codex
-  at: "2026-11-06T12:28:58Z"
+  at: "2026-11-06T12:36:47Z"
 ---
 
 # Query metrics
@@ -25,7 +25,7 @@ once in each, so group totals can overlap.
 | Route | Whole-range support |
 | --- | --- |
 | `/metrics/users` | `window=calendar` only; `to` must be a closed UTC day |
-| `/metrics/custom` | count, unique_count, sum and average; ratios require omitted grain |
+| `/metrics/custom` | count, unique_count, sum, average and percentile; ratios require omitted grain |
 | `/metrics/acquisition` | users and sessions; default grouping remains channel |
 | `/metrics/events` | distinct canonical events |
 | `/metrics/page-views` | canonical page views |
@@ -815,8 +815,8 @@ scope: only a group consisting entirely of positive event-name eq/in terms narro
 ## Custom metrics
 
 `GET /metrics/custom` requires `from`, `to`, `events` (1..100 comma-separated validated
-names) and `aggregation`: `count`, `unique_count`, `sum`, `average` or `ratio`.
-Sum/average require `property`, declared numeric across every listed event/version.
+names) and `aggregation`: `count`, `unique_count`, `sum`, `average`, `percentile` or `ratio`.
+Sum/average/percentile require `property`, declared numeric across every listed event/version.
 Count deduplicates event IDs; unique count uses resolved identities across all listed
 events. Event names need not be registered, but property dimensions require declarations.
 The standard filters, up to two group dimensions and time grains apply; day is the default.
@@ -838,6 +838,54 @@ Invalid definitions and unsupported aggregation combinations return 400 `invalid
 Filters retain `invalid_filter`; date, cardinality and resource bounds retain their standard
 codes. No custom definition contains SQL, and every query uses the authenticated account.
 
+### Percentiles and sample counts
+
+Use `aggregation=percentile&property=amount&quantile=0.75` for p75; p50 and p95 use
+0.5 and 0.95. Quantile is required, finite, and strictly between zero and one, with
+no default. Other aggregations and either ratio component reject quantile/percentile.
+Malformed numeric URL text returns a decoding error; invalid numeric bounds return
+400 `invalid_metric`.
+
+Percentile uses exact inclusive interpolation (R-7), with normal Float64 rounding and
+no approximate estimator. Sort n eligible samples and interpolate between adjacent
+values at zero-based position `(n-1)*quantile`. Samples 10, 20, 30, 40 have p50=25,
+p75=32.5 and p95=38.5. A singleton returns itself. Zero, negative and repeated values
+are eligible. Only finite numeric values with compatible numeric declarations across
+the selected events participate; missing, null, incompatible historical types and
+non-finite values are excluded. Replay cannot add samples. Filters, account isolation,
+current traits and cohorts apply before aggregation. Each group and time bucket is
+computed from its own underlying samples; combining daily percentiles does not produce
+a weekly percentile. Empty buckets/groups emit no points, including an entirely empty
+`points` array; there is no synthetic zero percentile.
+
+Pair a percentile with a separate `count` request using identical events, dates,
+filters, grouping and grain. Add an explicit `filter=prop:amount:set` to **both**
+requests so the count measures the eligible numeric samples. Omit `property` and
+`quantile` from the count request. For example:
+
+```bash
+curl --get "$BASE_URL/metrics/custom" -H "Authorization: Bearer $TOKEN" \
+  --data-urlencode from=2026-07-01 --data-urlencode to=2026-08-01 \
+  --data-urlencode events=payment_completed --data-urlencode aggregation=percentile \
+  --data-urlencode property=amount --data-urlencode quantile=0.75 \
+  --data-urlencode groupBy=prop:plan --data-urlencode timeGrain=day \
+  --data-urlencode 'filter=prop:amount:set'
+curl --get "$BASE_URL/metrics/custom" -H "Authorization: Bearer $TOKEN" \
+  --data-urlencode from=2026-07-01 --data-urlencode to=2026-08-01 \
+  --data-urlencode events=payment_completed --data-urlencode aggregation=count \
+  --data-urlencode groupBy=prop:plan --data-urlencode timeGrain=day \
+  --data-urlencode 'filter=prop:amount:set'
+```
+
+Match the returned bucket/group keys. A group with no eligible values is absent from
+both results. These separate requests are non-atomic: new events or changed identities,
+traits or cohort membership between reads can change the population. This recipe does
+not provide a transactional snapshot. Exact percentile retains samples in memory;
+existing memory, execution and complete-result limits apply. Resource exhaustion returns
+the existing query error, never an approximate result or silently truncated population.
+
+### Saved definitions
+
 Save a simple definition with `POST /metric-definitions`:
 
 ```json
@@ -852,6 +900,12 @@ Save a simple definition with `POST /metric-definitions`:
   "timeGrain": "day"
 }
 ```
+
+To save p75, use the same simple shape with `"aggregation":"percentile"`,
+`"aggregationProperty":"amount"`, `"quantile":0.75`, and `"filters":["prop:amount:set"]`.
+POST, GET and PUT preserve quantile. Older definitions without quantile remain valid;
+saved execution takes its quantile from the definition. `metric=payment_p75&quantile=0.95`
+is rejected; replace the definition with PUT to change its quantile.
 
 A ratio body has `name`, optional `description`, and `numerator`/`denominator` containing
 simple definitions of the same shape (each with empty groupBy and null timeGrain).
@@ -872,5 +926,5 @@ with saved filters, and the combined population remains subject to the eight-gro
 Do not combine `metric` with ad-hoc definition parameters. Saved cohort references are
 resolved in the current account at execution time; deleting a cohort makes its references
 fail with `cohort_not_found`. Trait and cohort selection uses resolved event paths even
-for event counts and sums. The typed client exposes `Metrics.custom metricsClient` and
+for event counts, sums, averages and percentiles. The typed client exposes `Metrics.custom metricsClient` and
 `metricDefinitionsClient` from `Kansoku.Client.Metrics`.

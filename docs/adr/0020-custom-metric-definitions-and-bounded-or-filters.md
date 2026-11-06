@@ -5,7 +5,7 @@ description: Compile account-scoped saved and ad-hoc metric definitions through 
 docId: ADR-20
 status: Accepted
 date: 2026-10-16
-timestamp: 2026-11-06T05:10:00Z
+timestamp: 2026-11-06T12:36:47Z
 generated:
   by: process:codex
   at: 2026-10-16T12:30:07Z
@@ -27,7 +27,7 @@ cohort references and resource pagination. These rules also govern custom metric
 
 `Kansoku.Metrics.Definition` in the shared API package owns the wire representation.
 A simple definition contains name, description, eventNames, aggregation,
-aggregationProperty, filters as a list of grammar strings, groupBy as full dimension
+aggregationProperty, optional quantile, filters as a list of grammar strings, groupBy as full dimension
 names, and timeGrain. A ratio contains name, description, numerator and denominator;
 its components are simple definitions with no independent grouping or time grain.
 Each component can count distinct events, count resolved subjects, sum, or average.
@@ -58,7 +58,7 @@ scope for property validation. A mixed event-name/other-dimension group cannot n
 
 Custom metrics contain definitions, never SQL. They share account predicates, canonical
 event deduplication, identity resolution, property checks, complete-result bounds and
-query resource budgets with builtins. Count/sum/average use canonical raw events unless
+query resource budgets with builtins. Count/sum/average/percentile use canonical raw events unless
 traits/cohorts require the resolved source; unique counts and ratios use resolved events.
 Saved state does not snapshot data, identities, traits or cohort membership.
 
@@ -82,3 +82,25 @@ cover OR scope safety, invalid definitions and native parameterization.
 ## Whole-range temporal grouping
 
 Explicit `timeGrain=none` is distinct from omission/null and is persisted as the string none. Request grain overrides saved grain in either direction. Simple custom aggregates, calendar users, acquisition, events, page views and sessions support a constant null bucket per populated group. Exact identities are aggregated over the whole selected population; per-group counts can overlap. Custom ratios still reject explicit grain. Existing sparse results, population rules and complete-result bounds apply; sessions alone retain ungrouped zero-fill.
+
+## Exact percentile aggregation
+
+Simple definitions support percentile with a declared numeric aggregationProperty and
+required finite quantile strictly between zero and one. The optional JSON field is
+omitted when absent, preserving legacy payloads. Ad-hoc URL quantile uses the same
+validation; saved execution cannot override it. Ratio components reject percentile and
+other aggregations reject quantile. Writes, loaded definitions and the compiler validate
+before executing native queries.
+
+ClickHouse quantileExactInclusive performs exact inclusive (R-7) interpolation at
+zero-based position (n-1)q on finite Float64 samples; a singleton returns itself. Each
+bucket/group uses its full underlying population, never aggregated partial percentiles.
+The normal numeric extraction excludes missing, null, incompatible and non-finite values.
+Canonical events deduplicate replay; traits/cohorts select the existing resolved source.
+Empty populations emit no points. Exact sample retention remains subject to existing
+memory/execution limits and complete-or-error behavior, with no approximation fallback.
+
+Sample-count pairing uses separate existing count requests and identical explicit numeric
+property set filters on both requests, plus matching events, dates, grouping, grain and
+other filters. No new count field or atomic snapshot is introduced; writes or changes to
+current identity/trait/cohort state between requests can change either population.

@@ -3,7 +3,8 @@ module Kansoku.Metrics.FilterIntegrationSpec (spec) where
 import ClickHaskell (ChString, ClickHaskell, Column, Connection, Float64, Select, closeConnection, command, select, unsafeMkSelect)
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (cancel, waitCatch, withAsync)
-import Control.Exception (bracket, bracket_)
+import Control.Exception (bracket, bracket_, finally)
+import Control.Monad (forM_)
 import Data.Aeson qualified as Aeson
 import Data.Aeson.Key qualified as Key
 import Data.Aeson.KeyMap qualified as KeyMap
@@ -24,6 +25,7 @@ import Kansoku.Metrics.Api (MetricResult (..), TimeGrain (Day))
 import Kansoku.Metrics.Definition qualified as Definition
 import Kansoku.Metrics.Filter qualified as Filter
 import Kansoku.Metrics.Query qualified as Query
+import Kansoku.Metrics.Query.Property (propertyFloatExpr, resolveNumericProperty)
 import Kansoku.Metrics.Registry qualified as Registry
 import Kansoku.Prelude
 import System.Environment (lookupEnv)
@@ -110,6 +112,40 @@ spec = describe "Kansoku.Metrics filters native" $ do
       split <- query pool ratio ratioRequest {Query.groupBy = Just ["source", "source_service"]}
       [(Map.lookup "source_service" (point ^. #group), point ^. #value) | point <- split ^. #points]
         `shouldBe` [(Just (Just "a"), 1), (Just (Just "b"), 1)]
+
+  it "computes exact percentiles over eligible canonical historical numeric samples" $ withNative $ \connection -> do
+    seed connection
+    insertEvents connection [event "percentile-null" [("plan", Aeson.String "unset"), ("amount", Aeson.Null)]]
+    -- Native JSON rejects non-finite literals, so exercise its Dynamic numeric
+    -- extraction guard with typed subcolumns containing inf/-inf/nan/3.5.
+    property <- either (fail . show) pure (resolveNumericProperty registry [EventName "metric_probe"] "amount")
+    let finiteReference :: Select '[Column "value" Float64] ReferenceUnique
+        finiteReference = unsafeMkSelect (const (fromString (Text.unpack ("SELECT toFloat64(countIf(isNotNull(" <> propertyFloatExpr property <> "))) AS value FROM (SELECT CAST(tuple(CAST(x,'Dynamic')),'Tuple(amount Dynamic)') AS properties_json FROM (SELECT arrayJoin([toFloat64('inf'),toFloat64('-inf'),toFloat64('nan'),3.5]) AS x))"))))
+    finite <- concat <$> select finiteReference connection pure
+    case finite of
+      [ReferenceUnique value] -> value `shouldBe` 1
+      _ -> expectationFailure "finite numeric extraction must return one count"
+    withPool $ \pool -> do
+      let percentile q = Registry.Simple (Registry.events & #name .~ "custom" & #eventNames .~ ["metric_probe"] & #aggregation .~ Definition.Percentile & #aggregationProperty ?~ "amount" & #quantile ?~ q)
+      eligible <- filterValue "prop:amount" "set" Nothing
+      let selected = request {Query.filters = [eligible]}
+      -- Historical strings/bools/nulls/missing values cannot join [-2,0,2,3.5,10].
+      forM_ [(0.5, 2), (0.75, 3.5), (0.95, 8.7)] $ \(q, expected) -> do
+        total pool (percentile q) request >>= (`shouldSatisfy` (\actual -> abs (actual - expected) < 1e-9))
+        result <- query pool (percentile q) selected
+        counts <- query pool countMetric selected
+        map (\p -> (p ^. #bucket, p ^. #group)) (result ^. #points) `shouldBe` map (\p -> (p ^. #bucket, p ^. #group)) (counts ^. #points)
+        total pool countMetric selected `shouldReturn` 5
+      command connection "SYSTEM STOP MERGES analytics.events_raw"
+      ( do
+          insertEvents connection (reverse rows)
+          total pool (percentile 0.75) request `shouldReturn` 3.5
+          total pool countMetric selected `shouldReturn` 5
+        )
+        `finally` command connection "SYSTEM START MERGES analytics.events_raw"
+      empty <- filterValue "prop:amount" "gt" (Just (Aeson.Number 1000))
+      result <- query pool (percentile 0.75) request {Query.filters = [empty]}
+      result ^. #points `shouldBe` []
 
   it "keeps null, empty, arbitrary Unicode and namespaced dual dimensions distinct and sorts numbers numerically" $ withNative $ \connection -> do
     seed connection
