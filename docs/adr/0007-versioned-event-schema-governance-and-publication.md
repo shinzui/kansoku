@@ -2,7 +2,7 @@
 type: Architecture Decision Record
 title: Versioned event schema governance and publication
 description: Govern event schemas as immutable, contiguous versions authored in the Haskell registry, with accepted events recording the schema version they matched.
-timestamp: 2026-10-16T12:55:33Z
+timestamp: 2026-11-06T13:54:38Z
 generated:
   by: human:kansoku-maintainers
   at: 2026-07-19T00:00:00Z
@@ -114,3 +114,33 @@ eligibility uses the existing private queue marker, revalidated before writing. 
 queue envelopes and raw rows cannot promote properties into governed state. Omitted
 keys preserve values; null/type-invalid values are rejected. Current state and membership
 semantics are recorded in [ADR-21](0021-organization-aggregation-and-current-membership.md).
+
+## Client error and web vital contracts
+
+Catalog v5 adds optional string maxLength alongside minLength. Bounds are Unicode code points;
+missing bounds remain omitted and legacy properties without maxLength decode. New client_error
+v1 requires sanitized message of 1–256 code points, type of 1–128, and Boolean handled. False
+denotes uncaught errors/unhandled rejections; explicit reports may set true. The message bound
+keeps even four-byte UTF-8 labels within the existing 1024-byte equality-filter operand limit.
+Producers sanitize/truncate; validation rejects violations and performs no content redaction.
+Do not send stack traces or personal data. Extra properties retain the existing permissive
+policy, and historical rows receive no retroactive sanitation.
+
+New web_vital v1 requires metric matching `^(LCP|INP|CLS|FCP|TTFB)$` and nonnegative numeric
+value. Names are exact equality membership at ingest, without a runtime regex dependency.
+Units are milliseconds for LCP, INP, FCP and TTFB, and unitless for CLS; CLS may exceed one and
+zero is valid for every metric. Missing/unsupported measurements are absent samples, not zeros.
+This establishes a measurement contract, not a browser algorithm. Both events reuse top-level
+URL/session attribution and declared scalar queries without a storage migration.
+
+Declaring previously permissive names tightens new versionless submissions too. Existing
+released event versions remain immutable. Declaration enables no capture: optional browser
+work is recorded at
+`mori://shinzui/kansoku-ts/plans/7-capture-client-errors-and-web-vitals-with-explicit-opt-in`.
+Both names currently follow generic engagement classification under
+[ADR-13](0013-whole-retained-replay-safe-web-sessions.md); automatic collection can affect bounce
+and observed duration. Enable it only after a deliberate product decision. Reclassifying retained
+sessions needs separate migration/rebuild work. Error counts and exact affected subjects use
+existing event/users routes; per-metric/per-route p75 uses ADR-20's exact percentile and paired
+sample counts. Counts across overlapping user groups and percentiles across groups must not be
+added or averaged.

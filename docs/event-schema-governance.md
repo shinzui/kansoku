@@ -10,7 +10,18 @@ The catalog's top-level `catalogVersion` versions the JSON document shape. Each 
 `versions` array independently versions that event's properties. A property publishes its
 name, JSON type, requiredness, validation pattern, and description. Catalog version 2 also
 publishes optional `minLength` and `minimum` for string and numeric constraints. Patterns
-remain regular expressions; a numeric minimum is never encoded as a pattern.
+remain regular expressions; a numeric minimum is never encoded as a pattern. Catalog version 3
+adds the closed identifier vocabulary, version 4 numeric `multipleOf`, and version 5 optional
+string `maxLength`. Absent bounds stay omitted and older property objects still decode.
+Bounded text lengths count Unicode code points, not UTF-8 bytes or UTF-16 code units.
+
+`client_error` v1 declares required sanitized `message` (1–256 code points), `type` (1–128)
+and Boolean `handled`; producers must not send stack traces or personal data. `web_vital` v1
+declares `metric` matching `^(LCP|INP|CLS|FCP|TTFB)$` and numeric `value >= 0`. All values use
+milliseconds except unitless CLS; zero and CLS above one are valid. See
+[Send events](guides/send-events.md#client-errors-and-web-vitals) for examples and report recipes.
+Declaration tightens new submissions, including versionless events, but does not sanitize old
+rows or enable browser capture. Released earlier schemas remain unchanged.
 
 ## Declaring a new event
 

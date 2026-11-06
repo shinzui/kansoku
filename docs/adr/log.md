@@ -2,6 +2,8 @@
 
 ## 2026-11-06
 
+* **Update**: ADR-7: Publish catalog v5 maxLength and immutable client_error/web_vital v1 contracts
+
 * **Update**: ADR-9: Bound acquisition conversion lists before normalization and reject invalid combinations before storage
 * **Update**: ADR-12: Document first-selected-session conversion population, timing, source and bot policies
 

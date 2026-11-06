@@ -10,9 +10,11 @@ import uuid
 from acceptance_resources import OwnedResources
 from enrichment_acceptance import event, eventually, send
 from cohorts_acceptance import main
+from site_health_scenario import verify_site_health
 
 
 def verify_custom_metrics(base, write_key, token, other_token, after_membership=None, env=None, **_):
+    verify_site_health(base, write_key, token, other_token)
     prefix = 'custom_' + uuid.uuid4().hex
 
     def api(path, body=None, method='GET', credential=token, expected=200, **params):

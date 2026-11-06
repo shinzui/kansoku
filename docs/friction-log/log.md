@@ -1,6 +1,8 @@
 # Bundle Update Log
 
 ## 2026-11-06
+* **Update**: FRIC-9 accepted: Accept the documented preservation workaround, as also required by FRIC-7 in a previous plan
+* **Addition**: FRIC-9 records detour tooling friction with mori://shinzui/okf: OKF log append removes existing guide provenance table
 * **Update**: FRIC-8 resolved: Resolve the oversized replay fixture after packaged public acceptance verifies all preserved assertions
 * **Addition**: FRIC-8 records detour tooling friction with mori://shinzui/kansoku: Percentile replay fixture exceeds the packaged request cap
 * **Update**: FRIC-7 accepted: Retain all prior prose evidence and accept a preservation step around log appends

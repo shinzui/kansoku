@@ -6,7 +6,7 @@ docId: DOC-11
 tags: ["ingestion", "events", "schemas", "identity"]
 generated:
   by: process:codex
-  at: "2026-10-16T17:52:47Z"
+  at: "2026-11-06T13:54:38Z"
 ---
 
 # Send events
@@ -140,7 +140,8 @@ Undeclared event names are accepted without property-schema checks, provided the
 schema version is in range. Declaring an event in Kansoku is the point at which its published
 property types, required fields, and constraints become enforced. Catalog version 2 added
 string `minLength` and numeric `minimum` alongside regular-expression `pattern`. Catalog version 3 also publishes the closed
-`identifierKinds` vocabulary, including `email_hmac`.
+`identifierKinds` vocabulary, including `email_hmac`. Catalog version 4 adds numeric
+`multipleOf`; version 5 adds optional string `maxLength` for bounded labels.
 
 `alias` v1 requires nonempty `properties.previousId` and `properties.newId` matching top-level
 `anonymousId` and `userId`. It binds an anonymous identifier to a user. `group` v1 requires
@@ -148,6 +149,140 @@ a nonempty top-level `organizationId` and stamps organization context. `page_lea
 requires numeric `properties.durationMs >= 0`; it is a lifecycle event, with the page URL
 at top level. See
 [event schema governance](../event-schema-governance.md) before changing a released schema.
+
+## Client errors and web vitals
+
+`client_error` v1 and `web_vital` v1 use the ordinary web envelope. Send top-level `url`,
+a nonempty `sessionId`, a `sourceService` identifying the producer, and available user/anonymous
+identity so reports can attribute measurements to a page and session. These are producer
+recommendations; the server adds no event-specific top-level requirements. Missing URL/session
+keeps the normal generic behavior. Do not copy them into new properties.
+
+```json
+{
+  "eventId": "client-error-unique-123",
+  "eventName": "client_error",
+  "schemaVersion": 1,
+  "source": "web",
+  "sourceService": "marketing-site",
+  "occurredAt": "2026-07-01T12:00:00Z",
+  "receivedAt": "2026-07-01T12:00:00Z",
+  "userId": "user-123",
+  "anonymousId": "browser-cookie-123",
+  "sessionId": "session-456",
+  "url": "https://example.test/checkout",
+  "properties": {"message": "Cannot read property", "type": "TypeError", "handled": false},
+  "context": {}
+}
+```
+
+All three error properties are required: `message` is 1–256 Unicode code points, `type` is
+1–128, and `handled` is Boolean. Use short sanitized report labels; `type` is a class/category
+such as `TypeError` or `UnhandledRejection`. Use `handled=false` for uncaught errors and
+unhandled promise rejections; explicit application reports may use true. Normalize or truncate
+labels before submission. The server rejects invalid lengths/types and never silently truncates.
+Do not send stack traces or personal data, including identifiers or secrets in messages or URLs.
+This is producer guidance: the server does not redact content and still accepts undeclared extra
+properties. A 256-code-point label fits the 1024-byte UTF-8 equality-filter operand limit.
+
+```json
+{
+  "eventId": "web-vital-unique-123",
+  "eventName": "web_vital",
+  "schemaVersion": 1,
+  "source": "web",
+  "sourceService": "marketing-site",
+  "occurredAt": "2026-07-01T12:00:00Z",
+  "receivedAt": "2026-07-01T12:00:00Z",
+  "userId": "user-123",
+  "anonymousId": "browser-cookie-123",
+  "sessionId": "session-456",
+  "url": "https://example.test/checkout",
+  "properties": {"metric": "LCP", "value": 1250.5},
+  "context": {}
+}
+```
+
+Both vital properties are required. `metric` accepts exactly the uppercase names below,
+published as `^(LCP|INP|CLS|FCP|TTFB)$`; `value` is nonnegative numeric. Zero is valid for each
+metric. CLS may exceed one. There is no separate unit property.
+
+| Metric | Meaning | Unit |
+| --- | --- | --- |
+| LCP | Largest Contentful Paint | milliseconds |
+| INP | Interaction to Next Paint | milliseconds |
+| CLS | Cumulative Layout Shift | unitless |
+| FCP | First Contentful Paint | milliseconds |
+| TTFB | Time to First Byte | milliseconds |
+
+This contract establishes names and units, not browser measurement algorithms. Unsupported or
+missing measurements are absent samples, never invented zeros. Merely declaring the events
+starts no browser capture. Explicit opt-in capture is planned separately at
+`mori://shinzui/kansoku-ts/plans/7-capture-client-errors-and-web-vitals-with-explicit-opt-in`.
+Under current session rules both names count as engagement: automatic collection can remove
+bounces and extend observed duration. Decide deliberately before enabling it in a product;
+changing retained session semantics would require separate migration/rebuild work.
+
+### Site-health query recipes
+
+Run these authenticated requests in a trusted report service. `TOKEN` is a service token,
+never a browser-bundled credential; `BASE_URL` is your server origin and `SOURCE` is the same
+sourceService used above. All filters are URL encoded. Dates include `from` and exclude `to`
+in UTC. See [Query metrics](query-metrics.md) for time buckets, exact resolved-user semantics,
+filter limits, result bounds and exact inclusive percentile behavior.
+
+```bash
+curl --get "$BASE_URL/metrics/events" -H "Authorization: Bearer $TOKEN" \
+  --data-urlencode from=2026-07-01 --data-urlencode to=2026-07-03 \
+  --data-urlencode timeGrain=day --data-urlencode groupBy=route \
+  --data-urlencode 'filter=event_name:eq:client_error' \
+  --data-urlencode "filter=source_service:eq:$SOURCE"
+
+curl --get "$BASE_URL/metrics/events" -H "Authorization: Bearer $TOKEN" \
+  --data-urlencode from=2026-07-01 --data-urlencode to=2026-07-03 \
+  --data-urlencode timeGrain=day --data-urlencode groupBy=prop:message \
+  --data-urlencode 'filter=event_name:eq:client_error' \
+  --data-urlencode "filter=source_service:eq:$SOURCE"
+
+curl --get "$BASE_URL/metrics/users" -H "Authorization: Bearer $TOKEN" \
+  --data-urlencode from=2026-07-01 --data-urlencode to=2026-07-03 \
+  --data-urlencode timeGrain=day --data-urlencode includeBots=true \
+  --data-urlencode 'filter=event_name:eq:client_error' \
+  --data-urlencode "filter=source_service:eq:$SOURCE"
+
+curl --get "$BASE_URL/metrics/custom" -H "Authorization: Bearer $TOKEN" \
+  --data-urlencode from=2026-07-01 --data-urlencode to=2026-07-03 \
+  --data-urlencode events=web_vital --data-urlencode aggregation=percentile \
+  --data-urlencode property=value --data-urlencode quantile=0.75 \
+  --data-urlencode timeGrain=day --data-urlencode groupBy=prop:metric,route \
+  --data-urlencode 'filter=prop:value:set' \
+  --data-urlencode "filter=source_service:eq:$SOURCE"
+```
+
+The first two recipes count errors per page or sanitized message. Use
+`groupBy=route,prop:message` for both. Add `filter=prop:handled:eq:false` to count only unhandled
+errors, or `filter=prop:message:eq:Cannot read property` for that exact label.
+
+The users recipe counts exact resolved user or anonymous subjects; missing identities do not
+count. Add `groupBy=route` for affected users per page. `includeBots=true` aligns its population
+with all-event error counts. To exclude bots consistently, use `filter=is_bot:eq:false` on error
+counts and users and retain the users route's default exclusion. Do not add user counts across
+pages or days: a subject can occur in several groups. Use `timeGrain=none` for an exact
+whole-range count instead of summing daily distinct counts.
+
+The final recipe computes each group's p75 from its underlying samples. For sample counts,
+repeat it with `aggregation=count`, remove `property` and `quantile`, and keep the same events,
+dates, groups, grain, `prop:value:set` and source filter. These are separate reads, not an atomic
+snapshot. Add `filter=prop:metric:eq:LCP` to select LCP for a slow-page report. Never combine CLS
+with millisecond values or average/sum page or bucket percentiles. Existing bounded-result errors
+remain errors; the server does not silently truncate groups.
+
+The owned acceptance fixture in `scripts/site_health_scenario.py` executes these parameter sets.
+It expects four errors (three checkout, one pricing), message counts three and one, two affected
+users overall and at checkout, and one at pricing. For each millisecond metric on July 1,
+checkout samples 10/20/30/40 yield p75 32.5 and pricing 100/200/300/400 yield 325; CLS p75 is
+0.0325/0.325. July 2 has one sample per metric/page: 50 milliseconds or 0.05 CLS. Replays and
+foreign-account events leave these results unchanged.
 
 ## Single-event responses
 

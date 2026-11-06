@@ -33,10 +33,12 @@ This work declares the server contracts and records an opt-in browser SDK captur
 
 
 - [x] Milestone 1 (2026-11-06): Published catalog v5 and generated OpenAPI enforce bounded error labels, the closed vital vocabulary and nonnegative values. Build and deterministic gates passed, including Unicode boundaries, legacy decoding, version behavior and indexed batch rejection; earlier event schemas remain unchanged.
-- [ ] Milestone 2: Public report queries return independently calculated error counts, affected-user counts, and per-metric/per-route p75 values from accepted fixture events.
+- [x] Milestone 2 (2026-11-06): Owned `just custom-metrics-acceptance` exited zero with five native examples and the complete public scenario. Exact route/message/handled filters, global and per-page affected users, all five vital p75/sample counts on both days, replay and foreign-account isolation passed without skipped prerequisites.
 - [ ] Milestone 3: Sending/reporting documentation, generated contracts, durable contract decisions, and a linked opt-in SDK follow-up are complete and validated.
 
 ## Surprises & Discoveries
+
+The packaged acceptance server caps requests at 4 KiB; the new fixture delivers and replays in three-event batches, preserving the same populations and server limit.
 
 Plan 55 is now complete: exact percentile support and its passing public/native evidence are present, so the full report proof can run without a skipped prerequisite.
 

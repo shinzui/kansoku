@@ -16,4 +16,5 @@ okf_version: "0.2"
 - [OpenAPI generation reconfigures the test-enabled build](6-openapi-generation-reconfigures-the-test-enabled-build.md) - Running cabal run through the documented OpenAPI target changes component flags and makes the next test-enabled build recompile much of the workspace.
 - [Bundle log appends discard existing prose evidence](7-bundle-log-appends-discard-existing-prose-evidence.md) - okf log add rewrote the guides log and removed its adoption provenance table, requiring preservation of the original body.
 - [Percentile replay fixture exceeds the packaged request cap](8-percentile-replay-fixture-exceeds-the-packaged-request-cap.md) - The existing percentile replay sends its complete sample population in one batch despite the packaged 4 KiB cap, blocking full acceptance after acquisition HTTP succeeds.
+- [OKF log append removes existing guide provenance table](9-okf-log-append-removes-existing-guide-provenance-table.md) - The okf log add command rewrote existing history and removed the guide migration provenance table, requiring restoration around the generated new entry.
 
