@@ -61,8 +61,8 @@ def verify_identity_browser(server, admin, env, root, sdk, tokens=None):
             (root / 'live.private').write_text(evidence)
             live_result.check_returncode()
             import re
-            assert re.search(r'\b9 pass\b',evidence) and re.search(r'\b0 fail\b',evidence) and not re.search(r'\b[1-9]\d* skip\b',evidence), 'required SDK live gate needs nine passing cases and zero skips'
-            print('Required SDK live contract: 9 cases, 0 skipped, passed.',flush=True)
+            assert re.search(r'\b10 pass\b',evidence) and re.search(r'\b0 fail\b',evidence) and not re.search(r'\b[1-9]\d* skip\b',evidence), 'required SDK live gate needs ten passing cases and zero skips'
+            print('Required SDK live contract: 10 cases, 0 skipped, passed.',flush=True)
             example_env=dict(live_env,KANSOKU_SMOKE_BASE_URL=base,KANSOKU_SMOKE_WRITE_KEY=keys[0])
             examples=execute(['bun','node_modules/@playwright/test/cli.js','test','--config','test/smoke/playwright.config.ts','test/smoke/live-examples.pw.ts'],env=example_env,cwd=sdk,timeout=180)
             example_log=examples.stdout+examples.stderr
