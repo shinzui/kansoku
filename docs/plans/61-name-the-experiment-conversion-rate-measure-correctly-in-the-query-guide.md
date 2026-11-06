@@ -16,6 +16,11 @@ provenance:
       at: 2026-11-06T04:36:59Z
       mode: "update"
       note: "Record acceptance of IR-3 and its link to this plan."
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-11-06T12:29:06Z
+      mode: "implement"
+      note: "Implement the guide measure correction and record acceptance evidence."
 ---
 
 # Name the experiment conversion rate measure correctly in the query guide
@@ -30,7 +35,7 @@ A reader building an experiment conversion chart must be able to find the measur
 ## Progress
 
 
-- [ ] The experiment conversion guide names all three emitted measures correctly, its metadata and update log are current, and documentation validation passes.
+- [x] 2026-11-06: The experiment conversion guide names `exposed`, `converted`, and `conversion_rate`, with refreshed DOC-10 metadata and an additive update-log entry. Source inspection confirms both SQL paths and the decoded `group.measure` assertion agree; `just guides-check` passes for all 14 concepts and `git diff --check` passes.
 
 ## Surprises & Discoveries
 
@@ -43,12 +48,16 @@ A reader building an experiment conversion chart must be able to find the measur
 ## Outcomes & Retrospective
 
 
+2026-11-06: AC-1 is satisfied. `docs/guides/query-metrics.md` now names the existing `conversion_rate` measure while retaining post-exposure ordering, multiple-variant counting, statistical-significance wording, and curl examples. The final guide diff contains only the measure correction and revision timestamp; the log adds one DOC-10 entry and preserves all historical content, including the provenance table. Server behavior and tests are unchanged.
+
+`just guides-check` exited zero with `OK: 14 concepts (okf_version 0.2)`, and `git diff --check` exited zero. No implementation work remains. The friction query found no logged entries for this plan, and no new friction was encountered. Reviewing the Decision Log and implementation findings confirmed that ADR-6 already supplies the relevant architectural context; this prose correction introduces no durable decision requiring an ADR change.
+
 ## Context and Orientation
 
 
 The source request is [docs/improvement-requests/name-the-experiment-conversion-rate-measure-in-the-query-guide.md](../improvement-requests/name-the-experiment-conversion-rate-measure-in-the-query-guide.md), identified as IR-3. Its AC-1 acceptance criterion requires the three names `exposed`, `converted`, and `conversion_rate`. A measure is the label in a returned point's `group.measure` that identifies what its numeric `value` represents. The first two measures count exposed and converted users; the third is their ratio, with zero for an empty denominator.
 
-In `docs/guides/query-metrics.md`, the `Experiments` section describes `GET /metrics/experiments/conversion` but currently lists `rate`. In `kansoku-core/src/Kansoku/Metrics/Query.hs`, `compileTraitExperimentConversion` already emits `('conversion_rate',if(exposed=0,0.,converted/exposed))`; `buildExperimentConversionSQL` also emits this label. In `kansoku-core/test/Kansoku/QuerySpec.hs`, the test titled “builds exact conversion SQL with an explicit post-exposure ordering predicate” checks that SQL label, and the `experimentConversionPoint` assertion checks a decoded group containing `("measure", "conversion_rate")`.
+In `docs/guides/query-metrics.md`, the `Experiments` section describes `GET /metrics/experiments/conversion` and, before implementation, listed `rate`. In `kansoku-core/src/Kansoku/Metrics/Query.hs`, `compileTraitExperimentConversion` already emits `('conversion_rate',if(exposed=0,0.,converted/exposed))`; `buildExperimentConversionSQL` also emits this label. In `kansoku-core/test/Kansoku/QuerySpec.hs`, the test titled “builds exact conversion SQL with an explicit post-exposure ordering predicate” checks that SQL label, and the `experimentConversionPoint` assertion checks a decoded group containing `("measure", "conversion_rate")`.
 
 The relevant architecture record is [docs/adr/0006-exposure-based-experiment-analytics.md](../adr/0006-exposure-based-experiment-analytics.md), found by scanning local ADR filenames and headings. It establishes exact conversion counts under current identity resolution, conversion only at or after exposure, counting a user in every observed variant, and no statistical-significance calculation. Preserve that context in the surrounding guide prose. This correction introduces no new architectural decision and needs no ADR edit.
 
@@ -61,7 +70,7 @@ Existing [docs/friction-log/1-okf-log-append-removes-existing-guide-provenance-p
 
 One milestone delivers the corrected reader contract. In the experiment conversion paragraph of `docs/guides/query-metrics.md`, replace only the measure name `rate` with `conversion_rate`, producing “The endpoint returns `exposed`, `converted`, and `conversion_rate` as separate points in each variant's `group`; it does not calculate statistical significance.” Preserve nearby semantics and curl examples. Refresh the guide's revision metadata and add a concise `Update` entry for DOC-10 under the matching UTC date in `docs/guides/log.md`, retaining existing entries and the historical provenance table.
 
-Verify the sentence against both SQL construction paths and the decoding assertion, then run the guide validation and whitespace checks below. Record their results and mark the milestone complete only after AC-1 and the metadata checks pass. Review the plan's decisions for durable architectural changes; none are expected. IR-3 is accepted and linked to this plan; implementation has not started. Preserve that status until implementation satisfies its acceptance criterion.
+Verify the sentence against both SQL construction paths and the decoding assertion, then run the guide validation and whitespace checks below. Record their results and mark the milestone complete only after AC-1 and the metadata checks pass. Review the plan's decisions for durable architectural changes; none are expected. IR-3 is accepted and linked to this plan; implementation now satisfies its acceptance criterion, as recorded in Outcomes & Retrospective.
 
 ## Concrete Steps
 

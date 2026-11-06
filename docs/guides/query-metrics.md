@@ -6,7 +6,7 @@ docId: DOC-10
 tags: ["metrics", "queries", "identity", "cohorts"]
 generated:
   by: process:codex
-  at: "2026-10-16T18:24:00Z"
+  at: "2026-11-06T12:28:58Z"
 ---
 
 # Query metrics
@@ -411,7 +411,7 @@ curl --fail-with-body --get http://localhost:8080/metrics/experiments \
 
 Conversion counts query exact, current identity resolution. A conversion counts only at or after
 that user's first exposure to the variant. A user exposed to multiple variants counts in each.
-The endpoint returns `exposed`, `converted`, and `rate` as separate points in each variant's
+The endpoint returns `exposed`, `converted`, and `conversion_rate` as separate points in each variant's
 `group`; it does not calculate statistical significance.
 
 ```bash
