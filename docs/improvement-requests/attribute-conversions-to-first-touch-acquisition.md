@@ -3,10 +3,11 @@ type: Improvement Request
 title: Attribute conversions to first-touch acquisition
 description: Add converted-user and conversion-rate measures to /metrics/acquisition for a caller-supplied list of conversion events, credited to the visitor's first-touch channel, referrer, campaign or landing page, so a consumer can rank traffic sources by how well they convert.
 generated:
-  by: process:claude-code
-  at: "2026-11-05T21:06:04Z"
+  by: process:codex
+  at: "2026-11-06T03:40:27Z"
 requestId: IR-5
-status: proposed
+status: accepted
+targetPlan: docs/plans/56-attribute-conversions-to-first-touch-acquisition.md
 origin: mori://shinzui/kansoku-ui
 dependencies:
   - ref: mori://shinzui/kansoku/okf/improvement-requests/concepts/IR-4
@@ -48,6 +49,9 @@ reviews:
 **Created:** 2026-11-05.
 
 Part of the set filed with IR-4; that request lists the others.
+
+**Implementation plan:** [ExecPlan 56: Attribute conversions to first-touch acquisition](../plans/56-attribute-conversions-to-first-touch-acquisition.md).
+The request is accepted for implementation; implementation has not started.
 
 
 ## Why
