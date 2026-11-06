@@ -1,6 +1,7 @@
 # Bundle Update Log
 
 ## 2026-11-06
+* **Update**: Accept IR-9 for implementation and link targetPlan to docs/plans/59-filter-and-group-events-by-their-session-attributes.md; implementation has not started.
 * **Update**: Accept IR-4 for implementation and link targetPlan to docs/plans/60-count-unique-users-over-a-whole-query-range.md; implementation has not started.
 * **Update**: Accept IR-8 for implementation and link targetPlan to docs/plans/57-declare-client-error-and-web-vital-events.md; implementation has not started.
 * **Update**: Accept IR-6 for implementation and link targetPlan to docs/plans/58-classify-ai-assistant-referrals-as-a-channel.md; implementation has not started.

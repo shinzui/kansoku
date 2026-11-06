@@ -3,10 +3,11 @@ type: Improvement Request
 title: Filter and group events by the attributes of their session
 description: Add session-scoped dimensions (for example session:channel, session:referrer_host, session:utm_campaign, session:entry_page) that page-views, users and custom metrics can filter and group by, selecting each event by the first-touch attributes of the web session it belongs to, so a consumer can report the pages viewed and the people seen during visits from one source.
 generated:
-  by: process:claude-code
-  at: "2026-11-06T03:38:11Z"
+  by: process:codex
+  at: "2026-11-06T04:19:06Z"
 requestId: IR-9
-status: proposed
+status: accepted
+targetPlan: docs/plans/59-filter-and-group-events-by-their-session-attributes.md
 origin: mori://shinzui/kansoku-ui/masterplans/3-build-the-reports-page
 acceptanceCriteria:
   - id: AC-1
@@ -46,6 +47,9 @@ reviews:
 **Created:** 2026-11-06.
 
 Follows the set IR-4 to IR-8, filed for the same page.
+
+**Implementation plan:** [ExecPlan 59: Filter and group events by their session attributes](../plans/59-filter-and-group-events-by-their-session-attributes.md).
+The request is accepted for implementation; implementation has not started.
 
 
 ## Why
