@@ -3,10 +3,11 @@ type: Improvement Request
 title: Name the experiment conversion rate measure correctly in the query guide
 description: The query guide says the experiment conversion endpoint returns a measure named rate, while the query compiler and its tests emit conversion_rate; correct the guide so API consumers read the measure kansoku actually returns.
 generated:
-  by: process:claude-code
-  at: "2026-11-05T04:54:03Z"
+  by: process:codex
+  at: "2026-11-06T04:36:59Z"
 requestId: IR-3
-status: proposed
+status: accepted
+targetPlan: docs/plans/61-name-the-experiment-conversion-rate-measure-correctly-in-the-query-guide.md
 origin: mori://shinzui/kansoku-ui/plans/11-add-a-chart-kind-registry-composed-chart-inputs-and-a-chart-options-panel
 acceptanceCriteria:
   - id: AC-1
@@ -34,6 +35,9 @@ reviews:
 `mori://shinzui/kansoku-ui/plans/11-add-a-chart-kind-registry-composed-chart-inputs-and-a-chart-options-panel`.
 **Addressed to:** `shinzui/kansoku` agents.
 **Created:** 2026-11-05.
+
+**Implementation plan:** [ExecPlan 61: Name the experiment conversion rate measure correctly in the query guide](../plans/61-name-the-experiment-conversion-rate-measure-correctly-in-the-query-guide.md).
+The request is accepted for implementation; implementation has not started.
 
 
 ## Why
