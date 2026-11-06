@@ -1,5 +1,6 @@
 module Kansoku.Metrics.FilterSpec (spec) where
 
+import Control.Monad (forM_)
 import Data.Aeson qualified as Aeson
 import Data.ByteString.Lazy qualified as LBS
 import Data.Either (isLeft, isRight)
@@ -9,6 +10,7 @@ import Data.Text.Encoding qualified as Text
 import Data.Time (fromGregorian)
 import Effectful (runEff)
 import Kansoku.Event (AccountId (..), EventName (..), EventSchema (..), PropertySpec (..), PropertyType (..), defaultRegistry, registerSchema)
+import Kansoku.Metrics.Api (AcquisitionMeasure (..))
 import Kansoku.Metrics.Filter qualified as Filter
 import Kansoku.Metrics.Query qualified as Query
 import Kansoku.Metrics.Query.Dimension
@@ -44,6 +46,27 @@ spec = describe "Kansoku.Metrics filters" $ do
       ["session:prop:amount", "session:user:plan", "session:org:tier", "session:cohort"]
     resolveDimension defaultRegistry [] "session:channel" `shouldSatisfy` isLeft
     resolveSessionDimension defaultRegistry [] "session:channel" `shouldSatisfy` isLeft
+
+  it "keeps excluded routes closed and rejects session faults before pool checkout" $ do
+    selected <- validFilter "session:channel:eq:organic_search"
+    result <- runEff (Query.run defaultRegistry (error "excluded route borrowed the pool") (Simple events) request {Query.filters = [selected]})
+    case result of
+      Left (Query.QueryCompileFailure failure) -> Query.queryCompileErrorCode failure `shouldBe` "invalid_filter"
+      other -> expectationFailure (show other)
+    let grouped = request {Query.groupBy = Just ["session:channel"]}
+    traverse_
+      (`shouldSatisfy` isLeft)
+      [ Query.buildSQL defaultRegistry (Simple events) grouped,
+        Query.buildSessionsSQL grouped,
+        Query.buildAcquisitionSQL defaultRegistry AcquisitionSessions grouped,
+        Query.buildStickinessSQL defaultRegistry grouped,
+        Query.buildLifecycleSQL defaultRegistry grouped
+      ]
+    forM_ [["session:channel", "session:channel"], ["route", "source", "session:channel"]] $ \names ->
+      Query.buildSQL defaultRegistry (Simple pageViews) request {Query.groupBy = Just names} `shouldSatisfy` isLeft
+    invalid <- validFilter "session:unknown:set"
+    bad <- runEff (Query.run defaultRegistry (error "invalid session suffix borrowed the pool") (Simple pageViews) request {Query.filters = [invalid]})
+    bad `shouldSatisfy` (\case Left (Query.QueryCompileFailure _) -> True; _ -> False)
 
   it "compiles bounded OR groups with independent bindings and preserves safe event scope" $ do
     input <- validFilter "prop:plan:eq:pro|prop:plan:eq:enterprise"

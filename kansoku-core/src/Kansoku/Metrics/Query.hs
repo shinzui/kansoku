@@ -749,13 +749,13 @@ compileMetric registry metric req = case metric of
     when (req ^. #timeGrain == Just NoTimeBucket) (Left QueryCompileInvalidTimeGrain)
     let scope = Filters.filteredEventScope (definitionEvents (ratio ^. #numerator) <> definitionEvents (ratio ^. #denominator)) (req ^. #filters)
     when (any (Text.isPrefixOf "prop:") (fromMaybe [] (req ^. #groupBy))) (Left (QueryCompileUnsupportedPropertyGrouping (ratio ^. #name)))
-    grouping <- requestGrouping req registry scope (req ^. #groupBy) []
+    grouping <- requestGroupingFor (ratio ^. #name == "custom") req registry scope (req ^. #groupBy) []
     when (any isPropertyDimension grouping) (Left (QueryCompileUnsupportedPropertyGrouping (ratio ^. #name)))
-    common <- first QueryCompileFilterError (requestFilters req "metric_filter" registry scope (req ^. #filters))
+    common <- first QueryCompileFilterError (requestFiltersFor (ratio ^. #name == "custom") req "metric_filter" registry scope (req ^. #filters))
     numeratorInputs <- definitionFilters (ratio ^. #numerator)
     denominatorInputs <- definitionFilters (ratio ^. #denominator)
-    numeratorFilters <- first QueryCompileFilterError (requestFilters req "numerator_filter" registry (definitionEvents (ratio ^. #numerator)) numeratorInputs)
-    denominatorFilters <- first QueryCompileFilterError (requestFilters req "denominator_filter" registry (definitionEvents (ratio ^. #denominator)) denominatorInputs)
+    numeratorFilters <- first QueryCompileFilterError (requestFiltersFor (ratio ^. #name == "custom") req "numerator_filter" registry (definitionEvents (ratio ^. #numerator)) numeratorInputs)
+    denominatorFilters <- first QueryCompileFilterError (requestFiltersFor (ratio ^. #name == "custom") req "denominator_filter" registry (definitionEvents (ratio ^. #denominator)) denominatorInputs)
     numeratorAggregate <- ratioAggregate registry (ratio ^. #numerator) "numerator_event_name" (Filters.predicates numeratorFilters)
     denominatorAggregate <- ratioAggregate registry (ratio ^. #denominator) "denominator_event_name" (Filters.predicates denominatorFilters)
     pure CompiledMetric {sql = buildRatioSQL numeratorAggregate denominatorAggregate ratio grouping (Filters.predicates common) (req & #filters .~ (req ^. #filters <> numeratorInputs <> denominatorInputs)), groupLabels = map dimensionLabel grouping, filterParameters = Filters.parameters common <> Filters.parameters numeratorFilters <> Filters.parameters denominatorFilters, ordering = BucketDimensions}
@@ -777,7 +777,7 @@ compileSimpleMetric registry def req = do
   defaults <- definitionFilters def
   let inputs = defaults <> req ^. #filters
       scope = Filters.filteredEventScope (definitionEvents def) (req ^. #filters)
-  let sessionSupport = def ^. #name == "page_views"
+  let sessionSupport = def ^. #name `elem` ["page_views", "active_users", "custom"]
   grouping <- requestGroupingFor sessionSupport req registry scope (req ^. #groupBy) (def ^. #groupBy)
   compiled <- first QueryCompileFilterError (requestFiltersFor sessionSupport req "metric_filter" registry scope inputs)
   compiledSQL <- buildSimpleSQL registry grouping (Filters.predicates compiled) def req {filters = inputs}
@@ -867,7 +867,7 @@ buildRatioSQL numeratorAggregate denominatorAggregate RatioMetric {numerator, de
           "FROM ( SELECT " <> bucket <> " AS bucket, " <> groupProjection grouping <> ",",
           "      toFloat64(" <> numeratorAggregate <> ") AS numerator,",
           "      toFloat64(" <> denominatorAggregate <> ") AS denominator",
-          "    FROM " <> resolvedSource req,
+          "    FROM " <> eventSessionSource grouping req (resolvedSource req),
           "    WHERE " <> accountPredicate,
           "      AND (" <> numeratorPredicate <> " OR " <> denominatorPredicate <> ")",
           "      AND " <> timestampPredicate req <> propertyFilterClause predicates,
@@ -989,15 +989,18 @@ compileUsers registry CalendarWindow req = compileMetric registry (Simple active
 compileUsers registry window req = compileRolling registry (windowDays window) False req
 
 activityPopulation :: EventRegistry -> QueryRequest -> QueryRequest -> Either QueryCompileError ([GroupDimension], Filters.CompiledFilters, Text)
-activityPopulation registry req scope = do
+activityPopulation = activityPopulationFor False
+
+activityPopulationFor :: Bool -> EventRegistry -> QueryRequest -> QueryRequest -> Either QueryCompileError ([GroupDimension], Filters.CompiledFilters, Text)
+activityPopulationFor sessionSupport registry req scope = do
   when (req ^. #timeGrain == Just NoTimeBucket) (Left QueryCompileInvalidTimeGrain)
   let events = Filters.filteredEventScope [] (req ^. #filters)
-  grouping <- requestGrouping req registry events (req ^. #groupBy) []
-  filters <- first QueryCompileFilterError (requestFilters req "metric_filter" registry events (req ^. #filters))
+  grouping <- requestGroupingFor sessionSupport req registry events (req ^. #groupBy) []
+  filters <- first QueryCompileFilterError (requestFiltersFor sessionSupport req "metric_filter" registry events (req ^. #filters))
   let population =
         Text.unlines
           [ "SELECT DISTINCT canonical_user,toDate(occurred_at) AS active_day," <> groupProjection grouping,
-            "FROM " <> resolvedSource scope,
+            "FROM " <> eventSessionSource grouping req (resolvedSource scope),
             "WHERE " <> accountPredicate <> " AND canonical_user!='' AND " <> activityPredicate,
             "AND " <> timestampPredicate scope <> propertyFilterClause (["NOT is_bot" | not (req ^. #includeBots)] <> Filters.predicates filters)
           ]
@@ -1023,7 +1026,7 @@ compileRolling :: EventRegistry -> Integer -> Bool -> QueryRequest -> Either Que
 compileRolling registry width stickiness req = do
   first (QueryCompileFilterError . Text.pack . show) (dailyGrain req)
   let scope = req {from = addDays (negate (width - 1)) (req ^. #from)}
-  (grouping, filters, population) <- activityPopulation registry req scope
+  (grouping, filters, population) <- activityPopulationFor (not stickiness) registry req scope
   let aggregate =
         Text.unlines
           [ "WITH population AS (" <> population <> "),expanded AS (SELECT *,addDays(active_day,arrayJoin(range(" <> Text.pack (show width) <> "))) AS series_day FROM population)",

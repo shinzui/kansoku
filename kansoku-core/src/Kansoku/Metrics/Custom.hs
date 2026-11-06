@@ -10,7 +10,7 @@ import Kansoku.Event (EventName (..), EventRegistry)
 import Kansoku.Metrics.Definition
 import Kansoku.Metrics.Filter qualified as F
 import Kansoku.Metrics.Query qualified as Q
-import Kansoku.Metrics.Query.Dimension (GroupDimension (..), dimensionErrorMessage, resolveDimension)
+import Kansoku.Metrics.Query.Dimension (GroupDimension (..), dimensionErrorMessage, resolveEventSessionDimension)
 import Kansoku.Metrics.Query.Filter qualified as Filters
 import Kansoku.Metrics.Query.Property (resolveNumericProperty)
 import Kansoku.Metrics.Query.Validate (mkSqlName)
@@ -65,7 +65,7 @@ validateCustom registry definition = do
       let resolve label
             | label == "cohort" = Right (GroupByCohort "validation" "'in'")
             | Just ident <- T.stripPrefix "cohort:" label, isJust (UUID.fromText ident) = Right (GroupByCohort ident "'in'")
-            | otherwise = resolveDimension registry (map EventName (eventNames def)) label
+            | otherwise = resolveEventSessionDimension registry (map EventName (eventNames def)) label
       unless (all (not . T.isPrefixOf "cohort:" . F.dimension) (concatMap F.filterTerms inputs)) (Left "cohort filters require dimension cohort and a UUID operand")
       void (Filters.compileFiltersWith "validation" resolve inputs)
       unless (length (groupBy def) <= 2 && length (groupBy def) == length (nubText (groupBy def))) (Left "groupBy allows at most two distinct dimensions")

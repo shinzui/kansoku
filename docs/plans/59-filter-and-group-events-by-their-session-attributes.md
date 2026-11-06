@@ -35,7 +35,7 @@ The same session dimensions work in grouping, including `groupBy=route,session:r
 
 
 - [x] Milestone 1 (2026-11-06): Page views attach finalized session attributes once; the owned runner passed three versus one page views, route/referrer grouping and replay at block sizes 65536 and 2. Adjacent sessions, acquisition and activity suites also passed.
-- [ ] Milestone 2: Calendar/rolling users and ad-hoc/saved custom metrics, including both ratio populations, accept the same dimensions without changing existing metric populations.
+- [x] Milestone 2 (2026-11-06): Calendar/rolling users and ad-hoc/saved custom metrics, including both ratio populations and the already-shipped percentile aggregate, use the same attachment. Eight native examples passed at both block sizes, including traits/cohorts/organization options, numeric samples and component-only filters; deterministic suites passed.
 - [ ] Milestone 3: Native and authenticated public acceptance prove isolation, missing-session behavior, attribution parity, replay safety, and unchanged result limits.
 - [ ] Milestone 4: Generated API documentation, query/enrichment guides, and ADRs describe the shipped behavior, and required checks pass.
 
@@ -43,6 +43,7 @@ The same session dimensions work in grouping, including `groupBy=route,session:r
 ## Surprises & Discoveries
 
 
+2026-11-06: The existing custom compiler already supports exact percentile aggregation. It uses the same decorated numeric-sample relation; the native median of amounts 2 and 4 is 3 under the session filter. No separate aggregate path or dependency change is needed.
 
 
 ## Decision Log

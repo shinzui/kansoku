@@ -18,6 +18,21 @@ import Web.HttpApiData (parseUrlPiece, toUrlPiece)
 
 spec :: Spec
 spec = describe "Custom metrics" $ do
+  it "validates saved session defaults and discovers component-only joins once" $ do
+    let simple = CustomSimple base {filters = ["session:channel:eq:organic_search"], groupBy = ["route", "session:referrer_host"]}
+        component channel = base {filters = ["session:channel:eq:" <> channel]}
+        ratio = CustomRatio (RatioMetric "rate" Nothing (component "organic_search") (component "referral"))
+    forM_ [simple, ratio] $ \def -> do
+      validateCustom defaultRegistry def `shouldBe` Right ()
+      req <- either (fail . T.unpack) pure (customRequest def request)
+      sql <- either (fail . show) pure (Q.buildSQL defaultRegistry (customBuiltin def) req)
+      T.count "FROM analytics.sessions" sql `shouldBe` 1
+      sql `shouldSatisfy` T.isInfixOf "attached_session_present = 1"
+    forM_ ["session:unknown", "session:prop:amount", "session:", "session:channel');DROP"] $ \bad ->
+      validateCustom defaultRegistry (CustomSimple base {groupBy = [bad]}) `shouldSatisfy` isLeft
+    forM_ [["session:channel", "session:channel"], ["route", "source", "session:channel"]] $ \groups ->
+      validateCustom defaultRegistry (CustomSimple base {groupBy = groups}) `shouldSatisfy` isLeft
+
   it "roundtrips exact grain spellings in JSON and URLs" $ do
     forM_ [Hour, Day, Week, Month, NoTimeBucket] $ \grain -> do
       A.eitherDecode (A.encode grain) `shouldBe` Right grain
