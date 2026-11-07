@@ -6,7 +6,7 @@ docId: DOC-13
 tags: ["clickhouse", "migrations", "maintenance", "recovery"]
 generated:
   by: process:codex
-  at: "2026-10-17T00:54:46Z"
+  at: "2026-11-07T20:24:51Z"
 ---
 
 # Initialize and upgrade ClickHouse
@@ -21,9 +21,13 @@ The qualified integration target is one directly addressed, self-managed ClickHo
 effects. `nix develop` supplies the hash-qualified artifact ahead of the template binary.
 The [matrix](../../db/clickhouse/qualification/matrix.json) and
 [adoption evidence](../evidence/clickhouse-migrate-adoption.md) record its digest and limits.
-The pinned upstream `0.1.0.1` source cohort also qualifies exact Altinity
-`26.3.60.10001.altinitystable` on an owned Linux arm64 server. Both Nix and extracted
-source artifacts pass all thirteen native groups on both candidates. This does not
+The pinned upstream `0.1.1.0` source candidate also qualifies exact Altinity
+`26.3.60.10001.altinitystable` and `26.3.60.10002.altinitystable` on owned Linux arm64
+servers. Upstream records passing Nix and extracted-source qualification for these
+artifacts. All four packages use the immutable source revision recorded in
+`cabal.project` and `flake.module.nix`; Hackage still publishes `0.1.0.0` as of
+2026-11-07. Kansoku continues to configure a direct-server target; adopting this
+dependency does not enable its new replicated-target mode. This does not
 qualify managed-cloud/proxy topology or the Linux amd64 application image. The
 staging initiative at
 `mori://tan/tan-app-infrastructure/plans/42-qualify-kansoku-artifacts-and-the-staging-clickhouse-contract`

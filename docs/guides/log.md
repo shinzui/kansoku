@@ -1,5 +1,9 @@
 # Bundle Update Log
 
+## 2026-11-07
+
+* **Update**: DOC-13: Record the immutable clickhouse-migrate 0.1.1.0 source candidate, upstream qualification and Kansoku direct-server configuration.
+
 ## 2026-11-06
 
 * **Update**: DOC-8 and DOC-11: Point browser and React producers at the published `kansoku-js` and `kansoku-react` 0.1.0 packages and record that opt-in client error and web vital capture has shipped

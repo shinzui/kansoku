@@ -7,10 +7,10 @@ packages:
 
 index-state: 2026-10-16T20:50:11Z
 constraints:
-  clickhouse-migrate ==0.1.0.1,
-  clickhouse-migrate-embed ==0.1.0.1,
-  clickhouse-migrate-cli ==0.1.0.1,
-  clickhouse-migrate-test-support ==0.1.0.1,
+  clickhouse-migrate ==0.1.1.0,
+  clickhouse-migrate-embed ==0.1.1.0,
+  clickhouse-migrate-cli ==0.1.1.0,
+  clickhouse-migrate-test-support ==0.1.1.0,
   hs-opentelemetry-instrumentation-wai ==1.0.0.0,
   hs-opentelemetry-exporter-in-memory ==1.0.0.0,
   servant-health ==0.1.0.0,
@@ -38,7 +38,7 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/shinzui/clickhouse-migrate.git
-  tag: 00afa9fa1038f2b90e7bc5f041ac1b56649b639f
+  tag: 0e75c4cc1303423ba561370ee5795aa0cf2455b7
   subdir:
     clickhouse-migrate
     clickhouse-migrate-embed

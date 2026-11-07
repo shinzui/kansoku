@@ -5,6 +5,49 @@ External consumer reference: [Kansoku Plan 49](mori://shinzui/kansoku/plans/49-a
 Implementation source checkpoint: `11d3f63` on the existing `master` branch.
 Qualified local aggregate validation is complete. No deployment or persistent user-data operation is recorded.
 
+## Source upgrade on 2026-11-07
+
+All four packages from [mori://shinzui/clickhouse-migrate](mori://shinzui/clickhouse-migrate)
+now use the `0.1.1.0` source candidate at immutable upstream revision
+`0e75c4cc1303423ba561370ee5795aa0cf2455b7`, replacing `0.1.0.1` at
+`00afa9fa1038f2b90e7bc5f041ac1b56649b639f`. Cabal and Nix select the same
+revision; the Nix unpacked source SHA-256 is
+`05f08nbqj5cq3yq0nxh10hssfgnp7bf03j8f8jc7xx33430rr6nk`.
+
+The authoritative Hackage version endpoints for all four packages still report
+only `0.1.0.0`; upstream tags still contain only `v0.1.0.0`. The selected revision
+was the upstream `master` head when checked. This is a source candidate upgrade,
+not a published Hackage release. The existing Cabal index-state is retained.
+
+Upstream adds exact Altinity `26.3.60.10002.altinitystable` qualification,
+replicated targets and checksum v2. Kansoku retains its direct-server target
+configuration and exact SQL inputs. Direct checksum v1 remains compatible;
+offline plan JSON gains additive v2 checksum fields. The historical qualification
+results below describe their original candidates.
+
+Upgrade verification passed the Nix production and upgrade-proof package builds,
+the source-conversion check (25 original files / 253 exact ranges / 257 native
+steps), formatting and strict guide validation. An offline comparison with the
+previous compiled CLI preserved every existing JSON field, all 25 migration v1
+checksums and all 257 step v1 checksums. Only the additive `checksums` objects
+are new. Private before/after plans are retained under
+`.dev/acceptance/clickhouse-migrate-upgrade-0.1.1.0`.
+
+The complete Cabal workspace build with tests enabled and the deterministic
+core/client/probe suites passed. The actual Nix-packaged CLI/coordinator suite
+passed all 17 cases with zero failures and zero skips at
+`.dev/acceptance/ch-migrations-v1ntv0vy`, including fresh/repeated migrations,
+recovery, failure boundaries and administrative coordination. The public native
+component suite also passed all four cases: full baseline execution, assertion
+cleanup, wrong-target/version refusal and zero-SQL repeat after a same-root restart.
+
+Archive checks passed at `.dev/acceptance/ch-embedding-55ebyafb` and
+`.dev/acceptance/ch-sdist-kz_z__eo`. The first compiled an extracted server archive,
+observed a preserved-timestamp SQL edit and ran with inputs withheld. The second
+built the production CLI exclusively from all ten extracted workspace/pinned
+package archives and verified its offline 25-migration/257-step plan after
+withholding migration inputs.
+
 ## Release identity
 
 On 2026-10-16 all four Hackage preferred-version endpoints reported 0.1.0.0.

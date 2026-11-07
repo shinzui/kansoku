@@ -40,8 +40,8 @@
             clickhouseMigrateSrc = pkgs.fetchFromGitHub {
               owner = "shinzui";
               repo = "clickhouse-migrate";
-              rev = "00afa9fa1038f2b90e7bc5f041ac1b56649b639f";
-              sha256 = "0bgahw4hmmi6cw5kaag0x7pfmgwbd91w278b69aiz77246ag95rw";
+              rev = "0e75c4cc1303423ba561370ee5795aa0cf2455b7";
+              sha256 = "05f08nbqj5cq3yq0nxh10hssfgnp7bf03j8f8jc7xx33430rr6nk";
             };
             hasqlMigrationSrc = pkgs.fetchFromGitHub {
               owner = "shinzui";
@@ -213,7 +213,7 @@
             servant-health = callHackageNoCheck "servant-health" "0.1.0.0" "1g24jnnijpap99vkmmqmkinlw18pg0hd23arrijgss430y63iv4x";
             servant-openapi-hs = callHackageNoCheck "servant-openapi-hs" "5.1.0" "19mvvlzfk7ffh5gbmqhpy587rjjd0xcgydbkcy1b48wxx061h8im";
 
-            # Keep the four-package cohort at the same immutable 0.1.0.1 source.
+            # Keep the four-package cohort at the same immutable 0.1.1.0 source.
             clickhouse-migrate = self.callCabal2nix "clickhouse-migrate" (clickhouseMigrateSrc + "/clickhouse-migrate") { };
             clickhouse-migrate-embed = self.callCabal2nix "clickhouse-migrate-embed" (clickhouseMigrateSrc + "/clickhouse-migrate-embed") { };
             clickhouse-migrate-cli = self.callCabal2nix "clickhouse-migrate-cli" (clickhouseMigrateSrc + "/clickhouse-migrate-cli") { };
