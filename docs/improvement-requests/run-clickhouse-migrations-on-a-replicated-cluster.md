@@ -6,7 +6,8 @@ generated:
   by: process:claude-code
   at: "2026-11-08T00:00:15Z"
 requestId: IR-10
-status: proposed
+status: accepted
+targetPlan: docs/plans/62-run-clickhouse-migrations-on-a-replicated-cluster.md
 origin: mori://tan/tan-app-infrastructure/plans/45-onboard-kansoku-to-production-on-the-replicated-clickhouse-cluster
 acceptanceCriteria:
   - id: AC-1
@@ -50,6 +51,9 @@ Kansoku's production onboarding
 (`mori://tan/tan-app-infrastructure/plans/45-onboard-kansoku-to-production-on-the-replicated-clickhouse-cluster`).
 **Addressed to:** `shinzui/kansoku` agents.
 **Created:** 2026-11-08.
+
+**Implementation plan:** [ExecPlan 62: Run ClickHouse migrations on a replicated cluster](../plans/62-run-clickhouse-migrations-on-a-replicated-cluster.md).
+The request is accepted for implementation; implementation has not started.
 
 This is the first of a set filed together for production onboarding. The other two are IR-11 in
 this bundle (runtime and maintenance jobs on a replicated cluster) and IR-12 (accepting the
