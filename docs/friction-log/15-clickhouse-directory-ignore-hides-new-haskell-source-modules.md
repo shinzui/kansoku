@@ -6,13 +6,18 @@ generated:
   by: "codex-cli/gpt-6.1-sol"
   at: "2026-11-08T03:18:47Z"
 frictionId: FRIC-15
-status: logged
+status: "resolved"
 impact: detour
 kind: tooling
 origin: "mori://shinzui/kansoku"
 affects: "mori://shinzui/kansoku"
 plan: "docs/plans/63-keep-writes-and-maintenance-jobs-correct-on-a-replicated-cluster.md"
 workaround: "Remove the redundant unanchored ignore, preserve /clickhouse/, and stage new sources before packaging."
+resolution: "The redundant unanchored ignore is removed; the anchored root ClickHouse ignore remains and new native modules are tracked and packaged."
+amended:
+  - by: "codex-cli/gpt-6.1-sol"
+    at: "2026-11-08T04:14:40Z"
+    change: "Resolve the case-insensitive source exclusion with the scoped ignore and tracked native modules."
 ---
 # ClickHouse directory ignore hides new Haskell source modules
 

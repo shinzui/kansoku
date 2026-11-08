@@ -404,6 +404,7 @@ def main():
                 before_lost_nodes=block_nodes()
                 lost=dict(event,eventId='writer-lost-ack')
                 proxy.reply_marker=b'writer-lost-ack'
+                proxy.trace_marker=b'writer-lost-ack'
                 send(lost)
                 assert proxy.seen.wait(20),'INSERT completion was never held'
                 eventually(lambda:physical('writer-lost-ack')==[1,1],'commit before losing acknowledgement')
@@ -413,9 +414,17 @@ def main():
                 assert lost_nodes,'lost-ack block identity was not observed in Keeper'
                 report['lostAckDeduplicationIds']=sorted(lost_nodes)
                 committed=snapshots()
+                first_port=proxy.held_port
+                retry_port=next(port for port in ports if port!=first_port)
+                with proxy.lock:
+                    proxy.forced_port=retry_port
                 proxy.drop.set()
                 assert proxy.dropped.wait(5),'held native reply connection was not closed'
                 eventually(empty,'actual writer recovery retry',90)
+                assert len(proxy.trace_ports)>=2 and proxy.trace_ports[:2]==[first_port,retry_port],'lost-ack retry did not traverse the other replica'
+                report['lostAckReplicaRoute']=[ids[ports.index(port)] for port in proxy.trace_ports[:2]]
+                with proxy.lock:
+                    proxy.forced_port=None
                 sync()
                 assert physical('writer-lost-ack')==[1,1],'identical retry duplicated physical raw rows'
                 assert snapshots()==committed,'identical retry changed finalized target values'

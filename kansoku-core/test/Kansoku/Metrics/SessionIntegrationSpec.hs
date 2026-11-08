@@ -9,9 +9,9 @@ import Data.Map.Strict qualified as Map
 import Data.String (fromString)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
-import Data.Text.IO qualified as Text
 import Data.Time (fromGregorian)
 import Effectful (runEff)
+import Kansoku.Admin.ClickHouse (rebuildDerived)
 import Kansoku.ClickHouse
 import Kansoku.ClickHouseTestSupport
 import Kansoku.Event
@@ -39,10 +39,10 @@ spec = describe "Kansoku.Sessions native" $ do
       forM_ rows (insertQueuedEvents connection . pure)
       snapshot connection materializedSessionProjection `shouldReturn` canonical
       sessions pool SessionCount request `shouldReturn` initial
-      rebuild connection
+      rebuildDerived connection
       snapshot connection materializedSessionProjection `shouldReturn` canonical
       sessions pool SessionCount request `shouldReturn` initial
-      rebuild connection
+      rebuildDerived connection
       snapshot connection materializedSessionProjection `shouldReturn` canonical
 
   it "keeps lifecycle-only visits as bounces, includes zero-duration sessions and counts service keys separately" $ withClickHouse $ \connection -> do
@@ -142,11 +142,6 @@ snapshot connection source = do
   let projection = Text.replace "{account_id:String}" "'sessions-native'" source
       sql = "SELECT toJSONString(tuple(source_service,session_id,occurred_at,session_end_at,page_view_count,engagement_count,entry_url,exit_url,is_bot,event_name,source,url,referrer,utm_source,utm_medium,utm_campaign,utm_content,utm_term,browser_family,os_family,device_class,channel,country_code,toString(properties_json))) AS value FROM (" <> projection <> ") ORDER BY source_service,session_id"
   map (\(JsonRow bytes) -> bytes) . concat . reverse <$> select (unsafeMkSelect (const (Text.encodeUtf8Builder sql)) :: Select '[Column "value" ChString] JsonRow) connection pure
-
-rebuild :: Connection -> IO ()
-rebuild connection = do
-  sql <- Text.readFile "db/clickhouse/migrations/0020_replay_safe_sessions.sql"
-  forM_ (filter (not . Text.null . Text.strip) (Text.splitOn ";" sql)) (command connection . fromString . Text.unpack)
 
 seed :: Connection -> IO ()
 seed connection = do

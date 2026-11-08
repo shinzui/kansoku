@@ -6,13 +6,18 @@ generated:
   by: "codex-cli/gpt-6.1-sol"
   at: "2026-11-08T03:50:47Z"
 frictionId: FRIC-16
-status: logged
+status: "accepted"
 impact: detour
 kind: interface
 origin: "mori://shinzui/kansoku"
 affects: "mori://shinzui/clickhouse-migrate/packages/clickhouse-migrate-test-support"
 plan: "docs/plans/63-keep-writes-and-maintenance-jobs-correct-on-a-replicated-cluster.md"
 workaround: "Preserve typed fixture RPC failure in the local bridge; start exactly once, then independently verify the same UUID and zero read-only database/table counts within a bounded sixty-second readiness observation before resume."
+resolution: "Retain the owned full-schema fixture capacity profile and explicit failure/identity observations; both final-checkpoint restart cases pass without retrying failed starts."
+amended:
+  - by: "codex-cli/gpt-6.1-sol"
+    at: "2026-11-08T04:14:40Z"
+    change: "Accept the explicit owned capacity profile and bounded same-UUID restoration checks for full-schema recovery."
 ---
 # Owned replica restart readiness ends before interrupted rebuild recovery
 

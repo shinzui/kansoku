@@ -44,6 +44,10 @@ class NativeProxy:
     def __init__(self, ports):
         self.ports = ports
         self.next = 0
+        self.forced_port = None
+        self.held_port = None
+        self.trace_marker = None
+        self.trace_ports = []
         self.lock = threading.Lock()
         self.closed = False
         self.hold = threading.Event()
@@ -74,13 +78,16 @@ class NativeProxy:
 
             def forward(self):
                 with owner.lock:
-                    port = owner.ports[owner.next % len(owner.ports)]
-                    owner.next += 1
+                    port = owner.forced_port
+                    if port is None:
+                        port = owner.ports[owner.next % len(owner.ports)]
+                        owner.next += 1
                 try:
                     with socket.create_connection(('127.0.0.1', port), timeout=3) as upstream:
                         upstream.settimeout(None)
                         holding = False
                         tail = b''
+                        traced_insert = False
                         while not owner.closed:
                             ready, _, _ = select.select([self.request, upstream], [], [], .1)
                             for source in ready:
@@ -95,6 +102,12 @@ class NativeProxy:
                                     return
                                 if source is self.request:
                                     window = tail + data
+                                    if b'INSERT INTO events_raw' in window:
+                                        traced_insert = False
+                                    if owner.trace_marker and owner.trace_marker in window and not traced_insert:
+                                        with owner.lock:
+                                            owner.trace_ports.append(port)
+                                        traced_insert = True
                                     if owner.client_marker and owner.client_marker in window:
                                         owner.client_seen.set()
                                         while owner.client_hold.is_set() and not owner.closed:
@@ -103,6 +116,7 @@ class NativeProxy:
                                         # The unique serialized row marker occurs only after
                                         # native sample negotiation, never in handshake/SQL.
                                         holding = True
+                                        owner.held_port = port
                                         owner.reply_marker = None
                                     tail = window[-256:]
                                 (upstream if source is self.request else self.request).sendall(data)

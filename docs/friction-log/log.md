@@ -1,6 +1,10 @@
 # Bundle Update Log
 
 ## 2026-11-08
+* **Update**: FRIC-17 accepted: Accept the repeated final-build cost without weakening embedding or native acceptance gates.
+* **Addition**: FRIC-17 records slowdown tooling friction with mori://shinzui/clickhouse-migrate/packages/clickhouse-migrate-embed: Final native gates force broad recompilation for a focused consumer fix
+* **Update**: FRIC-16 accepted: Accept the explicit owned capacity profile and bounded same-UUID restoration checks for full-schema recovery.
+* **Update**: FRIC-15 resolved: Resolve the case-insensitive source exclusion with the scoped ignore and tracked native modules.
 * **Addition**: FRIC-16 records detour interface friction with mori://shinzui/clickhouse-migrate/packages/clickhouse-migrate-test-support: Owned replica restart readiness ends before interrupted rebuild recovery
 * **Traceability**: FRIC-1, FRIC-3, FRIC-7, FRIC-9, FRIC-11 and FRIC-14 consolidated in mori://shinzui/okf/okf/bug-reports/concepts/BUG-2 and mori://shinzui/okf/okf/improvement-requests/concepts/IR-15; retain accepted local workarounds.
 * **Addition**: FRIC-15 records detour tooling friction with mori://shinzui/kansoku: ClickHouse directory ignore hides new Haskell source modules
