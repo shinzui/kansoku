@@ -16,6 +16,11 @@ provenance:
       at: 2026-11-08T04:53:20Z
       mode: "implement"
       note: "Implement target dossier, exact image plan capture and fail-closed release validation"
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-11-08T05:20:48Z
+      mode: "implement"
+      note: "Reconcile current implementation context and Apple Container registry readback commands"
 ---
 
 # Accept TAN production as a deployment target
@@ -76,7 +81,7 @@ Milestones 1 and 2 are implemented and verified. Clean source `7c1132d74c8cb4fd5
 
 A shard is one logical data partition; two replicas keep copies of that partition. Keeper is the coordination service that makes replication work. A migration ledger records applied schema operations and uncertain outcomes. Direct installations use the existing single-server ledger and checksum v1 history. Plans 62 and 63 add a separate replicated baseline, a fresh v2 ledger, complete replica identity, and all-replica maintenance/writer behavior. A migration-plan SHA-256 in this release record hashes the whole CLI JSON output; it is distinct from the individual v1/v2 migration checksums inside that output.
 
-`docs/evidence/clickhouse-migrate-adoption.md` contains historical Darwin qualification and the 2026-11-07 dependency upgrade, but its current production disposition still says no target is selected. `db/clickhouse/qualification/matrix.json` retains the original `26.8.28.14` Darwin binary, its startup SIGSEGV caveat, and an old policy excluding replication and Cloud. Its historical `sourceRevision` is not the currently adopted toolkit revision. Preserve those facts as historical evidence while clearly identifying the new selected target and current scope. Do not leave the document's final aggregate paragraph contradicting the new disposition.
+`docs/evidence/clickhouse-migrate-adoption.md` contains historical Darwin qualification, the 2026-11-07 dependency upgrade, and the selected TAN production disposition added by Milestone 1. `db/clickhouse/qualification/matrix.json` retains the original `26.8.28.14` Darwin binary, its startup SIGSEGV caveat, alongside a separate `deploymentTargets` record. The current policy separates fixture qualification from managed-target acceptance. Its historical `sourceRevision` is not the currently adopted toolkit revision. Preserve those facts as historical evidence while clearly identifying the new selected target and current scope. Do not leave the document's final aggregate paragraph contradicting the new disposition.
 
 `nix/clickhouse-qualified.nix` reads `builtins.head matrix.entries` and downloads its `url`/`sha256`; unsupported systems get a failing executable. `scripts/isolated_clickhouse.py` and `scripts/clickhouse_migrations_acceptance.py` also guard the existing Darwin fixture. A managed-target record must not make those existing direct recipes silently select another server or report Linux qualification. The new replicated recipes supplied by Plans 62 and 63 are separate acceptance paths.
 
@@ -88,7 +93,7 @@ The target configuration was read at `mori://tan/tan-infrastructure`, revision `
 
 TAN's existing artifact contract was inspected at `mori://tan/tan-app-infrastructure`, revision `108a5d918d2e51f58c8cb73c8e9f080e3af6abf9`, project-relative `pulumi/apps/kansoku/qualified-artifact.json` and `docs/qualification/kansoku-image.json` (artifact-level URIs pending). The first has exactly eight fields: `image`, `sourceProject`, `sourcePackage`, `sourceRevision`, `upstreamProject`, `upstreamImplementation`, `nativePlanSha256`, and `postgresPlanSha256`. Its current values describe an older staging image and must not be copied as the new release's identity. The originating TAN Plan 45 was absent both locally and from upstream master during planning; IR-12 is the available request contract. Its unavailable plan does not prevent this self-contained Kansoku plan. Recheck its consumer expectations before handoff, keeping the canonical plan URI even if Mori cannot resolve it.
 
-`nix/kansoku-image.nix` packages all four executables, BusyBox, a CA bundle and `packaging/entrypoint.sh`. The image tag is the first twelve source-revision characters followed by `-p1`. `flake.module.nix` exposes `packages.x86_64-linux.kansoku-image`, the Linux VM smoke check, and a native `kansoku-image-stream` exporter. `scripts/check_container_image.py` inspects a normal exported archive, verifies Linux amd64 and OCI source labels, binds the loaded layers/configuration, and executes the recorded Docker image ID with networking disabled. It currently checks only the direct 25-migration/257-step plan and hashes that output. It does not capture a PostgreSQL plan or execute replicated database acceptance. `kansoku-server/app/Migrate.hs` exposes the PostgreSQL plan command and loads application configuration even for offline inspection, so provide harmless fixture environment values through the normal entrypoint.
+`nix/kansoku-image.nix` packages all four executables, BusyBox, a CA bundle and `packaging/entrypoint.sh`. The image tag is the first twelve source-revision characters followed by `-p1`. `flake.module.nix` exposes `packages.x86_64-linux.kansoku-image`, the Linux VM smoke check, and a native `kansoku-image-stream` exporter. `scripts/check_container_image.py` inspects a normal exported Docker archive and its equivalent OCI conversion, verifies Linux amd64 and source labels, and binds the loaded layers/configuration. Its Apple Container backend verifies each created container descriptor before starting it with no network or host mounts. It captures both native histories and the PostgreSQL plan twice, requires exact byte equality, and hashes those bytes. It does not execute replicated database acceptance. Docker remains an explicitly selected backend for Linux hosts; Colima must never be used. `kansoku-server/app/Migrate.hs` exposes the PostgreSQL plan command and loads application configuration even for offline inspection, so provide harmless fixture environment values through the normal entrypoint.
 
 A registry manifest digest identifies the published image reference. The archive SHA-256, archive configuration digest and loaded Docker image ID identify different representations; loading can normalize configuration. Keep them under distinct names. Nix package output identities returned by build metadata help bind the candidate to its compiled package. Query build metadata and execute declared outputs through normal tools; never traverse `/nix/store` or inspect its files to establish provenance.
 
@@ -221,29 +226,33 @@ nix develop --no-write-lock-file -c python3 scripts/clickhouse_replicated_runtim
   --image-id "$TAN_RELEASE_IMAGE_ID" --docker-context "$TAN_RELEASE_CONTEXT"
 python3 scripts/check_tan_release.py \
   --evidence docs/evidence/tan-production-release.json \
-  --artifact docs/evidence/tan-production-qualified-artifact.json \
+  --artifact docs/evidence/tan-production-artifact-draft.json \
   --image-report "$TAN_RELEASE_DIR/image-report.json" \
   --plan-dir "$TAN_RELEASE_DIR/plans" --phase prepared
 ```
 
 These image-mode flags are proposed interfaces to implement or reconcile with the prerequisite harnesses, not claims about current CLI support. Default image-mode execution must run all existing required cases; focused development cases cannot qualify a whole release. Prepared validation prints the bound identities and still-pending gates, never `published` readiness. If full image execution cannot be established, record that gap for the owner instead of treating the failed command as passing.
 
-After Milestone 3, use an auth file supplied privately for registry access. `TAN_RELEASE_AUTH_FILE` below is a path to that file, never a token value. First inspect the intended tag: only a confirmed not-found result permits new publication; authentication/network errors do not mean it is absent. An existing tag may be reused only after proving it already contains the identical candidate, without an overwrite.
+After Milestone 3, use an auth file supplied privately for registry access. Skopeo is available through the pinned nixpkgs expression documented in `docs/guides/container-image.md`. The copy commands below accept unsigned image transport explicitly; they still require authenticated TLS registry access and independently verified candidate/readback identities. `TAN_RELEASE_AUTH_FILE` below is a path to that file, never a token value. First inspect the intended tag: only a confirmed not-found result permits new publication; authentication/network errors do not mean it is absent. An existing tag may be reused only after proving it already contains the identical candidate, without an overwrite.
 
 ```bash
 export TAN_RELEASE_TAG="gcr.io/tan-ng/kansoku:${TAN_RELEASE_REVISION:0:12}-p1"
 skopeo inspect --authfile "$TAN_RELEASE_AUTH_FILE" "docker://$TAN_RELEASE_TAG"
-skopeo copy --authfile "$TAN_RELEASE_AUTH_FILE" \
+skopeo --insecure-policy copy --authfile "$TAN_RELEASE_AUTH_FILE" \
   "docker-archive:$TAN_RELEASE_DIR/image.tar" "docker://$TAN_RELEASE_TAG"
 skopeo inspect --authfile "$TAN_RELEASE_AUTH_FILE" "docker://$TAN_RELEASE_TAG" \
   > "$TAN_RELEASE_DIR/registry.json"
 export TAN_RELEASE_DIGEST="$(jq -r .Digest "$TAN_RELEASE_DIR/registry.json")"
-skopeo copy --authfile "$TAN_RELEASE_AUTH_FILE" \
+skopeo --insecure-policy copy --authfile "$TAN_RELEASE_AUTH_FILE" \
   "docker://gcr.io/tan-ng/kansoku@$TAN_RELEASE_DIGEST" \
   "docker-archive:$TAN_RELEASE_DIR/readback.tar:$TAN_RELEASE_TAG"
+skopeo --insecure-policy copy \
+  "docker-archive:$TAN_RELEASE_DIR/readback.tar" \
+  "oci-archive:$TAN_RELEASE_DIR/readback-oci.tar:$TAN_RELEASE_TAG"
 python3 scripts/check_container_image.py \
   --archive "$TAN_RELEASE_DIR/readback.tar" \
-  --docker-context "$TAN_RELEASE_CONTEXT" --revision "$TAN_RELEASE_REVISION" \
+  --engine apple --oci-archive "$TAN_RELEASE_DIR/readback-oci.tar" \
+  --revision "$TAN_RELEASE_REVISION" \
   --report "$TAN_RELEASE_DIR/readback-report.json" \
   --plan-dir "$TAN_RELEASE_DIR/readback-plans"
 ```
