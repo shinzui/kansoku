@@ -86,3 +86,11 @@ candidate archive and image ID before publication, then the verified registry di
 Evidence commits follow candidate source commits and do not trigger a rebuild of
 the already tested content. The selected managed target remains pending acceptance;
 local fixture qualification continues to describe its actual platform scope.
+
+On macOS the user-selected runtime is Apple Container; Colima is forbidden by
+`AGENTS.md`. Its Rosetta smoke path converts the normal exported archive to OCI,
+compares loaded configuration/layers, creates each isolated container, verifies
+its recorded image descriptor, then starts it. Its local OCI index digest is
+identified explicitly and is not called a Docker ID or published registry receipt.
+Rosetta execution remains emulated. Historical Docker receipts retain their original
+platform and do not prescribe future macOS execution.

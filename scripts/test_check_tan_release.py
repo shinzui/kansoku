@@ -75,6 +75,7 @@ class ReleaseValidation(unittest.TestCase):
 
     def test_pending_only_prepares_unusable_draft(self):
         self.evidence['gates']['managed-endpoint']['status'] = 'pending'
+        self.evidence['publication'] = None
         artifact, pending = self.check('prepared')
         self.assertIsNone(artifact['image'])
         self.assertEqual(pending, ['managed-endpoint'])

@@ -13,7 +13,9 @@ from check_image_plans import PLAN_FIELDS, SELECTORS, validate_plan
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--archive', type=Path, required=True)
-    parser.add_argument('--docker-context', required=True)
+    parser.add_argument('--engine', choices=['apple', 'docker'], default='apple')
+    parser.add_argument('--docker-context')
+    parser.add_argument('--oci-archive', type=Path, help='Equivalent OCI archive for Apple Container')
     parser.add_argument('--revision', required=True)
     parser.add_argument('--report', type=Path, required=True)
     parser.add_argument('--plan-dir', type=Path, required=True)
@@ -40,19 +42,35 @@ def main():
     if config['config']['Entrypoint'] != ['/entrypoint.sh'] or config['config']['Cmd'] != ['kansoku-server']:
         raise SystemExit('Unexpected entrypoint or default command')
     config_digest = 'sha256:' + hashlib.sha256(config_bytes).hexdigest()
-    docker = ['docker', '--context', args.docker_context]
-    context = json.loads(subprocess.check_output(docker + ['context', 'inspect', args.docker_context], text=True))[0]
-    if not context['Endpoints']['docker']['Host'].startswith('unix://'):
-        raise SystemExit('An explicit local Unix Docker context is required')
-    subprocess.run(docker + ['load', '-i', str(archive_path)], check=True, capture_output=True, timeout=120)
-    loaded = json.loads(subprocess.check_output(docker + ['image', 'inspect', expected], text=True))[0]
-    if loaded['RootFS']['Layers'] != config['rootfs']['diff_ids'] or any(
-            loaded['Config'].get(key) != config['config'].get(key)
+    if args.engine == 'apple':
+        if not args.oci_archive or str(args.oci_archive.resolve()).startswith('/nix/store/'):
+            raise SystemExit('Apple Container requires --oci-archive exported to a normal file')
+        subprocess.run(['container', 'image', 'load', '--input', str(args.oci_archive)], check=True, capture_output=True, timeout=120)
+        loaded = json.loads(subprocess.check_output(['container', 'image', 'inspect', expected], timeout=30))[0]
+        variants = loaded['variants']
+        if len(variants) != 1 or variants[0]['platform'] != {'architecture': 'amd64', 'os': 'linux'}:
+            raise RuntimeError('Expected exactly one Linux amd64 variant')
+        loaded_config = variants[0]['config']
+        image_id = 'sha256:' + loaded['id']
+        host_architecture = 'arm64'
+        image_id_kind = 'Apple Container local OCI index digest; not a published registry digest'
+    else:
+        if not args.docker_context:
+            raise SystemExit('Docker requires an explicit local --docker-context')
+        docker = ['docker', '--context', args.docker_context]
+        context = json.loads(subprocess.check_output(docker + ['context', 'inspect', args.docker_context], text=True))[0]
+        if not context['Endpoints']['docker']['Host'].startswith('unix://'):
+            raise SystemExit('An explicit local Unix Docker context is required')
+        subprocess.run(docker + ['load', '-i', str(archive_path)], check=True, capture_output=True, timeout=120)
+        loaded = json.loads(subprocess.check_output(docker + ['image', 'inspect', expected], text=True))[0]
+        loaded_config = {'rootfs': {'diff_ids': loaded['RootFS']['Layers']}, 'config': loaded['Config']}
+        image_id = loaded['Id']
+        host_architecture = subprocess.check_output(docker + ['info', '--format', '{{.Architecture}}'], text=True, timeout=15).strip()
+        image_id_kind = 'Docker loaded configuration ID; not a published registry digest'
+    if loaded_config['rootfs']['diff_ids'] != config['rootfs']['diff_ids'] or any(
+            loaded_config['config'].get(key) != config['config'].get(key)
             for key in ['Entrypoint', 'Cmd', 'Env', 'Labels']):
         raise RuntimeError('Loaded image differs from the exported artifact')
-    # Docker may normalize legacy archive configuration when assigning its ID.
-    # Bind the loaded filesystem/configuration, then execute that recorded ID.
-    image_id = loaded['Id']
     supplied = {
         'DATABASE_URL': 'postgresql://image-proof@pg/kansoku',
         'CLICKHOUSE_HOST': 'owned-clickhouse',
@@ -72,14 +90,25 @@ def main():
         name = 'kansoku-image-proof-' + uuid.uuid4().hex
         flags = [item for key, value in env.items() for item in ['-e', key + '=' + value]]
         try:
-            result = subprocess.run(docker + ['run', '--name', name, '--rm', '--network', 'none',
-                '--platform', 'linux/amd64', '--pull=never', *flags, image_id, *command],
-                capture_output=True, timeout=60)
+            if args.engine == 'apple':
+                subprocess.run(['container', 'create', '--name', name, '--network', 'none', '--no-dns',
+                    '--rosetta', '--platform', 'linux/amd64', '--memory', '2G', *flags, expected, *command],
+                    check=True, capture_output=True, timeout=30)
+                created = json.loads(subprocess.check_output(['container', 'inspect', name], timeout=15))[0]['configuration']
+                if (created['image']['descriptor']['digest'] != image_id or created['networks'] or created['mounts']
+                        or created['platform'] != {'architecture': 'amd64', 'os': 'linux'}):
+                    raise RuntimeError('Created container identity/isolation differs')
+                result = subprocess.run(['container', 'start', '--attach', name], capture_output=True, timeout=60)
+            else:
+                result = subprocess.run(docker + ['run', '--name', name, '--rm', '--network', 'none',
+                    '--platform', 'linux/amd64', '--pull=never', *flags, image_id, *command],
+                    capture_output=True, timeout=60)
             if (result.returncode == 0) != success:
                 raise RuntimeError('Owned image probe failed: ' + ' '.join(command) + ' (exit ' + str(result.returncode) + '): ' + result.stderr[-2000:].decode(errors='replace'))
             return result.stdout if success else result.stderr
         finally:
-            subprocess.run(docker + ['rm', '--force', name], capture_output=True, timeout=15)
+            cleanup = ['container', 'delete', '--force', name] if args.engine == 'apple' else docker + ['rm', '--force', name]
+            subprocess.run(cleanup, capture_output=True, timeout=15)
 
     captures = {}
     for filename in PLAN_FIELDS:
@@ -113,11 +142,14 @@ def main():
         raise RuntimeError('Missing environment failed for an unexpected reason')
     run(supplied, 'sh', '-c', 'for name in kansoku-server kansoku-migrate kansoku-ch-migrate kansoku-admin; do command -v "$name" >/dev/null || exit 1; done; test -s "$SSL_CERT_FILE"')
     report = {'sourceRevision': args.revision, 'tag': expected, 'imageId': image_id, 'archiveConfigDigest': config_digest,
-              'architecture': 'amd64', 'os': 'linux', 'migrationCount': 25, 'stepCount': 257,
+              'architecture': 'amd64', 'os': 'linux', 'dockerHostArchitecture': host_architecture,
+              'clientExecution': 'native' if host_architecture in ('amd64', 'x86_64') else 'emulated', 'migrationCount': 25, 'stepCount': 257,
               **{field: hashlib.sha256(captures[name]).hexdigest() for name, field in PLAN_FIELDS.items()},
               'replicatedSelectors': SELECTORS, 'hashSemantics': 'SHA-256 of exact stdout bytes including final newline',
               'archiveSha256': hashlib.file_digest(archive_path.open('rb'), 'sha256').hexdigest(),
-              'layers': loaded['RootFS']['Layers'], 'labels': labels,
+              'layers': loaded_config['rootfs']['diff_ids'], 'labels': labels,
+              'engine': args.engine, 'imageIdKind': image_id_kind,
+              'ociArchiveSha256': hashlib.file_digest(args.oci_archive.open('rb'), 'sha256').hexdigest() if args.oci_archive else None,
               'environmentMapping': True, 'explicitTlsValues': True, 'caBundle': True,
               'fourExecutablePaths': True, 'scope': 'Network-disabled exported-image smoke only; no database, managed-target or event-flow acceptance'}
     args.report.write_text(json.dumps(report, indent=2) + '\n')

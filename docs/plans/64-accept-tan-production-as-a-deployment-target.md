@@ -44,11 +44,15 @@ This is a standalone release plan, not a child of MasterPlan 7 or of the request
 
 ## Surprises & Discoveries
 
+2026-11-08: FRIC-18 in `docs/friction-log/` records the failed emulated Docker probe: exit 137 and independently observed OOMKilled=true, even with GHCRTS=-N1. The native Linux VM smoke passes. Apple Container with Rosetta executes the same exported image and all three repeated offline plans successfully. The checker now binds each created Apple container to its inspected local OCI index before starting it; no networking or host mounts are present. A local index digest is not a registry manifest receipt.
+
 2026-11-08: Official Altinity notes explicitly identify CVE-2026-116366 remediation in 10002 and temporarily withheld security source changes. The public release tag identifies only the public baseline, not all binary inputs. The dossier retains that limitation; security disposition remains pending. Both infrastructure and consumer master heads still match the planning snapshots.
 
 
 
 ## Decision Log
+
+2026-11-08: The user requires Apple Container on macOS and forbids Colima. `AGENTS.md` now retains this instruction. Use the Apple backend for image smoke with Rosetta and network isolation; existing Colima prerequisite receipts are historical evidence only. No prerequisite application or dependency code changed, so those retained behavioral results remain applicable within their original scope.
 
 
 2026-11-08: Preserve the existing matrix's direct Darwin candidate and add a separate selected deployment-target record. `nix/clickhouse-qualified.nix` currently uses the first `entries` element as a downloadable macOS binary. Replacing it with managed-service metadata would break local builds and confuse target selection with fixture qualification.
@@ -171,7 +175,7 @@ gh api 'repos/topagentnetwork/tan-app-infrastructure/contents/pulumi/apps/kansok
 
 For current release decisions, first resolve the new authoritative revision and retain it, then substitute it into these reads. Before changing any dependency pin or bound, additionally check the authoritative package registry and upstream release tags. For security disposition use the current official Altinity release notes at `https://docs.altinity.com/releasenotes/altinity-stable-release-notes/26.3/` and ClickHouse security policy at `https://github.com/ClickHouse/ClickHouse/security/policy`, follow their relevant advisory/release links, and record the review date and findings. This plan does not pre-approve the security review.
 
-After prerequisite implementation, exercise its published recipes in the owned fixture context:
+The following prerequisite recipes describe the retained historical Docker acceptance, not commands to rerun on macOS. The user now forbids Colima; a future behavioral rerun must adapt their owned fixtures to Apple Container. No application/dependency changes in this release preparation invalidate the retained runs:
 
 ```bash
 export CLICKHOUSE_MIGRATE_DOCKER_CONTEXT='<isolated-local-context>'
@@ -195,12 +199,14 @@ nix build .#checks.x86_64-linux.kansoku-image-smoke --no-link --json > "$TAN_REL
 nix run .#kansoku-image-stream > "$TAN_RELEASE_DIR/image.tar"
 python3 scripts/check_container_image.py \
   --archive "$TAN_RELEASE_DIR/image.tar" \
-  --docker-context "$TAN_RELEASE_CONTEXT" \
+  --engine apple --oci-archive "$TAN_RELEASE_DIR/image-oci.tar" \
   --revision "$TAN_RELEASE_REVISION" \
   --report "$TAN_RELEASE_DIR/image-report.json" \
   --plan-dir "$TAN_RELEASE_DIR/plans"
 python3 -m unittest discover -s scripts -p 'test_check_tan_release.py'
 ```
+
+On macOS use Apple Container and convert `image.tar` to `image-oci.tar` with the pinned Skopeo recipe in `docs/guides/container-image.md` before invoking the checker. Never use Colima. The checker retains both archive hashes and reports Rosetta execution as emulated.
 
 `--plan-dir` is added in Milestone 2. It writes `native-direct.json`, `native-replicated.json` and `postgres.json`. The report must identify `linux/amd64`, the exact source revision and three stable hashes. The VM check requires an available x86_64 Linux builder with the NixOS test features; missing build capacity remains a visible prerequisite. None of these commands starts production services.
 

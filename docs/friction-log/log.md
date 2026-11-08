@@ -1,6 +1,8 @@
 # Bundle Update Log
 
 ## 2026-11-08
+* **Update**: FRIC-18 resolved: Resolve local image execution through the user-selected Apple Container backend; retain the OOM failures as historical evidence.
+* **Addition**: FRIC-18 records blocked environment friction with mori://shinzui/kansoku: Emulated amd64 image plan exhausts local Docker memory
 * **Update**: FRIC-17 accepted: Accept the repeated final-build cost without weakening embedding or native acceptance gates.
 * **Addition**: FRIC-17 records slowdown tooling friction with mori://shinzui/clickhouse-migrate/packages/clickhouse-migrate-embed: Final native gates force broad recompilation for a focused consumer fix
 * **Update**: FRIC-16 accepted: Accept the explicit owned capacity profile and bounded same-UUID restoration checks for full-schema recovery.

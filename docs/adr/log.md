@@ -1,6 +1,7 @@
 # Bundle Update Log
 
 ## 2026-11-08
+* **Update**: Use Apple Container on macOS, bind created container descriptors, and distinguish local OCI index identity from registry publication.
 * **Update**: Select managed TAN scope while retaining explicit owner decisions and independently verified inventory/storage obligations.
 * **Update**: Record exact plan-byte hashes, draft versus published TAN records and candidate-bound owner dispositions.
 * **Update**: ADR-10 and ADR-4: Record qualified native runtime fixture capacity, physical-versus-logical retry evidence and direct outage startup validation.

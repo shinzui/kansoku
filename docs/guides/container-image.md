@@ -39,7 +39,7 @@ no manual store-file inspection or copying is needed:
 nix run .#kansoku-image-stream > /tmp/kansoku-image.tar
 python3 scripts/check_container_image.py \
   --archive /tmp/kansoku-image.tar \
-  --docker-context <isolated-local-context> \
+  --engine apple --oci-archive /tmp/kansoku-image-oci.tar \
   --revision "$(git rev-parse HEAD)" \
   --report /tmp/kansoku-image-smoke.json \
   --plan-dir /tmp/kansoku-image-plans
@@ -86,7 +86,8 @@ archive/configuration hashes, loaded image ID and layers in the release candidat
 
 ```bash
 python3 scripts/check_container_image.py \
-  --archive /tmp/kansoku-image.tar --docker-context colima \
+  --archive /tmp/kansoku-image.tar --engine apple \
+  --oci-archive /tmp/kansoku-image-oci.tar \
   --revision "$(git rev-parse HEAD)" --report /tmp/image-report.json \
   --plan-dir /tmp/kansoku-release-plans
 python3 scripts/check_tan_release.py \
@@ -109,3 +110,24 @@ with a new report/plan directory. Retain original and readback archive hashes
 separately because registry representation can change. The final record belongs at
 `docs/evidence/tan-production-qualified-artifact.json` only after published-phase
 validation. Evidence commits follow the clean image source commit; record both.
+
+
+On macOS always use Apple Container, with Rosetta for amd64; never use Colima.
+Convert the normal Docker archive to an OCI archive before loading it. Run Skopeo
+from the source flake's pinned nixpkgs when it is not installed:
+
+```bash
+nix shell --impure --expr 'let f = builtins.getFlake (toString ./.); pkgs = import f.inputs.nixpkgs { system = builtins.currentSystem; }; in pkgs.skopeo' \
+  -c skopeo --insecure-policy copy \
+  docker-archive:/tmp/kansoku-image.tar \
+  oci-archive:/tmp/kansoku-image-oci.tar:gcr.io/tan-ng/kansoku:<source-tag>
+```
+
+The policy flag here permits a local unsigned archive conversion; this command
+contacts no registry. Keep the original Docker archive for publication. The checker
+compares the loaded OCI filesystem layers, labels, environment and command with
+that archive, then binds each created container's recorded local index digest
+before starting it. Each probe has no networks or host mounts. The Apple local
+index digest in `imageId` is distinct from Docker's configuration ID and the
+published registry manifest. `imageIdKind` identifies its meaning. Reports record
+Rosetta execution as emulated; it is not native Linux behavioral acceptance.

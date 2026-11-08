@@ -30,6 +30,8 @@ def validate(evidence, report, plan_dir, phase):
     require(candidate['cabalToolkitRevision'] == candidate['nixToolkitRevision'], 'Dependency pins disagree')
     require(re.fullmatch(r'[0-9a-f]{40}', candidate['cabalToolkitRevision']) is not None, 'Full toolkit revision required')
     require((report['os'], report['architecture']) == ('linux', 'amd64'), 'Expected Linux amd64')
+    if phase == 'published':
+        require(isinstance(evidence.get('publication'), dict), 'Publication receipts required')
     identity = candidate if phase == 'prepared' else evidence['publication']['readback']
     for key in ['archiveSha256', 'archiveConfigDigest', 'imageId', 'layers']:
         require(identity[key] == report[key], 'Candidate/readback image mismatch: ' + key)
@@ -78,7 +80,7 @@ def validate(evidence, report, plan_dir, phase):
     if evidence['gates']['linux-amd64-image']['status'] == 'resolved':
         families = {r['family'] for r in evidence['acceptanceRuns'] if r['clientPlatform'] == 'linux/amd64' and r.get('complete') is True}
         require({'migrations', 'runtime'} <= families, 'Missing full image behavioral acceptance')
-    image = evidence.get('publication', {}).get('image')
+    image = (evidence.get('publication') or {}).get('image')
     if phase == 'published':
         require(not pending, 'Pending release gates: ' + ', '.join(sorted(pending)))
         publication = evidence['publication']
