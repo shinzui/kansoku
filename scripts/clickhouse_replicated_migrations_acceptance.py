@@ -24,24 +24,15 @@ def native_examples(env, fixture, root, replica):
     """Resolve only the exact owned fixture container, then verify native UUID."""
     import urllib.parse
     from test_support import binary, hspec
-    context = os.environ['CLICKHOUSE_MIGRATE_DOCKER_CONTEXT']
-    docker = ['docker','--context',context]
-    port = urllib.parse.urlsplit(fixture['replicas'][0]['endpoint']).port
-    containers = subprocess.check_output(docker+['ps','-q','--filter','label=clickhouse-migrate.fixture=owned'],text=True,timeout=10).split()
-    assert containers, 'No owned fixture containers'
-    inspected = json.loads(subprocess.check_output(docker+['inspect',*containers],text=True,timeout=10))
-    selected = [c for c in inspected if any(int(p['HostPort'])==port for p in c['NetworkSettings']['Ports'].get('8123/tcp',[]) or [])]
-    assert len(selected)==1, 'Native mapping must match exactly one owned HTTP endpoint'
-    native = selected[0]['NetworkSettings']['Ports']['9000/tcp']
-    assert len(native)==1
-    test_env=dict(env,KANSOKU_CLICKHOUSE_USER='kansoku_native_tests',KANSOKU_REQUIRED_INTEGRATION='1',KANSOKU_QUERY_LIMIT_FIXTURES='1',KANSOKU_CLICKHOUSE_HOST='127.0.0.1',CLICKHOUSE_TCP_PORT=native[0]['HostPort'])
-    identity=subprocess.check_output(['clickhouse-client','--host','127.0.0.1','--port',native[0]['HostPort'],'--user','default','--password','test-password','--query','SELECT toString(serverUUID())'],env=test_env,text=True,timeout=10).strip()
+    native_port = str(fixture['nativePorts'][0])
+    test_env=dict(env,KANSOKU_CLICKHOUSE_USER='kansoku_native_tests',KANSOKU_REQUIRED_INTEGRATION='1',KANSOKU_QUERY_LIMIT_FIXTURES='1',KANSOKU_CLICKHOUSE_HOST='127.0.0.1',CLICKHOUSE_TCP_PORT=native_port)
+    identity=subprocess.check_output(['clickhouse-client','--host','127.0.0.1','--port',native_port,'--user','default','--password','test-password','--query','SELECT toString(serverUUID())'],env=test_env,text=True,timeout=10).strip()
     assert identity==rows(fixture['replicas'][0])[0]['id']
     patterns=['Kansoku.Query integration','Kansoku.Metrics.Limits/native','Kansoku.Metrics filters native','Kansoku.Enrichment native','Kansoku.Acquisition native','Kansoku.Activity native','Kansoku.Funnel native','Kansoku.Paths native','Kansoku.Traits native','Organization native','Kansoku.Sessions native','Kansoku.Session attributes native']
     for index in [0,1]:
         replica(index,"CREATE USER kansoku_native_tests IDENTIFIED WITH plaintext_password BY 'test-password' SETTINGS insert_deduplicate=0,async_insert=0,wait_for_async_insert=1,mutations_sync=2,alter_sync=2,max_result_rows=0,max_result_bytes=0,result_overflow_mode='throw',read_overflow_mode='throw',distributed_ddl_output_mode='none'")
         replica(index,'GRANT SELECT, INSERT, CREATE TABLE, CREATE VIEW, CREATE TEMPORARY TABLE, ALTER TABLE, DROP TABLE, DROP VIEW, TRUNCATE, OPTIMIZE, SYSTEM, KILL QUERY ON *.* TO kansoku_native_tests')
-    effective=json.loads(subprocess.check_output(['clickhouse-client','--host','127.0.0.1','--port',native[0]['HostPort'],'--user','kansoku_native_tests','--password','test-password','--query',"SELECT currentUser() AS user,getSetting('insert_deduplicate') AS dedup,getSetting('async_insert') AS async FORMAT JSONEachRow"],env=test_env,text=True,timeout=10))
+    effective=json.loads(subprocess.check_output(['clickhouse-client','--host','127.0.0.1','--port',native_port,'--user','kansoku_native_tests','--password','test-password','--query',"SELECT currentUser() AS user,getSetting('insert_deduplicate') AS dedup,getSetting('async_insert') AS async FORMAT JSONEachRow"],env=test_env,text=True,timeout=10))
     assert effective=={'user':'kansoku_native_tests','dedup':False,'async':False}, effective
     # Destructive fixture reseeding must not be mistaken for a retried insert.
     # This is test setup after schema parity; migration app settings stay fixed.
@@ -97,7 +88,7 @@ def main():
     pg_migrate = os.environ['KANSOKU_PG_MIGRATION_BINARY']
     if direct:
         rpc('query',sql="CREATE USER app IDENTIFIED WITH plaintext_password BY 'test-password'")
-        rpc('query',sql='GRANT SELECT, INSERT, CREATE DATABASE, CREATE TABLE, CREATE VIEW, ALTER TABLE, DROP TABLE, DROP VIEW, TRUNCATE ON *.* TO app')
+        rpc('query',sql='GRANT SELECT, INSERT, CREATE DATABASE, CREATE TABLE, CREATE VIEW, ALTER TABLE, DROP TABLE, DROP VIEW, TRUNCATE, SYSTEM SYNC REPLICA, SYSTEM SYNC DATABASE REPLICA, CLUSTER, REMOTE ON *.* TO app')
     if not direct:
         import base64
         import urllib.request
@@ -135,7 +126,7 @@ def main():
             ids[1 if case == 'missing-id' else 0] = '00000000-0000-0000-0000-000000000000'
         env.update(KANSOKU_CH_MIGRATION_TARGET='kansoku/owned-' + uuid.uuid4().hex,
                    KANSOKU_CH_MIGRATION_ENDPOINT=endpoint,
-                   KANSOKU_CH_MIGRATION_CLUSTER='fixture',
+                   KANSOKU_CH_MIGRATION_CLUSTER=fixture.get('cluster','fixture'),
                    KANSOKU_CH_MIGRATION_REPLICA_IDS=','.join(ids),
                    KANSOKU_CH_MIGRATION_LEDGER_ID=str(uuid.uuid4()),
                    KANSOKU_CLICKHOUSE_USER='app',KANSOKU_CLICKHOUSE_PASSWORD='test-password')
@@ -179,8 +170,77 @@ def main():
                 rpc('query',sql='INSERT INTO kansoku_migration_ledger.events FORMAT JSONEachRow\n' + '\n'.join(json.dumps(row) for row in direct_events))
             if case == 'stopped':
                 rpc('stop',index=1)
-            success = case in ('tiny','direct','full')
-            entry(['up','--initialize-ledger',env['KANSOKU_CH_MIGRATION_LEDGER_ID']],success)
+            success = case in ('tiny','direct','full','fresh','hyphen')
+            def replica(index, sql):
+                return rpc('query',sql=sql) if direct else rows(rpc('replica',index=index,sql=sql))
+            if case in ('direct','full','nonquorum'):
+                from diagnostic_session_upgrade import seed, observation, expected, insert_after, repair_args
+                entry(['--proof-historical-prefix','up','--initialize-ledger',env['KANSOKU_CH_MIGRATION_LEDGER_ID']],executable=proof)
+                def query(sql):return replica(0,sql)
+                def sync():
+                    if not direct:
+                        for i in [0,1]:
+                            replica(i,'SYSTEM SYNC DATABASE REPLICA analytics')
+                            for table in ['events_raw','retention_policy','sessions']:
+                                replica(i,'SYSTEM SYNC REPLICA analytics.'+table+' STRICT')
+                sync()
+                seed(query)
+                sync()
+                for i in ([0] if direct else [0,1]):
+                    assert observation(lambda sql:replica(i,sql))==expected(1)
+                if case=='nonquorum':
+                    # Deliberately violate the supported historical writer contract.
+                    # Native quorum-prefix reads must not silently authorize release.
+                    replica(0,"INSERT INTO analytics.retention_policy(singleton,revision,cutoff) SETTINGS insert_quorum=0 VALUES (1,100,toDateTime64('2026-07-02',3,'UTC'))")
+                    sync()
+                    refused=entry(['up'],False)
+                    primary=refused['error']['primary']
+                    assert primary['code']=='callback-failed' and primary['callback']['phase']=='BeforeMigrationComplete', primary
+                    assert pg('SELECT count(*) FROM kansoku.maintenance_fence WHERE active_migration_session IS NOT NULL')=='1'
+                    entry(['maintenance','finish'],False)
+                    assert pg('SELECT count(*) FROM kansoku.maintenance_fence WHERE active_migration_session IS NOT NULL')=='1'
+                    (root/'nonquorum-guard.private.json').write_text(json.dumps(dict(full_history_verification_refused=True,fence_retained=True)))
+                    print('nonquorum: complete-history comparison refused partial reconstruction; fence retained',file=sys.stderr,flush=True)
+                    return
+                if case=='full':
+                    proxy.match=b'TRUNCATE TABLE analytics.sessions'
+                    entry(['up'],False)
+                    assert proxy.triggered.is_set()
+                    sync()
+                    for i in [0,1]:
+                        assert replica(i,'SELECT count() AS n FROM analytics.sessions')==[dict(n=0)]
+                    assert pg('SELECT count(*) FROM kansoku.maintenance_fence WHERE active_migration_session IS NOT NULL')=='1'
+                    entry(['up'],False)
+                    entry(['maintenance','finish'],False)
+                    entry(['maintenance','reconcile'],False)
+                    state=invoke(['status','--guarded','--json'])
+                    entry(repair_args(state,'accept-step',True))
+                    state=invoke(['status','--guarded','--json'])
+                    entry(repair_args(state,'resume'))
+                else:
+                    entry(['up'])
+                sync()
+                for i in ([0] if direct else [0,1]):
+                    assert observation(lambda sql:replica(i,sql))==expected(0)
+                insert_after(query)
+                sync()
+                for i in ([0] if direct else [0,1]):
+                    assert observation(lambda sql:replica(i,sql))==expected(0)
+                replay=Path('kansoku-server/migrations/'+('clickhouse' if direct else 'clickhouse-replicated')+'/steps/0026_diagnostic_session_engagement/rebuild-sessions.sql').read_text()
+                for _ in range(2):
+                    replica(0,'TRUNCATE TABLE analytics.sessions')
+                    sync()
+                    replica(0,replay)
+                    sync()
+                    for i in ([0] if direct else [0,1]):
+                        assert observation(lambda sql:replica(i,sql))==expected(0)
+                # Adjacent query families own their own seeds and original cutoff.
+                replica(0,'TRUNCATE TABLE analytics.events_raw')
+                replica(0,'TRUNCATE TABLE analytics.sessions')
+                replica(0,"INSERT INTO analytics.retention_policy(singleton,revision,cutoff) VALUES (1,100,toDateTime64('1970-01-01',3,'UTC'))")
+                sync()
+            else:
+                entry(['up','--initialize-ledger',env['KANSOKU_CH_MIGRATION_LEDGER_ID']],success)
             assert pg('SELECT count(*) FROM kansoku.maintenance_fence WHERE active_migration_session IS NOT NULL') == '1'
             if not success:
                 assert proxy.application_count() == 0
@@ -190,7 +250,7 @@ def main():
             status = invoke(['status','--json'])
             (root / 'status.json').write_text(json.dumps(status,indent=2))
             selected=status['selectedTarget']
-            assert selected==({'topology':'direct','serverId':ids[0]} if direct else {'topology':'replicated','cluster':'fixture','replicaIds':sorted(ids)})
+            assert selected==({'topology':'direct','serverId':ids[0]} if direct else {'topology':'replicated','cluster':fixture.get('cluster','fixture'),'replicaIds':sorted(ids)})
             def replica(index, sql):
                 return rpc('query',sql=sql) if direct else rows(rpc('replica',index=index,sql=sql))
             def events():
@@ -202,8 +262,8 @@ def main():
                 Path('.dev/acceptance/direct-control-events.private').write_text(json.dumps(before_events[0]))
             assert before_events[0] and (direct or before_events[0] == before_events[1])
             assert ('sha256-v1' if direct else 'sha256-v2') in json.dumps(before_events)
-            before = proxy.application_count()
             entry(['maintenance','finish'])
+            before = proxy.application_count()
             assert pg('SELECT count(*) FROM kansoku.maintenance_fence WHERE active_migration_session IS NOT NULL') == '0'
             begin()
             entry(['up'])

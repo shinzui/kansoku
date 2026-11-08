@@ -26,7 +26,11 @@ def validate_plan(name, raw):
         if len(components) != 1 or components[0]['name'] != expected:
             raise ValueError('Wrong native history: ' + name)
         migrations = components[0]['migrations']
-        if len(migrations) != 25 or sum(len(m['steps']) for m in migrations) != (254 if replicated else 257):
+        # Previously published 25-migration artifacts remain independently valid.
+        # New artifacts must carry the complete named, seven-step suffix.
+        if (len(migrations) not in (25,26) or
+                sum(len(m['steps']) for m in migrations[:25]) != (254 if replicated else 257) or
+                (len(migrations)==26 and (migrations[-1].get('name')!='0026_diagnostic_session_engagement' or len(migrations[-1]['steps'])!=7))):
             raise ValueError('Unexpected native migration/step count')
         if replicated and 'sha256-v2' not in doc['result']['checksumFormats']:
             raise ValueError('Missing v2 checksums')

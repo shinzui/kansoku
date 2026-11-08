@@ -26,18 +26,24 @@ def main():
         fixture.parent.mkdir(parents=True,exist_ok=True)
         fixture.write_text(json.dumps(inspect(args.capture_reference),indent=2)+'\n')
     canonical = lambda value: json.dumps(value,sort_keys=True,separators=(',',':'),ensure_ascii=False)
-    assert canonical(inspect(args.binary)) == canonical(json.loads(fixture.read_text())), 'Direct offline JSON changed from 2008b67'
-    subprocess.run(['git','diff','--exit-code','2008b67','--','kansoku-server/migrations/clickhouse'],cwd=REPO,check=True)
+    current = inspect(args.binary)
+    assert len(current['result']['components'][0]['migrations']) == 26
+    current['result']['components'][0]['migrations'] = current['result']['components'][0]['migrations'][:25]
+    current['result']['schedule'] = current['result']['schedule'][:25]
+    assert canonical(current) == canonical(json.loads(fixture.read_text())), 'Direct prefix changed from 2008b67'
+    from check_clickhouse_conversion import verify, verify_replicated
+    verify()
+    verify_replicated()
     doc = inspect(args.binary,True)
     components = doc['result']['components']
     assert len(components) == 1 and components[0]['name'] == 'kansoku_replicated'
     migrations = components[0]['migrations']
-    assert len(migrations) == 25 and sum(len(m['steps']) for m in migrations) == 254
+    assert len(migrations) == 26 and sum(len(m['steps']) for m in migrations[:25]) == 254 and len(migrations[-1]['steps']) == 7
     assert 'sha256-v2' in doc['result']['checksumFormats']
     for migration in migrations:
         assert len(migration['checksums']['sha256-v2']) == 64
         assert all(len(step['checksums']['sha256-v2']) == 64 for step in migration['steps'])
-    print('offline plans: direct recursively identical to 2008b67 (25/257); replicated 25/254')
+    print('offline plans: immutable direct 25/257 and replicated 25/254 prefixes plus 0026 (7 steps)')
 
 
 if __name__ == '__main__':

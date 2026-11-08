@@ -1,6 +1,7 @@
 # Bundle Update Log
 
 ## 2026-11-08
+* **Update**: IR-13: Complete diagnostic non-engagement classification, fenced retained-session correction and public/native upgrade acceptance in plan 65
 * **Update**: Complete AC-1 through AC-5 with dated explicit owner risk acceptance and published Linux amd64 image/source/plan hashes verified from registry readback.
 * **Update**: Accept IR-12 for implementation and link targetPlan to docs/plans/64-accept-tan-production-as-a-deployment-target.md; implementation and release-owner risk acceptance have not occurred.
 * **Update**: Accept IR-11 for implementation and link targetPlan to docs/plans/63-keep-writes-and-maintenance-jobs-correct-on-a-replicated-cluster.md; implementation has not started.

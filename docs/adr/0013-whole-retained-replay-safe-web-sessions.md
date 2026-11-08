@@ -5,7 +5,7 @@ description: Merge idempotent session state before date and attribute selection 
 docId: ADR-13
 status: Accepted
 date: 2026-10-15
-timestamp: 2026-11-06T14:31:34Z
+timestamp: 2026-11-08T06:55:25Z
 generated:
   by: process:codex
   at: 2026-10-15T22:46:52Z
@@ -49,9 +49,10 @@ subject per session. Current user traits will use that same first resolved user 
 
 Count includes zero-page sessions. A bounce has exactly one distinct page_view and zero
 engagement events; zero-page sessions are not bounces. session_start, page_leave, identify,
-identify_once, alias, group and experiment_viewed are lifecycle/identity events. Other events,
-excluding page_view itself, are engagement. Observed duration is maximum minus minimum event
-time, including page_leave, in seconds with millisecond precision. Average includes one-event
+identify_once, alias, group and experiment_viewed are lifecycle/identity events. The diagnostic
+names client_error and web_vital are also non-engagement for all stored versions, including
+versionless and future-version rows. Other events, excluding page_view itself, are engagement. Observed duration is maximum minus minimum event
+time, including page_leave, client_error and web_vital, in seconds with millisecond precision. Average includes one-event
 sessions with zero duration; it does not measure active reading time. Bounce rate divides
 bounces by all selected sessions. Any bot event excludes the whole session by default;
 includeBots=true opts in. Ungrouped requested UTC buckets return zero for every measure when
@@ -100,3 +101,26 @@ null groups and never satisfy session predicates, even unset/neq. Real missing a
 satisfy unset. Presence guards belong inside each OR term so event alternatives remain valid.
 The unprefixed event and whole-session resolvers remain restricted to their existing callers;
 entry_page/exit_page suffixes require pages and session:route uses the attribution event URL.
+
+## Correcting retained diagnostic engagement
+
+The exact-ID engagement sets cannot subtract diagnostic IDs that earlier views counted.
+Migration `0026_diagnostic_session_engagement` is appended to both immutable native histories:
+replace only the view predicate, clear sessions, replay canonical facts under the applied cutoff,
+and compare every finalized session field before finishing maintenance. Rebuild inserts disable
+block and dependent-view deduplication so a prior replay cannot suppress replacement rows.
+The migration coordinator synchronizes schema/sources/target before replay on all configured
+replicas, then synchronizes and independently checks every expected UUID at completion and again
+before fence release. No unrelated derived population is replayed. Deploy the matching application
+binary in that same window. Expired or discarded raw history cannot be reconstructed; installations
+without the migration retain the prior aggregate classification. Diagnostics still extend duration.
+
+The qualified Altinity candidate's sequential read mode can hide synchronized historical rows
+written without quorum, including a later retention revision. The native toolkit protects that
+read policy, so migration SQL retains it and the upgrade fixture uses the supported full-quorum
+writer contract. Independent complete-history verification uses `select_sequential_consistency=0`
+after all-replica synchronization and refuses fence release if native reconstruction omitted
+canonical facts. Nonquorum history outside the supported acknowledgement contract requires
+operator diagnosis under the retained fence. Ledger admission and ordinary runtime settings
+keep their existing policy. Complete result limits and throwing overflow are explicit on replay
+and assertion statements.

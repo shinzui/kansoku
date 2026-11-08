@@ -63,10 +63,10 @@ executable embedding-proof
         run(build, package)
         changed = run([binary], root)
         before, after = original.splitlines(), changed.splitlines()
-        assert len(after) == 50
-        assert before[index*25:(index+1)*25] != after[index*25:(index+1)*25]
+        assert len(after) == 52
+        assert before[index*26:(index+1)*26] != after[index*26:(index+1)*26]
         other = 1-index
-        assert before[other*25:(other+1)*25] == after[other*25:(other+1)*25]
+        assert before[other*26:(other+1)*26] == after[other*26:(other+1)*26]
         original = changed
     # Remove all inputs from the extracted source, then run the compiled result.
     (package / 'migrations').rename(root / 'withheld-inputs')

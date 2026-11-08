@@ -6,7 +6,7 @@ from pathlib import Path
 import tempfile
 import unittest
 from check_tan_release import validate, GATES
-from check_image_plans import PLAN_FIELDS, SELECTORS
+from check_image_plans import PLAN_FIELDS, SELECTORS, validate_plan
 
 
 class ReleaseValidation(unittest.TestCase):
@@ -37,6 +37,16 @@ class ReleaseValidation(unittest.TestCase):
 
     def check(self, phase='published'):
         return validate(self.evidence, self.report, self.plans, phase)
+
+    def test_diagnostic_suffix_and_historical_image_plans(self):
+        for name in ['native-direct.json','native-replicated.json']:
+            doc=json.loads((self.plans/name).read_bytes())
+            validate_plan(name,json.dumps(doc))
+            doc['result']['components'][0]['migrations'].append(dict(name='0026_diagnostic_session_engagement',steps=[{}]*7))
+            validate_plan(name,json.dumps(doc))
+            doc['result']['components'][0]['migrations'][-1]['steps'].pop()
+            with self.assertRaisesRegex(ValueError,'migration/step count'):
+                validate_plan(name,json.dumps(doc))
 
     def test_valid_mapping(self):
         artifact, pending = self.check()

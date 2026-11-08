@@ -143,7 +143,7 @@ def main():
     run(supplied, 'sh', '-c', 'for name in kansoku-server kansoku-migrate kansoku-ch-migrate kansoku-admin; do command -v "$name" >/dev/null || exit 1; done; test -s "$SSL_CERT_FILE"')
     report = {'sourceRevision': args.revision, 'tag': expected, 'imageId': image_id, 'archiveConfigDigest': config_digest,
               'architecture': 'amd64', 'os': 'linux', 'dockerHostArchitecture': host_architecture,
-              'clientExecution': 'native' if host_architecture in ('amd64', 'x86_64') else 'emulated', 'migrationCount': 25, 'stepCount': 257,
+              'clientExecution': 'native' if host_architecture in ('amd64', 'x86_64') else 'emulated', 'migrationCount': len(json.loads(captures['native-direct.json'])['result']['components'][0]['migrations']), 'stepCount': sum(len(m['steps']) for m in json.loads(captures['native-direct.json'])['result']['components'][0]['migrations']),
               **{field: hashlib.sha256(captures[name]).hexdigest() for name, field in PLAN_FIELDS.items()},
               'replicatedSelectors': SELECTORS, 'hashSemantics': 'SHA-256 of exact stdout bytes including final newline',
               'archiveSha256': hashlib.file_digest(archive_path.open('rb'), 'sha256').hexdigest(),

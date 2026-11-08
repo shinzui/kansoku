@@ -315,8 +315,9 @@ def verify(root, native, upgrade, pg_migrate, admin, server):
     offline = {key: value for key, value in os.environ.items() if not key.startswith(('PG', 'CLICKHOUSE', 'KANSOKU_'))}
     result = subprocess.run([native, 'plan', '--json'], env=offline, capture_output=True, text=True, check=True)
     plan = json.loads(result.stdout)['result']['components']
-    assert len(plan) == 1 and len(plan[0]['migrations']) == 25
-    assert sum(len(m['steps']) for m in plan[0]['migrations']) == 257
+    assert len(plan) == 1 and len(plan[0]['migrations']) == 26
+    assert sum(len(m['steps']) for m in plan[0]['migrations'][:25]) == 257
+    assert len(plan[0]['migrations'][-1]['steps']) == 7
     adoption = subprocess.run([native, 'adopt', 'apply', '--expect-target', 'kansoku/refused', '--expect-absent', '--initialize-ledger', str(uuid.uuid4()), '--actor', 'owned acceptance', '--reason', 'unsupported import check', '--quiescent', '--evidence', 'owned offline proof', '--request', str(root / 'must-not-open.json')], env=offline, capture_output=True, text=True)
     assert adoption.returncode != 0 and 'Legacy import is unsupported' in adoption.stderr
     assert not (root / 'must-not-open.json').exists()
@@ -357,6 +358,8 @@ def verify(root, native, upgrade, pg_migrate, admin, server):
         assert h.sql('SELECT count() FROM analytics.__native_upgrade_probe').strip() == '1'
         h.finish(binary=upgrade)
         cases += 1
+    from diagnostic_session_upgrade import direct_case
+    cases += direct_case(root / 'diagnostic-upgrade',native,upgrade,pg_migrate,admin,server,owned,FaultProxy)
     cases += refuse_legacy_case(root / 'refuse-legacy', native, upgrade, pg_migrate, admin)
     cases += original_parity(root / 'original-parity', native_observation)
     cases += append_and_initialization_cases(root / 'boundaries', native, upgrade, pg_migrate, admin)

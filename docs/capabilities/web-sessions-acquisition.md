@@ -2,6 +2,7 @@
 type: Capability
 title: "Web sessions and acquisition"
 description: "Compute whole retained web-session counts, bounce, observed duration and first-touch acquisition using preserved server enrichment."
+timestamp: 2026-11-08T06:55:25Z
 generated:
   by: process:codex
   at: "2026-10-16T13:11:11Z"
@@ -33,7 +34,7 @@ evidence:
 
 # Web sessions and acquisition
 
-Classify bounded request user agents and campaign/referrer signals at acceptance. Assemble sessions over all retained web facts before selecting start dates and attributes. Count sessions, bounce fractions and last-minus-first duration; acquisition uses first-page attribution and exact primary-subject users. Optional trusted country lookup stores a country code.
+Classify bounded request user agents and campaign/referrer signals at acceptance. Assemble sessions over all retained web facts before selecting start dates and attributes. Count sessions, bounce fractions and last-minus-first duration; acquisition uses first-page attribution and exact primary-subject users. Optional trusted country lookup stores a country code. `client_error` and `web_vital` never count as engagement, regardless of version, while their timestamps still extend observed duration. Migration 0026 corrects all retained session aggregates under maintenance.
 
 ## Compatibility
 

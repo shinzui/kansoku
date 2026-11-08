@@ -39,7 +39,7 @@ main :: IO ()
 main = withCandidateServer "lts-native" $ \server -> withFaultProxy server $ \proxy -> do
   plan <- right M.plan
   let migrations = NE.toList (inspectSchedule plan)
-  assert "Wrong baseline" (length migrations == 25 && sum (map (NE.length . migrationSteps) migrations) == 257)
+  assert "Wrong baseline" (length migrations == 26 && sum (map (NE.length . migrationSteps) (take 25 migrations)) == 257 && NE.length (migrationSteps (last migrations)) == 7)
   rows <- queryServer server "SELECT toString(serverUUID()) AS id" >>= fromJson :: IO [Value]
   identity <- case rows of [row] -> field "id" row; _ -> fail "Missing identity"
   key <- right (targetKey "kansoku/owned-early-proof")
@@ -61,7 +61,7 @@ main = withCandidateServer "lts-native" $ \server -> withFaultProxy server $ \pr
   setFault proxy Pass
   access <- hostLocalExclusiveAccess lockRoot 1000000 Nothing >>= right
   _ <- R.up (R.mutationContext (config FirstUse) access E.quietEvents E.redactedDiagnostics) (R.upOptions audit (Just (L.authorizeInitialization key ledger audit))) plan >>= right
-  assert "Baseline request count differs" . (== 257) =<< countSql proxy
+  assert "Baseline request count differs" . (== 264) =<< countSql proxy
   scratch <- queryServer server "SELECT count() AS count FROM system.tables WHERE database='analytics' AND startsWith(name,'__chm_legacy_assert_')" >>= fromJson :: IO [Value]
   n <- case scratch of [row] -> field "count" row; _ -> fail "Missing scratch observation"
   assert "Assertions did not clean up" (n == (0 :: Int))
@@ -72,6 +72,6 @@ main = withCandidateServer "lts-native" $ \server -> withFaultProxy server $ \pr
   quiet <- right (L.attestQuiescence key quietAudit)
   again <- hostLocalExclusiveAccess lockRoot 1000000 (Just quiet) >>= right
   _ <- R.up (R.mutationContext (config (ExistingLedger ledger)) again E.quietEvents E.redactedDiagnostics) (R.upOptions audit Nothing) plan >>= right
-  assert "Repeat submitted application SQL" . (== 257) =<< countSql proxy
+  assert "Repeat submitted application SQL" . (== 264) =<< countSql proxy
   _ <- I.verify I.Observe (config (ExistingLedger ledger)) (I.verifyOptions True) plan >>= right
-  putStrLn "4 cases passed: 25 migrations / 257 steps; assertions; restart and zero-SQL repeat"
+  putStrLn "4 cases passed: 26 migrations / 264 steps; assertions; restart and zero-SQL repeat"

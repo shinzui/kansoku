@@ -9,7 +9,7 @@ attributes :: [Text]
 attributes = ["event_name", "source", "url", "referrer", "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "browser_family", "os_family", "device_class", "channel", "country_code"]
 
 engagementPredicate :: Text
-engagementPredicate = "event_name NOT IN ('page_view','session_start','page_leave','identify','identify_once','alias','group','experiment_viewed')"
+engagementPredicate = "event_name NOT IN ('page_view','session_start','page_leave','identify','identify_once','alias','group','experiment_viewed','client_error','web_vital')"
 
 project :: Text -> Text
 project body =

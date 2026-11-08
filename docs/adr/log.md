@@ -1,6 +1,8 @@
 # Bundle Update Log
 
 ## 2026-11-08
+* **Update**: ADR-13: Exclude client errors and web vitals from engagement while preserving duration and require verified retained-session reconstruction
+* **Update**: ADR-7: Classify both diagnostic names as non-engagement for every stored version and require fenced retained-state correction
 * **Update**: Record immutable TAN publication and digest readback binding without rebuilding the approved candidate.
 * **Update**: Record actual owner-accepted TAN release scope and independently retained managed onboarding obligations.
 * **Update**: Use Apple Container on macOS, bind created container descriptors, and distinguish local OCI index identity from registry publication.

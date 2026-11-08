@@ -1,5 +1,11 @@
 # Bundle Update Log
 
+## 2026-11-08
+
+* **Update**: TERM-56: Preserve diagnostic timestamps in observed session duration
+* **Update**: TERM-55: Exclude both diagnostic names from engagement for every version
+* **Update**: TERM-53: Clarify diagnostic membership and duration without engagement
+
 ## 2026-11-01
 
 * **Update**: Align liveness and readiness terminology with the two canonical probe endpoints.

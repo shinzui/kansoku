@@ -1,6 +1,12 @@
 # Bundle Update Log
 
 ## 2026-11-08
+* **Update**: FRIC-19 resolved: Remove the Docker-specific dependency fixture from the migration execution path while preserving actual coverage and refusal behavior.
+* **Update**: FRIC-21 accepted: Accept the content-fingerprint rebuild cost for this plan; preserve the observed recurrence of FRIC-17.
+* **Update**: FRIC-20 accepted: Accept the local preservation workaround; this occurrence repeats the log-writer behavior recorded in FRIC-3.
+* **Addition**: FRIC-21 records slowdown tooling friction with mori://shinzui/clickhouse-migrate: Migration SQL fingerprints recompile unrelated application dependencies
+* **Addition**: FRIC-20 records detour tooling friction with mori://shinzui/okf: OKF log append drops preserved prose and tables
+* **Addition**: FRIC-19 records detour tooling friction with mori://shinzui/clickhouse-migrate: Replicated migration fixture requires Docker instead of Apple Container
 * **Update**: FRIC-18 resolved: Resolve local image execution through the user-selected Apple Container backend; retain the OOM failures as historical evidence.
 * **Addition**: FRIC-18 records blocked environment friction with mori://shinzui/kansoku: Emulated amd64 image plan exhausts local Docker memory
 * **Update**: FRIC-17 accepted: Accept the repeated final-build cost without weakening embedding or native acceptance gates.

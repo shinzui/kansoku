@@ -1,5 +1,9 @@
 # Bundle Update Log
 
+## 2026-11-08
+
+* **Update**: CAP-7: Describe diagnostic classification and retained session correction
+
 ## 2026-11-06
 
 * **Update**: CAP-14 includes exact custom percentiles, saved quantiles and numeric sample eligibility.

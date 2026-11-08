@@ -22,8 +22,7 @@ import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
 import Kansoku.Admin.Coordination qualified as C
 import Kansoku.ClickHouseMigration.Config qualified as Config
-import Kansoku.ClickHouseMigration.Coordinator (withCoordinator)
-
+import Kansoku.ClickHouseMigration.Coordinator (sessionEvents, verifySessions, withCoordinator)
 import Kansoku.Exception (trySynchronous)
 import Options.Applicative qualified as O
 import System.Environment (getArgs)
@@ -96,7 +95,7 @@ run choose = do
             case command of
               RepairCommand _ (RepairInput _ _ _ _ _ _ receipts) -> requireReceipts (map L.appendReceiptText receipts)
               _ -> pure ()
-            result <- handleCommand (commandEnvironment (Just (Config.nativeConfig config (firstUse command))) (Just provider) quietEvents redactedDiagnostics AdministrativeCommands) plan command
+            result <- handleCommand (commandEnvironment (Just (Config.nativeConfig config (firstUse command))) (Just provider) (sessionEvents config plan) redactedDiagnostics AdministrativeCommands) plan command
             -- Emit the native report before coordinator cleanup so a secondary
             -- PostgreSQL failure cannot hide the original primary error/receipt.
             outputSelected (Config.nativeConfig config False) format result
@@ -149,7 +148,7 @@ run choose = do
         verified <- I.verify I.Observe (Config.nativeConfig config False) (I.verifyOptions True) plan
         case verified of
           Left failure -> output format (CommandResult "maintenance-finish" (Left (InspectionFailed failure))) >> exitFailure
-          Right _ -> finish
+          Right _ -> verifySessions config plan >> finish
       renderMaintenance format "maintenance-finish" (A.object ["complete" A..= True])
   where
     whenNull row = unless (row /= A.Null) (fail "Unknown session identity")

@@ -13,6 +13,7 @@ module Kansoku.ClickHouseMigration.Config
     postgres,
     nativeConfig,
     ensureFreshInitialization,
+    sessionBarrier,
   )
 where
 
@@ -21,7 +22,7 @@ import ClickHouseMigrate.Report qualified as R
 import ClickHouseMigrate.Target qualified as T
 import Control.Concurrent (threadDelay)
 import Control.Exception (bracket)
-import Control.Monad (unless)
+import Control.Monad (forM_, unless)
 import Data.Aeson qualified as A
 import Data.Aeson.KeyMap qualified as KM
 import Data.ByteString qualified as BS
@@ -36,6 +37,7 @@ import Kansoku.ClickHouse.Topology qualified as Topology
 import Network.HTTP.Client qualified as H
 import Network.HTTP.Client.TLS (tlsManagerSettings)
 import Network.HTTP.Types.Status (statusCode)
+import Network.HTTP.Types.URI (renderQuery)
 import System.Environment (lookupEnv)
 import System.Timeout (timeout)
 
@@ -188,3 +190,62 @@ ensureFreshInitialization c = do
       let next = acc <> chunk
       unless (BS.length next <= 65536) (fail "Fresh initialization observation exceeds bound")
       if BS.null chunk then pure next else collect body next
+
+-- Synchronization is read-only with respect to application facts. ON CLUSTER
+-- targets only the validated configured cluster; each expected UUID is then
+-- observed independently through the original endpoint, never a discovered host.
+-- These barriers can be repeated after recovery without replaying a clear/insert.
+-- After synchronization, read the entire retained population (sequential=0):
+-- quorum-only reads can hide synchronized historical nonquorum retention rows.
+sessionBarrier :: Config -> Text -> IO ()
+sessionBarrier c proof = bracket (H.newManager (H.managerSetProxy H.noProxy tlsManagerSettings {H.managerIdleConnectionCount = 0, H.managerRetryableException = const False})) H.closeManager $ \manager -> do
+  let expected = case topology c of
+        T.DirectServer sid -> Set.singleton (T.serverIdText sid)
+        T.ReplicatedCluster _ ids -> Set.fromList (map T.serverIdText (NE.toList ids))
+      request sql = do
+        initial <- H.parseRequest (Text.unpack (T.endpointText (endpoint c)))
+        let settings = [("wait_end_of_query", "1"), ("async_insert", "0"), ("max_result_rows", "0"), ("max_result_bytes", "0"), ("result_overflow_mode", "throw"), ("read_overflow_mode", "throw"), ("select_sequential_consistency", "0"), ("max_execution_time", "55"), ("receive_timeout", "55"), ("distributed_ddl_task_timeout", "55"), ("distributed_ddl_output_mode", "throw")]
+            checked =
+              H.applyBasicAuth
+                (Encoding.encodeUtf8 (username c))
+                (Encoding.encodeUtf8 (password c))
+                initial
+                  { H.method = "POST",
+                    H.redirectCount = 0,
+                    H.queryString = renderQuery True [(k, Just v) | (k, v) <- settings],
+                    H.requestHeaders = [("Accept-Encoding", "identity"), ("Connection", "close")],
+                    H.responseTimeout = H.responseTimeoutMicro 60000000,
+                    H.requestBody = H.RequestBodyBS (Encoding.encodeUtf8 sql)
+                  }
+        H.withResponse checked manager $ \response -> do
+          unless (statusCode (H.responseStatus response) == 200) (fail "Session reconstruction barrier failed; fence retained")
+          let collect acc = do
+                chunk <- H.brRead (H.responseBody response)
+                let next = acc <> chunk
+                unless (BS.length next <= 65536) (fail "Session barrier observation exceeds bound")
+                if BS.null chunk then pure next else collect next
+          collect BS.empty
+      observe remaining budget
+        | Set.null remaining = pure ()
+        | budget == (0 :: Int) = fail "Session verification did not observe every expected replica; fence retained"
+        | otherwise = do
+            bytes <- request ("SELECT toString(serverUUID()) AS id,(" <> proof <> ") AS result FORMAT JSONEachRow")
+            row <- case A.eitherDecodeStrict' bytes of Right (A.Object value) -> pure value; _ -> fail "Invalid session verification response"
+            sid <- case KM.lookup "id" row of Just (A.String value) -> pure value; _ -> fail "Missing session verification UUID"
+            unless (Set.member sid expected && KM.lookup "result" row == Just (A.Number 0)) (fail "Session verification differs from canonical state or target; fence retained")
+            unless (Set.member sid remaining) (threadDelay 100000)
+            observe (Set.delete sid remaining) (budget - 1)
+  case topology c of
+    T.DirectServer _ -> pure ()
+    T.ReplicatedCluster name _ -> do
+      let cluster = T.clusterNameText name
+      bytes <- request ("SELECT arraySort(groupArray(toString(serverUUID()))) AS ids FROM clusterAllReplicas('" <> cluster <> "',system.one) FORMAT JSONEachRow")
+      case A.eitherDecodeStrict' bytes of
+        Right (A.Object row) | KM.lookup "ids" row == Just (A.toJSON (Set.toAscList expected)) -> pure ()
+        _ -> fail "Session barrier cluster inventory differs; fence retained"
+      _ <- request ("SYSTEM SYNC DATABASE REPLICA ON CLUSTER '" <> cluster <> "' analytics")
+      forM_ ["events_raw", "retention_policy", "sessions"] $ \table -> do
+        _ <- request ("SYSTEM SYNC REPLICA ON CLUSTER '" <> cluster <> "' analytics." <> table <> " STRICT")
+        pure ()
+  result <- timeout 35000000 (observe expected 64)
+  case result of Just () -> pure (); Nothing -> fail "Session replica verification deadline expired; fence retained"

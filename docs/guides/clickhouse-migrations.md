@@ -4,6 +4,7 @@ title: "Initialize and upgrade ClickHouse"
 description: "Initialize a fresh owned ClickHouse target, retain native identities, coordinate maintenance and recover explicit migration attempts."
 docId: DOC-13
 tags: ["clickhouse", "migrations", "maintenance", "recovery"]
+timestamp: 2026-11-08T06:55:25Z
 generated:
   by: process:codex
   at: "2026-11-07T20:24:51Z"
@@ -26,8 +27,7 @@ The pinned upstream `0.1.1.0` source candidate also qualifies exact Altinity
 servers. Upstream records passing Nix and extracted-source qualification for these
 artifacts. All four packages use the immutable source revision recorded in
 `cabal.project` and `flake.module.nix`; Hackage still publishes `0.1.0.0` as of
-2026-11-07. Kansoku continues to configure a direct-server target; adopting this
-dependency does not enable its new replicated-target mode. This does not
+2026-11-07. Kansoku supports explicit direct or replicated selectors as described below. These checks do not
 qualify managed-cloud/proxy topology or the Linux amd64 application image. The
 staging initiative at
 `mori://tan/tan-app-infrastructure/plans/42-qualify-kansoku-artifacts-and-the-staging-clickhouse-contract`
@@ -39,7 +39,8 @@ local commands still use the original qualified Darwin fixture and fresh identit
 
 Use a new checkout with new owned database roots. Preserve any old development data until its
 owner chooses disposal. A database populated by the filename-only runner is not imported.
-Native history begins by executing the compiled 25-migration/257-step baseline. Its reviewed
+Native history executes the immutable 25-migration/257-step baseline followed by the
+seven-step 0026 diagnostic-session correction (26 migrations/264 direct steps). Its reviewed
 conversion preserves original SQL byte ranges: two standalone assertions become explicit
 prepare/check/cleanup steps, and one materialization uses the qualified local mutation policy.
 The [conversion evidence](../../kansoku-server/migrations/clickhouse/provenance.json) records
@@ -296,8 +297,8 @@ Run PostgreSQL migrations first, including `0008-clickhouse-replicated-administr
 Existing direct sessions retain their fences, receipts and identities across this upgrade.
 
 With neither replicated selector present, direct installations keep their original component,
-25 migrations, 257 SQL steps and checksum v1 history. Replicated installations use the separate
-`kansoku_replicated` component (25 migrations, 254 steps) and a fresh checksum v2 ledger.
+immutable 25-migration/257-step prefix and checksum v1 history, followed by 0026. Replicated installations use the separate
+`kansoku_replicated` component (immutable 25-migration/254-step prefix, then the seven-step 0026 suffix) and a fresh checksum v2 ledger.
 A direct ledger cannot be adopted or converted. Operators must pre-create both `analytics`
 and `kansoku_migration_ledger` as Replicated databases. Persistent tables use Replicated engine
 families without explicit Keeper paths or replica arguments; replacement version columns remain.
@@ -363,3 +364,52 @@ submission. A direct staging rollout cannot replace replicated acceptance or
 retained migration image/session/ledger inputs.
 
 The published [TAN artifact record](../evidence/tan-production-qualified-artifact.json) uses the replicated offline native plan hash. Keep direct and replicated hashes distinct; raw CLI stdout includes its final newline. Publication does not create a managed ledger or perform production migrations.
+
+## Diagnostic session engagement upgrade
+
+`0026_diagnostic_session_engagement` excludes the exact names `client_error` and `web_vital`
+from engagement for every stored version, including versionless rows. Both still contribute to
+the first/last timestamps and observed duration. Purchase and other application actions still
+remove a one-page bounce. Existing engagement sets cannot remove old diagnostic IDs, so this
+migration replaces `mv_sessions`, clears `sessions`, replays retained canonical facts using the
+applied retention cutoff, and asserts equality of every finalized session field. It leaves raw
+events and other derived populations intact. Discarded raw history cannot be recovered.
+Installations that have not applied 0026 retain the old aggregate classification.
+
+Use the begin/up/guarded verify/finish commands in **Subsequent native migration** above.
+Deploy the matching application binary and migration in this same maintenance window: stop
+application traffic and external SQL readers/writers/schedules before beginning; preserve the
+existing target, ledger and session identities; establish and record external drain before
+each mutating entry. Run `up`, then `verify --require-current --guarded --json`. Establish fresh
+drain evidence and run `maintenance finish`. Finish checks the full canonical/materialized
+session projection again while fenced. Resume traffic only when finish succeeds, so canonical
+and materialized queries never intentionally serve different classifications.
+
+Replicated operators also need `SYSTEM SYNC DATABASE REPLICA`, `SYSTEM SYNC REPLICA`, `CLUSTER` and
+`REMOTE` privileges. The coordinator validates the cluster UUID inventory, synchronizes the
+Replicated schema and `events_raw`, `retention_policy`, `sessions` tables, and observes an empty
+session target on every expected UUID before the single replay. Completion and finish repeat
+synchronization and require canonical agreement on each UUID. A missing replica, barrier error,
+permission refusal or verification failure retains the fence. Native reconstruction retains the toolkit's protected sequential-read and full INSERT-quorum
+policy. Retained replicated data must follow the supported synchronous quorum-write contract.
+Independent complete-history verification reads all synchronized canonical facts
+(`select_sequential_consistency=0`); omitted nonquorum history prevents completion and fence
+release. Diagnose that history under the same fence and reconcile it to the supported write
+contract before retrying; do not hide it by weakening verification or releasing maintenance. The endpoint must cover the
+complete expected inventory; discovered hostnames never redirect credentials.
+
+If interrupted after clear, keep maintenance active and follow **Interruption, receipts and
+explicit repair** above. Preserve exact receipts and reconcile them with fresh drain evidence.
+Inspect fresh guarded status and independently observe the selected effect on every replica:
+accept a completed clear only when all session targets are empty, then `repair resume` runs
+the never-started replay and checks. Do not blindly rerun clear after replay may have succeeded.
+An uncertain replay requires determining whether it completed before accepting or retrying its
+selected step; the pre-replay empty-target barrier refuses replay into populated state. If a
+full clear/rebuild is needed, retain the same fence and deliberately repair the selected state;
+do not start a separate data-maintenance job while the migration owns it. A repeated clean
+`up` submits no application SQL. Restoring separately reviewed consistent backups to an isolated
+target remains the rollback procedure.
+
+`just ch-migrations-replicated` uses Apple Container with the exact digest-qualified Linux arm64
+image, owned Keeper and two replicas with 4 GiB per replica for the full native query fixtures. Failed fixture evidence is retained under `.dev/acceptance`.
+This local execution is separate from managed endpoint qualification.

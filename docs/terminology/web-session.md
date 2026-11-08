@@ -2,6 +2,7 @@
 type: Term
 title: "web session"
 description: "The whole retained set of web events sharing an account, source service and nonempty producer session ID."
+timestamp: 2026-11-08T06:55:25Z
 generated:
   by: process:codex
   at: "2026-10-16T13:15:03Z"
@@ -26,7 +27,7 @@ anchors:
 
 The whole retained set of web events sharing an account, source service and nonempty producer session ID.
 
-Sessions span batches, hosts and midnight. The server assembles the whole retained session before start-date and attribute selection; it does not infer an inactivity timeout. Late arrivals can move the start or extend duration. Missing IDs and non-web events do not join sessions.
+Sessions span batches, hosts and midnight. The server assembles the whole retained session before start-date and attribute selection; it does not infer an inactivity timeout. Late arrivals can move the start or extend duration. Missing IDs and non-web events do not join sessions. `client_error` and `web_vital` belong to sessions and extend observed duration, but do not count as engagement for any version.
 
 Related: [source service](source-service.md), [first-touch attribution](first-touch-attribution.md), [bounce rate](bounce-rate.md), [observed session duration](observed-session-duration.md).
 

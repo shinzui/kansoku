@@ -4,6 +4,7 @@ title: "Send events"
 description: "Send authenticated single, batch or beacon events with governed schemas, identity signals, immutable event IDs and correct retry handling."
 docId: DOC-11
 tags: ["ingestion", "events", "schemas", "identity"]
+timestamp: 2026-11-08T06:55:25Z
 generated:
   by: process:codex
   at: "2026-11-06T13:54:38Z"
@@ -220,9 +221,12 @@ missing measurements are absent samples, never invented zeros. Merely declaring 
 starts no browser capture. `kansoku-js` 0.1.0 and later capture both only when the application
 opts in with `autocapture.clientErrors` or `autocapture.webVitals`
 (`mori://shinzui/kansoku-ts/plans/7-capture-client-errors-and-web-vitals-with-explicit-opt-in`).
-Under current session rules both names count as engagement: automatic collection can remove
-bounces and extend observed duration. Decide deliberately before enabling it in a product;
-changing retained session semantics would require separate migration/rebuild work.
+Both exact names are non-engagement for every schema version, including historical versionless
+rows. One page plus client errors or web vitals remains a bounce. Their timestamps still extend
+observed session duration; purchase and other application actions still count as engagement.
+Migration `0026_diagnostic_session_engagement` corrects every retained session during the
+[fenced upgrade](clickhouse-migrations.md#diagnostic-session-engagement-upgrade). Installations
+that have not applied it retain the old aggregate classification.
 
 ### Site-health query recipes
 

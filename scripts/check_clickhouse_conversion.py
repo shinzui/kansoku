@@ -6,13 +6,32 @@ import re
 from pathlib import Path
 
 
+def suffix(root, manifest):
+    """Append-only authored suffixes are separate from the frozen conversion."""
+    additions = manifest['migrations'][25:]
+    assert [m['name'] for m in additions] == ['0026_diagnostic_session_engagement']
+    referenced = set()
+    for migration in additions:
+        assert [s['name'] for s in migration['steps']] == ['drop-view', 'create-view', 'clear-sessions', 'rebuild-sessions', 'prepare-check', 'verify-sessions', 'cleanup-check']
+        for step in migration['steps']:
+            assert step['file'] == f"steps/{migration['name']}/{step['name']}.sql"
+            path = root / step['file']
+            assert path.is_file() and path.read_text().strip()
+            assert path not in referenced
+            referenced.add(path)
+    on_disk = {p for d in (root / 'steps').iterdir() if d.name >= '0026' for p in d.glob('*.sql')}
+    assert on_disk == referenced, 'Suffix SQL membership differs'
+
+
 def verify():
     root = Path(__file__).resolve().parents[1]
     converted = root / 'kansoku-server/migrations/clickhouse'
     provenance = json.loads((converted / 'provenance.json').read_text())
     manifest = json.loads((converted / 'manifest.json').read_text())
     digest = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
-    assert len(provenance['files']) == len(manifest['migrations']) == 25
+    assert len(provenance['files']) == 25
+    suffix(converted, manifest)
+    manifest['migrations'] = manifest['migrations'][:25]
     expected = {}
     for source in provenance['files']:
         original = (converted / source['original']).read_bytes()
@@ -51,7 +70,9 @@ def verify_replicated():
     manifest = json.loads((target / 'manifest.json').read_text())
     provenance = json.loads((target / 'provenance.json').read_text())
     assert manifest['component'] == 'kansoku_replicated'
-    assert len(manifest['migrations']) == 25
+    suffix(target, manifest)
+    original['migrations'] = original['migrations'][:25]
+    manifest['migrations'] = manifest['migrations'][:25]
     files = {item['file']: item for item in provenance['files']}
     omissions, adaptations = [], []
     for before, after in zip(original['migrations'], manifest['migrations'], strict=True):

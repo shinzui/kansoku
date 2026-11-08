@@ -4,6 +4,7 @@ title: "Query metrics"
 description: "Look up metric populations, query bounds, filters, grouping, analytical semantics, cohorts and saved definitions."
 docId: DOC-10
 tags: ["metrics", "queries", "identity", "cohorts"]
+timestamp: 2026-11-08T06:55:25Z
 generated:
   by: process:codex
   at: "2026-11-06T14:31:34Z"
@@ -529,12 +530,17 @@ later events fall inside the requested range. Missing IDs and non-web events do 
 
 `measure=bounce_rate` returns a fraction from zero to one: exactly one distinct page_view and
 no engagement events, divided by every selected session. session_start, page_leave, identify,
-identify_once, alias, group and experiment_viewed are not engagement; other application events
-are. Zero-page sessions count but are not bounces. A page_view followed by page_leave can be
+identify_once, alias, group, experiment_viewed, client_error and web_vital are not engagement;
+other application events such as purchase are. The diagnostic exclusions depend only on exact
+event name, for all versions including versionless rows. Zero-page sessions count but are not bounces. A page_view followed by page_leave can be
 a bounce with positive duration. `measure=average_duration_seconds` averages last minus first
-observed timestamp, including page_leave and one-event sessions with zero duration. It measures
+observed timestamp, including page_leave, client_error, web_vital and one-event sessions with zero duration. It measures
 elapsed observed duration, not active reading time. Empty ungrouped buckets return zero for
-all measures; nonexistent groups are omitted.
+all measures; nonexistent groups are omitted. One page at time 0 plus diagnostics at 10 and 20
+seconds has bounce rate 1 and duration 20 seconds; purchase at 30 seconds changes these to 0
+and 30 seconds. Apply migration `0026_diagnostic_session_engagement` and the matching application
+binary together inside the [maintenance window](clickhouse-migrations.md#diagnostic-session-engagement-upgrade).
+The migration corrects all retained aggregates; unupgraded aggregates retain the old classification.
 
 Use `groupBy=entry_page,exit_page` for the first/last page_view route; lifecycle events cannot
 supply these routes. Other common/enrichment dimensions use first-page attribution, otherwise

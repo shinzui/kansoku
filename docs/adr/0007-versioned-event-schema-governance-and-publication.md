@@ -2,7 +2,7 @@
 type: Architecture Decision Record
 title: Versioned event schema governance and publication
 description: Govern event schemas as immutable, contiguous versions authored in the Haskell registry, with accepted events recording the schema version they matched.
-timestamp: 2026-11-06T13:54:38Z
+timestamp: 2026-11-08T06:55:25Z
 generated:
   by: human:kansoku-maintainers
   at: 2026-07-19T00:00:00Z
@@ -131,16 +131,19 @@ value. Names are exact equality membership at ingest, without a runtime regex de
 Units are milliseconds for LCP, INP, FCP and TTFB, and unitless for CLS; CLS may exceed one and
 zero is valid for every metric. Missing/unsupported measurements are absent samples, not zeros.
 This establishes a measurement contract, not a browser algorithm. Both events reuse top-level
-URL/session attribution and declared scalar queries without a storage migration.
+URL/session attribution and declared scalar queries without a raw-event schema migration.
 
 Declaring previously permissive names tightens new versionless submissions too. Existing
 released event versions remain immutable. Declaration enables no capture: optional browser
 work is recorded at
 `mori://shinzui/kansoku-ts/plans/7-capture-client-errors-and-web-vitals-with-explicit-opt-in`.
-Both names currently follow generic engagement classification under
-[ADR-13](0013-whole-retained-replay-safe-web-sessions.md); automatic collection can affect bounce
-and observed duration. Enable it only after a deliberate product decision. Reclassifying retained
-sessions needs separate migration/rebuild work. Error counts and exact affected subjects use
+Both exact names are non-engagement under [ADR-13](0013-whole-retained-replay-safe-web-sessions.md)
+for every stored version, including historical versionless and future-version rows. Their timestamps
+still extend observed duration. Automatic collection cannot remove a one-page bounce; an application
+action such as purchase can. Migration `0026_diagnostic_session_engagement` replaces the insert view
+and clears/rebuilds all retained session state under the migration fence. Deploy the matching binary
+and migration together; unupgraded aggregates retain the prior classification. Schema governance
+and immutable accepted event versions do not change. Error counts and exact affected subjects use
 existing event/users routes; per-metric/per-route p75 uses ADR-20's exact percentile and paired
 sample counts. Counts across overlapping user groups and percentiles across groups must not be
 added or averaged.

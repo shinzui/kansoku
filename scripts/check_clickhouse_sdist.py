@@ -46,11 +46,11 @@ def main():
     offline = {key:value for key,value in os.environ.items() if not key.startswith(('PG','CLICKHOUSE','KANSOKU_'))}
     document = json.loads(run([binary,'plan','--json'],root,offline))
     migrations = document['result']['components'][0]['migrations']
-    assert len(migrations) == 25 and sum(len(item['steps']) for item in migrations) == 257
+    assert len(migrations) == 26 and sum(len(item['steps']) for item in migrations[:25]) == 257 and len(migrations[-1]['steps']) == 7
     offline.update(KANSOKU_CH_MIGRATION_CLUSTER='fixture',KANSOKU_CH_MIGRATION_REPLICA_IDS='11111111-1111-4111-8111-111111111111,22222222-2222-4222-8222-222222222222')
     replicated = json.loads(run([binary,'plan','--json'],root,offline))['result']['components'][0]['migrations']
-    assert len(replicated) == 25 and sum(len(item['steps']) for item in replicated) == 254
-    print('source archives: ' + str(len(packages)) + ' extracted packages built the production CLI; 25/257 direct and 25/254 replicated offline plans passed with inputs withheld',flush=True)
+    assert len(replicated) == 26 and sum(len(item['steps']) for item in replicated[:25]) == 254 and len(replicated[-1]['steps']) == 7
+    print('source archives: ' + str(len(packages)) + ' extracted packages built the production CLI; 26/264 direct and 26/261 replicated offline plans passed with inputs withheld',flush=True)
 
 
 if __name__ == '__main__':

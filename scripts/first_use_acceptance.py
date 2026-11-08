@@ -133,7 +133,7 @@ def main():
         if not native_initialized:
             up+=['--initialize-ledger',env['KANSOKU_CH_MIGRATION_LEDGER_ID']]
         report=cli(*predecessor,*up)['result']['report']
-        expected=0 if native_initialized else 257
+        expected=0 if native_initialized else 264
         assert len(report['observations'])==expected
         native_initialized=True
         cli('verify','--require-current','--guarded','--json')

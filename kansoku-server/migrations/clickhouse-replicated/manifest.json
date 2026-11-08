@@ -1168,6 +1168,40 @@
           "file": "steps/0025_organization_analytics/statement-10.sql"
         }
       ]
+    },
+    {
+      "name": "0026_diagnostic_session_engagement",
+      "description": "Exclude diagnostic events from engagement and reconstruct all retained session state under maintenance",
+      "steps": [
+        {
+          "name": "drop-view",
+          "file": "steps/0026_diagnostic_session_engagement/drop-view.sql"
+        },
+        {
+          "name": "create-view",
+          "file": "steps/0026_diagnostic_session_engagement/create-view.sql"
+        },
+        {
+          "name": "clear-sessions",
+          "file": "steps/0026_diagnostic_session_engagement/clear-sessions.sql"
+        },
+        {
+          "name": "rebuild-sessions",
+          "file": "steps/0026_diagnostic_session_engagement/rebuild-sessions.sql"
+        },
+        {
+          "name": "prepare-check",
+          "file": "steps/0026_diagnostic_session_engagement/prepare-check.sql"
+        },
+        {
+          "name": "verify-sessions",
+          "file": "steps/0026_diagnostic_session_engagement/verify-sessions.sql"
+        },
+        {
+          "name": "cleanup-check",
+          "file": "steps/0026_diagnostic_session_engagement/cleanup-check.sql"
+        }
+      ]
     }
   ]
 }

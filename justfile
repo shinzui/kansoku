@@ -229,6 +229,7 @@ ch-migrations-replicated:
     nix build .#kansoku-ch-migrate --no-link --no-write-lock-file --json > "$packaged_json"
     export KANSOKU_CH_MIGRATION_BINARY="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[0]["outputs"]["out"] + "/bin/kansoku-ch-migrate")' "$packaged_json")"
     "$(cabal list-bin kansoku-server:test:clickhouse-replicated-migrations -fnative-migration-tests)" full
+    "$(cabal list-bin kansoku-server:test:clickhouse-replicated-migrations -fnative-migration-tests)" hyphen
 
 # Required native runtime/maintenance proof on an owned exact two-replica cluster.
 ch-runtime-replicated:

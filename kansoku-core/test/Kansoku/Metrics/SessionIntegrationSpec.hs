@@ -67,6 +67,63 @@ spec = describe "Kansoku.Sessions native" $ do
       amount <$> sessions pool SessionCount request {Query.includeBots = True} `shouldReturn` 9
       amount <$> sessions pool SessionCount request {Query.accountId = AccountId "sessions-other"} `shouldReturn` 1
 
+  it "excludes diagnostics for every stored version while preserving timestamps, actions and replay" $ withClickHouse $ \connection -> do
+    -- Write through the storage boundary: undeclared future versions are not an
+    -- ingest contract change, and historical versionless rows stay classifiable.
+    let diagnostic = request {Query.accountId = AccountId "sessions-diagnostics", Query.timeGrain = Just NoTimeBucket}
+        makeRow eid name stamp sid = make eid name stamp sid ("/" <> sid) & #event . #accountId ?~ AccountId "sessions-diagnostics"
+        compareState = do
+          canonical <- snapshotFor "sessions-diagnostics" connection (sessionProjection "analytics.events_canonical" False)
+          snapshotFor "sessions-diagnostics" connection materializedSessionProjection `shouldReturn` canonical
+    withPool $ \pool -> do
+      forM_ [("error", ["client_error"]), ("vital", ["web_vital"]), ("both", ["client_error", "web_vital"])] $ \(label, names) ->
+        forM_ [("legacy", Nothing), ("v1", Just 1), ("future", Just 999)] $ \(versionLabel, version) -> do
+          let sid = label <> "-" <> versionLabel
+              page = makeRow (sid <> "-page") "page_view" "2026-07-01 12:00:00 UTC" sid
+              diagnostics = [makeRow (sid <> "-" <> name <> suffix) name stamp sid & #event . #schemaVersion .~ version | name <- names, (suffix, stamp) <- [("-10", "2026-07-01 12:00:10 UTC"), ("-20", "2026-07-01 12:00:20 UTC")]]
+          entry <- input "entry_page" Filter.FilterEq (Just (Aeson.String ("/" <> sid)))
+          let selected = diagnostic {Query.filters = [entry]}
+              expect bounce duration = do
+                amount <$> sessions pool SessionCount selected `shouldReturn` 1
+                amount <$> sessions pool SessionBounceRate selected `shouldReturn` bounce
+                amount <$> sessions pool SessionAverageDuration selected `shouldReturn` duration
+                compareState
+          insertQueuedEvents connection [page]
+          expect 1 0
+          forM_ diagnostics (insertQueuedEvents connection . pure)
+          expect 1 20
+          insertQueuedEvents connection (reverse (page : diagnostics))
+          expect 1 20
+          -- A second page alone removes the bounce, without diagnostic engagement.
+          let two = sid <> "-two"
+          insertQueuedEvents connection (map (\row -> row & #event . #sessionId ?~ SessionId two & #event . #eventId .~ EventId (two <> "-" <> (let EventId eid = row ^. #event . #eventId in eid)) & #event . #url ?~ ("https://shop.example/" <> two)) (page : diagnostics))
+          insertQueuedEvents connection [makeRow (two <> "-second-page") "page_view" "2026-07-01 12:00:30 UTC" two]
+          twoEntry <- input "entry_page" Filter.FilterEq (Just (Aeson.String ("/" <> two)))
+          amount <$> sessions pool SessionBounceRate diagnostic {Query.filters = [twoEntry]} `shouldReturn` 0
+          insertQueuedEvents connection [makeRow (sid <> "-purchase") "purchase" "2026-07-01 12:00:30 UTC" sid]
+          expect 0 30
+          insertQueuedEvents connection [makeRow (sid <> "-second-page") "page_view" "2026-07-01 12:00:40 UTC" sid]
+          expect 0 40
+      let only = makeRow "diagnostics-only" "client_error" "2026-07-01 12:00:00 UTC" "diagnostics-only"
+      insertQueuedEvents connection [only, makeRow "diagnostics-only-vital" "web_vital" "2026-07-01 12:00:20 UTC" "diagnostics-only"]
+      onlyEntry <- input "route" Filter.FilterEq (Just (Aeson.String "/diagnostics-only"))
+      amount <$> sessions pool SessionBounceRate diagnostic {Query.filters = [onlyEntry]} `shouldReturn` 0
+      let midnight = makeRow "diagnostic-midnight-page" "page_view" "2026-07-02 00:00:00 UTC" "diagnostic-midnight"
+          earlier = makeRow "diagnostic-midnight-error" "client_error" "2026-07-01 23:59:50 UTC" "diagnostic-midnight"
+          later = makeRow "diagnostic-midnight-vital" "web_vital" "2026-07-02 00:00:10 UTC" "diagnostic-midnight"
+      insertQueuedEvents connection [midnight]
+      insertQueuedEvents connection [later, earlier]
+      entry <- input "entry_page" Filter.FilterEq (Just (Aeson.String "/diagnostic-midnight"))
+      let selected = diagnostic {Query.filters = [entry], Query.timeGrain = Just Day}
+      buckets <$> sessions pool SessionCount selected `shouldReturn` [(Just "2026-07-01", 1), (Just "2026-07-02", 0)]
+      amount <$> sessions pool SessionBounceRate selected `shouldReturn` 1
+      amount <$> sessions pool SessionAverageDuration selected `shouldReturn` 20
+      compareState
+      rebuildDerived connection
+      compareState
+      rebuildDerived connection
+      compareState
+
   it "agrees with acquisition for equivalent attributes, fills empty ungrouped buckets and rejects property selection" $ withClickHouse $ \connection -> do
     seed connection
     withPool $ \pool -> do
@@ -138,8 +195,11 @@ newtype JsonRow = JsonRow {value :: BS.ByteString}
   deriving anyclass (ClickHaskell '[Column "value" ChString])
 
 snapshot :: Connection -> Text -> IO [BS.ByteString]
-snapshot connection source = do
-  let projection = Text.replace "{account_id:String}" "'sessions-native'" source
+snapshot = snapshotFor "sessions-native"
+
+snapshotFor :: Text -> Connection -> Text -> IO [BS.ByteString]
+snapshotFor account connection source = do
+  let projection = Text.replace "{account_id:String}" ("'" <> account <> "'") source
       sql = "SELECT toJSONString(tuple(source_service,session_id,occurred_at,session_end_at,page_view_count,engagement_count,entry_url,exit_url,is_bot,event_name,source,url,referrer,utm_source,utm_medium,utm_campaign,utm_content,utm_term,browser_family,os_family,device_class,channel,country_code,toString(properties_json))) AS value FROM (" <> projection <> ") ORDER BY source_service,session_id"
   map (\(JsonRow bytes) -> bytes) . concat . reverse <$> select (unsafeMkSelect (const (Text.encodeUtf8Builder sql)) :: Select '[Column "value" ChString] JsonRow) connection pure
 

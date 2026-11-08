@@ -6,7 +6,15 @@ generated:
   by: process:claude-code
   at: "2026-11-08T01:20:00Z"
 requestId: IR-13
-status: proposed
+status: completed
+completedAt: "2026-11-08T06:55:25Z"
+timestamp: "2026-11-08T06:55:25Z"
+targetPlan: docs/plans/65-stop-counting-client-errors-and-web-vitals-as-session-engagement.md
+resolution: >-
+  AC-1 through AC-4 delivered by plan 65. Both diagnostic names are non-engagement
+  for every stored version while preserving duration. Direct and replicated
+  fenced migrations reconstruct retained sessions; native, packaged HTTP,
+  upgrade/recovery, replica and documentation checks passed.
 origin: mori://shinzui/kansoku-ui/masterplans/4-build-the-health-tab-of-the-reports-page
 dependencies:
   - ref: mori://shinzui/kansoku/okf/improvement-requests/concepts/IR-8

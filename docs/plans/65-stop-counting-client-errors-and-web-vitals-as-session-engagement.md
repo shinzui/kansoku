@@ -10,6 +10,12 @@ provenance:
     model: "gpt-6-astra"
     harness: "codex-cli"
     at: 2026-11-08T04:31:52Z
+  revisions:
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-11-08T05:33:25Z
+      mode: "implement"
+      note: "Implement diagnostic classification, fenced retained-session correction, and acceptance evidence"
 ---
 
 # Stop counting client errors and web vitals as session engagement
@@ -27,14 +33,22 @@ Implement the request in `docs/improvement-requests/stop-counting-client-errors-
 ## Progress
 
 
-- [ ] Milestone 1: Canonical queries and newly populated session state exclude both diagnostic names, with passing native bounce/duration and replay tests.
-- [ ] Milestone 2: Direct and replicated upgrades correct retained sessions while fenced, with immutable historical migration prefixes and verified recovery behavior.
-- [ ] Milestone 3: Public query acceptance, operator instructions, and ADR/guide updates demonstrate and explain the complete new contract.
+- [x] (2026-11-08) Milestone 1: Canonical queries and fresh session state exclude both diagnostics for every stored version. `scripts/session-attributes-acceptance.py` passed at 65536- and 2-row blocks (native session, attachment, acquisition and activity suites; no failures/pending). Direct native migration component passed 26 migrations/264 steps, assertions and zero-SQL repeat.
+- [x] (2026-11-08) Milestone 2: Both native topologies upgrade retained page/vital sessions from engagement 1/bounce 0 to engagement 0/bounce 1 with unchanged 20-second duration. Packaged direct acceptance passed 18 cases; Apple Container acceptance passed 15 owned cases, the packaged full case and the packaged hyphenated-cluster case, including interrupted clear, explicit repair, repeated reconstruction, fresh installation and nonquorum-history refusal with the fence retained. Historical 25/257 and 25/254 prefixes remain byte/checksum-identical.
+- [x] (2026-11-08) Milestone 3: Packaged authenticated HTTP checks report bounce 1/duration 20 for retained diagnostics and bounce 0/duration 30 after purchase, preserving event counts. Guides, OpenAPI, capability/terms and ADR-7/ADR-13 document classification, duration, the retained upgrade, supported quorum contract and recovery. Repository, documentation/profile and source-archive checks pass.
 
 ## Surprises & Discoveries
 
+The exact Altinity candidate reads a quorum-written retention revision 0 instead of a later synchronized nonquorum revision 99 when `select_sequential_consistency=1`. An owned probe returned cutoff 99 with sequential reads disabled and cutoff 0 with them enabled, independently of result limits or insert quorum. The toolkit deliberately protects sequential read mode for native replicated statements; authored SQL cannot override it. The retained-upgrade fixture therefore uses the established supported writer contract (synchronous full quorum). The coordinator independently verifies the complete canonical population with sequential restriction disabled, so incompatible nonquorum history fails closed while fenced rather than silently completing a partial rebuild. No dependency upgrade or policy bypass is introduced.
+
+The dependency replica fixture hardcodes Docker, so the required Apple Container policy needs a repository-owned bridge using the same qualified image and hostile profiles. FRIC-19 in `docs/friction-log/` records the detour. The bridge preserves Keeper, full UUID inventories, explicit coordinator sessions and refusal cases. Each owned replica has 4 GiB: the full native memory-limit fixture exceeded the initial 2 GiB VM during seed insertion, before reaching its intentionally constrained query. Query limits remain unchanged; no Colima runtime is used.
+
 
 ## Decision Log
+
+Decision (2026-11-08): Preserve the toolkit's protected replicated read policy on separately journaled SQL. Use full-quorum retained fixtures representing the supported writer contract, and an independent complete-history read for final canonical agreement. Explicit complete-result/throwing-overflow settings prevent limiting command profiles from silently narrowing reconstruction or verification. History outside the supported acknowledgement contract must remain fenced if complete canonical agreement cannot be established.
+
+Decision (2026-11-08): Use coordinator event callbacks for repeatable all-replica barriers before the separately journaled replay, and reuse the compiled SQL assertion for a fresh read-only check before migration completion and maintenance release. Synchronization uses the validated configured cluster; bounded local observations cover every expected UUID through the retained endpoint without following discovered hostnames.
 
 
 Decision (2026-11-08): Exclude the exact names `client_error` and `web_vital` from engagement without testing schema version. Preserve minimum/maximum event timestamps. This implements the requested behavior for historical, versionless and future-version rows without changing accepted event contracts or duration semantics.
@@ -42,6 +56,12 @@ Decision (2026-11-08): Exclude the exact names `client_error` and `web_vital` fr
 Decision (2026-11-08): Append migrations for both supported topologies and rebuild retained session state inside the migration maintenance window. Existing exact-ID aggregate states cannot subtract previously counted diagnostic IDs; changing only the insert view would leave history wrong. Do not finish maintenance between replacing the view and correcting retained state.
 
 ## Outcomes & Retrospective
+
+Completed on 2026-11-08. Both exact diagnostic names are excluded for every stored version, while all observed timestamps continue contributing to duration. Migration 0026 replaces the view and reconstructs only retained sessions inside the existing persisted fence. Native and independent complete-history checks prevent partial reconstruction from being served; replicated sources retain the supported synchronous quorum contract and incompatible nonquorum history refuses completion.
+
+Validation passed: 54 native attachment/session/acquisition/activity examples at normal and two-row blocks; four direct component cases over 26 migrations/264 steps; 18 packaged direct cases including authenticated public metrics; 15 owned Apple Container cases plus packaged full and hyphenated-cluster cases; 73/73 native query/metrics examples across the two full replicated runs; exact historical-prefix inspection; preserved-time embedding rebuilds; ten extracted source archives building both offline plans; `just check`; strict ADR, guide, terminology and friction profiles; the capability profile; and `git diff --check`. Source-archive/embedding evidence remains applicable after the final SQL and read-only query-rendering corrections: migration membership, build/embedding code and interfaces are unchanged, and the final packaged/native runs execute the accepted SQL. Private failed and passing evidence remains under `.dev/acceptance/`.
+
+FRIC-19 in `docs/friction-log/` is resolved by the owned Apple Container migration fixture; no Docker/Colima backend is used by this gate. FRIC-20 is accepted with preservation of every historical log byte around generated additions. FRIC-21 is accepted: retain content-qualified embedding and use bounded SQL probes before expensive graph rebuilds. Durable classification, reconstruction and quorum-visibility context is recorded in ADR-7 and ADR-13. No live installation was migrated or deployed by this work.
 
 
 ## Context and Orientation
@@ -51,7 +71,7 @@ A session is the retained set of web events with the same account, source servic
 
 `kansoku-core/src/Kansoku/Metrics/Query/Session.hs` owns `engagementPredicate`, the canonical `sessionProjection`, and `materializedSessionProjection`. Canonical means reconstructing from retained event facts rather than reading derived aggregates. The first projection counts engagement directly; the second merges stored distinct-ID sets from `analytics.sessions`. `kansoku-core/src/Kansoku/Metrics/Query.hs` computes bounce rate from finalized page and engagement counts. Changing the Haskell predicate alone cannot fix the stored sets.
 
-An insert-triggered materialized view, `analytics.mv_sessions`, builds aggregate state in `analytics.sessions`. Its current definition is in `kansoku-server/migrations/clickhouse/steps/0022_applied_retention_policy/statement-19.sql`. It includes the applied retention cutoff and all attribution fields. Earlier definitions in migration 0020 are historical evidence, not edit targets. The direct manifest is `kansoku-server/migrations/clickhouse/manifest.json`; the replicated manifest is `kansoku-server/migrations/clickhouse-replicated/manifest.json`. Both currently end at 0025. A replicated installation keeps synchronized copies of data on multiple ClickHouse servers.
+An insert-triggered materialized view, `analytics.mv_sessions`, builds aggregate state in `analytics.sessions`. Its pre-change definition is in `kansoku-server/migrations/clickhouse/steps/0022_applied_retention_policy/statement-19.sql`; migration 0026 replaces it with the corrected predicate. It includes the applied retention cutoff and all attribution fields. Earlier definitions in migration 0020 are historical evidence, not edit targets. The direct manifest is `kansoku-server/migrations/clickhouse/manifest.json`; the replicated manifest is `kansoku-server/migrations/clickhouse-replicated/manifest.json`. Both immutable converted prefixes end at 0025; their appended 0026 suffix has seven steps. A replicated installation keeps synchronized copies of data on multiple ClickHouse servers. Full INSERT quorum requires acknowledgement from every configured replica.
 
 `kansoku-core/test/Kansoku/Metrics/SessionIntegrationSpec.hs` compares canonical and materialized results and tests replay and session measures. `scripts/session-attributes-acceptance.py` runs this family and adjacent populations on owned scratch databases with normal and two-row block sizes. `kansoku-server/test/ClickHouseMigrations.hs`, `kansoku-server/test/ClickHouseReplicatedMigrations.hs`, and `scripts/clickhouse_migrations_acceptance.py` exercise native migrations and the packaged coordinator. `scripts/check_clickhouse_conversion.py` currently assumes the entire manifest is the 25-migration converted baseline; it must distinguish that immutable prefix from new suffixes.
 
@@ -139,3 +159,5 @@ On uncertain native execution, preserve the session, ledger identities and recei
 Keep `sessionProjection :: Text -> Bool -> Text` and `materializedSessionProjection :: Text` unchanged in `Kansoku.Metrics.Query.Session`. Public event schemas and session query response shapes remain unchanged. The classification is an exact event-name exclusion; unknown application events continue to count as engagement.
 
 Use the existing native migration/embedding cohort, PostgreSQL maintenance coordinator and ClickHouse aggregate state types. Its canonical dependency identity is `mori://shinzui/clickhouse-migrate`; no new package or compatibility pin is selected by this plan. Preserve separate direct and replicated manifests and their immutable prefixes. This is a standalone plan with no parent MasterPlan dependency.
+
+Revision note (2026-11-08): Preserve the native toolkit's protected quorum policy and add independent complete-history release verification, including a deliberate nonquorum-history refusal case. Use the repository-owned Apple Container fixture with 4 GiB per replica for the complete required native workload. Historical migration prefixes and the original acceptance obligations remain intact.
