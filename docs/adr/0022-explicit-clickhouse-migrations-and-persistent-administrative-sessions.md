@@ -5,7 +5,7 @@ description: Embed immutable native migration steps, bind administration to reta
 docId: ADR-22
 status: Accepted
 date: 2026-10-16
-timestamp: 2026-11-08T03:39:18Z
+timestamp: 2026-11-08T05:40:00Z
 generated:
   by: process:codex
   at: 2026-10-16T22:55:08Z
@@ -164,3 +164,16 @@ PostgreSQL migration 0009; this does not modify migration session identities, th
 The runtime's native consistency and maintenance contracts are defined by
 [ADR-4](0004-queryable-event-properties-and-identity-resolved-projection.md) and
 [ADR-17](0017-fenced-resumable-administration-and-applied-retention.md).
+
+## Selected managed deployment scope
+
+Plan 64 selects TAN's one-shard/two-replica Altinity.Cloud target at exact
+26.3.60.10002.altinitystable separately from local fixture qualification. Managed
+routing, full independent UUID inventory, healthy writable Local default storage,
+fsync, permissions and external drain remain deployment obligations. Per-connection
+admission fails closed but cannot certify routing, uptime or complete inventory.
+The managed endpoint always needs a dated release-owner acceptance; selection,
+offline plan smoke and Darwin-client fixture passes cannot supply that decision.
+Startup and patch/security dispositions and Linux application-image coverage are
+tracked in the [release dossier](../evidence/tan-production-target.md). Existing
+direct history and certificate verification remain mandatory.

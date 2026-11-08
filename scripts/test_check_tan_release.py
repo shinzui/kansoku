@@ -21,7 +21,7 @@ class ReleaseValidation(unittest.TestCase):
                            environmentMapping=True, explicitTlsValues=True, caBundle=True, fourExecutablePaths=True)
         for name, field in PLAN_FIELDS.items():
             if name == 'postgres.json':
-                components = [dict(name='pgmq', migrations=[]), dict(name='kansoku', migrations=[dict(id=m) for m in ['0008-clickhouse-replicated-administration', '0009-clickhouse-replicated-jobs']])]
+                components = [dict(name='pgmq', migrations=[]), dict(name='kansoku', migrations=[dict(id=m) for m in ['kansoku/0008-clickhouse-replicated-administration', 'kansoku/0009-clickhouse-replicated-jobs']])]
             else:
                 replicated = name == 'native-replicated.json'
                 steps = 254 if replicated else 257

@@ -140,6 +140,7 @@ openapi-lint:
 check: build-with-tests format-check deterministic-test openapi-check contracts-check openapi-lint capabilities-check terminology-check guides-check friction-check
     okf validate docs/adr --strict --profile docs/adr/profile.dhall --profile-enforce --log-enforce
     python3 scripts/http-telemetry.py
+    python3 -m unittest discover -s scripts -p test_check_tan_release.py
 
 # Safe, read-only resource families against an already-running loopback service.
 hurl:
