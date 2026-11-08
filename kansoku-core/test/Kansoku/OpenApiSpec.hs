@@ -40,6 +40,24 @@ import Test.Hspec
 
 spec :: Spec
 spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
+  it "documents optional contained-event selection only on sessions" $ do
+    let operation = fromMaybe Aeson.Null (valueAt ["paths", "/metrics/sessions", "get"] documentValue)
+        parameters = fromMaybe [] (valueAt ["parameters"] operation >>= \case Aeson.Array xs -> Just (Foldable.toList xs); _ -> Nothing)
+        contains = filter ((== Just "containsEvent") . lookupText ["name"]) parameters
+    length contains `shouldBe` 1
+    traverse_
+      ( \parameter -> do
+          lookupText ["schema", "type"] parameter `shouldBe` Just "string"
+          valueAt ["required"] parameter `shouldSatisfy` (\required -> required == Nothing || required == Just (Aeson.Bool False))
+      )
+      contains
+    traverse_
+      (\phrase -> lookupText ["description"] operation `shouldSatisfy` maybe False (Text.isInfixOf phrase))
+      ["whole sessions", "any-of", "1..20", "1..128", "lowercase ASCII", "invalid_contains_event"]
+    traverse_
+      (\path -> operationParameterNames (fromMaybe Aeson.Null (valueAt ["paths", path, "get"] documentValue)) `shouldSatisfy` notElem "containsEvent")
+      ["/metrics/events", "/metrics/acquisition", "/metrics/page-views", "/metrics/users", "/metrics/custom"]
+
   it "documents acquisition conversion measures, event list and first-session denominator" $ do
     let operation = fromMaybe Aeson.Null (valueAt ["paths", "/metrics/acquisition", "get"] documentValue)
     operationParameterNames operation `shouldContain` ["conversionEvents"]

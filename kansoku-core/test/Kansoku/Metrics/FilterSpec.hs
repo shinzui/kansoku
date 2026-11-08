@@ -164,6 +164,13 @@ spec = describe "Kansoku.Metrics filters" $ do
     input <- validFilter (jsonFilter "source" "eq" (Aeson.String "web"))
     let req endpoint query = defaultRequest {pathInfo = [], rawPathInfo = Text.encodeUtf8 ("/metrics/" <> endpoint), queryString = query}
         encoded = Just (Text.encodeUtf8 (toUrlPiece input))
+    validateMetricRequest (req "sessions" [("containsEvent", Just "client_error,page_leave")]) `shouldBe` Right ()
+    traverse_
+      (\query -> validateMetricRequest (req "sessions" query) `shouldSatisfy` either ((== "invalid_query_parameter") . fst) (const False))
+      [[("containsEvent", Nothing)], [("containsEvent", Just "a"), ("containsEvent", Just "b")]]
+    traverse_
+      (\endpoint -> validateMetricRequest (req endpoint [("containsEvent", Just "a")]) `shouldSatisfy` either ((== "unsupported_query_parameter") . fst) (const False))
+      ["events", "page-views", "users", "acquisition", "custom"]
     validateMetricRequest (req "acquisition" [("measure", Just "converted_users"), ("conversionEvents", Just "one,two")]) `shouldBe` Right ()
     traverse_
       (\query -> validateMetricRequest (req "acquisition" query) `shouldSatisfy` either ((== "invalid_query_parameter") . fst) (const False))

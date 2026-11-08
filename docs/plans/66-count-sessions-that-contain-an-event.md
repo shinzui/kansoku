@@ -10,6 +10,12 @@ provenance:
     model: "gpt-6-astra"
     harness: "codex-cli"
     at: 2026-11-08T04:40:34Z
+  revisions:
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-11-08T13:47:06Z
+      mode: "implement"
+      note: "Implement whole-session contained-event selection and verify native and public reporting paths"
 ---
 
 # Count sessions that contain an event
@@ -27,12 +33,14 @@ This implements all four acceptance criteria in [IR-14](docs/improvement-request
 ## Progress
 
 
-- [ ] Milestone 1: Core queries select whole sessions by a bounded any-of event-name list; native tests prove count, bounce, duration, retained-history matching, and isolation.
-- [ ] Milestone 2: The authenticated HTTP route and typed client expose the selection, reject invalid input before storage, and preserve existing requests and response shapes.
+- [x] Milestone 1 (2026-11-08): Whole-session selection, shared raw-list validation and native binding implemented. `nix develop --no-write-lock-file -c python3 scripts/acquisition-acceptance.py` executed acquisition/session/trait families with 9/9/6 examples at each of block sizes 65536 and 2, all with zero failures/pending; coverage includes all measures/grains, replay, late starts, cross-midnight witnesses, bots, key collisions and trait/cohort selection.
+- [x] Milestone 2 (2026-11-08): Authenticated HTTP and derived client expose the optional scalar, reject invalid input before cohort/storage access and preserve omission. `just build-with-tests` passed; `just deterministic-test` passed 512 core examples, 22 client examples and 4 probes. OpenAPI generation/freshness, lint and formatting passed.
 - [ ] Milestone 3: A packaged public ingestion/query fixture proves IR-14, and generated OpenAPI, query guidance, and durable ADR context describe the accepted behavior.
 
 ## Surprises & Discoveries
 
+
+2026-11-08: The starting tree is clean and Plan 65's diagnostic engagement correction is already present (including native tests and migration 0026). Preserve those semantics; the two-page error fixture remains valid. The early owned ClickHouse proof executed the native bound-name path and returned count 1, duration 60 and bounce rate 0 for a last-event error (`1 example, 0 failures`).
 
 ## Decision Log
 

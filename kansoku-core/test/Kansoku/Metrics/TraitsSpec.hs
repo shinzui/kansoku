@@ -14,6 +14,7 @@ import Data.Time (fromGregorian)
 import Effectful (Eff, IOE, runEff)
 import Kansoku.ClickHouse
 import Kansoku.ClickHouseTestSupport
+import Kansoku.Cohort.Query qualified as Cohort
 import Kansoku.Event
 import Kansoku.Ingest.QueuedEvent (QueuedEvent (..), enrichedQueuedEvent, legacyQueuedEvent)
 import Kansoku.Ingest.RequestContext (emptyRequestContext)
@@ -198,6 +199,17 @@ spec = do
         sum . pointValues <$> metric (Query.runSessionMetric pool SessionCount req) `shouldReturn` 1
         sum . pointValues <$> metric (Query.runSessionMetric pool SessionBounceRate req) `shouldReturn` 0
         sum . pointValues <$> metric (Query.runSessionMetric pool SessionAverageDuration req) `shouldReturn` 10
+        let contained measure selected = metric (Query.runSessionMetricWithContains pool measure (Just ["page_view"]) selected)
+        sum . pointValues <$> contained SessionCount req `shouldReturn` 1
+        sum . pointValues <$> contained SessionAverageDuration req `shouldReturn` 10
+        sum . pointValues <$> contained SessionBounceRate req `shouldReturn` 0
+        sum . pointValues <$> contained SessionCount req {Query.filters = [free]} `shouldReturn` 0
+        cohort <- input "cohort" Filter.FilterEq (Aeson.String "contains-cohort")
+        let member = Cohort.Membership "primary_subject='user:alice'" [] (fromGregorian 2026 1 1)
+        sum . pointValues <$> contained SessionCount req {Query.filters = [cohort], Query.cohorts = [("contains-cohort", member)]} `shouldReturn` 1
+        absent <- metric (Query.runSessionMetricWithContains pool SessionCount (Just ["absent_name"]) req)
+        sum (pointValues absent) `shouldBe` 0
+
         sum . pointValues <$> metric (Query.runSessionMetric pool SessionCount req {Query.filters = [free]}) `shouldReturn` 0
         sum . pointValues <$> metric (Query.runAcquisition defaultRegistry pool AcquisitionUsers req) `shouldReturn` 1
         insertEvents connection [profile account "alice-new-plan" "identify" 2 "alice" "2026-07-03 00:00:00 UTC" [("plan", Aeson.String "free")]]

@@ -81,6 +81,16 @@ spec = describe "Kansoku.Auth.Handler" $ do
     unknownError <- expectServerError 400 unknown
     code <$> decodeEnvelope unknownError `shouldReturn` "unsupported_query_parameter"
 
+  it "authenticates before rejecting duplicate or valueless session containsEvent" $ do
+    let handler = metricsAuthHandlerWith fixtureLookup
+        run headers query = runHandler (unAuthHandler handler defaultRequest {requestHeaders = headers, rawPathInfo = "/metrics/sessions", queryString = query})
+    forM_ [[("containsEvent", Nothing)], [("containsEvent", Just "a"), ("containsEvent", Just "b")]] $ \query -> do
+      run [] query >>= void . expectServerError 401
+      run [("X-Api-Key", writeToken)] query >>= void . expectServerError 403
+      result <- run [("X-Api-Key", serviceToken)] query
+      err <- expectServerError 400 result
+      code <$> decodeEnvelope err `shouldReturn` "invalid_query_parameter"
+
   it "validates duplicate and valueless quantiles only after authentication" $ do
     let handler = metricsAuthHandlerWith fixtureLookup
         run headers query = runHandler (unAuthHandler handler defaultRequest {requestHeaders = headers, rawPathInfo = "/metrics/custom", queryString = query})

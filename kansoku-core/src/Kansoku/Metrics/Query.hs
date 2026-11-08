@@ -25,6 +25,7 @@ module Kansoku.Metrics.Query
     activityPredicate,
     buildSessionsSQL,
     buildSessionMetricSQL,
+    buildSessionMetricSQLWithContains,
     experimentConversionPoint,
     experimentExposuresPoint,
     experimentFunnelPoint,
@@ -48,6 +49,7 @@ module Kansoku.Metrics.Query
     runLifecycle,
     runSessions,
     runSessionMetric,
+    runSessionMetricWithContains,
     runAcquisition,
     runAcquisitionWithConversions,
   )
@@ -110,7 +112,7 @@ import Kansoku.Metrics.Query.Property
   )
 import Kansoku.Metrics.Query.Session (attachSessionAttributes, materializedSessionProjection, sessionProjection)
 import Kansoku.Metrics.Query.Traits qualified as Traits
-import Kansoku.Metrics.Query.Validate (QueryLimitError (..), SqlName, mkSqlName, renderSqlName, validateAcquisitionConversions, validateDateRange, validateObservationCutoff, validateOffsets, validateSteps)
+import Kansoku.Metrics.Query.Validate (QueryLimitError (..), SqlName, mkSqlName, renderSqlName, validateAcquisitionConversions, validateDateRange, validateObservationCutoff, validateOffsets, validateSessionContainsEvents, validateSteps)
 import Kansoku.Metrics.Registry (BuiltinMetric (..), activeUsers)
 import Kansoku.Prelude
 import System.Timeout (timeout)
@@ -138,6 +140,7 @@ data QueryCompileError
   | QueryCompileInvalidQuantile
   | QueryCompileInvalidTimeGrain
   | QueryCompileFilterError !Text
+  | QueryCompileContainsEvent !QueryLimitError
   | QueryCompileConversionEvents !QueryLimitError
   deriving stock (Generic, Eq, Show)
 
@@ -282,9 +285,12 @@ runSessions :: (IOE :> es) => QueryPool -> QueryRequest -> Eff es (Either QueryE
 runSessions pool = runSessionMetric pool SessionCount
 
 runSessionMetric :: (IOE :> es) => QueryPool -> SessionMeasure -> QueryRequest -> Eff es (Either QueryExecutionError MetricResult)
-runSessionMetric pool measure req =
+runSessionMetric pool measure = runSessionMetricWithContains pool measure Nothing
+
+runSessionMetricWithContains :: (IOE :> es) => QueryPool -> SessionMeasure -> Maybe [Text] -> QueryRequest -> Eff es (Either QueryExecutionError MetricResult)
+runSessionMetricWithContains pool measure names req =
   case first QueryLimitFailure (validateDateRange (req ^. #from) (req ^. #to))
-    >> first QueryCompileFailure (compileSessions measure req) of
+    >> first QueryCompileFailure (compileSessionsWithContains measure names req) of
     Left failure -> pure (Left failure)
     Right compiled ->
       liftIO $
@@ -921,10 +927,17 @@ buildSessionsSQL :: QueryRequest -> Either QueryCompileError Text
 buildSessionsSQL = buildSessionMetricSQL SessionCount
 
 buildSessionMetricSQL :: SessionMeasure -> QueryRequest -> Either QueryCompileError Text
-buildSessionMetricSQL measure req = boundedSQL BucketDimensions . view #sql <$> compileSessions measure req
+buildSessionMetricSQL measure = buildSessionMetricSQLWithContains measure Nothing
+
+buildSessionMetricSQLWithContains :: SessionMeasure -> Maybe [Text] -> QueryRequest -> Either QueryCompileError Text
+buildSessionMetricSQLWithContains measure names req = boundedSQL BucketDimensions . view #sql <$> compileSessionsWithContains measure names req
 
 compileSessions :: SessionMeasure -> QueryRequest -> Either QueryCompileError CompiledMetric
-compileSessions measure req = do
+compileSessions measure = compileSessionsWithContains measure Nothing
+
+compileSessionsWithContains :: SessionMeasure -> Maybe [Text] -> QueryRequest -> Either QueryCompileError CompiledMetric
+compileSessionsWithContains measure supplied req = do
+  names <- first QueryCompileContainsEvent (validateSessionContainsEvents supplied)
   let days = diffDays (req ^. #to) (req ^. #from)
   unless (days > 0 && days <= maxQueryDays) (Left (QueryCompileFilterError "session calendar requires a positive range of at most 366 days"))
   when
@@ -942,7 +955,7 @@ compileSessions measure req = do
           <> ") WHERE "
           <> accountPredicate
           <> " AND "
-          <> Text.intercalate " AND " ([timestampPredicate req] <> ["NOT is_bot" | not (req ^. #includeBots)] <> Filters.predicates predicates)
+          <> Text.intercalate " AND " ([timestampPredicate req] <> sessionContainsPredicate names <> ["NOT is_bot" | not (req ^. #includeBots)] <> Filters.predicates predicates)
       aggregate = case measure of
         SessionCount -> "toFloat64(count())"
         SessionBounceRate -> "toFloat64(countIf(page_view_count=1 AND engagement_count=0))/count()"
@@ -955,7 +968,18 @@ compileSessions measure req = do
         if null grouping
           then "SELECT calendar.bucket AS bucket,'[]' AS group_key,CAST(NULL,'Nullable(String)') AS sort_group_1,CAST(NULL,'Nullable(String)') AS sort_group_2,ifNull(answer.value,0) AS value FROM (" <> calendar <> ") AS calendar LEFT JOIN (" <> grouped <> ") AS answer USING(bucket)"
           else grouped
-  pure CompiledMetric {sql, groupLabels = map dimensionLabel grouping, filterParameters = Filters.parameters predicates, ordering = BucketDimensions}
+  pure CompiledMetric {sql, groupLabels = map dimensionLabel grouping, filterParameters = namedParameters "session_contains_event" names <> Filters.parameters predicates, ordering = BucketDimensions}
+
+-- Witnesses range over retained web history; the assembled session owns selection.
+sessionContainsPredicate :: [SqlName] -> [Text]
+sessionContainsPredicate [] = []
+sessionContainsPredicate names =
+  [ "(account_id,source_service,session_id) IN (SELECT account_id,source_service,session_id FROM analytics.events_canonical WHERE "
+      <> accountPredicate
+      <> " AND source='web' AND session_id!='' AND "
+      <> eventNamePredicate "session_contains_event" names
+      <> ")"
+  ]
 
 sessionCalendar :: QueryRequest -> Text
 sessionCalendar req = "SELECT arrayJoin([" <> Text.intercalate "," (map (\label -> "'" <> label <> "'") labels) <> "]) AS bucket"
@@ -1349,6 +1373,7 @@ propertyFilterClause = foldMap ("\n  AND " <>)
 
 queryCompileErrorCode :: QueryCompileError -> Text
 queryCompileErrorCode = \case
+  QueryCompileContainsEvent failure -> limitCode failure
   QueryCompileConversionEvents failure -> limitCode failure
   QueryCompileInvalidQuantile -> "invalid_metric_definition"
   QueryCompileInvalidTimeGrain -> "invalid_time_grain"
@@ -1362,6 +1387,7 @@ queryCompileErrorCode = \case
 
 queryCompileErrorMessage :: QueryCompileError -> Text
 queryCompileErrorMessage = \case
+  QueryCompileContainsEvent failure -> limitMessage failure
   QueryCompileConversionEvents failure -> limitMessage failure
   QueryCompileInvalidQuantile -> "percentile requires a finite quantile strictly between zero and one; other aggregations cannot specify quantile"
   QueryCompileInvalidTimeGrain -> "timeGrain none is unsupported for this metric"

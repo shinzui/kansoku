@@ -11,6 +11,15 @@ import Test.Hspec
 
 spec :: Spec
 spec = describe "Kansoku.Metrics.Query.Validate" $ do
+  it "bounds raw contained-event lists, trims, deduplicates and accepts undeclared names" $ do
+    validateSessionContainsEvents Nothing `shouldBe` Right []
+    validateSessionContainsEvents (Just [" client_error ", "client_error", "not_declared"]) `shouldBe` Right (map expectSqlName ["client_error", "not_declared"])
+    validateSessionContainsEvents (Just (replicate 20 "a")) `shouldBe` Right [expectSqlName "a"]
+    validateSessionContainsEvents (Just [Text.replicate 128 "a"]) `shouldSatisfy` isRight
+    traverse_
+      (\names -> validateSessionContainsEvents (Just names) `shouldSatisfy` either ((== "invalid_contains_event") . limitCode) (const False))
+      [[], [""], [" "], ["a", ""], ["", "a"], ["a", "", "b"], ["A"], ["é"], ["a١"], ["bad'name"], [Text.replicate 129 "a"], replicate 21 "a"]
+
   it "accepts the metric SQL name charset through the 128-character boundary" $
     traverse_
       (\value -> mkSqlName value `shouldBe` Right (expectSqlName value))

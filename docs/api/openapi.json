@@ -6767,7 +6767,7 @@
     },
     "/metrics/sessions": {
       "get": {
-        "description": "Whole retained web sessions keyed by account/source_service/nonempty session_id; assemble before selecting the start date or UTC bucket. timeGrain=none aggregates selected sessions directly, including rates and averages; ungrouped empty whole ranges return one zero point. Defaults: measure=count, day grain, no grouping, includeBots=false. bounce_rate is exactly one page_view and no engagement divided by all selected sessions; lifecycle/identity/exposure events and the exact names client_error/web_vital are not engagement, regardless of schema version. average_duration_seconds includes every selected session, including zero-duration visits, and measures last minus first observed event including page_leave, client_error and web_vital. Attribute grouping/filters select first page_view, else earliest event; entry_page/exit_page come from page views. Arbitrary prop: filters/grouping are rejected. Any bot event excludes the whole session unless includeBots=true. Empty ungrouped buckets return zero; nonexistent groups are omitted. One/two dimensions, at most 8 AND filter groups with up to 8 OR terms each (100 in values, 1024 UTF-8 bytes per string, 16384 decoded bytes), positive half-open range at most 366 days, at most 10000 complete points. Late arrivals and retained-history changes can change start/attribution/duration.",
+        "description": "Whole retained web sessions keyed by account/source_service/nonempty session_id; assemble before selecting the start date or UTC bucket. timeGrain=none aggregates selected sessions directly, including rates and averages; ungrouped empty whole ranges return one zero point. Optional containsEvent selects whole sessions containing any-of 1..20 comma-separated event names across retained web history, including matches beyond the date range. Names have 1..128 lowercase ASCII letters, digits, underscore, dot, colon or hyphen; trim entries, reject empties, bound the raw list before deduplication. Invalid lists return invalid_contains_event before storage; valid absent names select zero sessions. All three measures use the selected whole sessions. Defaults: measure=count, day grain, no grouping, includeBots=false. bounce_rate is exactly one page_view and no engagement divided by all selected sessions; lifecycle/identity/exposure events and the exact names client_error/web_vital are not engagement, regardless of schema version. average_duration_seconds includes every selected session, including zero-duration visits, and measures last minus first observed event including page_leave, client_error and web_vital. Attribute grouping/filters select first page_view, else earliest event; entry_page/exit_page come from page views. Arbitrary prop: filters/grouping are rejected. Any bot event excludes the whole session unless includeBots=true. Empty ungrouped buckets return zero; nonexistent groups are omitted. One/two dimensions, at most 8 AND filter groups with up to 8 OR terms each (100 in values, 1024 UTF-8 bytes per string, 16384 decoded bytes), positive half-open range at most 366 days, at most 10000 complete points. Late arrivals and retained-history changes can change start/attribution/duration.",
         "operationId": "getMetricsSessions",
         "parameters": [
           {
@@ -6837,6 +6837,14 @@
           },
           {
             "in": "query",
+            "name": "containsEvent",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
             "name": "includeBots",
             "required": false,
             "schema": {
@@ -6868,7 +6876,7 @@
                 }
               }
             },
-            "description": "Malformed request or `includeBots` or `measure` or `filter` or `timeGrain` or `groupBy` or `to` or `from`"
+            "description": "Malformed request or `includeBots` or `containsEvent` or `measure` or `filter` or `timeGrain` or `groupBy` or `to` or `from`"
           },
           "401": {
             "content": {

@@ -100,6 +100,30 @@ spec = describe "Kansoku analytics route dispatch" $ do
       HTTP.responseStatus schemaResponse `shouldBe` status200
       decodeBody (HTTP.responseBody schemaResponse) `shouldReturn` schemaCatalog defaultRegistry
 
+  it "forwards session containsEvent independently of parameter order" $ do
+    let shouldEqual actual expected = if actual == expected then pure () else fail "session control was not forwarded"
+        server =
+          sentinelKansokuServer
+            { Api.metrics =
+                sentinelMetricsServer
+                  { Metrics.sessions = \_ _ _ _ _ _ measure names bots -> do
+                      measure `shouldEqual` Just Metrics.SessionAverageDuration
+                      names `shouldEqual` Just "client_error,page_leave"
+                      bots `shouldEqual` Just True
+                      pure (Response.KansokuOk (sentinelResult "contains-controls"))
+                  }
+            }
+    Warp.testWithApplication (pure (serveWithContext Api.kansokuAPI sentinelContext server)) $ \port -> do
+      manager <- HTTP.newManager HTTP.defaultManagerSettings
+      traverse_
+        ( \controls -> do
+            request <- HTTP.parseRequest (baseUrl port <> "/metrics/sessions?from=2026-07-01&to=2026-07-02&" <> controls)
+            response <- HTTP.httpLbs request manager
+            HTTP.responseStatus response `shouldBe` status200
+            decodeBody (HTTP.responseBody response) `shouldReturn` sentinelResult "contains-controls"
+        )
+        ["measure=average_duration_seconds&containsEvent=client_error,page_leave&includeBots=true", "includeBots=true&containsEvent=client_error,page_leave&measure=average_duration_seconds"]
+
   it "forwards acquisition conversion controls independently of query parameter order" $ do
     let shouldEqual actual expected = if actual == expected then pure () else fail "acquisition control was not forwarded"
         server =
@@ -323,7 +347,7 @@ sentinelMetricsServer =
   Metrics.MetricsRoutes
     { Metrics.events = standardSentinel "events",
       Metrics.pageViews = webSentinel "page-views",
-      Metrics.sessions = \principal fromDay toDay groupBy grain filters _measure _bots -> standardSentinel "sessions" principal fromDay toDay groupBy grain filters,
+      Metrics.sessions = \principal fromDay toDay groupBy grain filters _measure _contains _bots -> standardSentinel "sessions" principal fromDay toDay groupBy grain filters,
       Metrics.paths = \_ _ _ _ _ _ _ _ _ _ _ _ -> pure (Response.KansokuOk (sentinelResult "paths")),
       Metrics.funnel = funnelSentinel,
       Metrics.retention = retentionSentinel,

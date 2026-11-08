@@ -8,6 +8,7 @@ module Kansoku.Metrics.Query.Validate
     validateObservationCutoff,
     validateSteps,
     validateAcquisitionConversions,
+    validateSessionContainsEvents,
     validateOffsets,
     SqlName,
     mkSqlName,
@@ -95,3 +96,16 @@ validateAcquisitionConversions measure supplied =
     _ -> Left invalid
   where
     invalid = QueryLimitError "invalid_conversion_events" "converted_users and conversion_rate require conversionEvents with 1..20 names of 1..128 lowercase ASCII letters, digits, underscore, dot, colon or hyphen; empty entries and lists on sessions/users are invalid"
+
+-- | Bound raw entries before trimming and deduplicating an any-of selection.
+validateSessionContainsEvents :: Maybe [Text] -> Either QueryLimitError [SqlName]
+validateSessionContainsEvents Nothing = Right []
+validateSessionContainsEvents (Just names)
+  | not (null names),
+    length names <= maxSessionContainsEvents =
+      case traverse (mkSqlName . Text.strip) names of
+        Right valid -> Right (List.nub valid)
+        Left _ -> Left invalid
+  | otherwise = Left invalid
+  where
+    invalid = QueryLimitError "invalid_contains_event" "containsEvent requires 1..20 names of 1..128 lowercase ASCII letters, digits, underscore, dot, colon or hyphen; empty entries are invalid"

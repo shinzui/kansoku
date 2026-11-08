@@ -26,6 +26,126 @@ import Test.Hspec
 
 spec :: Spec
 spec = describe "Kansoku.Sessions native" $ do
+  it "selects a last-event match without shortening its whole session" $ withClickHouse $ \connection -> do
+    insertQueuedEvents
+      connection
+      [ makeFor "sessions-contains-smoke" "contains-first" "page_view" "2026-07-01 12:00:00 UTC" "contains" "/entry",
+        makeFor "sessions-contains-smoke" "contains-second" "page_view" "2026-07-01 12:00:20 UTC" "contains" "/second",
+        makeFor "sessions-contains-smoke" "contains-last" "client_error" "2026-07-01 12:01:00 UTC" "contains" "/error"
+      ]
+    withPool $ \pool -> do
+      let selected measure = runEff (Query.runSessionMetricWithContains pool measure (Just ["client_error"]) request {Query.accountId = AccountId "sessions-contains-smoke"}) >>= either (fail . show) pure
+      amount <$> selected SessionCount `shouldReturn` 1
+      amount <$> selected SessionAverageDuration `shouldReturn` 60
+      amount <$> selected SessionBounceRate `shouldReturn` 0
+
+  it "selects whole any-of populations for every measure, grouping and grain without replay weighting" $ withClickHouse $ \connection -> do
+    let fixture =
+          [ makeFor "sessions-contains-population" "contains-a0" "page_view" "2026-07-01 12:00:00 UTC" "a" "/error" & #enrichment . #channel .~ "email",
+            makeFor "sessions-contains-population" "contains-a1" "page_view" "2026-07-01 12:00:20 UTC" "a" "/second",
+            makeFor "sessions-contains-population" "contains-a2" "client_error" "2026-07-01 12:01:00 UTC" "a" "/later" & #enrichment . #channel .~ "paid_search",
+            makeFor "sessions-contains-population" "contains-b0" "page_view" "2026-07-01 13:00:00 UTC" "b" "/quiet" & #enrichment . #channel .~ "email",
+            makeFor "sessions-contains-population" "contains-b1" "page_leave" "2026-07-01 13:00:30 UTC" "b" "/quiet",
+            makeFor "sessions-contains-population" "contains-c0" "page_view" "2026-07-01 14:00:00 UTC" "c" "/quiet",
+            makeFor "sessions-contains-population" "contains-nosession" "client_error" "2026-07-01 15:00:00 UTC" "" "/ignored",
+            makeFor "sessions-contains-population" "contains-server" "client_error" "2026-07-01 15:00:00 UTC" "" "/ignored" & #event . #source .~ Service
+          ]
+        req = request {Query.accountId = AccountId "sessions-contains-population", Query.to = fromGregorian 2026 7 2, Query.timeGrain = Just NoTimeBucket}
+    insertQueuedEvents connection fixture
+    withPool $ \pool -> do
+      let report names measure selected = runEff (Query.runSessionMetricWithContains pool measure names selected) >>= either (fail . show) pure
+          expect names count duration bounce = do
+            amount <$> report names SessionCount req `shouldReturn` count
+            amount <$> report names SessionAverageDuration req `shouldReturn` duration
+            actual <- amount <$> report names SessionBounceRate req
+            actual `shouldSatisfy` (\value -> abs (value - bounce) < 1e-9)
+          verify = do
+            expect Nothing 3 30 (2 / 3)
+            expect (Just ["client_error"]) 1 60 0
+            expect (Just ["client_error", "page_leave"]) 2 45 0.5
+            expect (Just ["absent_event"]) 0 0 0
+      verify
+      amount <$> report (Just [" client_error ", "client_error"]) SessionCount req `shouldReturn` 1
+      empty <- report (Just ["absent_event"]) SessionCount req {Query.groupBy = Just ["entry_page"]}
+      empty ^. #points `shouldBe` []
+      grouped <- report (Just ["client_error", "page_leave"]) SessionCount req {Query.groupBy = Just ["entry_page"]}
+      groups "entry_page" grouped `shouldBe` Map.fromList [(Just "/error", 1), (Just "/quiet", 1)]
+      attributed <- report (Just ["client_error"]) SessionCount req {Query.groupBy = Just ["entry_page", "channel"]}
+      map (view #group) (attributed ^. #points) `shouldBe` [Map.fromList [("entry_page", Just "/error"), ("channel", Just "email")]]
+      forM_ [("email", 2), ("direct", 0)] $ \(channel, expected) -> do
+        selected <- input "channel" Filter.FilterEq (Just (Aeson.String channel))
+        amount <$> report (Just ["client_error", "page_leave"]) SessionCount req {Query.filters = [selected]} `shouldReturn` expected
+      forM_ [Nothing, Just Hour, Just Day, Just Week, Just Month, Just NoTimeBucket] $ \grain -> do
+        forM_ [(SessionCount, 1), (SessionBounceRate, 0), (SessionAverageDuration, 60)] $ \(measure, expected) -> do
+          amount <$> report (Just ["client_error"]) measure req {Query.timeGrain = grain} `shouldReturn` expected
+        result <- report (Just ["client_error"]) SessionCount req {Query.timeGrain = grain}
+        [bucket | (bucket, value) <- buckets result, value /= 0] `shouldBe` case grain of
+          Just Hour -> [Just "2026-07-01 12:00:00"]
+          Just Week -> [Just "2026-06-29"]
+          Just Month -> [Just "2026-07-01"]
+          Just NoTimeBucket -> [Nothing]
+          _ -> [Just "2026-07-01"]
+      insertQueuedEvents connection (reverse fixture)
+      forM_ fixture (insertQueuedEvents connection . pure)
+      -- A second distinct matching event at the same timestamp cannot weight a visit.
+      insertQueuedEvents connection [makeFor "sessions-contains-population" "contains-a3" "client_error" "2026-07-01 12:01:00 UTC" "a" "/other"]
+      verify
+      canonical <- snapshotFor "sessions-contains-population" connection (sessionProjection "analytics.events_canonical" False)
+      snapshotFor "sessions-contains-population" connection materializedSessionProjection `shouldReturn` canonical
+      rebuildDerived connection
+      verify
+
+  it "isolates witness keys and keeps bot and zero-page session rules" $ withClickHouse $ \connection -> do
+    let page eid sid = makeFor "sessions-contains-keys" eid "page_view" "2026-07-01 12:00:00 UTC" sid "/page"
+        witness eid sid = makeFor "sessions-contains-keys" eid "client_error" "2026-07-01 12:00:10 UTC" sid "/error"
+        req = request {Query.accountId = AccountId "sessions-contains-keys", Query.to = fromGregorian 2026 7 2, Query.timeGrain = Just NoTimeBucket}
+    insertQueuedEvents
+      connection
+      [ page "key-page" "collision",
+        witness "key-nonweb" "collision" & #event . #source .~ Service,
+        witness "key-account" "collision" & #event . #accountId ?~ AccountId "sessions-contains-other",
+        witness "key-service" "collision" & #event . #sourceService ?~ "b",
+        page "bot-clean-page" "bot-clean",
+        witness "bot-clean-error" "bot-clean",
+        makeFor "sessions-contains-keys" "bot-other" "page_leave" "2026-07-01 12:00:20 UTC" "bot-clean" "" & #enrichment . #isBot .~ True,
+        page "bot-witness-page" "bot-witness",
+        witness "bot-witness-error" "bot-witness" & #enrichment . #isBot .~ True,
+        witness "zero-page-error" "zero-page"
+      ]
+    service <- input "source_service" Filter.FilterEq (Just (Aeson.String "a"))
+    withPool $ \pool -> do
+      let report measure selected = runEff (Query.runSessionMetricWithContains pool measure (Just ["client_error"]) selected) >>= either (fail . show) pure
+          selected = req {Query.filters = [service]}
+      amount <$> report SessionCount selected `shouldReturn` 1
+      amount <$> report SessionBounceRate selected `shouldReturn` 0
+      amount <$> report SessionAverageDuration selected `shouldReturn` 0
+      amount <$> report SessionCount selected {Query.includeBots = True} `shouldReturn` 3
+      collision <- input "entry_page" Filter.FilterEq (Just (Aeson.String "/page"))
+      amount <$> report SessionCount selected {Query.filters = [service, collision]} `shouldReturn` 0
+      -- The same textual key in another source service is its own matching session.
+      amount <$> report SessionCount req `shouldReturn` 2
+
+  it "matches retained history beyond the interval and moves late earlier starts" $ withClickHouse $ \connection -> do
+    let page = makeFor "sessions-contains-midnight" "contains-midnight-page" "page_view" "2026-07-01 23:59:00 UTC" "midnight" "/entry"
+        err = makeFor "sessions-contains-midnight" "contains-midnight-error" "client_error" "2026-07-02 00:01:00 UTC" "midnight" "/later"
+        firstDay = request {Query.accountId = AccountId "sessions-contains-midnight", Query.to = fromGregorian 2026 7 2, Query.timeGrain = Just NoTimeBucket}
+        nextDay = firstDay {Query.from = fromGregorian 2026 7 2, Query.to = fromGregorian 2026 7 3}
+    insertQueuedEvents connection [page]
+    insertQueuedEvents connection [err]
+    withPool $ \pool -> do
+      let report measure selected = runEff (Query.runSessionMetricWithContains pool measure (Just ["client_error"]) selected) >>= either (fail . show) pure
+      amount <$> report SessionCount firstDay `shouldReturn` 1
+      amount <$> report SessionAverageDuration firstDay `shouldReturn` 120
+      amount <$> report SessionCount nextDay `shouldReturn` 0
+      insertQueuedEvents connection [err, page]
+      amount <$> report SessionAverageDuration firstDay `shouldReturn` 120
+      insertQueuedEvents connection [makeFor "sessions-contains-midnight" "contains-midnight-earlier" "session_start" "2026-06-30 23:58:00 UTC" "midnight" ""]
+      amount <$> report SessionCount firstDay `shouldReturn` 0
+      moved <- report SessionCount firstDay {Query.from = fromGregorian 2026 6 30, Query.timeGrain = Just Day}
+      buckets moved `shouldBe` [(Just "2026-06-30", 1), (Just "2026-07-01", 0)]
+      canonical <- snapshotFor "sessions-contains-midnight" connection (sessionProjection "analytics.events_canonical" False)
+      snapshotFor "sessions-contains-midnight" connection materializedSessionProjection `shouldReturn` canonical
+
   it "merges complete retained state across batches, rebatches and canonical rebuilds" $ withClickHouse $ \connection -> do
     seed connection
     canonical <- snapshot connection (sessionProjection "analytics.events_canonical" False)
@@ -223,6 +343,9 @@ make eid name timestamp sid route =
       ?~ UserId "first-user"
       & #url
       .~ (if Text.null route then Nothing else Just ("https://shop.example" <> route))
+
+makeFor :: Text -> Text -> Text -> String -> Text -> Text -> QueuedEvent
+makeFor account eid name stamp sid route = make eid name stamp sid route & #event . #accountId ?~ AccountId account
 
 rows :: [QueuedEvent]
 rows =

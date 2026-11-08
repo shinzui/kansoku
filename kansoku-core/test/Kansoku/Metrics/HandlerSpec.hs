@@ -20,6 +20,13 @@ import Test.Hspec
 
 spec :: Spec
 spec = describe "Kansoku.Metrics.Handler" $ do
+  it "rejects malformed contained-event names before cohort loading or query checkout" $
+    Warp.testWithApplication (pure validationApplication) $ \port -> do
+      manager <- HTTP.newManager HTTP.defaultManagerSettings
+      traverse_
+        (\names -> assertBadRequest manager port ("/metrics/sessions?from=2026-07-01&to=2026-07-02&containsEvent=" <> names <> "&filter=cohort:eq:missing") "invalid_contains_event" "")
+        ["", ",", ",a", "a,", "a,,b", "%20", "A", "%C3%A9", "bad%27name", replicate 129 'a', concat (replicate 20 "a,") <> "a"]
+
   it "rejects invalid acquisition conversion options before cohort loading or storage" $
     Warp.testWithApplication (pure validationApplication) $ \port -> do
       manager <- HTTP.newManager HTTP.defaultManagerSettings

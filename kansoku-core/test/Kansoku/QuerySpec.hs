@@ -28,6 +28,24 @@ import Test.Hspec
 
 spec :: Spec
 spec = describe "Kansoku.Query.buildSQL" $ do
+  it "validates contained-event input before checkout and preserves omission SQL" $ do
+    forM_ [SessionCount, SessionBounceRate, SessionAverageDuration] $ \measure -> do
+      Query.buildSessionMetricSQLWithContains measure Nothing dayRequest `shouldBe` Query.buildSessionMetricSQL measure dayRequest
+      old <- either (fail . show) pure (Query.buildSessionMetricSQL measure dayRequest)
+      old `shouldNotContainText` "session_contains_event"
+      old `shouldNotContainText` "FROM analytics.events_canonical"
+      selected <- either (fail . show) pure (Query.buildSessionMetricSQLWithContains measure (Just ["private_error", "page_leave"]) dayRequest)
+      selected `shouldContainText` "(account_id,source_service,session_id) IN (SELECT"
+      selected `shouldContainText` "{session_contains_event_1:String}"
+      selected `shouldContainText` "{session_contains_event_2:String}"
+      selected `shouldNotContainText` "private_error"
+      forM_ [Just [], Just [""], Just ["bad'name"], Just (replicate 21 "a")] $ \names -> do
+        Query.buildSessionMetricSQLWithContains measure names dayRequest `shouldSatisfy` either ((== "invalid_contains_event") . queryCompileErrorCode) (const False)
+        result <- runEff (Query.runSessionMetricWithContains (error "contains validation forced storage") measure names dayRequest)
+        result `shouldSatisfy` \case
+          Left (QueryCompileFailure failure) -> queryCompileErrorCode failure == "invalid_contains_event"
+          _ -> False
+
   it "validates acquisition conversion options identically at compiler and executor boundaries" $ do
     let compile = Query.buildAcquisitionSQLWithConversions defaultRegistry
         invalid measure names = do

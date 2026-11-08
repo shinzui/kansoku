@@ -48,7 +48,7 @@ allowedParameters = \case
     | endpoint `elem` ["events", "revenue"] ->
         Just ["from", "to", "groupBy", "timeGrain", "filter"]
   ["metrics", endpoint] | endpoint `elem` ["feature-adoption", "conversion", "organizations"] -> Just ["from", "to", "groupBy", "timeGrain", "filter", "aggregate", "attribution"]
-  ["metrics", "sessions"] -> Just ["from", "to", "groupBy", "timeGrain", "filter", "measure", "includeBots"]
+  ["metrics", "sessions"] -> Just ["from", "to", "groupBy", "timeGrain", "filter", "measure", "containsEvent", "includeBots"]
   ["metrics", "paths"] -> Just ["from", "to", "start", "end", "steps", "top", "window", "events", "exclude", "by", "filter"]
   ["metrics", "funnel"] -> Just ["from", "to", "steps", "window", "mode", "measure", "counting", "attribution", "exclude", "groupBy", "filter", "aggregate"]
   ["metrics", "retention"] -> Just ["from", "to", "groupBy", "timeGrain", "filter", "days", "mode", "cohort", "includeBots", "aggregate", "attribution"]

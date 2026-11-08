@@ -4,6 +4,7 @@ module Main (main) where
 
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.STM (TVar, atomically, modifyTVar', newTVarIO, readTVarIO)
+import Control.Monad (forM_)
 import Data.Aeson qualified as Aeson
 import Data.Aeson.Key qualified as Key
 import Data.Aeson.KeyMap qualified as KeyMap
@@ -264,6 +265,30 @@ spec = describe "Kansoku.Client" $ do
           (pathsClient (kansokuMetricsCredential "test-service-token") (read "2026-07-01") (read "2026-07-03") (Just "/pricing") Nothing (Just 4) (Just 2) (Just 60) (Just "page_view") (Just "x,y") (Just Metrics.PathRoute) [])
           (mkClientEnv manager base)
       result `shouldBe` Right (KansokuOk MetricResult {metric = "paths", points = []})
+
+  it "serializes optional session containsEvent once with credentials and filters" $ do
+    captured <- newTVarIO []
+    input <- either (fail . Text.unpack) pure (Filter.mkMetricFilter "channel" Filter.FilterEq (Just (Aeson.String "email")))
+    let app request respond = do
+          pathInfo request `shouldBe` ["metrics", "sessions"]
+          lookup hAuthorization (requestHeaders request) `shouldBe` Just "Bearer test-service-token"
+          atomically (modifyTVar' captured (<> [queryString request]))
+          respond (responseLBS status200 [(hContentType, "application/json")] "{\"metric\":\"sessions\",\"points\":[]}")
+    Warp.testWithApplication (pure app) $ \port -> do
+      manager <- HTTP.newManager HTTP.defaultManagerSettings
+      base <- parseBaseUrl ("http://127.0.0.1:" <> show port)
+      forM_ [Nothing, Just "client_error,page_leave"] $ \names -> do
+        result <-
+          runClientM
+            (Metrics.sessions metricsClient (kansokuMetricsCredential "test-service-token") (read "2026-07-01") (read "2026-07-02") (Just "entry_page") (Just Metrics.NoTimeBucket) [input] (Just Metrics.SessionCount) names (Just False))
+            (mkClientEnv manager base)
+        result `shouldBe` Right (KansokuOk MetricResult {metric = "sessions", points = []})
+    requests <- readTVarIO captured
+    [[(key, value) | (key, value) <- parameters, key == "containsEvent"] | parameters <- requests] `shouldBe` [[], [("containsEvent", Just "client_error,page_leave")]]
+    forM_ requests $ \parameters -> do
+      lookup "measure" parameters `shouldBe` Just (Just "count")
+      lookup "includeBots" parameters `shouldBe` Just (Just "false")
+      traverse Aeson.eitherDecodeStrict' [value | ("filter", Just value) <- parameters] `shouldBe` Right [input]
 
   it "sends typed repeatable JSON filters and decodes nullable namespaced groups" $ do
     captured <- newTVarIO []
