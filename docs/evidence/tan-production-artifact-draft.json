@@ -1,0 +1,10 @@
+{
+  "image": null,
+  "sourceProject": "mori://shinzui/kansoku",
+  "sourcePackage": "mori://shinzui/kansoku/packages/kansoku-server",
+  "sourceRevision": "7c1132d74c8cb4fd5702b3ba8394aa1f52f66780",
+  "upstreamProject": "mori://shinzui/clickhouse-migrate",
+  "upstreamImplementation": "0e75c4cc1303423ba561370ee5795aa0cf2455b7",
+  "nativePlanSha256": "116f8f90d5d84b957717d243610ae05db19b563bebf4f05e915c4a7b5d86b558",
+  "postgresPlanSha256": "4fcbc14449b2726a7bd1997f99b39b5baa92a6058894f676febe336bf41e0fa3"
+}

@@ -37,7 +37,7 @@ This is a standalone release plan, not a child of MasterPlan 7 or of the request
 
 
 - [x] (2026-11-08; immutable infrastructure/consumer rereads, patch review and separate target dossier; original fixture entry unchanged) Milestone 1: The selected TAN target and every production gate have a source-backed dossier, and the local Darwin qualification fixture still selects its original artifact.
-- [ ] Milestone 2: A clean candidate containing Plans 62 and 63 yields an identifiable Linux amd64 image, reproducible direct/replicated/PostgreSQL plan hashes, and a validated draft TAN artifact record.
+- [x] (2026-11-08; clean 7c1132d, Linux image/VM builds, Apple Rosetta byte-repeatable 25/257, 25/254 and PostgreSQL plans, prepared draft exits 2 with four explicit pending gates; 11 negative cases pass) Milestone 2: A clean candidate containing Plans 62 and 63 yields an identifiable Linux amd64 image, reproducible direct/replicated/PostgreSQL plan hashes, and a validated draft TAN artifact record.
 - [ ] Milestone 3: The exact candidate has linked replicated acceptance evidence and dated release-owner dispositions for all remaining gates, including the managed endpoint and any Linux application-image coverage gap.
 - [ ] Milestone 4: The approved image is published and verified by registry digest, and the final evidence and TAN-compatible artifact record agree on source, dependency revision, plan hashes, and acceptance scope.
 
@@ -66,8 +66,9 @@ This is a standalone release plan, not a child of MasterPlan 7 or of the request
 
 ## Outcomes & Retrospective
 
-Implementation in progress. The target dossier and fail-closed release tooling are implemented; 11 focused validator cases pass, including mismatched sources/histories/bytes, absent decisions/prerequisites and configuration-ID substitution. No owner risk acceptance or publication has occurred. Candidate build and exact-image validation are the next boundary.
+Milestones 1 and 2 are implemented and verified. Clean source `7c1132d74c8cb4fd5702b3ba8394aa1f52f66780` yields the Linux amd64 image and passing native Linux VM smoke. Apple Container/Rosetta runs the exported image with no networks or mounts; all three plan outputs repeat exactly and the direct history matches the retained fixture. Prepared validation emits `docs/evidence/tan-production-artifact-draft.json` with `image: null` and exits 2 for the four pending owner gates. The sanitized image report is `docs/evidence/tan-production-image.json`; private archives, exact stdout, build metadata and failures remain under `.dev/acceptance/`.
 
+`just check` passes, including the eleven negative release cases; strict ADR, guide and friction validation passes. No application/package/dependency source changed relative to `a40b20a`, so retained Plan 62/63 evidence remains applicable within its recorded scope. Full database acceptance from the Linux application image has not run. Proposed owner rationale in the target dossier is explicitly unapproved. Milestones 3 and 4 remain open: actual dated owner decisions and verified registry publication/readback are required. IR-12 remains unresolved. FRIC-18 is resolved through Apple Container; the user instruction never to use Colima is retained in `AGENTS.md`.
 
 
 ## Context and Orientation

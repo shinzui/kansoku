@@ -87,3 +87,35 @@ A disposition must retain owner, UTC date, actual decision source, residual risk
 reason, candidate archive SHA-256 and loaded image ID. No model provenance or generic
 implementation permission supplies that decision. No synthetic offline UUID belongs
 in TAN's inventory. Publication and IR-12 completion remain blocked until the gates pass.
+
+## Prepared candidate and requested release-owner decisions
+
+The clean candidate is `7c1132d74c8cb4fd5702b3ba8394aa1f52f66780`, tag
+`gcr.io/tan-ng/kansoku:7c1132d74c8c-p1`. Its preserved Docker archive SHA-256 is
+`db8197a8161e5cf52fdd1c7a57939d19590bcbd3c7886a84f311e898264f8e86`;
+the Apple local OCI index is
+`sha256:783b91e441775a30189cd6d4988cfa4b5dce5fc16756546331981a112b846790`.
+These are prepublication identities. The [image report](tan-production-image.json)
+and [draft artifact](tan-production-artifact-draft.json) retain all three hashes.
+The draft's `image: null` deliberately prevents its use as a deployment record.
+No package, application source or dependency pins changed since the passing
+Plan 62/63 checkpoint `a40b20a`.
+
+All four decisions below remain **pending**. The rationale column proposes text
+for owner review; it is not an approval or an attribution to any person. Each actual
+acceptance must retain the owner's identity, UTC date, decision source and reason,
+bound to the archive and local image identity above. The final registry digest will
+be connected to this candidate only after publication and readback verification.
+
+| Gate | Residual risk to accept | Proposed rationale for owner review |
+| --- | --- | --- |
+| Startup crash | Two unexplained Darwin native pre-readiness SIGSEGV attempts; neither later success nor platform difference proves a fix. | Accept the unresolved developer-fixture startup risk for this managed Altinity deployment, retaining failures and requiring any future startup failure to fail its acceptance run. |
+| Patch/security | Vendor 10002 declares CVE-2026-116366 fixed, but some security source is temporarily withheld; managed binary digest has not been observed. | Select the vendor's exact security-fixed patch with its disclosed source limitation, retain exact-version admission, and require TAN to verify deployed version and follow vendor security updates. |
+| Linux application image | Native Linux VM and Rosetta image smoke pass; full replicated database scenarios ran with Darwin clients/Linux ARM64 servers, not this Linux amd64 image. All image-based migration lifecycle, fault/recovery, native query parity, maintenance/drain/rebuild, writer/retry/deduplication and synchronized read-back scenarios remain omitted. | Accept this precisely bounded packaged-image/platform coverage gap using unchanged passing prerequisite behavior, while retaining TAN's managed migration and event-flow rehearsal obligation. |
+| Managed endpoint | Single load-balanced endpoint remains uncertified; per-connection UUID/version/cluster/settings admission fails closed but cannot guarantee routing, availability, durable storage or complete drain. Missing replica exposure can fail bounded observation; connection loss can leave uncertain work fenced. | Accept the uncertified endpoint with independently verified full replica inventory, storage/fsync and grants, normal TLS verification, external drain and explicit uncertain-outcome recovery required during TAN onboarding. |
+
+Apple Container 1.5.0 runs the amd64 image with Rosetta and no attached networks or
+host mounts. All three exact plan outputs repeat byte-for-byte; the direct history
+also matches the retained compatibility fixture. The historical Colima OOM failure
+is retained in FRIC-18, resolved by Apple Container. Colima is forbidden for future
+work by repository instructions. These smoke checks do not execute a live database.
