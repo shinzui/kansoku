@@ -81,8 +81,8 @@ in
       migrations = replicated_plan["result"]["components"][0]["migrations"]
       assert len(migrations) == 25 and sum(len(m["steps"]) for m in migrations) == 254
       postgres = json.loads(machine.succeed(run(supplied, "kansoku-migrate", "plan", "--json")))
-      assert postgres["status"] == "ok"
-      components = {c["name"]: c for c in postgres["result"]["components"]}
+      assert postgres["ok"] is True
+      components = {c["name"]: c for c in postgres["data"]["components"]}
       assert set(components) == {"pgmq", "kansoku"}
       assert [m["id"] for m in components["kansoku"]["migrations"]][-2:] == ["0008-clickhouse-replicated-administration", "0009-clickhouse-replicated-jobs"]
       mapped = environment(supplied)

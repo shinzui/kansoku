@@ -1,6 +1,7 @@
 # Bundle Update Log
 
 ## 2026-11-08
+* **Update**: Select managed TAN scope while retaining explicit owner decisions and independently verified inventory/storage obligations.
 * **Update**: Record exact plan-byte hashes, draft versus published TAN records and candidate-bound owner dispositions.
 * **Update**: ADR-10 and ADR-4: Record qualified native runtime fixture capacity, physical-versus-logical retry evidence and direct outage startup validation.
 * **Update**: ADR-4, ADR-17 and ADR-22: Bind runtime jobs to complete replica identities and document quorum, replay, synchronized read-back and fresh all-replica completion rules.

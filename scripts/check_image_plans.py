@@ -12,9 +12,14 @@ PLAN_FIELDS = {'native-direct.json': 'nativePlanSha256',
 
 def validate_plan(name, raw):
     doc = json.loads(raw)
-    if doc['status'] != 'ok':
-        raise ValueError('Unsuccessful plan: ' + name)
-    components = doc['result']['components']
+    if name == 'postgres.json':
+        if doc.get('ok') is not True:
+            raise ValueError('Unsuccessful PostgreSQL plan')
+        components = doc['data']['components']
+    else:
+        if doc.get('status') != 'ok':
+            raise ValueError('Unsuccessful plan: ' + name)
+        components = doc['result']['components']
     if name.startswith('native-'):
         replicated = name == 'native-replicated.json'
         expected = 'kansoku_replicated' if replicated else 'kansoku'

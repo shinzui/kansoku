@@ -26,7 +26,8 @@ class ReleaseValidation(unittest.TestCase):
                 replicated = name == 'native-replicated.json'
                 steps = 254 if replicated else 257
                 components = [dict(name='kansoku_replicated' if replicated else 'kansoku', migrations=[dict(steps=[{}]*(steps-24))]+[dict(steps=[{}]) for _ in range(24)])]
-            raw = json.dumps(dict(status='ok', result=dict(components=components, checksumFormats=['sha256-v2']))).encode()+b'\n'
+            doc = dict(ok=True, data=dict(components=components)) if name == 'postgres.json' else dict(status='ok', result=dict(components=components, checksumFormats=['sha256-v2']))
+            raw = json.dumps(doc).encode()+b'\n'
             (self.plans/name).write_bytes(raw)
             self.report[field] = hashlib.sha256(raw).hexdigest()
         candidate = {**self.report, 'cabalToolkitRevision':'f'*40, 'nixToolkitRevision':'f'*40, 'packageOutputs':['recorded-output'], 'buildEvidence':'private build receipt'}
