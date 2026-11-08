@@ -136,3 +136,5 @@ not change image contents. TAN's staging rollout, full production UUID inventory
 storage/fsync/grant checks, retained operation inputs, fresh ledger creation and
 managed migration/event-flow rehearsal remain TAN onboarding work. No deployment
 repository or database was changed by this release.
+
+The publication evidence commit is `4a87822faa9e8fa8832f31551e245f21f9a28bb4`, distinct from the image source commit. It contains the completed plan, owner decision, final qualified artifact and registry/readback receipts. Later metadata-only bookkeeping does not rebuild or replace the image.

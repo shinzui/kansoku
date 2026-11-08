@@ -310,8 +310,9 @@
     },
     "candidateArchiveSha256": "db8197a8161e5cf52fdd1c7a57939d19590bcbd3c7886a84f311e898264f8e86",
     "candidateImageId": "sha256:783b91e441775a30189cd6d4988cfa4b5dce5fc16756546331981a112b846790",
-    "evidenceCheckpoint": "85b499b31eb20ecff5b196664fa1d166b590057d",
-    "contentComparison": "Linux amd64, source labels, filesystem layers and all three exact plan byte streams match the preserved approved candidate. Archive/configuration/local-index identities are retained separately."
+    "contentComparison": "Linux amd64, source labels, filesystem layers and all three exact plan byte streams match the preserved approved candidate. Archive/configuration/local-index identities are retained separately.",
+    "evidenceCommit": "4a87822faa9e8fa8832f31551e245f21f9a28bb4",
+    "preparedEvidenceCommit": "85b499b31eb20ecff5b196664fa1d166b590057d"
   },
   "hashSemantics": "SHA-256 of exact CLI stdout bytes, including final newline. Production nativePlanSha256 maps to replicatedNativePlanSha256; nativePlanSha256 in image report remains direct.",
   "preparationEvidence": {
