@@ -11,11 +11,15 @@ maintainer: nadeem@gmail.com
 category: Web
 build-type: Simple
 extra-source-files:
+  migrations/clickhouse-replicated/*.json
+  migrations/clickhouse-replicated/native-assertions/*.sql
+  migrations/clickhouse-replicated/steps/**/*.sql
   migrations/clickhouse/*.json
   migrations/clickhouse/native-assertions/*.sql
   migrations/clickhouse/original/*.sql
   migrations/clickhouse/original/migrate.sh
   migrations/clickhouse/steps/**/*.sql
+  test/fixtures/*.json
 
 common common
   ghc-options:
@@ -84,6 +88,7 @@ executable kansoku-ch-migrate
     Kansoku.ClickHouseMigration.Config
     Kansoku.ClickHouseMigration.Coordinator
     Kansoku.ClickHouseMigrations
+    Kansoku.ClickHouseReplicatedMigrations
 
   build-depends:
     aeson,
@@ -92,8 +97,10 @@ executable kansoku-ch-migrate
     clickhouse-migrate ==0.1.1.0,
     clickhouse-migrate-cli ==0.1.1.0,
     clickhouse-migrate-embed ==0.1.1.0,
+    containers,
     http-client,
     http-client-tls,
+    http-types,
     kansoku-core,
     optparse-applicative,
     text,
@@ -117,6 +124,7 @@ executable kansoku-ch-migrate-upgrade-proof
     Kansoku.ClickHouseMigration.Coordinator
     Kansoku.ClickHouseMigration.UpgradeProof
     Kansoku.ClickHouseMigrations
+    Kansoku.ClickHouseReplicatedMigrations
 
   build-depends:
     aeson,
@@ -128,6 +136,7 @@ executable kansoku-ch-migrate-upgrade-proof
     containers,
     http-client,
     http-client-tls,
+    http-types,
     kansoku-core,
     optparse-applicative,
     text,
@@ -156,6 +165,44 @@ test-suite clickhouse-migrations
     clickhouse-migrate ==0.1.1.0,
     clickhouse-migrate-embed ==0.1.1.0,
     clickhouse-migrate-test-support ==0.1.1.0,
+    text,
+
+  if !flag(native-migration-tests)
+    buildable: False
+
+test-suite clickhouse-migration-config
+  import: common
+  type: exitcode-stdio-1.0
+  hs-source-dirs:
+    test
+    src
+
+  main-is: ClickHouseMigrationConfig.hs
+  other-modules: Kansoku.ClickHouseMigration.Config
+  build-depends:
+    aeson,
+    base >=4.21 && <5,
+    bytestring,
+    clickhouse-migrate ==0.1.1.0,
+    containers,
+    http-client,
+    http-client-tls,
+    http-types,
+    kansoku-core,
+    text,
+
+test-suite clickhouse-replicated-migrations
+  import: common
+  type: exitcode-stdio-1.0
+  ghc-options: -threaded
+  hs-source-dirs: test
+  main-is: ClickHouseReplicatedMigrations.hs
+  build-depends:
+    aeson,
+    base >=4.21 && <5,
+    bytestring,
+    clickhouse-migrate-test-support ==0.1.1.0,
+    process,
     text,
 
   if !flag(native-migration-tests)

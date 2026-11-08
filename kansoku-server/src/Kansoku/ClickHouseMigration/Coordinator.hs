@@ -12,7 +12,7 @@ import Kansoku.ClickHouseMigration.Config qualified as Config
 identity :: Config.Config -> IO C.SessionIdentity
 identity config = do
   session <- maybe (fail "KANSOKU_CH_MIGRATION_SESSION is required") pure (Config.session config)
-  pure (C.SessionIdentity session (T.targetKeyText (Config.target config)) (T.serverIdText (Config.server config)) (T.ledgerIdText (Config.ledger config)))
+  pure (C.SessionIdentity session (T.targetKeyText (Config.target config)) (Config.sessionTarget config) (T.ledgerIdText (Config.ledger config)))
 
 withCoordinator :: Config.Config -> Maybe (Integer, Text, Value) -> (E.ExclusiveAccess -> IO () -> (Bool -> [Text] -> IO ()) -> ([Text] -> IO ()) -> IO a) -> IO a
 withCoordinator config mutation action = do

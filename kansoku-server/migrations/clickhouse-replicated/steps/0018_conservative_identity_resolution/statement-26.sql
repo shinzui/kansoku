@@ -1,0 +1,2 @@
+
+DROP TABLE analytics.identity_session_users_rebuild;

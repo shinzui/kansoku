@@ -281,3 +281,47 @@ the active migration, then completes that migration. `finalize` records completi
 resolved steps without application SQL. Neither accept nor retry automatically runs the suffix.
 Every subsequent operation needs fresh counter/position/attempt/evidence as applicable. Unknown
 requests, active native work, incompatible definitions and cleanup errors preserve the fence.
+
+
+## Replicated targets
+
+Set both `KANSOKU_CH_MIGRATION_CLUSTER` and `KANSOKU_CH_MIGRATION_REPLICA_IDS`
+(a comma-separated list of server UUIDs), and remove `KANSOKU_CH_MIGRATION_SERVER_ID`
+entirely. Empty values are present values and are refused. UUIDs are validated, whitespace
+around CSV entries is trimmed, duplicates are refused, and the complete inventory is sorted.
+Changing the cluster, topology, or any UUID refuses a retained PostgreSQL session.
+Run PostgreSQL migrations first, including `0008-clickhouse-replicated-administration`.
+Existing direct sessions retain their fences, receipts and identities across this upgrade.
+
+With neither replicated selector present, direct installations keep their original component,
+25 migrations, 257 SQL steps and checksum v1 history. Replicated installations use the separate
+`kansoku_replicated` component (25 migrations, 254 steps) and a fresh checksum v2 ledger.
+A direct ledger cannot be adopted or converted. Operators must pre-create both `analytics`
+and `kansoku_migration_ledger` as Replicated databases. Persistent tables use Replicated engine
+families without explicit Keeper paths or replica arguments; replacement version columns remain.
+The empty schema inference in 0020 uses `EMPTY AS SELECT`; its separate backfill remains.
+Memory tables exist only during the two historical native assertion groups.
+
+Offline inspection needs only the topology selectors:
+
+```bash
+env -u KANSOKU_CH_MIGRATION_SERVER_ID \
+  KANSOKU_CH_MIGRATION_CLUSTER=fixture \
+  KANSOKU_CH_MIGRATION_REPLICA_IDS=11111111-1111-4111-8111-111111111111,22222222-2222-4222-8222-222222222222 \
+  kansoku-ch-migrate plan --json
+```
+
+The maintenance begin/up/guarded verify/finish lifecycle and all existing audit, ledger UUID,
+session UUID and predecessor requirements apply. Before fresh initialization, bounded local
+observations must cover every configured UUID and verify both database engines. The endpoint
+must route fresh HTTP connections to every expected replica within 35 seconds and at most
+64 observations (each response is limited to 64 KiB). An unexpected replica or exhausted
+coverage fails closed. A matching initialized ledger permits interrupted recovery with existing
+application tables, while replica coverage and database engines remain required.
+
+Drain evidence must cover all replicas and all submitting clients, including external SQL
+schedules. Failed observations, timeouts and process disappearance do not prove drain and do
+not release the PostgreSQL fence. Retain identities and exact receipts for explicit recovery;
+never delete only analytics or replace an existing ledger UUID. Owned round-robin acceptance
+is separate from qualification of a managed endpoint, deployment permissions, and replicated
+application or data-maintenance behavior.

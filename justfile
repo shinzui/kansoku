@@ -11,11 +11,11 @@ create-database:
 
 # Build everything (library, server, tests).
 build:
-    clickhouse-migrate-embed-build --input kansoku-server migrations/clickhouse/manifest.json -- build all
+    clickhouse-migrate-embed-build --input kansoku-server migrations/clickhouse/manifest.json --input kansoku-server migrations/clickhouse-replicated/manifest.json -- build all
 
 # Run the unit tests.
 test:
-    clickhouse-migrate-embed-build --input kansoku-server migrations/clickhouse/manifest.json -- test all
+    clickhouse-migrate-embed-build --input kansoku-server migrations/clickhouse/manifest.json --input kansoku-server migrations/clickhouse-replicated/manifest.json -- test all
 
 # Regenerate the checked-in OpenAPI document from the served route types.
 openapi:
@@ -66,7 +66,7 @@ guides-check:
 ch-migrate *args:
     #!/usr/bin/env bash
     set -euo pipefail
-    clickhouse-migrate-embed-build --input kansoku-server migrations/clickhouse/manifest.json -- build kansoku-server:exe:kansoku-ch-migrate >&2
+    clickhouse-migrate-embed-build --input kansoku-server migrations/clickhouse/manifest.json --input kansoku-server migrations/clickhouse-replicated/manifest.json -- build kansoku-server:exe:kansoku-ch-migrate >&2
     migration_binary="$(cabal list-bin kansoku-server:exe:kansoku-ch-migrate)"
     exec "$migration_binary" "$@"
 
@@ -122,7 +122,7 @@ up:
 
 # Build every local component, including test executables.
 build-with-tests:
-    clickhouse-migrate-embed-build --input kansoku-server migrations/clickhouse/manifest.json -- build all --enable-tests
+    clickhouse-migrate-embed-build --input kansoku-server migrations/clickhouse/manifest.json --input kansoku-server migrations/clickhouse-replicated/manifest.json -- build all --enable-tests
 
 # Non-mutating source formatting gate.
 format-check:
@@ -196,7 +196,7 @@ fixture-isolation-acceptance: build-with-tests
 # Public-library integration proof on a digest-qualified owned native server.
 ch-migrations-component:
     python3 scripts/check_clickhouse_conversion.py
-    clickhouse-migrate-embed-build --input kansoku-server migrations/clickhouse/manifest.json -- test kansoku-server:clickhouse-migrations -fnative-migration-tests --test-show-details=direct
+    clickhouse-migrate-embed-build --input kansoku-server migrations/clickhouse/manifest.json --input kansoku-server migrations/clickhouse-replicated/manifest.json -- test kansoku-server:clickhouse-migrations -fnative-migration-tests --test-show-details=direct
 
 # Required non-skipping acceptance of the actual packaged CLI/coordinator.
 ch-migrations-acceptance:
@@ -214,3 +214,17 @@ acquisition-acceptance: build-with-tests
 # Session-scoped event metrics and adjacent native population proofs.
 session-attributes-acceptance: build-with-tests
     python3 scripts/session-attributes-acceptance.py
+
+# Required owned two-replica CLI proof on the exact Linux Altinity candidate.
+ch-migrations-replicated:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    clickhouse-migrate-embed-build --input kansoku-server migrations/clickhouse/manifest.json --input kansoku-server migrations/clickhouse-replicated/manifest.json -- build kansoku-server:exe:kansoku-ch-migrate kansoku-server:exe:kansoku-ch-migrate-upgrade-proof kansoku-server:exe:kansoku-migrate kansoku-server:test:clickhouse-replicated-migrations kansoku-core:test:kansoku-core-test -fmigration-acceptance-probe -fnative-migration-tests
+    export KANSOKU_CH_MIGRATION_BINARY="$(cabal list-bin kansoku-server:exe:kansoku-ch-migrate)"
+    export KANSOKU_CH_MIGRATION_PROOF_BINARY="$(cabal list-bin kansoku-server:exe:kansoku-ch-migrate-upgrade-proof -fmigration-acceptance-probe)"
+    export KANSOKU_PG_MIGRATION_BINARY="$(cabal list-bin kansoku-server:exe:kansoku-migrate)"
+    "$(cabal list-bin kansoku-server:test:clickhouse-replicated-migrations -fnative-migration-tests)"
+    packaged_json="$(mktemp .dev/acceptance/replicated-package.XXXXXX)"
+    nix build .#kansoku-ch-migrate --no-link --no-write-lock-file --json > "$packaged_json"
+    export KANSOKU_CH_MIGRATION_BINARY="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[0]["outputs"]["out"] + "/bin/kansoku-ch-migrate")' "$packaged_json")"
+    "$(cabal list-bin kansoku-server:test:clickhouse-replicated-migrations -fnative-migration-tests)" full

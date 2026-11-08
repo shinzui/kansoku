@@ -1,0 +1,2 @@
+
+EXCHANGE TABLES analytics.identity_session_users AND analytics.identity_session_users_rebuild;

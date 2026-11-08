@@ -1,0 +1,2764 @@
+{
+  "command": "plan",
+  "error": null,
+  "result": {
+    "checksumFormat": "sha256-v1",
+    "checksumFormats": [
+      "sha256-v1",
+      "sha256-v2"
+    ],
+    "completionPolicy": "clickhouse-migrate/local-sync-v1;async_insert=0;mutations_sync=1;alter_sync=1",
+    "components": [
+      {
+        "dependencies": [],
+        "index": 0,
+        "migrations": [
+          {
+            "checksum": "dd40f2d88935c720265e1770319e60766403650f2b0c30e991aff29684f54563",
+            "checksums": {
+              "sha256-v1": "dd40f2d88935c720265e1770319e60766403650f2b0c30e991aff29684f54563",
+              "sha256-v2": "66b8d6e7879545096cc2c570fbc8ca2c1734554150ae22c98d6ac834b50f51eb"
+            },
+            "description": "Reviewed complete source file 0001_events_raw.sql",
+            "name": "0001_events_raw",
+            "ordinal": 0,
+            "steps": [
+              {
+                "checksum": "5e3e91a531197cb50b5ce2b316f49d58d775596eeef120cf2b48707b74a5ed0e",
+                "checksums": {
+                  "sha256-v1": "5e3e91a531197cb50b5ce2b316f49d58d775596eeef120cf2b48707b74a5ed0e",
+                  "sha256-v2": "481fc338c553943e851ed86454e57c75afcfc1b05979fe8b5d1fec22908e2561"
+                },
+                "index": 0,
+                "name": "statement-01"
+              },
+              {
+                "checksum": "105ff7e83e2ee51bbfcb050f7c024665d28ab186432b488a9c684f8606deb353",
+                "checksums": {
+                  "sha256-v1": "105ff7e83e2ee51bbfcb050f7c024665d28ab186432b488a9c684f8606deb353",
+                  "sha256-v2": "f6a45f581056d8170e48da91e269bf1dd39c3f04ab83e4f36d7f715ab84c6dee"
+                },
+                "index": 1,
+                "name": "statement-02"
+              }
+            ]
+          },
+          {
+            "checksum": "ab74991ee31565ceecff9a9cdc247c07411f6be36e6cc17c3a7c189f39c76e32",
+            "checksums": {
+              "sha256-v1": "ab74991ee31565ceecff9a9cdc247c07411f6be36e6cc17c3a7c189f39c76e32",
+              "sha256-v2": "8f6af49c92f22b3dc22096e592ef7a84d005bcbe758d7a3e761b8f5ef8e81408"
+            },
+            "description": "Reviewed complete source file 0002_identity.sql",
+            "name": "0002_identity",
+            "ordinal": 1,
+            "steps": [
+              {
+                "checksum": "22531c872395f1759e4c81005fccfecf188a88c4b7057415388615d76434518f",
+                "checksums": {
+                  "sha256-v1": "22531c872395f1759e4c81005fccfecf188a88c4b7057415388615d76434518f",
+                  "sha256-v2": "e87b6be49c5ab40d281d36690fcaf9ac134d2e86c3dd85f97c5fae8eacc8691d"
+                },
+                "index": 0,
+                "name": "statement-01"
+              },
+              {
+                "checksum": "8d98d7e9297b00d07eec2ce436ba7bda96b9ccb624ea588f31cedcf1c85c7995",
+                "checksums": {
+                  "sha256-v1": "8d98d7e9297b00d07eec2ce436ba7bda96b9ccb624ea588f31cedcf1c85c7995",
+                  "sha256-v2": "408a2079cd0e3424e1a23e32ad9e9f5c6ab8fbb1d6c621fca5fb50e744a3b125"
+                },
+                "index": 1,
+                "name": "statement-02"
+              },
+              {
+                "checksum": "81e7473f920614b15a21be07ef52e202b514f2e6f92e898b2b7dd514ccc2c0f6",
+                "checksums": {
+                  "sha256-v1": "81e7473f920614b15a21be07ef52e202b514f2e6f92e898b2b7dd514ccc2c0f6",
+                  "sha256-v2": "4bac7c618c456fffec62e2f5b579cf2837e61f1140560b7e4d033cb1a34aeb2d"
+                },
+                "index": 2,
+                "name": "statement-03"
+              },
+              {
+                "checksum": "f09d4b8f55ace33933200be55a6ada5761d584f1eef6ed0367c09fdfd03e839a",
+                "checksums": {
+                  "sha256-v1": "f09d4b8f55ace33933200be55a6ada5761d584f1eef6ed0367c09fdfd03e839a",
+                  "sha256-v2": "2351a096e4ad0e7ea1cb251ba447f13b95c6ee5608550b4e0abcd5ecb5681784"
+                },
+                "index": 3,
+                "name": "statement-04"
+              }
+            ]
+          },
+          {
+            "checksum": "870babe92f2d591a44192953e534ed44e0f2e397ad07688a1b57a00de7809d8f",
+            "checksums": {
+              "sha256-v1": "870babe92f2d591a44192953e534ed44e0f2e397ad07688a1b57a00de7809d8f",
+              "sha256-v2": "2fda8bc22d2fa223861953435f9d796664413899f9b6dfcea2d134c46b26da87"
+            },
+            "description": "Reviewed complete source file 0003_rollups.sql",
+            "name": "0003_rollups",
+            "ordinal": 2,
+            "steps": [
+              {
+                "checksum": "cab6be9ad5c5e2a986c3740661845ec4b43d675e0baeb723b757a251211c07f4",
+                "checksums": {
+                  "sha256-v1": "cab6be9ad5c5e2a986c3740661845ec4b43d675e0baeb723b757a251211c07f4",
+                  "sha256-v2": "2ce629b5b0eb212c0b8015133afba358ff428a1d7fd5f3e6677c8b07a6c9d6e3"
+                },
+                "index": 0,
+                "name": "statement-01"
+              },
+              {
+                "checksum": "0735e0f699f87d09b96a73cee57a3bc1fce611f0c650718e1c264c765d380667",
+                "checksums": {
+                  "sha256-v1": "0735e0f699f87d09b96a73cee57a3bc1fce611f0c650718e1c264c765d380667",
+                  "sha256-v2": "c1d5b700e4a0c3a84ec32c7467eac471a23f61886feed6e26c6ef9ed8ddd393f"
+                },
+                "index": 1,
+                "name": "statement-02"
+              },
+              {
+                "checksum": "c46c91067bd77ca059d9a7de671c360f5b7303217359bf23a33900ff34190ed1",
+                "checksums": {
+                  "sha256-v1": "c46c91067bd77ca059d9a7de671c360f5b7303217359bf23a33900ff34190ed1",
+                  "sha256-v2": "d452b01b51ba607dc570408f240020150b6210f37968372bf302727d51f2d94c"
+                },
+                "index": 2,
+                "name": "statement-03"
+              },
+              {
+                "checksum": "a6079b90f25445b8b3147a264309ad1ce25a9fb57fed803f05844533f77176af",
+                "checksums": {
+                  "sha256-v1": "a6079b90f25445b8b3147a264309ad1ce25a9fb57fed803f05844533f77176af",
+                  "sha256-v2": "2bac17e80f0450e988a91833f8abf691a9ca27e4bf9017c8b51232d0efc4e0c0"
+                },
+                "index": 3,
+                "name": "statement-04"
+              },
+              {
+                "checksum": "4e0b874cc7de360ee0ccf5356afd68243770ae72539ee3207ecfc61a053a010a",
+                "checksums": {
+                  "sha256-v1": "4e0b874cc7de360ee0ccf5356afd68243770ae72539ee3207ecfc61a053a010a",
+                  "sha256-v2": "ff6230decc91247824c876a9db212f3af327c60f89cb7cd761b6814932e0efb8"
+                },
+                "index": 4,
+                "name": "statement-05"
+              },
+              {
+                "checksum": "0ac8a6c1d86be64bf83e73eb98e5091f02aaf158b382f28e04f3167a1098c98c",
+                "checksums": {
+                  "sha256-v1": "0ac8a6c1d86be64bf83e73eb98e5091f02aaf158b382f28e04f3167a1098c98c",
+                  "sha256-v2": "d3aae3578abe739344484fda63709387032c223a027b97a5c973afcc7787b734"
+                },
+                "index": 5,
+                "name": "statement-06"
+              },
+              {
+                "checksum": "da39e97b37882901153e57b3195a5b6cdb917d0665744aff540858945767d82b",
+                "checksums": {
+                  "sha256-v1": "da39e97b37882901153e57b3195a5b6cdb917d0665744aff540858945767d82b",
+                  "sha256-v2": "a81ef38ad30d2a0a0218217c5b5d31255cd833df646fc59cfe3394709de4ed7f"
+                },
+                "index": 6,
+                "name": "statement-07"
+              },
+              {
+                "checksum": "fe1779971716ae731d15f34c2b3210fc0ab7fe021715003e3066b3e13c7df254",
+                "checksums": {
+                  "sha256-v1": "fe1779971716ae731d15f34c2b3210fc0ab7fe021715003e3066b3e13c7df254",
+                  "sha256-v2": "2ea406da379174d423f60e613222ca2d2bb2f5bf756858f08de907889bfc3294"
+                },
+                "index": 7,
+                "name": "statement-08"
+              },
+              {
+                "checksum": "51a49abd57e104222224d82680c83c694fed5205889d3eef61012ee41853a7c8",
+                "checksums": {
+                  "sha256-v1": "51a49abd57e104222224d82680c83c694fed5205889d3eef61012ee41853a7c8",
+                  "sha256-v2": "c999ca03f6821928ba754c559103bc1eda30119c3dcf8e5875fbe03228954113"
+                },
+                "index": 8,
+                "name": "statement-09"
+              }
+            ]
+          },
+          {
+            "checksum": "54db0203b20948c989a7271e285d0807ee73785718a5ad11ffc0667ab9c2b561",
+            "checksums": {
+              "sha256-v1": "54db0203b20948c989a7271e285d0807ee73785718a5ad11ffc0667ab9c2b561",
+              "sha256-v2": "a982da5ac18a9d7c8e95491118a3f04ccbeb1d83307f10a083b4f7db79152379"
+            },
+            "description": "Reviewed complete source file 0004_events_raw_v2.sql",
+            "name": "0004_events_raw_v2",
+            "ordinal": 3,
+            "steps": [
+              {
+                "checksum": "6fbd7351ce0eace485a9e1158168b0e6c0d7f1e79d88dd9519f7eefeefd4e980",
+                "checksums": {
+                  "sha256-v1": "6fbd7351ce0eace485a9e1158168b0e6c0d7f1e79d88dd9519f7eefeefd4e980",
+                  "sha256-v2": "39032495701d0eb2fcf2edfbb928668d8a9d6142dde3e09a82491e724440dd1d"
+                },
+                "index": 0,
+                "name": "statement-01"
+              },
+              {
+                "checksum": "bc05ef4e337012b70068206884f4a19130203c8101626578a32f52f744cc6b17",
+                "checksums": {
+                  "sha256-v1": "bc05ef4e337012b70068206884f4a19130203c8101626578a32f52f744cc6b17",
+                  "sha256-v2": "c81ed5132d000eaa81fc6df21d5c60bae6f7bfacbd009121bf47bc92ddfab0c7"
+                },
+                "index": 1,
+                "name": "statement-02"
+              },
+              {
+                "checksum": "80cef90e0fd9ae5dc241663f6411f1af0a23541de56d891c369726d2a3f029a7",
+                "checksums": {
+                  "sha256-v1": "80cef90e0fd9ae5dc241663f6411f1af0a23541de56d891c369726d2a3f029a7",
+                  "sha256-v2": "450e156649b8408803a23019b2481fc807e149c2bf79bff61848e6a592ff1cc3"
+                },
+                "index": 2,
+                "name": "statement-03"
+              },
+              {
+                "checksum": "17d369c75b2c19baa5fd51d5eb3a6eee9ebeebe1594315ead98ad8b4e87a0011",
+                "checksums": {
+                  "sha256-v1": "17d369c75b2c19baa5fd51d5eb3a6eee9ebeebe1594315ead98ad8b4e87a0011",
+                  "sha256-v2": "d2241f0ec2461440b5a548fceaa56c9a3f2015196dc061b49536c7b1b4416a23"
+                },
+                "index": 3,
+                "name": "statement-04"
+              },
+              {
+                "checksum": "f3927a1640543b5ff8deff078fb48c104031ae63cf263d0a7741cb56ca98d4db",
+                "checksums": {
+                  "sha256-v1": "f3927a1640543b5ff8deff078fb48c104031ae63cf263d0a7741cb56ca98d4db",
+                  "sha256-v2": "f4889d030632d35c079f3898dfd03f986fc84fe533cd8c2395d24b0fbd4cbf5f"
+                },
+                "index": 4,
+                "name": "statement-05"
+              },
+              {
+                "checksum": "d1df670d3d13abe336f73621a71c4eba47dbe185de15bc518f6220c74d83927b",
+                "checksums": {
+                  "sha256-v1": "d1df670d3d13abe336f73621a71c4eba47dbe185de15bc518f6220c74d83927b",
+                  "sha256-v2": "a697b0a3ffb48dd934919be972c6612d894ac7ed0d311815fd61cea83d9fce96"
+                },
+                "index": 5,
+                "name": "statement-06"
+              },
+              {
+                "checksum": "ab218b8cb23ea9e7894257a924cdda55bfc1de3c304472655aa0fac8547b262d",
+                "checksums": {
+                  "sha256-v1": "ab218b8cb23ea9e7894257a924cdda55bfc1de3c304472655aa0fac8547b262d",
+                  "sha256-v2": "33a9e101e875186203fff785bb9d23fbde8326ff485d900583d0f48c8ca1cace"
+                },
+                "index": 6,
+                "name": "statement-07"
+              },
+              {
+                "checksum": "4b79971c69808482581eda3159b4ffd3786be65f16aad7232b04bb026fecc293",
+                "checksums": {
+                  "sha256-v1": "4b79971c69808482581eda3159b4ffd3786be65f16aad7232b04bb026fecc293",
+                  "sha256-v2": "3bcd3e5124ffe04ff460c604f1f3f70fed948de605b9b889d582e4135c318b80"
+                },
+                "index": 7,
+                "name": "statement-08"
+              },
+              {
+                "checksum": "aa69d868d050b0e1cd13d8ac3418a5cebbe74c43301378873c0f72f22546a205",
+                "checksums": {
+                  "sha256-v1": "aa69d868d050b0e1cd13d8ac3418a5cebbe74c43301378873c0f72f22546a205",
+                  "sha256-v2": "27a4c1225cefddb5db8eb33a9272030370b4634fb9f241f5b4a26556188f0306"
+                },
+                "index": 8,
+                "name": "statement-09"
+              },
+              {
+                "checksum": "55f030330ef8bd047f07704c17492c7ecddb49b33d37d3930fa9be018ee4b9c7",
+                "checksums": {
+                  "sha256-v1": "55f030330ef8bd047f07704c17492c7ecddb49b33d37d3930fa9be018ee4b9c7",
+                  "sha256-v2": "6400ca8c1870b4e43692bf8b7ed39b4fa6c2c7bba1f605e018f54c4a57b8ef11"
+                },
+                "index": 9,
+                "name": "statement-10"
+              },
+              {
+                "checksum": "eb7ee5a839e2d7750abc93b04cbd6e8d64edbdc333b3cbe03776c43d036967db",
+                "checksums": {
+                  "sha256-v1": "eb7ee5a839e2d7750abc93b04cbd6e8d64edbdc333b3cbe03776c43d036967db",
+                  "sha256-v2": "d3fa58c8d5fb049453148e56ca8ca9e1125e483fc7af0306132acad6201502b4"
+                },
+                "index": 10,
+                "name": "statement-11"
+              },
+              {
+                "checksum": "e2b87ae726ae47ef0bd3aaa01565dddf01dc66579fc790f1100dc7cb4247aa54",
+                "checksums": {
+                  "sha256-v1": "e2b87ae726ae47ef0bd3aaa01565dddf01dc66579fc790f1100dc7cb4247aa54",
+                  "sha256-v2": "38414c39776db2262efb0825cd42855f48d28cc56a43e2383abdab7dc1c3d5ee"
+                },
+                "index": 11,
+                "name": "statement-12"
+              },
+              {
+                "checksum": "791602eded36b3f3f2d2f8e57e4d20488ddf54bd110058fd413c50165fd95a8a",
+                "checksums": {
+                  "sha256-v1": "791602eded36b3f3f2d2f8e57e4d20488ddf54bd110058fd413c50165fd95a8a",
+                  "sha256-v2": "59d10dabc0cd2c46b390f2b1b15f25a7dd5f95527d42145cf69acf969e452544"
+                },
+                "index": 12,
+                "name": "statement-13"
+              },
+              {
+                "checksum": "c24ed501c532948195d6bf68f8fefe38eed1c87af309a19c07ea838767ace71d",
+                "checksums": {
+                  "sha256-v1": "c24ed501c532948195d6bf68f8fefe38eed1c87af309a19c07ea838767ace71d",
+                  "sha256-v2": "cfba5928e9da295873c8ed3180f4fc751436f6590b6bbfa307054c3e66791a93"
+                },
+                "index": 13,
+                "name": "statement-14"
+              },
+              {
+                "checksum": "98aca34c843cafc40252b022a1c27128f59686f30875f2ab41d8d4a1c6778d1c",
+                "checksums": {
+                  "sha256-v1": "98aca34c843cafc40252b022a1c27128f59686f30875f2ab41d8d4a1c6778d1c",
+                  "sha256-v2": "9ee13233d72198f14229535b5350dc026206b5e2f212075a9d241a3ceb6b79fd"
+                },
+                "index": 14,
+                "name": "statement-15"
+              },
+              {
+                "checksum": "2433450bf21944e5070f186cb5c9e4097338f296616972fea310cfe7e28f56ea",
+                "checksums": {
+                  "sha256-v1": "2433450bf21944e5070f186cb5c9e4097338f296616972fea310cfe7e28f56ea",
+                  "sha256-v2": "bbea89fab015c24f7858638a6f7a6dadb9c26dc2eb2243d238b5305609d6196f"
+                },
+                "index": 15,
+                "name": "statement-16"
+              }
+            ]
+          },
+          {
+            "checksum": "ae891139aae1eff8b47a50f7683806c0692ff89e565a10706b07a7034dc1912b",
+            "checksums": {
+              "sha256-v1": "ae891139aae1eff8b47a50f7683806c0692ff89e565a10706b07a7034dc1912b",
+              "sha256-v2": "98fe36bbd8e451e01a0aaa7fd7472f9a0ce0b4411e28c81bbedf520cf5ac45eb"
+            },
+            "description": "Reviewed complete source file 0005_final_free_resolution.sql",
+            "name": "0005_final_free_resolution",
+            "ordinal": 4,
+            "steps": [
+              {
+                "checksum": "02cd760b93c30cce2225238a4897b650baf751a7f3a22344ad7b6fa1dcbacc30",
+                "checksums": {
+                  "sha256-v1": "02cd760b93c30cce2225238a4897b650baf751a7f3a22344ad7b6fa1dcbacc30",
+                  "sha256-v2": "695076a671bf6c2a3dfd65a83dddc07358ba9b2010f63212368dfb9fad224038"
+                },
+                "index": 0,
+                "name": "statement-01"
+              },
+              {
+                "checksum": "ab80cf90c78387f5137179872ffc5877d62c06fc7a9b51668aeb516b1e457a7a",
+                "checksums": {
+                  "sha256-v1": "ab80cf90c78387f5137179872ffc5877d62c06fc7a9b51668aeb516b1e457a7a",
+                  "sha256-v2": "fd15a0f0e099cc586e89ced4664f6499a3539b63a44085de25fe90eeb02880dd"
+                },
+                "index": 1,
+                "name": "statement-02"
+              },
+              {
+                "checksum": "6b3b21c658c72e53fba2ab64d4f021608dbbaeccb1e650ba8f7572e388cc7c0f",
+                "checksums": {
+                  "sha256-v1": "6b3b21c658c72e53fba2ab64d4f021608dbbaeccb1e650ba8f7572e388cc7c0f",
+                  "sha256-v2": "20373dcece10e311e58106ce399efa25a6125e7b86f3adfc13622f864d9e206d"
+                },
+                "index": 2,
+                "name": "statement-03"
+              },
+              {
+                "checksum": "51d2be483c48d69a6c89c322e8cc4950b58ef1d09891422b54597932a34bb944",
+                "checksums": {
+                  "sha256-v1": "51d2be483c48d69a6c89c322e8cc4950b58ef1d09891422b54597932a34bb944",
+                  "sha256-v2": "45032432b767a78733de6f6bce8de3492a799ffc24f6dfa03fd614aa1262b213"
+                },
+                "index": 3,
+                "name": "statement-04"
+              },
+              {
+                "checksum": "fae6819df66098c6ab675a5ab6bb93cafea2af7730e0c7b35e8e8072c44d929d",
+                "checksums": {
+                  "sha256-v1": "fae6819df66098c6ab675a5ab6bb93cafea2af7730e0c7b35e8e8072c44d929d",
+                  "sha256-v2": "ed4b79a9bc23b7ef53a22fc029a338c016fc4ada11305e5b484756b1b23558f8"
+                },
+                "index": 4,
+                "name": "statement-05"
+              },
+              {
+                "checksum": "01439c789ae0762a22da90ccc05e0f306da68b06787d568f028231473413f9fd",
+                "checksums": {
+                  "sha256-v1": "01439c789ae0762a22da90ccc05e0f306da68b06787d568f028231473413f9fd",
+                  "sha256-v2": "b4d8b72a657004a5c646de6e2cb95e720c8c517b99e269e393879d438890f419"
+                },
+                "index": 5,
+                "name": "statement-06"
+              },
+              {
+                "checksum": "f39201c492367bff91720eded7d84219cc789f3e6d732ab1fc9fc8f218a010fa",
+                "checksums": {
+                  "sha256-v1": "f39201c492367bff91720eded7d84219cc789f3e6d732ab1fc9fc8f218a010fa",
+                  "sha256-v2": "fec84dd63562cb80a5d4ad2d5973da3c84a3b6e8d9a61d6a5910a86e0317da3a"
+                },
+                "index": 6,
+                "name": "statement-07"
+              },
+              {
+                "checksum": "1dda256eb51caf42caa2196c08bf90e2cce78ada309d0d3c27a51225b5d70fc5",
+                "checksums": {
+                  "sha256-v1": "1dda256eb51caf42caa2196c08bf90e2cce78ada309d0d3c27a51225b5d70fc5",
+                  "sha256-v2": "42c0cda01caab249ce1417feb61283e70e99ef58ea689784caae094d55b21e54"
+                },
+                "index": 7,
+                "name": "statement-08"
+              },
+              {
+                "checksum": "e3113718bed510b995db7bcaa0c87e448858d05ed5e72f2f715378df1e219360",
+                "checksums": {
+                  "sha256-v1": "e3113718bed510b995db7bcaa0c87e448858d05ed5e72f2f715378df1e219360",
+                  "sha256-v2": "694263697de2838ff71b5a4b4badb1f267341b28bc1120f256b3eeff9133a4b1"
+                },
+                "index": 8,
+                "name": "statement-09"
+              },
+              {
+                "checksum": "9e00e2d5b16ffa9263f350c96bd8afc94a03d058c81954576b641e58e6566f3f",
+                "checksums": {
+                  "sha256-v1": "9e00e2d5b16ffa9263f350c96bd8afc94a03d058c81954576b641e58e6566f3f",
+                  "sha256-v2": "51566fa73dc6aae52a750e6d213b4c291bb4c19229f04b500df4c4b1eaa91be1"
+                },
+                "index": 9,
+                "name": "statement-10"
+              }
+            ]
+          },
+          {
+            "checksum": "ed6b5a0ed7659d70de011f238f52160196294193fb1b6c26b02a0efcf0efaf9d",
+            "checksums": {
+              "sha256-v1": "ed6b5a0ed7659d70de011f238f52160196294193fb1b6c26b02a0efcf0efaf9d",
+              "sha256-v2": "07f10dc8f1090c797b2d51119a1f8b9690c64a4752597e751bdb9fc47a984f4b"
+            },
+            "description": "Reviewed complete source file 0006_rollups_v2.sql",
+            "name": "0006_rollups_v2",
+            "ordinal": 5,
+            "steps": [
+              {
+                "checksum": "8e81ac831bab5776e0b8a700e7ebcef8c4ada80772362196e1d60c0839e1bca3",
+                "checksums": {
+                  "sha256-v1": "8e81ac831bab5776e0b8a700e7ebcef8c4ada80772362196e1d60c0839e1bca3",
+                  "sha256-v2": "98ec216017142906aaf39856c501feba65fc5aa3472a93ce3621f4aad1510bc6"
+                },
+                "index": 0,
+                "name": "statement-01"
+              },
+              {
+                "checksum": "c4becd3abbfb09430bee877f158470169154764e73569c6d7aedfd04539a2ebb",
+                "checksums": {
+                  "sha256-v1": "c4becd3abbfb09430bee877f158470169154764e73569c6d7aedfd04539a2ebb",
+                  "sha256-v2": "de04d2dc26d2e19cfaefdc1120419b56c2af51cea294e238bc5497af282b83fe"
+                },
+                "index": 1,
+                "name": "statement-02"
+              },
+              {
+                "checksum": "42d20f75369223d2a523b507cf05bf1a93498b4dce2e560cdf0b884cc7b408d9",
+                "checksums": {
+                  "sha256-v1": "42d20f75369223d2a523b507cf05bf1a93498b4dce2e560cdf0b884cc7b408d9",
+                  "sha256-v2": "0360334899a5ee143ac671a696a57a811f3f91e28347097131a54be2cbf0b8a5"
+                },
+                "index": 2,
+                "name": "statement-03"
+              },
+              {
+                "checksum": "e4cab576fab2558c91f4691d5aaa500cb0d070344fe8378e600538075e9dd5aa",
+                "checksums": {
+                  "sha256-v1": "e4cab576fab2558c91f4691d5aaa500cb0d070344fe8378e600538075e9dd5aa",
+                  "sha256-v2": "2a9b65ca2241bdc5a4898b6d275695412b8622f1d98615b1d79e5127a323bac3"
+                },
+                "index": 3,
+                "name": "statement-04"
+              },
+              {
+                "checksum": "94e0ddbf5495225539ebf65f16ad00e426dbaebc1e12a1ff395197386039e46c",
+                "checksums": {
+                  "sha256-v1": "94e0ddbf5495225539ebf65f16ad00e426dbaebc1e12a1ff395197386039e46c",
+                  "sha256-v2": "5b9a1c5d4b3fe87cdb3f74bc619a0b102da9fa488c30b8c49e5dd67a2b26dcb1"
+                },
+                "index": 4,
+                "name": "statement-05"
+              },
+              {
+                "checksum": "0615a397c4f917c7e78e2c9267c78ce72488fa524dc0c0ab853d8df1953a4011",
+                "checksums": {
+                  "sha256-v1": "0615a397c4f917c7e78e2c9267c78ce72488fa524dc0c0ab853d8df1953a4011",
+                  "sha256-v2": "6a594eddc8a8a6b3bafcd13037fd598775244dcf4ef7d1377339fb3e70b3d1f2"
+                },
+                "index": 5,
+                "name": "statement-06"
+              },
+              {
+                "checksum": "8ccb4856573af926e86a0b3040f1924f8e00d3c3a47a55f9397e24273f9e2656",
+                "checksums": {
+                  "sha256-v1": "8ccb4856573af926e86a0b3040f1924f8e00d3c3a47a55f9397e24273f9e2656",
+                  "sha256-v2": "1d3b0596d416de88997cb4839eb7543a7addf96893fd70b76ed77ec4826ee290"
+                },
+                "index": 6,
+                "name": "statement-07"
+              },
+              {
+                "checksum": "5268e2758fe555c58833af5185c3514cbe9e4f96cd9a051611ae4f705cf065d8",
+                "checksums": {
+                  "sha256-v1": "5268e2758fe555c58833af5185c3514cbe9e4f96cd9a051611ae4f705cf065d8",
+                  "sha256-v2": "7a6c0071e3e1539f018a9f1662d78b83edca3ba287a1362c33e184e385a1a4a6"
+                },
+                "index": 7,
+                "name": "statement-08"
+              },
+              {
+                "checksum": "2133aa329db273ebf0153de7ba760675b0824a4e694ec12b4e227d3222758276",
+                "checksums": {
+                  "sha256-v1": "2133aa329db273ebf0153de7ba760675b0824a4e694ec12b4e227d3222758276",
+                  "sha256-v2": "626ad983f784c2413e368963fb4cd890e4087a0e031b00ef9c6669f48b08148e"
+                },
+                "index": 8,
+                "name": "statement-09"
+              },
+              {
+                "checksum": "bbc968b559503a07e35bfbcd06dea6a2af7857e8672ba4ea1feeab5bdc2e9485",
+                "checksums": {
+                  "sha256-v1": "bbc968b559503a07e35bfbcd06dea6a2af7857e8672ba4ea1feeab5bdc2e9485",
+                  "sha256-v2": "2cdbbafc2a91f3ee27dc6cbc1edab92a4c4ad59ceca08052460972a42adf5844"
+                },
+                "index": 9,
+                "name": "statement-10"
+              },
+              {
+                "checksum": "c3c8a28527722aceb382a6b94118b19d70055d76b889fb8b581d3d0ba32e1a1f",
+                "checksums": {
+                  "sha256-v1": "c3c8a28527722aceb382a6b94118b19d70055d76b889fb8b581d3d0ba32e1a1f",
+                  "sha256-v2": "84e9426aca525d9dea4f03617f531d3cc45ef2deb0913a2600401b287b900f6d"
+                },
+                "index": 10,
+                "name": "statement-11"
+              },
+              {
+                "checksum": "ab9b0614167545b6e4f3286ec117669178ebe998b7f3ebde0b934da95a32718f",
+                "checksums": {
+                  "sha256-v1": "ab9b0614167545b6e4f3286ec117669178ebe998b7f3ebde0b934da95a32718f",
+                  "sha256-v2": "87ab961a8e13a3717d635c938558a64decaa2a4d9a8d8bd4977492a9d836d57a"
+                },
+                "index": 11,
+                "name": "statement-12"
+              },
+              {
+                "checksum": "b14a6af0a5fc78c2d7fede8b880f401c546627e5a271053cff8df05dcea213ab",
+                "checksums": {
+                  "sha256-v1": "b14a6af0a5fc78c2d7fede8b880f401c546627e5a271053cff8df05dcea213ab",
+                  "sha256-v2": "e69a5e6f0fb755152fb3b1dcfbdd662a0be70133f8e6ba7e52a78558c431dc1a"
+                },
+                "index": 12,
+                "name": "statement-13"
+              },
+              {
+                "checksum": "cdaa42b4b66996ae092414406f0ed3da1f3c6f7f6dee34221cfc8e7d7c9f3599",
+                "checksums": {
+                  "sha256-v1": "cdaa42b4b66996ae092414406f0ed3da1f3c6f7f6dee34221cfc8e7d7c9f3599",
+                  "sha256-v2": "abd7e4577d53a822291a221ab59919101b20d46548a7d7bbaf380dd597826a34"
+                },
+                "index": 13,
+                "name": "statement-14"
+              },
+              {
+                "checksum": "2ebdc61149723f9dcd0a41b760eb52f8da17ab8579036bc639e4134503ba3f3e",
+                "checksums": {
+                  "sha256-v1": "2ebdc61149723f9dcd0a41b760eb52f8da17ab8579036bc639e4134503ba3f3e",
+                  "sha256-v2": "ed59ee567532f9476db7ce1e6b4682bc6204453f0f4f204f9d7cc0cec7028bd8"
+                },
+                "index": 14,
+                "name": "statement-15"
+              },
+              {
+                "checksum": "4c6470f6e6d2f62368e2c57d6800f763cf53aae2b53aa7bdd154bc89cf7cf1dc",
+                "checksums": {
+                  "sha256-v1": "4c6470f6e6d2f62368e2c57d6800f763cf53aae2b53aa7bdd154bc89cf7cf1dc",
+                  "sha256-v2": "61fa453ee5a3f9abc4bc20a15e9bdd09d65e39c2f33a63329f4b4fe96d94631d"
+                },
+                "index": 15,
+                "name": "statement-16"
+              },
+              {
+                "checksum": "631833d0bbf74f6a8c9516b600ccfea63ed9cdad65ff2554fb16abc0f0d7acc1",
+                "checksums": {
+                  "sha256-v1": "631833d0bbf74f6a8c9516b600ccfea63ed9cdad65ff2554fb16abc0f0d7acc1",
+                  "sha256-v2": "00077fcc174a6d69ef232ffbac6f2798aab192123e1a41fcef207d9a9c177924"
+                },
+                "index": 16,
+                "name": "statement-17"
+              },
+              {
+                "checksum": "d1188a34e282cef482495bfe00dea05e780b80b78f93494109f462827953d1d2",
+                "checksums": {
+                  "sha256-v1": "d1188a34e282cef482495bfe00dea05e780b80b78f93494109f462827953d1d2",
+                  "sha256-v2": "8b4e919ea10985113cc37d54b1da1afef858b3523e8ea04e1ff881cb95b5af6b"
+                },
+                "index": 17,
+                "name": "statement-18"
+              },
+              {
+                "checksum": "feaaff36ced2a5b960886560ce2c9b980f7bc815081ec1c28a0f9d6c7d298429",
+                "checksums": {
+                  "sha256-v1": "feaaff36ced2a5b960886560ce2c9b980f7bc815081ec1c28a0f9d6c7d298429",
+                  "sha256-v2": "b5fc11776e603d0bf69c666c5a7cc0a32d0a150fc3ddf65c46b939e53425e0e5"
+                },
+                "index": 18,
+                "name": "statement-19"
+              },
+              {
+                "checksum": "16b06659489deb9af6f82c169c8219656127de019a512c4ab0431ec0e18d7bf8",
+                "checksums": {
+                  "sha256-v1": "16b06659489deb9af6f82c169c8219656127de019a512c4ab0431ec0e18d7bf8",
+                  "sha256-v2": "0f471438c730179ce17425a99f35b4d94e81dc2738e190bbc3a124d6e6413ef9"
+                },
+                "index": 19,
+                "name": "statement-20"
+              }
+            ]
+          },
+          {
+            "checksum": "e498a854e7355a48fc59d64196b3c7fd6569f8942abe940a7a141e0b66eeff4f",
+            "checksums": {
+              "sha256-v1": "e498a854e7355a48fc59d64196b3c7fd6569f8942abe940a7a141e0b66eeff4f",
+              "sha256-v2": "c5da116e222e755c1995f56d4eefa71c29040c60111db1bbe90e286dfaac7f45"
+            },
+            "description": "Reviewed complete source file 0007_drop_events_raw_v1.sql",
+            "name": "0007_drop_events_raw_v1",
+            "ordinal": 6,
+            "steps": [
+              {
+                "checksum": "4982b58e67c2288114b5e21cdd22a597d777a12b202fc177e9c889ef04e608ce",
+                "checksums": {
+                  "sha256-v1": "4982b58e67c2288114b5e21cdd22a597d777a12b202fc177e9c889ef04e608ce",
+                  "sha256-v2": "ea1b49007139fa2659f19a1359056f046a7518b1f553d0e04d11b4197779f1f6"
+                },
+                "index": 0,
+                "name": "statement-01"
+              }
+            ]
+          },
+          {
+            "checksum": "26d327283acec5f326b451ae299f512a4414998a8761dcf4d09f0984ac9fee4a",
+            "checksums": {
+              "sha256-v1": "26d327283acec5f326b451ae299f512a4414998a8761dcf4d09f0984ac9fee4a",
+              "sha256-v2": "7fd79fbbe0b89df440453f7eacbe500f05aa7c486e3ddb5d10395a5a4fe5d4ae"
+            },
+            "description": "Reviewed complete source file 0008_account_scoped_metrics.sql",
+            "name": "0008_account_scoped_metrics",
+            "ordinal": 7,
+            "steps": [
+              {
+                "checksum": "4ead15ab389c5c3e759b682c6e7335fbcd9f355ee1ba3321c9ae626f2b68cd69",
+                "checksums": {
+                  "sha256-v1": "4ead15ab389c5c3e759b682c6e7335fbcd9f355ee1ba3321c9ae626f2b68cd69",
+                  "sha256-v2": "726216f994e1c9bfd1fe1747d0baa4b050280fbfcac818852aa61ce9df58e149"
+                },
+                "index": 0,
+                "name": "statement-01"
+              },
+              {
+                "checksum": "1a754684be52053fc3201eac38fd88afff2d84943d8dc16a7a8d7b04c1c8827c",
+                "checksums": {
+                  "sha256-v1": "1a754684be52053fc3201eac38fd88afff2d84943d8dc16a7a8d7b04c1c8827c",
+                  "sha256-v2": "98f4aec0ae8439d9e1a3d7c624f86ebe5defd8bb5958d60e247751d01788f2b5"
+                },
+                "index": 1,
+                "name": "statement-02"
+              },
+              {
+                "checksum": "57b753f92f2767aff30e697018f22b9006b65bbe7bdfdd170d8fa1a3336c4ffa",
+                "checksums": {
+                  "sha256-v1": "57b753f92f2767aff30e697018f22b9006b65bbe7bdfdd170d8fa1a3336c4ffa",
+                  "sha256-v2": "c14a6f7161c08c0b3a0d25d7aacb3a0638485f6b114210ec4a36dc1da7cb7534"
+                },
+                "index": 2,
+                "name": "statement-03"
+              },
+              {
+                "checksum": "cba72ee0cd413aedce5da039e1994b79d76d92bbd0fd51c207680ebcc1848f23",
+                "checksums": {
+                  "sha256-v1": "cba72ee0cd413aedce5da039e1994b79d76d92bbd0fd51c207680ebcc1848f23",
+                  "sha256-v2": "a011d4b64b17bd2dcae109d7f0f3e3b567a8e62f5ed81d349a84a0111addb140"
+                },
+                "index": 3,
+                "name": "statement-04"
+              },
+              {
+                "checksum": "93a5b99d23ff7842b8b86a48652b9566af7ed967c8df89741fce433df2847c54",
+                "checksums": {
+                  "sha256-v1": "93a5b99d23ff7842b8b86a48652b9566af7ed967c8df89741fce433df2847c54",
+                  "sha256-v2": "dc53b9c63fb43efbebcf6ff0a52b701980750997e4c297a7926eb9c6e40f3d24"
+                },
+                "index": 4,
+                "name": "statement-05"
+              },
+              {
+                "checksum": "62372e9a2490bf9b94d12128262c6a994f84c4b6b63c42011d17eeddd98fc5ce",
+                "checksums": {
+                  "sha256-v1": "62372e9a2490bf9b94d12128262c6a994f84c4b6b63c42011d17eeddd98fc5ce",
+                  "sha256-v2": "f1a206a6a81cc5ca34f609640b34df18347c165a3f20a412b4bd6cf5c14f3990"
+                },
+                "index": 5,
+                "name": "statement-06"
+              },
+              {
+                "checksum": "16b630309991a5adc314b729f18e1d9782f32841cfa8c722d335040ee780731d",
+                "checksums": {
+                  "sha256-v1": "16b630309991a5adc314b729f18e1d9782f32841cfa8c722d335040ee780731d",
+                  "sha256-v2": "bedaecc36d073f41cd1e2de47fddfd2be0e3720a9b09309ed67ae6e9e5a753a2"
+                },
+                "index": 6,
+                "name": "statement-07"
+              },
+              {
+                "checksum": "0718420d1e118cf911426deaaa9ff030acf450ee1213603377cb7f6a476fb725",
+                "checksums": {
+                  "sha256-v1": "0718420d1e118cf911426deaaa9ff030acf450ee1213603377cb7f6a476fb725",
+                  "sha256-v2": "54e678f2b8124fc0c83748cd8e56e509ceb24b815ab3bf0f6f2c11499100e76d"
+                },
+                "index": 7,
+                "name": "statement-08"
+              },
+              {
+                "checksum": "18da05ac3dca5ffef2d9279895c9fa19b3651a0d21a164214e9bf70b2dea90c3",
+                "checksums": {
+                  "sha256-v1": "18da05ac3dca5ffef2d9279895c9fa19b3651a0d21a164214e9bf70b2dea90c3",
+                  "sha256-v2": "e4ec58617895cdabdf86b85a483aacd8a00021507afd3236fb4a951cc1474d50"
+                },
+                "index": 8,
+                "name": "statement-09"
+              },
+              {
+                "checksum": "278f9831b849cf321f1a36bc7ac969e39ec402bf8762000320346d77056bc938",
+                "checksums": {
+                  "sha256-v1": "278f9831b849cf321f1a36bc7ac969e39ec402bf8762000320346d77056bc938",
+                  "sha256-v2": "c27753022a372ad05106c58a45352e804cfbee7a5074a071f41136db85a83329"
+                },
+                "index": 9,
+                "name": "statement-10"
+              },
+              {
+                "checksum": "3235eb9c0e1f14184440b77006e23744af56257d2f8246b919b9a2e62880820d",
+                "checksums": {
+                  "sha256-v1": "3235eb9c0e1f14184440b77006e23744af56257d2f8246b919b9a2e62880820d",
+                  "sha256-v2": "700e7771765d2ae81944beae1018bbf346af7a6b258a048d0004804e67449628"
+                },
+                "index": 10,
+                "name": "statement-11"
+              },
+              {
+                "checksum": "4545a87550a894fd872851d5db45aebd770e64d4e35f0b817fd5df35fc092924",
+                "checksums": {
+                  "sha256-v1": "4545a87550a894fd872851d5db45aebd770e64d4e35f0b817fd5df35fc092924",
+                  "sha256-v2": "4d78c8b5da3efea4f34a21f61e0854027414766f0c9a99e3715ba13985bd8000"
+                },
+                "index": 11,
+                "name": "statement-12"
+              },
+              {
+                "checksum": "08d6c9e12042cf21a0b010cb920019f2729a58aa0fb7cf92853c2d567d8f7385",
+                "checksums": {
+                  "sha256-v1": "08d6c9e12042cf21a0b010cb920019f2729a58aa0fb7cf92853c2d567d8f7385",
+                  "sha256-v2": "e4431640f0c437a36870d99be082810a9b5f8df12e02790225f54336be7fb693"
+                },
+                "index": 12,
+                "name": "statement-13"
+              },
+              {
+                "checksum": "5b67480020774576aff20ef1ad1cc1205ef412e598cdce212a49bc3ebf11df94",
+                "checksums": {
+                  "sha256-v1": "5b67480020774576aff20ef1ad1cc1205ef412e598cdce212a49bc3ebf11df94",
+                  "sha256-v2": "715e4c6d1cbaf6913e8b992baf0756282e18f13716551c6f63046fa708308954"
+                },
+                "index": 13,
+                "name": "statement-14"
+              },
+              {
+                "checksum": "0f20ba82270fe47cb5f320f581e5e8e7535b7b5caf2a9f2ffefd2487cc10e9cc",
+                "checksums": {
+                  "sha256-v1": "0f20ba82270fe47cb5f320f581e5e8e7535b7b5caf2a9f2ffefd2487cc10e9cc",
+                  "sha256-v2": "5e010042b44b13d553521bad43f488db916d36719d01059fda9aff1e746dad12"
+                },
+                "index": 14,
+                "name": "statement-15"
+              },
+              {
+                "checksum": "0b5c2665b84eeb15439943ea6f696c2f9f096a408e8946701bda5937d49cd68c",
+                "checksums": {
+                  "sha256-v1": "0b5c2665b84eeb15439943ea6f696c2f9f096a408e8946701bda5937d49cd68c",
+                  "sha256-v2": "7e8473bc37aba5d507227fae1b58d7158b148532b8563cb7f451523d55b8a273"
+                },
+                "index": 15,
+                "name": "statement-16"
+              },
+              {
+                "checksum": "366d8afaadf76e8edc341ce32d6c84355c2ea157e8e6b380909191ee5b47c68b",
+                "checksums": {
+                  "sha256-v1": "366d8afaadf76e8edc341ce32d6c84355c2ea157e8e6b380909191ee5b47c68b",
+                  "sha256-v2": "53ad1879163478889060669ec89d7eba43e762c69d3f6a6edab59378504f1b28"
+                },
+                "index": 16,
+                "name": "statement-17"
+              },
+              {
+                "checksum": "bafeeaf5f851e6f6df8d9718e4a2a560b228639f1e877e5c0ba35eab48fffced",
+                "checksums": {
+                  "sha256-v1": "bafeeaf5f851e6f6df8d9718e4a2a560b228639f1e877e5c0ba35eab48fffced",
+                  "sha256-v2": "c126bc95e0d46611ea9c98656538c843a62deff8587895e9c2804be42b31a06c"
+                },
+                "index": 17,
+                "name": "statement-18"
+              },
+              {
+                "checksum": "3f2f6109b812c000e8cf70ffb701e0f0eab0a114019703b9f28c9e78a93c5dac",
+                "checksums": {
+                  "sha256-v1": "3f2f6109b812c000e8cf70ffb701e0f0eab0a114019703b9f28c9e78a93c5dac",
+                  "sha256-v2": "bf6f6473111ba7ca89240eb0b5d67049b74304e86bc19f0d0480b33f79f62604"
+                },
+                "index": 18,
+                "name": "statement-19"
+              },
+              {
+                "checksum": "a5326546c49f5fde922adfa28e87d1366b567369576850698c57f490314abb81",
+                "checksums": {
+                  "sha256-v1": "a5326546c49f5fde922adfa28e87d1366b567369576850698c57f490314abb81",
+                  "sha256-v2": "2ec0828e780499a931f403243603b4025aa202694937840e67d177aae1e57887"
+                },
+                "index": 19,
+                "name": "statement-20"
+              },
+              {
+                "checksum": "090280fed26632f2f2a58e56427fced7448223d80a1298acfc0367507e943d1b",
+                "checksums": {
+                  "sha256-v1": "090280fed26632f2f2a58e56427fced7448223d80a1298acfc0367507e943d1b",
+                  "sha256-v2": "4c43897ea985a57a4948d0e70c2c0d990af854606219d90543ff6efed22bbed7"
+                },
+                "index": 20,
+                "name": "statement-21"
+              },
+              {
+                "checksum": "ad2f93fc52b97b6a73a177b9f062a70983374f272bf9eeacbd70f45decded2a1",
+                "checksums": {
+                  "sha256-v1": "ad2f93fc52b97b6a73a177b9f062a70983374f272bf9eeacbd70f45decded2a1",
+                  "sha256-v2": "d1f6574ac39090ec402779eb8365acaecfa65afce039be42bc6e10863ce69bcf"
+                },
+                "index": 21,
+                "name": "statement-22"
+              }
+            ]
+          },
+          {
+            "checksum": "5cc95d5c4af7179298f5de60e05a3387261a1bf2b86294859bbc9ffaaaa577dc",
+            "checksums": {
+              "sha256-v1": "5cc95d5c4af7179298f5de60e05a3387261a1bf2b86294859bbc9ffaaaa577dc",
+              "sha256-v2": "b6c24cdfe8993cc36a21b3d0b931def3f979abd3b143d33796ef8da7a7957911"
+            },
+            "description": "Reviewed complete source file 0009_typed_properties.sql",
+            "name": "0009_typed_properties",
+            "ordinal": 8,
+            "steps": [
+              {
+                "checksum": "d016ac1486ae23f18b2f406659dc8a4cf55fbabe12006f6b4925deae020e252e",
+                "checksums": {
+                  "sha256-v1": "d016ac1486ae23f18b2f406659dc8a4cf55fbabe12006f6b4925deae020e252e",
+                  "sha256-v2": "2202993a72e9b15ce45bf0ad26629cd581ee93a4afba31d83d9ed0cbd8335251"
+                },
+                "index": 0,
+                "name": "statement-01"
+              },
+              {
+                "checksum": "f4575e210374adf600df5e6bc9b869abf8b0d54bb4756a83953650c147d06512",
+                "checksums": {
+                  "sha256-v1": "f4575e210374adf600df5e6bc9b869abf8b0d54bb4756a83953650c147d06512",
+                  "sha256-v2": "bdd203760e5602f40f49087d3c60adf158fd5cdd71118515be412d41ebd71abb"
+                },
+                "index": 1,
+                "name": "statement-02"
+              }
+            ]
+          },
+          {
+            "checksum": "c398c145aaf1e64919447c16fbff0fc48dc8e8f2eb8ec3b8230db6f035968d6d",
+            "checksums": {
+              "sha256-v1": "c398c145aaf1e64919447c16fbff0fc48dc8e8f2eb8ec3b8230db6f035968d6d",
+              "sha256-v2": "78e9f527c77220e5a191cdffbc4519116907a3e2e99aa819633a16aa9b96e279"
+            },
+            "description": "Reviewed complete source file 0010_resolved_event_properties.sql",
+            "name": "0010_resolved_event_properties",
+            "ordinal": 9,
+            "steps": [
+              {
+                "checksum": "0104e21794641f423db7e7b4a44f39a0ece37983829a9d50f3a9a1a45ae55dc7",
+                "checksums": {
+                  "sha256-v1": "0104e21794641f423db7e7b4a44f39a0ece37983829a9d50f3a9a1a45ae55dc7",
+                  "sha256-v2": "ac6582ebfbda76260a8a620c9c1aba4cd68617054d702d02a161ff54143cf861"
+                },
+                "index": 0,
+                "name": "statement-01"
+              },
+              {
+                "checksum": "cae31b812ee5ae3feeeac8f76af9d33caec8912574bea04b68df40dc00d27d53",
+                "checksums": {
+                  "sha256-v1": "cae31b812ee5ae3feeeac8f76af9d33caec8912574bea04b68df40dc00d27d53",
+                  "sha256-v2": "aeaf96b3f51cfef08065b8430f0b414a1e143106ceb01cefc505d6b632b98c64"
+                },
+                "index": 1,
+                "name": "statement-02"
+              }
+            ]
+          },
+          {
+            "checksum": "3de5b7ffa1e0ef0caf13b35346cad991b7ff71f131571faec2c38ea0f4f5a57f",
+            "checksums": {
+              "sha256-v1": "3de5b7ffa1e0ef0caf13b35346cad991b7ff71f131571faec2c38ea0f4f5a57f",
+              "sha256-v2": "c52a5af190cc18b03dcfa04f86a3d01301d755cd70c9a021b3f65531cee04d45"
+            },
+            "description": "Reviewed complete source file 0011_events_raw_identifiers.sql",
+            "name": "0011_events_raw_identifiers",
+            "ordinal": 10,
+            "steps": [
+              {
+                "checksum": "5349a782e9d6417e0ea4e2066c5b105b84c07eb5c04168fcab314720c6830024",
+                "checksums": {
+                  "sha256-v1": "5349a782e9d6417e0ea4e2066c5b105b84c07eb5c04168fcab314720c6830024",
+                  "sha256-v2": "e0b4708a93f82990d943181b98e1f41757293aab510ae203b8f0855e87a72419"
+                },
+                "index": 0,
+                "name": "statement-01"
+              }
+            ]
+          },
+          {
+            "checksum": "c2517b22c4e0093a69bff4406c6ad719c205a663f2b567a4896428542319db43",
+            "checksums": {
+              "sha256-v1": "c2517b22c4e0093a69bff4406c6ad719c205a663f2b567a4896428542319db43",
+              "sha256-v2": "fa2e99ab480172e7b03475ec73e1fe0d84fee4bd5a7fec78454698df88d24f01"
+            },
+            "description": "Reviewed complete source file 0012_identity_signals.sql",
+            "name": "0012_identity_signals",
+            "ordinal": 11,
+            "steps": [
+              {
+                "checksum": "7a20a33ff3030394e2aeef603b9730c84cccbf687ef97229e294d253360f2f0c",
+                "checksums": {
+                  "sha256-v1": "7a20a33ff3030394e2aeef603b9730c84cccbf687ef97229e294d253360f2f0c",
+                  "sha256-v2": "1c5fbdc14c96240433cfd7630f9f7fd1dfa84d95d3cb8de2c939c23359cbaa93"
+                },
+                "index": 0,
+                "name": "statement-01"
+              },
+              {
+                "checksum": "5ffad221701e1badfff7669cddd7bb67eb4c9d9f5a42ee7c90c84cb5e248338d",
+                "checksums": {
+                  "sha256-v1": "5ffad221701e1badfff7669cddd7bb67eb4c9d9f5a42ee7c90c84cb5e248338d",
+                  "sha256-v2": "ce65cbf130aa3e2604aa07910e2484f9d7cddb3e5a3a11f38953229e5792a834"
+                },
+                "index": 1,
+                "name": "statement-02"
+              },
+              {
+                "checksum": "586b23711b5cb99a4324a6f5bd326cb229e73c4d7053a406fa244305ca2e0585",
+                "checksums": {
+                  "sha256-v1": "586b23711b5cb99a4324a6f5bd326cb229e73c4d7053a406fa244305ca2e0585",
+                  "sha256-v2": "0b9af4c560d4298b64a8dc624d1e8af65c259be5c7ea18ffa909c58a005b2a59"
+                },
+                "index": 2,
+                "name": "statement-03"
+              },
+              {
+                "checksum": "bc77c53127f74207df61de5a7738e995e9744154da2ae94cc2256448392dfc6d",
+                "checksums": {
+                  "sha256-v1": "bc77c53127f74207df61de5a7738e995e9744154da2ae94cc2256448392dfc6d",
+                  "sha256-v2": "86144b87a7181785b6cffd15f1599db0ca0438813cb3fca83fb81a2f81e8bcb4"
+                },
+                "index": 3,
+                "name": "statement-04"
+              },
+              {
+                "checksum": "8b1f2ab58774241d10a5f4270a3df71972efa30762093c7db498a3af8f799b78",
+                "checksums": {
+                  "sha256-v1": "8b1f2ab58774241d10a5f4270a3df71972efa30762093c7db498a3af8f799b78",
+                  "sha256-v2": "dbe1bfa99bf1b8733e8f7915b5bd970c7d987791cf398f7110c33841689a180b"
+                },
+                "index": 4,
+                "name": "statement-05"
+              },
+              {
+                "checksum": "c5eb3dd679ea29a3eaa319fadf66bfa68eefc350da136383a53e6e15f0fbc73f",
+                "checksums": {
+                  "sha256-v1": "c5eb3dd679ea29a3eaa319fadf66bfa68eefc350da136383a53e6e15f0fbc73f",
+                  "sha256-v2": "2e7cce29ac089e28819046a02fc4515207e5820a074b1877bd6a7fad518054a6"
+                },
+                "index": 5,
+                "name": "statement-06"
+              },
+              {
+                "checksum": "07a99067a5e59b6556bc96d31e49af3654b7b192767e0075c10a68d68fb27bee",
+                "checksums": {
+                  "sha256-v1": "07a99067a5e59b6556bc96d31e49af3654b7b192767e0075c10a68d68fb27bee",
+                  "sha256-v2": "c3b9da4896352de63464778f008f7eb3c2bdc777112d6e1adcb80dae58e27b8f"
+                },
+                "index": 6,
+                "name": "statement-07"
+              },
+              {
+                "checksum": "e7f3f26ab39f5cbfb353cc2a1e750eecb25aac185b74ba7ebd72436641452f1d",
+                "checksums": {
+                  "sha256-v1": "e7f3f26ab39f5cbfb353cc2a1e750eecb25aac185b74ba7ebd72436641452f1d",
+                  "sha256-v2": "637ad4052b680ae136d7293ec31e14760ae07ed79a88f57bde64a2aeefdee1eb"
+                },
+                "index": 7,
+                "name": "statement-08"
+              }
+            ]
+          },
+          {
+            "checksum": "893f570cdf4b445b8194a383f7d2175db4ce267ace668ffdbdeb2b7ad6a96eda",
+            "checksums": {
+              "sha256-v1": "893f570cdf4b445b8194a383f7d2175db4ce267ace668ffdbdeb2b7ad6a96eda",
+              "sha256-v2": "53dce03ee511ed1b2b4e926cefa5983326e8117f80fb17e1d46e3a4595db4e61"
+            },
+            "description": "Reviewed complete source file 0013_retire_identity_map.sql",
+            "name": "0013_retire_identity_map",
+            "ordinal": 12,
+            "steps": [
+              {
+                "checksum": "2abfd1032c71173a98e276c1ec8511965827f18869f83bcc56dc920ac045520a",
+                "checksums": {
+                  "sha256-v1": "2abfd1032c71173a98e276c1ec8511965827f18869f83bcc56dc920ac045520a",
+                  "sha256-v2": "c06661e2892b141b621573defdf16f32c16a2ca4645102f10a080cf8b63b92c1"
+                },
+                "index": 0,
+                "name": "statement-01"
+              },
+              {
+                "checksum": "bcf63e96ba30f465cf580a5f5e133a16bd6666956f721bf5e4256e1fd24b3d09",
+                "checksums": {
+                  "sha256-v1": "bcf63e96ba30f465cf580a5f5e133a16bd6666956f721bf5e4256e1fd24b3d09",
+                  "sha256-v2": "ebbf6e85886cb42b17319db9a666513a9e1992772e401a034ff32697244b6e06"
+                },
+                "index": 1,
+                "name": "statement-02"
+              }
+            ]
+          },
+          {
+            "checksum": "4261a693fb9843b65e4bb3e83280bab3d704c67814f8e9481473fec8c727eb5f",
+            "checksums": {
+              "sha256-v1": "4261a693fb9843b65e4bb3e83280bab3d704c67814f8e9481473fec8c727eb5f",
+              "sha256-v2": "fde8b473e64b01b01574d0b8036bd07c432b5285de1d0049db416782a7ca4b9c"
+            },
+            "description": "Reviewed complete source file 0014_experiment_exposures.sql",
+            "name": "0014_experiment_exposures",
+            "ordinal": 13,
+            "steps": [
+              {
+                "checksum": "43a13092f9355e89b0d0ddd010f8cb00a1a749d3c6310cc3c16c468eb42bf194",
+                "checksums": {
+                  "sha256-v1": "43a13092f9355e89b0d0ddd010f8cb00a1a749d3c6310cc3c16c468eb42bf194",
+                  "sha256-v2": "691df4a1e69ed869ce3657c4990fdb44d85a35759805e03ec9f2fabe09d816a9"
+                },
+                "index": 0,
+                "name": "statement-01"
+              },
+              {
+                "checksum": "270987f82585ca956aa9a89f5544b99ed7dfdfc388c4e8ab947e921812bb5232",
+                "checksums": {
+                  "sha256-v1": "270987f82585ca956aa9a89f5544b99ed7dfdfc388c4e8ab947e921812bb5232",
+                  "sha256-v2": "42c429ab5ad59095b0cf16615643bd07f526df2d42f21e5a123db2de704c2fc8"
+                },
+                "index": 1,
+                "name": "statement-02"
+              },
+              {
+                "checksum": "3b8730f37118bc725969dc8fc5efc11ed24f434b6a8a966c2705c0ebb76b98ee",
+                "checksums": {
+                  "sha256-v1": "3b8730f37118bc725969dc8fc5efc11ed24f434b6a8a966c2705c0ebb76b98ee",
+                  "sha256-v2": "0d5e41918df1ddae0784b3b6178da556fa6af7e5c9930a17e2f3bf427998f0a1"
+                },
+                "index": 2,
+                "name": "statement-03"
+              }
+            ]
+          },
+          {
+            "checksum": "4fad2da973103e4d4b9ba6453bbe5cee830a149335ce74e7d6e6f66a86cb4e27",
+            "checksums": {
+              "sha256-v1": "4fad2da973103e4d4b9ba6453bbe5cee830a149335ce74e7d6e6f66a86cb4e27",
+              "sha256-v2": "bb9a46638e480e07006698c91926d7387b97e402289f7cc9f5522febe4a7b89e"
+            },
+            "description": "Reviewed complete source file 0015_experiment_exposure_string_casts.sql",
+            "name": "0015_experiment_exposure_string_casts",
+            "ordinal": 14,
+            "steps": [
+              {
+                "checksum": "0d5845ba9df559a75441c22fc6cec422368b3131e11807684fa5cec1d3867368",
+                "checksums": {
+                  "sha256-v1": "0d5845ba9df559a75441c22fc6cec422368b3131e11807684fa5cec1d3867368",
+                  "sha256-v2": "83ea1f3c1ed0b0a5fe81972d9e9091189e0733592d6dafb617a00c9ecca36e7d"
+                },
+                "index": 0,
+                "name": "statement-01"
+              },
+              {
+                "checksum": "9c149939336945d16770d303ac489989ebe3559ea2a3d24773bdf5866613cd6d",
+                "checksums": {
+                  "sha256-v1": "9c149939336945d16770d303ac489989ebe3559ea2a3d24773bdf5866613cd6d",
+                  "sha256-v2": "ec508919ed74abde0ee2583cd1f34aacf921dd779126a41f0710e789c5929171"
+                },
+                "index": 1,
+                "name": "statement-02"
+              }
+            ]
+          },
+          {
+            "checksum": "e287937087f84dce9d425d6b12b2d9fccf4053aacf4e5771564ca60d379c1eed",
+            "checksums": {
+              "sha256-v1": "e287937087f84dce9d425d6b12b2d9fccf4053aacf4e5771564ca60d379c1eed",
+              "sha256-v2": "75afaa68ae591b1452da06e06a3caf749f7461dfefbef6d3dedecf8009b1a27a"
+            },
+            "description": "Reviewed complete source file 0016_events_raw_schema_version.sql",
+            "name": "0016_events_raw_schema_version",
+            "ordinal": 15,
+            "steps": [
+              {
+                "checksum": "1ab588940a9fffd543e7b25ae5601f22de4f3705293a2ef597bd27866876f4db",
+                "checksums": {
+                  "sha256-v1": "1ab588940a9fffd543e7b25ae5601f22de4f3705293a2ef597bd27866876f4db",
+                  "sha256-v2": "00db53f45bcdbd2a47ccadc8a7d768af79a70ace830af868e36e9c9bac606dfa"
+                },
+                "index": 0,
+                "name": "statement-01"
+              }
+            ]
+          },
+          {
+            "checksum": "4f843622c90d758095547f1bb1595af1e743105d8ddc52464ad4ca2fb05e45ff",
+            "checksums": {
+              "sha256-v1": "4f843622c90d758095547f1bb1595af1e743105d8ddc52464ad4ca2fb05e45ff",
+              "sha256-v2": "f19bfe5f148d87e9550adfd3c27746e0086acd4cf59eb149720ecfe54788b95f"
+            },
+            "description": "Reviewed complete source file 0017_replay_safe_sources.sql",
+            "name": "0017_replay_safe_sources",
+            "ordinal": 16,
+            "steps": [
+              {
+                "checksum": "fb12058fb3788ab480e4b4e2717cdc24be8b58294ccf8e3c8aabfb230c7f6008",
+                "checksums": {
+                  "sha256-v1": "fb12058fb3788ab480e4b4e2717cdc24be8b58294ccf8e3c8aabfb230c7f6008",
+                  "sha256-v2": "f651570e9a46b44be25c4ac98be172c3e21508b1541aebbb0ecc27fd2a6b73a8"
+                },
+                "index": 0,
+                "name": "statement-01"
+              },
+              {
+                "checksum": "a343ed31726d6d8ef8e268fb8c1f64a003d03c17e831ee7cd9c7de04815a2799",
+                "checksums": {
+                  "sha256-v1": "a343ed31726d6d8ef8e268fb8c1f64a003d03c17e831ee7cd9c7de04815a2799",
+                  "sha256-v2": "1db53c709f14b4b597e28e5e5bf820ae79b287f3b6490bead1d9b9b9ae35cd41"
+                },
+                "index": 1,
+                "name": "statement-02"
+              },
+              {
+                "checksum": "35b68fd64df976a0bb8aa85f3d5112eb2bf9f794d5595d554e07b624a009b365",
+                "checksums": {
+                  "sha256-v1": "35b68fd64df976a0bb8aa85f3d5112eb2bf9f794d5595d554e07b624a009b365",
+                  "sha256-v2": "7626d5a0b79721bbd92c81c819a3a74635fec9a39ada4211b1e47612dceb744d"
+                },
+                "index": 2,
+                "name": "statement-03"
+              },
+              {
+                "checksum": "db1f89a830f5bd161bdef24b86649aacf69d98f7252b1ae1f09e4e9e96a6e8ae",
+                "checksums": {
+                  "sha256-v1": "db1f89a830f5bd161bdef24b86649aacf69d98f7252b1ae1f09e4e9e96a6e8ae",
+                  "sha256-v2": "41902e8bad98f98e2dd0797160be34777cb2c140b63f91000feb9132afcc45cb"
+                },
+                "index": 3,
+                "name": "statement-04"
+              },
+              {
+                "checksum": "bd7e156324b33e625957580ad840910d36a6094a76f33ceb6eafebc09997ccbe",
+                "checksums": {
+                  "sha256-v1": "bd7e156324b33e625957580ad840910d36a6094a76f33ceb6eafebc09997ccbe",
+                  "sha256-v2": "99c622106fe08222f3faf043a0874cbceccdb9ac96753094cf955ad6fef9d8b2"
+                },
+                "index": 4,
+                "name": "statement-05"
+              },
+              {
+                "checksum": "97721c615d78cdf1a76c737df6dfe5d8172651088e662c9de89ca3e16fc723d7",
+                "checksums": {
+                  "sha256-v1": "97721c615d78cdf1a76c737df6dfe5d8172651088e662c9de89ca3e16fc723d7",
+                  "sha256-v2": "ca87be8a8d0c7a616f8ce542b4672c8da2b41a268175995cffe912081397c795"
+                },
+                "index": 5,
+                "name": "statement-06"
+              },
+              {
+                "checksum": "5264b65f1f95a86ad8d4474a2b88eed51aec8b895a26581f34480cbd04c7a6b1",
+                "checksums": {
+                  "sha256-v1": "5264b65f1f95a86ad8d4474a2b88eed51aec8b895a26581f34480cbd04c7a6b1",
+                  "sha256-v2": "042e13848c4299e0f7815411b999378190443bf408ac0895c605c50d71f50ba9"
+                },
+                "index": 6,
+                "name": "statement-07"
+              },
+              {
+                "checksum": "ebe4234ed52acf9d050c0688f7708bb71e1220c031130ba43e4f41bddfd3f14e",
+                "checksums": {
+                  "sha256-v1": "ebe4234ed52acf9d050c0688f7708bb71e1220c031130ba43e4f41bddfd3f14e",
+                  "sha256-v2": "7193d18b68213b700a68b068b68754aefd0dc297f16f33dc6e57175d8252d993"
+                },
+                "index": 7,
+                "name": "statement-08"
+              },
+              {
+                "checksum": "e13925d17e1dc51114f95d3826a3a34ede338b809f947cdea532c8c2f008bd81",
+                "checksums": {
+                  "sha256-v1": "e13925d17e1dc51114f95d3826a3a34ede338b809f947cdea532c8c2f008bd81",
+                  "sha256-v2": "036876d0acc7eb682fb286893174d240193fe7405d3193f842f906d0959486ad"
+                },
+                "index": 8,
+                "name": "statement-09"
+              },
+              {
+                "checksum": "569f7c1c419e951fd2df3767def8e1281c488fe253e009f6513d338bfcb374dd",
+                "checksums": {
+                  "sha256-v1": "569f7c1c419e951fd2df3767def8e1281c488fe253e009f6513d338bfcb374dd",
+                  "sha256-v2": "d547200d0d5b2bc9da98a3a90cd8d64e8cb7c3a90385a12bd95e303888ecaa17"
+                },
+                "index": 9,
+                "name": "statement-10"
+              },
+              {
+                "checksum": "efaec191e7f7c03825f67e99e2cb3986aa8251dc17bb9095ee4d16b6259a7630",
+                "checksums": {
+                  "sha256-v1": "efaec191e7f7c03825f67e99e2cb3986aa8251dc17bb9095ee4d16b6259a7630",
+                  "sha256-v2": "c54a7e888369ba88b31034d9812b0e178164cdff3c4fba86a5ad13bfab3bf255"
+                },
+                "index": 10,
+                "name": "statement-11"
+              },
+              {
+                "checksum": "b6220d5d0f4b7f3917f6bd8c1772b04083650a0a0c86edf704da20591a0f9a99",
+                "checksums": {
+                  "sha256-v1": "b6220d5d0f4b7f3917f6bd8c1772b04083650a0a0c86edf704da20591a0f9a99",
+                  "sha256-v2": "57f823569fb057b7053e60661b845b3b57d75e02ab9ddd05e82a9d0918ebc6da"
+                },
+                "index": 11,
+                "name": "statement-12"
+              },
+              {
+                "checksum": "43db537c8d5618c2d813f8f5bd1b057f73bb31605d06fe789d85b6a8b1522369",
+                "checksums": {
+                  "sha256-v1": "43db537c8d5618c2d813f8f5bd1b057f73bb31605d06fe789d85b6a8b1522369",
+                  "sha256-v2": "4f7cd47d34f67e3f99ca809ece98605a56b5331b90e6fd714d99cd2ecbdaf98e"
+                },
+                "index": 12,
+                "name": "statement-13-prepare"
+              },
+              {
+                "checksum": "4c487adbf10141cfa4f4443fa8a50043f48ece008bbc5b44ccfa712f67887c33",
+                "checksums": {
+                  "sha256-v1": "4c487adbf10141cfa4f4443fa8a50043f48ece008bbc5b44ccfa712f67887c33",
+                  "sha256-v2": "a99be7dd461d447a205e167d64048c2bbbe221ae8f778ca78200e04b7fbae369"
+                },
+                "index": 13,
+                "name": "statement-13-check"
+              },
+              {
+                "checksum": "251697328d1ce167924bb6c498dd5ec3a0393c85d6c54e43710fd5bc622805a4",
+                "checksums": {
+                  "sha256-v1": "251697328d1ce167924bb6c498dd5ec3a0393c85d6c54e43710fd5bc622805a4",
+                  "sha256-v2": "b067a830a2fe34b17f9be4f0f73e829f73cff9a1a56e72ce82a76c9dd8ffad97"
+                },
+                "index": 14,
+                "name": "statement-13-cleanup"
+              },
+              {
+                "checksum": "a3d18cbd4f864d02db80a1e585a85c09f24a42180841d823ac31a6d5a91b4035",
+                "checksums": {
+                  "sha256-v1": "a3d18cbd4f864d02db80a1e585a85c09f24a42180841d823ac31a6d5a91b4035",
+                  "sha256-v2": "9fde27627b652fef121b4b7e3f150c0efc7387ec21bc4f6b1331c4bf67f666c4"
+                },
+                "index": 15,
+                "name": "statement-14-prepare"
+              },
+              {
+                "checksum": "1b3c30098969b1a96fc1c303bf52dab22c16e94187b353476169519eb12ce523",
+                "checksums": {
+                  "sha256-v1": "1b3c30098969b1a96fc1c303bf52dab22c16e94187b353476169519eb12ce523",
+                  "sha256-v2": "d2bc10a5545c44ce3d1ac40e45fd6512e04f2fc7c47972988176ad8db1986066"
+                },
+                "index": 16,
+                "name": "statement-14-check"
+              },
+              {
+                "checksum": "b374df3ab182184de2396d2a1703f9164a63f015a8d97abef699e0135ca34cde",
+                "checksums": {
+                  "sha256-v1": "b374df3ab182184de2396d2a1703f9164a63f015a8d97abef699e0135ca34cde",
+                  "sha256-v2": "953c266c66584cb0087e5a49895bdb91b00be24074047cdd97b1a51e2ab44567"
+                },
+                "index": 17,
+                "name": "statement-14-cleanup"
+              },
+              {
+                "checksum": "8e332416c9d92942742838b143a1118d1ce305cd06ef150689fb184f25d9713b",
+                "checksums": {
+                  "sha256-v1": "8e332416c9d92942742838b143a1118d1ce305cd06ef150689fb184f25d9713b",
+                  "sha256-v2": "d228965169ab57f9dc2efa7455d864e14869105d3ffdd8fa353d8795a1fa74f3"
+                },
+                "index": 18,
+                "name": "statement-15"
+              },
+              {
+                "checksum": "16aadc8db16f4b86414817a685ecf8bca1601dcfec8bf5978c16325e6d0a2e5d",
+                "checksums": {
+                  "sha256-v1": "16aadc8db16f4b86414817a685ecf8bca1601dcfec8bf5978c16325e6d0a2e5d",
+                  "sha256-v2": "0920b7f77a75b8bec219fafc964d650192ef61ea269ff33dda4d340e0948d98a"
+                },
+                "index": 19,
+                "name": "statement-16"
+              },
+              {
+                "checksum": "f1eae8fdfa891199658689ad4e0b55d9403bf4cd624d4b27d8646e2f10105880",
+                "checksums": {
+                  "sha256-v1": "f1eae8fdfa891199658689ad4e0b55d9403bf4cd624d4b27d8646e2f10105880",
+                  "sha256-v2": "289553bd1b67e8e5fab52e5c7b4091d79c7063c8083c2fd8508b4581df74af0c"
+                },
+                "index": 20,
+                "name": "statement-17"
+              },
+              {
+                "checksum": "c8ffb3ba17c0eb2e746d651167bf7b4ffa7acd338bc11985f08bb663768a7aab",
+                "checksums": {
+                  "sha256-v1": "c8ffb3ba17c0eb2e746d651167bf7b4ffa7acd338bc11985f08bb663768a7aab",
+                  "sha256-v2": "0fb7b0fe59208aadd483602a6c73182a0a55f336bd0436648cce060202389dee"
+                },
+                "index": 21,
+                "name": "statement-18"
+              },
+              {
+                "checksum": "64707c03ac3f4eeeca0e0d69e0f984bc0d84227769fa9c4630ce2c7a7e954274",
+                "checksums": {
+                  "sha256-v1": "64707c03ac3f4eeeca0e0d69e0f984bc0d84227769fa9c4630ce2c7a7e954274",
+                  "sha256-v2": "d4427ce417b313975e33276c41f3bdc816196a8dac5010d642b3a2128c012754"
+                },
+                "index": 22,
+                "name": "statement-19"
+              },
+              {
+                "checksum": "8481bf85ef0acc81751a5b1c5e90aa26f4dcc12177f87220c8cdbdd102b97bf9",
+                "checksums": {
+                  "sha256-v1": "8481bf85ef0acc81751a5b1c5e90aa26f4dcc12177f87220c8cdbdd102b97bf9",
+                  "sha256-v2": "a2c6297a690dfdedc2608606e93929089da32ef9a50920a0f98a2e440b2e75a2"
+                },
+                "index": 23,
+                "name": "statement-20"
+              }
+            ]
+          },
+          {
+            "checksum": "af0e63839731116ca368d8499adc3e24395626477ec33cce08e6dc9f3fd5e026",
+            "checksums": {
+              "sha256-v1": "af0e63839731116ca368d8499adc3e24395626477ec33cce08e6dc9f3fd5e026",
+              "sha256-v2": "b5f92b30d90aa72bbb183ee6d819ef2bdf286fe7524afb6e751da1083b4fb6dd"
+            },
+            "description": "Reviewed complete source file 0018_conservative_identity_resolution.sql",
+            "name": "0018_conservative_identity_resolution",
+            "ordinal": 17,
+            "steps": [
+              {
+                "checksum": "6981d0c0ebfe8491c0e517385bdf8050ab92e86017af3d140a7406761dd6299c",
+                "checksums": {
+                  "sha256-v1": "6981d0c0ebfe8491c0e517385bdf8050ab92e86017af3d140a7406761dd6299c",
+                  "sha256-v2": "134663a6e0c0ef8709d7c1e5998c92922220ddfe1dcb5123e3d004c82a4e7a1a"
+                },
+                "index": 0,
+                "name": "statement-01"
+              },
+              {
+                "checksum": "a3861dc54d57881ad55d14478b8842dacfb5691f12cc7ce014b1c58a176f0c40",
+                "checksums": {
+                  "sha256-v1": "a3861dc54d57881ad55d14478b8842dacfb5691f12cc7ce014b1c58a176f0c40",
+                  "sha256-v2": "ba1cb4605c3fdb2f4da9542e957c32dc582f3432f156c0f2f7830144b0bc62ab"
+                },
+                "index": 1,
+                "name": "statement-02"
+              },
+              {
+                "checksum": "7313d29dedb1147e92bec6368af4f3cfb9c3840f461f01ac89e4cdd1f8a97033",
+                "checksums": {
+                  "sha256-v1": "7313d29dedb1147e92bec6368af4f3cfb9c3840f461f01ac89e4cdd1f8a97033",
+                  "sha256-v2": "00f6bc94b43c6e617b340140d95982c09d43e5e9bdb2144c5bf02f4c53db310a"
+                },
+                "index": 2,
+                "name": "statement-03"
+              },
+              {
+                "checksum": "0b54078f59e8fb5dcb866fd8536500603c9c955404dcefd02eaf089d7904345d",
+                "checksums": {
+                  "sha256-v1": "0b54078f59e8fb5dcb866fd8536500603c9c955404dcefd02eaf089d7904345d",
+                  "sha256-v2": "50ffc9658e87b148b45b7bb400acb061a51608c65ba3882b88b4c58243a73c05"
+                },
+                "index": 3,
+                "name": "statement-04"
+              },
+              {
+                "checksum": "7111c65b94b53507a9ee065bd59dd3ed6eeaf891c83d5a0d03b7bb81e13828b1",
+                "checksums": {
+                  "sha256-v1": "7111c65b94b53507a9ee065bd59dd3ed6eeaf891c83d5a0d03b7bb81e13828b1",
+                  "sha256-v2": "54b77be7f1fc6d1cee7a0a5c16faea15a8471c82d24e1f93c074e68ce85ff423"
+                },
+                "index": 4,
+                "name": "statement-05"
+              },
+              {
+                "checksum": "e37a0b0630d7346ec1b688a8683d8a1599fdcba632bf22e8dc29b7fbd32e9f6b",
+                "checksums": {
+                  "sha256-v1": "e37a0b0630d7346ec1b688a8683d8a1599fdcba632bf22e8dc29b7fbd32e9f6b",
+                  "sha256-v2": "b01efe3bd0ea18304c38c635e2a91a1a44005ecc4363981df7bc75ee8d6e0103"
+                },
+                "index": 5,
+                "name": "statement-06"
+              },
+              {
+                "checksum": "11d94da8717c58f1117b09838aada47552cd2065bc04f1f5b62c49177aff7c24",
+                "checksums": {
+                  "sha256-v1": "11d94da8717c58f1117b09838aada47552cd2065bc04f1f5b62c49177aff7c24",
+                  "sha256-v2": "00d67f6645ab6212641c0ae33574d8b0bcac91b2d3e977d7998147c40a2c9274"
+                },
+                "index": 6,
+                "name": "statement-07"
+              },
+              {
+                "checksum": "eec2b3f2c11d2eec9461dd7031a5e4113550a2e0a5b2ed116768087090aa434a",
+                "checksums": {
+                  "sha256-v1": "eec2b3f2c11d2eec9461dd7031a5e4113550a2e0a5b2ed116768087090aa434a",
+                  "sha256-v2": "d6976361a10285da206b65ab570f3cb0ce3ff79cdfa978b4e9ec16f30e9ccd7d"
+                },
+                "index": 7,
+                "name": "statement-08"
+              },
+              {
+                "checksum": "2b8ef930d64dab3b89ed965cb6bcbc88699e8597fbdb044d0bed1a29ecf24976",
+                "checksums": {
+                  "sha256-v1": "2b8ef930d64dab3b89ed965cb6bcbc88699e8597fbdb044d0bed1a29ecf24976",
+                  "sha256-v2": "bb4ff49bd4e10b8e5c1fbcc84d95432e97b6364bef36a316fcce898af20d7e5a"
+                },
+                "index": 8,
+                "name": "statement-09"
+              },
+              {
+                "checksum": "8d7a404af54f23d4970e168b3e1f51709a6dff08685088cb31f61074c18284f0",
+                "checksums": {
+                  "sha256-v1": "8d7a404af54f23d4970e168b3e1f51709a6dff08685088cb31f61074c18284f0",
+                  "sha256-v2": "86ef99231568969bc42bda15e915c7bb92afdab901a615886d70d4566fd8af5e"
+                },
+                "index": 9,
+                "name": "statement-10"
+              },
+              {
+                "checksum": "ea4a6c5b07c8a44d308fc85cb007ad170c7de00f2e7fa4d33de34c59e5249740",
+                "checksums": {
+                  "sha256-v1": "ea4a6c5b07c8a44d308fc85cb007ad170c7de00f2e7fa4d33de34c59e5249740",
+                  "sha256-v2": "56483cc751cf70f8286aafe72ec3a4fd3d8a7e459930d5c650f4b6984b3a8ee7"
+                },
+                "index": 10,
+                "name": "statement-11"
+              },
+              {
+                "checksum": "36338e1d46b5b79e3bccd4f40a8c4edba82aab49111812b9aed0172cfe50c5a9",
+                "checksums": {
+                  "sha256-v1": "36338e1d46b5b79e3bccd4f40a8c4edba82aab49111812b9aed0172cfe50c5a9",
+                  "sha256-v2": "ecfa6171a613537332c8b6b7b6b7e9256368f21c600f2663642f7964c8f877d6"
+                },
+                "index": 11,
+                "name": "statement-12"
+              },
+              {
+                "checksum": "42710bbeffb6eafaf548d89ffe1f83edf610cc2c8141218727c8763aa0e24490",
+                "checksums": {
+                  "sha256-v1": "42710bbeffb6eafaf548d89ffe1f83edf610cc2c8141218727c8763aa0e24490",
+                  "sha256-v2": "8f365774de05d6a69793fb377112369126c7d4e70ad9a77f350f72d6826621b9"
+                },
+                "index": 12,
+                "name": "statement-13"
+              },
+              {
+                "checksum": "b66ca9d096f311f31435be4de901f22dad09ed81e82fd0f69dcbba77315a6ed0",
+                "checksums": {
+                  "sha256-v1": "b66ca9d096f311f31435be4de901f22dad09ed81e82fd0f69dcbba77315a6ed0",
+                  "sha256-v2": "eeaf706616b7a167f6115df31b7067abf204e8bca46564b11205d526506ba4cf"
+                },
+                "index": 13,
+                "name": "statement-14"
+              },
+              {
+                "checksum": "28feeb2d20286c325c0f53ceec268106f830f587ec18bd9cf4028f8a24b977ea",
+                "checksums": {
+                  "sha256-v1": "28feeb2d20286c325c0f53ceec268106f830f587ec18bd9cf4028f8a24b977ea",
+                  "sha256-v2": "ad3047bfa6e95e7ce39f56b5c3fa260d78aa168fb15d2132794a0348f4babd89"
+                },
+                "index": 14,
+                "name": "statement-15"
+              },
+              {
+                "checksum": "5f8f789720fda4151e4258e1a8d72f484032f76a9148b315531cfef30d354708",
+                "checksums": {
+                  "sha256-v1": "5f8f789720fda4151e4258e1a8d72f484032f76a9148b315531cfef30d354708",
+                  "sha256-v2": "ea654aa30ff9f48e1686c45e5464225872a570732b9678ed541b2a52b94cd95a"
+                },
+                "index": 15,
+                "name": "statement-16"
+              },
+              {
+                "checksum": "fdb3147f4284b7241650e9dd9eab9cead59778581d6adfb2661f470686b8c732",
+                "checksums": {
+                  "sha256-v1": "fdb3147f4284b7241650e9dd9eab9cead59778581d6adfb2661f470686b8c732",
+                  "sha256-v2": "8e9029997cab99032af90396c2e87f1e6e68c4bcdc6ccdefc28dd52bfc1f2f50"
+                },
+                "index": 16,
+                "name": "statement-17"
+              },
+              {
+                "checksum": "4558fb6a19ba14b42b22f9cf60bc788d0e9f57212e6f58ed6a7239946187f3e1",
+                "checksums": {
+                  "sha256-v1": "4558fb6a19ba14b42b22f9cf60bc788d0e9f57212e6f58ed6a7239946187f3e1",
+                  "sha256-v2": "d668b7f4ab8eb8c90be0198a62c1222e290116665fe4dc2fa9e46eaae36fc12e"
+                },
+                "index": 17,
+                "name": "statement-18"
+              },
+              {
+                "checksum": "e1d5b16739d1354c47cf02f7bea36d43035c994749330732fa3be6ff1c1c0da2",
+                "checksums": {
+                  "sha256-v1": "e1d5b16739d1354c47cf02f7bea36d43035c994749330732fa3be6ff1c1c0da2",
+                  "sha256-v2": "47f5371edf0e9d596a0db90a52fde8743349402eae0aa0673d1e5270338ead85"
+                },
+                "index": 18,
+                "name": "statement-19"
+              },
+              {
+                "checksum": "b76b50efd33efa503e8d922f0a986721f8a6c93753db9c8ba11259be0c35865d",
+                "checksums": {
+                  "sha256-v1": "b76b50efd33efa503e8d922f0a986721f8a6c93753db9c8ba11259be0c35865d",
+                  "sha256-v2": "418494d80cc85f53881540954827c2736706b23842dffc5d4b0072276ab604fc"
+                },
+                "index": 19,
+                "name": "statement-20"
+              },
+              {
+                "checksum": "578c5e04a71378caa5f3ade881fcd015508771b41c123e71920de901454947e4",
+                "checksums": {
+                  "sha256-v1": "578c5e04a71378caa5f3ade881fcd015508771b41c123e71920de901454947e4",
+                  "sha256-v2": "1e6076f1f2cb3788fe6842ce30b9bcb8e43d92f6f4aab3dd2f326be545a5f7d1"
+                },
+                "index": 20,
+                "name": "statement-21"
+              },
+              {
+                "checksum": "bbf3cca5bc44332c85a18859dbdf0bf752b57613a72eca11c4f9cd9b4c8575d6",
+                "checksums": {
+                  "sha256-v1": "bbf3cca5bc44332c85a18859dbdf0bf752b57613a72eca11c4f9cd9b4c8575d6",
+                  "sha256-v2": "7081c3443b80b830f68474d2662019779b84e3a48018c3eb2b4fcdbab4b594fd"
+                },
+                "index": 21,
+                "name": "statement-22"
+              },
+              {
+                "checksum": "0bd4ebcc890568779651e082eb2454ddf3ac0e1e01f50c0a5a0560b720b88770",
+                "checksums": {
+                  "sha256-v1": "0bd4ebcc890568779651e082eb2454ddf3ac0e1e01f50c0a5a0560b720b88770",
+                  "sha256-v2": "d642b9386678303f4af8f7e36789a142b579cc0972bf197b203d4424229e02a4"
+                },
+                "index": 22,
+                "name": "statement-23"
+              },
+              {
+                "checksum": "02d335b989cc8b9e1d0acc49c8f718930baaef684233379bf46428390c97a5d6",
+                "checksums": {
+                  "sha256-v1": "02d335b989cc8b9e1d0acc49c8f718930baaef684233379bf46428390c97a5d6",
+                  "sha256-v2": "3ef8df812a93a2e19f7cf19bc49da42b412c63dcb80698fed84d4cce3fa7344f"
+                },
+                "index": 23,
+                "name": "statement-24"
+              },
+              {
+                "checksum": "b9a0c72a0ed82eed1e8ec5e810743e5710ba9652513d4fb5ed301dd810188cc8",
+                "checksums": {
+                  "sha256-v1": "b9a0c72a0ed82eed1e8ec5e810743e5710ba9652513d4fb5ed301dd810188cc8",
+                  "sha256-v2": "741df762dbeaa41a83104b1545cbc971a0617c6c2a0aeedbddd2d990c1f8b142"
+                },
+                "index": 24,
+                "name": "statement-25"
+              },
+              {
+                "checksum": "78a2342e5e924ca8cf32f78121d884fd09c8df3b6ad7652e7ee9ee79efe1ef7a",
+                "checksums": {
+                  "sha256-v1": "78a2342e5e924ca8cf32f78121d884fd09c8df3b6ad7652e7ee9ee79efe1ef7a",
+                  "sha256-v2": "83c73f98ea1b53ce343a5998c21facbc03ce6228f95df4fdbefdd5aa1075109e"
+                },
+                "index": 25,
+                "name": "statement-26"
+              },
+              {
+                "checksum": "da4a19b07fa5bca28488f8ad8ec9ed819f962629de37adeaff4adc0053f1e83d",
+                "checksums": {
+                  "sha256-v1": "da4a19b07fa5bca28488f8ad8ec9ed819f962629de37adeaff4adc0053f1e83d",
+                  "sha256-v2": "95a62c9c097f5f22147888b62ecdb61551cac8f4dd82d55e80629263cdac7700"
+                },
+                "index": 26,
+                "name": "statement-27"
+              },
+              {
+                "checksum": "0e0ca7208bbc705a6a53f55169e32198f5f3cbf23366adaf1f70fce0b903f467",
+                "checksums": {
+                  "sha256-v1": "0e0ca7208bbc705a6a53f55169e32198f5f3cbf23366adaf1f70fce0b903f467",
+                  "sha256-v2": "f73403fe9e2785bf0365a238b42ddfedba2c3022edbd25ae095caa531034072e"
+                },
+                "index": 27,
+                "name": "statement-28"
+              },
+              {
+                "checksum": "d1fbd1a851aa61edee90d3e07b29078d1a991566248abec7d5a9a921443b5f9a",
+                "checksums": {
+                  "sha256-v1": "d1fbd1a851aa61edee90d3e07b29078d1a991566248abec7d5a9a921443b5f9a",
+                  "sha256-v2": "fa1253dff4caf49f3855140ff0b166519e665665cf8e9f8e618650fb9168ebbb"
+                },
+                "index": 28,
+                "name": "statement-29"
+              },
+              {
+                "checksum": "d19bff8edeb91ee5ab36bf44aa10ce8d2d23d25fee25286c4d4e6814fe3dd79f",
+                "checksums": {
+                  "sha256-v1": "d19bff8edeb91ee5ab36bf44aa10ce8d2d23d25fee25286c4d4e6814fe3dd79f",
+                  "sha256-v2": "7da7aab8ebfa9cc2eed8c77a4bfd2668e23c41b57c624be91a436c29a0b3eca9"
+                },
+                "index": 29,
+                "name": "statement-30"
+              },
+              {
+                "checksum": "ea2fb77ea34e6613b91930af1740ed0e34299e8234f363e6ec39fbac259a1564",
+                "checksums": {
+                  "sha256-v1": "ea2fb77ea34e6613b91930af1740ed0e34299e8234f363e6ec39fbac259a1564",
+                  "sha256-v2": "5a1ef8d3c6bcd4a5ddc636539e8c38f91e1723c8aeed7e353023f95bf9e51cbe"
+                },
+                "index": 30,
+                "name": "statement-31"
+              },
+              {
+                "checksum": "2ddadcc8500c5debee003b7001f6fd0b61de7aaf729d30fe887954273c4d3858",
+                "checksums": {
+                  "sha256-v1": "2ddadcc8500c5debee003b7001f6fd0b61de7aaf729d30fe887954273c4d3858",
+                  "sha256-v2": "3f55c42479b48a260a99deb158ecb196c7f6af8f2e9ec9d395181cba0f06d88d"
+                },
+                "index": 31,
+                "name": "statement-32"
+              },
+              {
+                "checksum": "1c151a0d56b9af262e1f0a1c4cba7d107d306f89468f314b784769cf9e5ad0c0",
+                "checksums": {
+                  "sha256-v1": "1c151a0d56b9af262e1f0a1c4cba7d107d306f89468f314b784769cf9e5ad0c0",
+                  "sha256-v2": "1d96a7bed7ad5c33b05ebafddedc294455a521424a9705c8321a606749dcf52e"
+                },
+                "index": 32,
+                "name": "statement-33"
+              },
+              {
+                "checksum": "b5c4a79bfccbf35f6bf4cad2abc530515de149ae31987d9a545a0bc679592531",
+                "checksums": {
+                  "sha256-v1": "b5c4a79bfccbf35f6bf4cad2abc530515de149ae31987d9a545a0bc679592531",
+                  "sha256-v2": "04b0b55fc6e58aa561f9f793cade7e712926c393a66b5be9a1d9e82134370f04"
+                },
+                "index": 33,
+                "name": "statement-34"
+              },
+              {
+                "checksum": "8a78b2f37aa8174a458f7ee83aab7cc79dac927d55de30ff300beda9ac8e7353",
+                "checksums": {
+                  "sha256-v1": "8a78b2f37aa8174a458f7ee83aab7cc79dac927d55de30ff300beda9ac8e7353",
+                  "sha256-v2": "9fc78294a318a2fa287892e770cd2100b8dba9031f9d4924df8a048a58714bf1"
+                },
+                "index": 34,
+                "name": "statement-35"
+              },
+              {
+                "checksum": "47879c37650c4592b2c30106dc0507b552f81468681cef6b97e64e7f78232e66",
+                "checksums": {
+                  "sha256-v1": "47879c37650c4592b2c30106dc0507b552f81468681cef6b97e64e7f78232e66",
+                  "sha256-v2": "f4575fdb9b38d32333fe89a8ff42fb9acf57df64045f103f6e00cc03946234ee"
+                },
+                "index": 35,
+                "name": "statement-36"
+              },
+              {
+                "checksum": "be99df040446875896ed2248c75d1167666584b60ae8fed3971ceeb3255675e2",
+                "checksums": {
+                  "sha256-v1": "be99df040446875896ed2248c75d1167666584b60ae8fed3971ceeb3255675e2",
+                  "sha256-v2": "6e91bb22cc2f93ef4093578a43d0ebc335700761268835fcbcc8276bc372c0f9"
+                },
+                "index": 36,
+                "name": "statement-37"
+              },
+              {
+                "checksum": "d9d4421676ed9056ca1c5c5e6eaaee2239a72e88858aa9761f382795a92a1732",
+                "checksums": {
+                  "sha256-v1": "d9d4421676ed9056ca1c5c5e6eaaee2239a72e88858aa9761f382795a92a1732",
+                  "sha256-v2": "1f63098403fabeede67088cb40844ef0517527d029e201eab3aba6578d2bfa21"
+                },
+                "index": 37,
+                "name": "statement-38"
+              },
+              {
+                "checksum": "23d23606751ed50cd7fbcddf125f8214b3b4fc21dbadbd5fcc38abd0be95d6d9",
+                "checksums": {
+                  "sha256-v1": "23d23606751ed50cd7fbcddf125f8214b3b4fc21dbadbd5fcc38abd0be95d6d9",
+                  "sha256-v2": "8585359de70d70c2759a747d75715a53683a41468e526eb6dbb4535b4d5b7581"
+                },
+                "index": 38,
+                "name": "statement-39"
+              },
+              {
+                "checksum": "09778255bd8e1c018c0be7e472aa9e00c18bb4210066ca1754780bbfb218d15c",
+                "checksums": {
+                  "sha256-v1": "09778255bd8e1c018c0be7e472aa9e00c18bb4210066ca1754780bbfb218d15c",
+                  "sha256-v2": "4444fcec995f7768b300789c6b90284523436576e58a5b4d7281502112776d87"
+                },
+                "index": 39,
+                "name": "statement-40"
+              },
+              {
+                "checksum": "9fe80cadbc2c50494261656a0edee798c867e66a6645b9b28a8df7c89f8b2a1c",
+                "checksums": {
+                  "sha256-v1": "9fe80cadbc2c50494261656a0edee798c867e66a6645b9b28a8df7c89f8b2a1c",
+                  "sha256-v2": "d311902a77e2a41606205c441e5ecc57083556b70090a7250be10a08dea7daa7"
+                },
+                "index": 40,
+                "name": "statement-41"
+              },
+              {
+                "checksum": "9f358115a41cd9c66bd83cf841158219533a280b4b2e8ff80c304150c3e21966",
+                "checksums": {
+                  "sha256-v1": "9f358115a41cd9c66bd83cf841158219533a280b4b2e8ff80c304150c3e21966",
+                  "sha256-v2": "2bc235439c173435bd1fb1268751a01aabf4315128b26891face863b3f7e2996"
+                },
+                "index": 41,
+                "name": "statement-42"
+              },
+              {
+                "checksum": "3fc699526eb65136e00b18daa276e08071ff2e27136461d86a405fa3e1504cc8",
+                "checksums": {
+                  "sha256-v1": "3fc699526eb65136e00b18daa276e08071ff2e27136461d86a405fa3e1504cc8",
+                  "sha256-v2": "d720919eb5e8aa36f5ed07ba507e057d9ea9a4d2a4fb30b064fe416323775863"
+                },
+                "index": 42,
+                "name": "statement-43"
+              },
+              {
+                "checksum": "900a9572c574e6c4541c847d1cf20013104eb1be057cf55b4bbfc5c924e00d31",
+                "checksums": {
+                  "sha256-v1": "900a9572c574e6c4541c847d1cf20013104eb1be057cf55b4bbfc5c924e00d31",
+                  "sha256-v2": "e27ade1d4d5bec20c21a77689af113e96d1d7c361ce2a884a34fe8d71efb4e20"
+                },
+                "index": 43,
+                "name": "statement-44"
+              },
+              {
+                "checksum": "6d63aae899d56384d357ade783e26875d6d5ffb80b5fd19c686c91abafa36c5b",
+                "checksums": {
+                  "sha256-v1": "6d63aae899d56384d357ade783e26875d6d5ffb80b5fd19c686c91abafa36c5b",
+                  "sha256-v2": "3614adaf6e2ebd12ae91a7f646c8a3bbee5bf5aa4e305529639b1c3490649151"
+                },
+                "index": 44,
+                "name": "statement-45"
+              },
+              {
+                "checksum": "35042c14209909fcbe9f8067cdc9cb2871671dfc50ac9605d7a500b4b57c91f9",
+                "checksums": {
+                  "sha256-v1": "35042c14209909fcbe9f8067cdc9cb2871671dfc50ac9605d7a500b4b57c91f9",
+                  "sha256-v2": "72754ae7cf3059172de88a3bf438f533e2c4d68432582259a6e0da4700735b01"
+                },
+                "index": 45,
+                "name": "statement-46"
+              },
+              {
+                "checksum": "f90cb3d9da2154b418cb8648597551cf6d13cf4ea6e5bfef5feec83f71aaf673",
+                "checksums": {
+                  "sha256-v1": "f90cb3d9da2154b418cb8648597551cf6d13cf4ea6e5bfef5feec83f71aaf673",
+                  "sha256-v2": "209a06690bcf41001ece184d447748a328057624a91e540656754a6336c9aee6"
+                },
+                "index": 46,
+                "name": "statement-47"
+              },
+              {
+                "checksum": "87864c7c3ac1d563ee4031f6d07948861c058782662f50d3128e203843e3aeca",
+                "checksums": {
+                  "sha256-v1": "87864c7c3ac1d563ee4031f6d07948861c058782662f50d3128e203843e3aeca",
+                  "sha256-v2": "ccf78ad7a73e0c7703d31a9aa255f9079c4d6c8b55e0897f37f25e6390b6191a"
+                },
+                "index": 47,
+                "name": "statement-48"
+              },
+              {
+                "checksum": "6b2cbde22f9a4f67b2f887ef99f730549b685d77b76723631fa22bceebe39cca",
+                "checksums": {
+                  "sha256-v1": "6b2cbde22f9a4f67b2f887ef99f730549b685d77b76723631fa22bceebe39cca",
+                  "sha256-v2": "e2e5be6882b392e8c971c66b5c860c45db1e4c7082ee418fe187a0e0179f79b6"
+                },
+                "index": 48,
+                "name": "statement-49"
+              },
+              {
+                "checksum": "8b37c2694336f031ab4c601631b3319fafad6b513f9bac8919287645751bda75",
+                "checksums": {
+                  "sha256-v1": "8b37c2694336f031ab4c601631b3319fafad6b513f9bac8919287645751bda75",
+                  "sha256-v2": "f1d19edd9fce988d611f65cf449af080366002a4a76647de3b486dbe81c0a0a1"
+                },
+                "index": 49,
+                "name": "statement-50"
+              },
+              {
+                "checksum": "10d2a927f241b3d002b81a441597cebc9e2c28959175a878541bcc184a7f4cde",
+                "checksums": {
+                  "sha256-v1": "10d2a927f241b3d002b81a441597cebc9e2c28959175a878541bcc184a7f4cde",
+                  "sha256-v2": "e66188fb9c296ae2b448fbec9ae67c6939e4ae0f8f0a97568b662260da03060e"
+                },
+                "index": 50,
+                "name": "statement-51"
+              },
+              {
+                "checksum": "1312df1be68924ed13a62fba70b800937c600f6f6e52903897ab6fc695e8ca73",
+                "checksums": {
+                  "sha256-v1": "1312df1be68924ed13a62fba70b800937c600f6f6e52903897ab6fc695e8ca73",
+                  "sha256-v2": "f56972e3355b959ca706a204a872fb2ade78e43ecc18ab52618935d6ea96d2d1"
+                },
+                "index": 51,
+                "name": "statement-52"
+              },
+              {
+                "checksum": "c94c26355327b344762b9af9d081d77db2c72cb2159b5ca20cc06bc35d9e862c",
+                "checksums": {
+                  "sha256-v1": "c94c26355327b344762b9af9d081d77db2c72cb2159b5ca20cc06bc35d9e862c",
+                  "sha256-v2": "f6284cc8fea26c67c812830651494537926432c44e95e9fb97fc3d65314fcfb6"
+                },
+                "index": 52,
+                "name": "statement-53"
+              },
+              {
+                "checksum": "3b22ff47e7a327862f7bae4e33cd783c0b7c90529c7b80889db52efcc13f2f8b",
+                "checksums": {
+                  "sha256-v1": "3b22ff47e7a327862f7bae4e33cd783c0b7c90529c7b80889db52efcc13f2f8b",
+                  "sha256-v2": "4be153ccd819b4c3a5062e1be032eec9d267d19cf5c053182382521dea7dda52"
+                },
+                "index": 53,
+                "name": "statement-54"
+              },
+              {
+                "checksum": "bc384a4046fe6fab1f7d0ac9a9f32d4fddc18871b5204e10fcdadca0dad96370",
+                "checksums": {
+                  "sha256-v1": "bc384a4046fe6fab1f7d0ac9a9f32d4fddc18871b5204e10fcdadca0dad96370",
+                  "sha256-v2": "447e5ffe5b9a619a047636fd6f51e565a67fb7d6d6614850249d01f078cc95ce"
+                },
+                "index": 54,
+                "name": "statement-55"
+              },
+              {
+                "checksum": "8370d4a109d92a5384d38187c8aa0ec834fa23e3bb87b03b433a9731f2535ede",
+                "checksums": {
+                  "sha256-v1": "8370d4a109d92a5384d38187c8aa0ec834fa23e3bb87b03b433a9731f2535ede",
+                  "sha256-v2": "015a67d34e7e99a18d1d9fd393a16d2f2ca14a5fc32f11889967cd3025f847a9"
+                },
+                "index": 55,
+                "name": "statement-56"
+              },
+              {
+                "checksum": "067cb9d9e88aa8a3365dc9c1d0bb5edf813a40a8b8f8c8e14637702259c6b3bf",
+                "checksums": {
+                  "sha256-v1": "067cb9d9e88aa8a3365dc9c1d0bb5edf813a40a8b8f8c8e14637702259c6b3bf",
+                  "sha256-v2": "354431c00212593aedbf7d299deeb010d886a6e36de4f4b65da11e7dff3280a9"
+                },
+                "index": 56,
+                "name": "statement-57"
+              },
+              {
+                "checksum": "c6ee66b99a1735c76830c3940369e868f19e7f990b03b6aa4c39e38857f516b6",
+                "checksums": {
+                  "sha256-v1": "c6ee66b99a1735c76830c3940369e868f19e7f990b03b6aa4c39e38857f516b6",
+                  "sha256-v2": "b31bdb43dd2596905a928bf0596c20d34014996f404b017a45cc82053f010cec"
+                },
+                "index": 57,
+                "name": "statement-58"
+              },
+              {
+                "checksum": "d848d2ab494bd1497cbaab8a46882aa87b6afdf01711b7bdc249112ded1d7af5",
+                "checksums": {
+                  "sha256-v1": "d848d2ab494bd1497cbaab8a46882aa87b6afdf01711b7bdc249112ded1d7af5",
+                  "sha256-v2": "387bb393f2ab9d5d8b587bc677ca1b567667685b957fe473f509013ee3092981"
+                },
+                "index": 58,
+                "name": "statement-59"
+              },
+              {
+                "checksum": "e431bd6b4811ded2832666d3eaf7ed1cc4c05dbb5b475c7870e03ca8b47d6430",
+                "checksums": {
+                  "sha256-v1": "e431bd6b4811ded2832666d3eaf7ed1cc4c05dbb5b475c7870e03ca8b47d6430",
+                  "sha256-v2": "4bf11e5078ece50e5a35e65390570e11299d2f80019cd1a5444071eb6c76ea50"
+                },
+                "index": 59,
+                "name": "statement-60"
+              },
+              {
+                "checksum": "c98ea914a949ea184f577865bc77794a98f8154019b4ca491ad3fac6540879fa",
+                "checksums": {
+                  "sha256-v1": "c98ea914a949ea184f577865bc77794a98f8154019b4ca491ad3fac6540879fa",
+                  "sha256-v2": "1aa4713a0bf87b022743810854470a14b4e25b89753cecab7bac1d316b96febf"
+                },
+                "index": 60,
+                "name": "statement-61"
+              },
+              {
+                "checksum": "be7a2f0c648c40af1d611ae5ff5a2ad133f76104fcf79c7de8fca066d5286189",
+                "checksums": {
+                  "sha256-v1": "be7a2f0c648c40af1d611ae5ff5a2ad133f76104fcf79c7de8fca066d5286189",
+                  "sha256-v2": "4a395191439de60d48c6910aedadb000ac8195b135cce31f6e383ca9a40cf081"
+                },
+                "index": 61,
+                "name": "statement-62"
+              },
+              {
+                "checksum": "db43aa0d338169dc74184010bb324016ea7d4766c8b608c406eabf1aa7a973c4",
+                "checksums": {
+                  "sha256-v1": "db43aa0d338169dc74184010bb324016ea7d4766c8b608c406eabf1aa7a973c4",
+                  "sha256-v2": "7ad0b5b0497bc57f7612bc9c09eea38e94612b7150b368460c4dc2e247cf7a19"
+                },
+                "index": 62,
+                "name": "statement-63"
+              },
+              {
+                "checksum": "c52e83b993e404a728df84b555c7657b294ffa0b859a90540e9c50c2c680f0d2",
+                "checksums": {
+                  "sha256-v1": "c52e83b993e404a728df84b555c7657b294ffa0b859a90540e9c50c2c680f0d2",
+                  "sha256-v2": "3da8a13da7df6401f58a1d53d2d7aefe3078212ddce2053d093dbcce3bdf790f"
+                },
+                "index": 63,
+                "name": "statement-64"
+              }
+            ]
+          },
+          {
+            "checksum": "9aa55454ce3f8aa771bec957fa6cf3fed0881809e5103c80ddaae44475dab85d",
+            "checksums": {
+              "sha256-v1": "9aa55454ce3f8aa771bec957fa6cf3fed0881809e5103c80ddaae44475dab85d",
+              "sha256-v2": "afdb76cad018d846a768a9e1535194ceca93b5b938a9a57c5d9952be58510d86"
+            },
+            "description": "Reviewed complete source file 0019_web_enrichment.sql",
+            "name": "0019_web_enrichment",
+            "ordinal": 18,
+            "steps": [
+              {
+                "checksum": "5cf83db405786547988a9878606723f77e0e430dd74444a0bd9245d48cee7491",
+                "checksums": {
+                  "sha256-v1": "5cf83db405786547988a9878606723f77e0e430dd74444a0bd9245d48cee7491",
+                  "sha256-v2": "40faa3801a13368ec003091104ca052a3be4d84cd9bfa6bffb2e1f76a1ad9839"
+                },
+                "index": 0,
+                "name": "statement-01"
+              },
+              {
+                "checksum": "990e9fd7308b7f2b65949b5eaacea9c2198118b1b9d05ec8107b56a1258acbd5",
+                "checksums": {
+                  "sha256-v1": "990e9fd7308b7f2b65949b5eaacea9c2198118b1b9d05ec8107b56a1258acbd5",
+                  "sha256-v2": "6464c8f7ad655392a2e4c7037174034f13adab018e4d21301bf817ff2c18f9c4"
+                },
+                "index": 1,
+                "name": "statement-02"
+              },
+              {
+                "checksum": "c056e6e02d7606952278bfba11aba780f534d8669e10db7c52dcd2012caba86c",
+                "checksums": {
+                  "sha256-v1": "c056e6e02d7606952278bfba11aba780f534d8669e10db7c52dcd2012caba86c",
+                  "sha256-v2": "cee52f64b578ef91761c1757bd663b2a9b3794317f0d48e75800bd275d48cbfc"
+                },
+                "index": 2,
+                "name": "statement-03"
+              },
+              {
+                "checksum": "125b0dd9955cc950caeee8b1212a9eefcea94f84aeba699d0a57561bec26f720",
+                "checksums": {
+                  "sha256-v1": "125b0dd9955cc950caeee8b1212a9eefcea94f84aeba699d0a57561bec26f720",
+                  "sha256-v2": "6569376e72f505928d92e26e9264b70c03506f3a5d4258659416cd9126a13efc"
+                },
+                "index": 3,
+                "name": "statement-04"
+              },
+              {
+                "checksum": "669befa0a8472b9bb952374ff96e0db33543232ba1966025b4753f5b512914dd",
+                "checksums": {
+                  "sha256-v1": "669befa0a8472b9bb952374ff96e0db33543232ba1966025b4753f5b512914dd",
+                  "sha256-v2": "e43ec21d8baebcc692facbb8f834e3debbe5bcada66f953c93060e27fcca9efb"
+                },
+                "index": 4,
+                "name": "statement-05"
+              },
+              {
+                "checksum": "64f272bf8fb8b6ecec9872e844df93d6e541a7ceebfe43af64f7ac1dcac1bafd",
+                "checksums": {
+                  "sha256-v1": "64f272bf8fb8b6ecec9872e844df93d6e541a7ceebfe43af64f7ac1dcac1bafd",
+                  "sha256-v2": "fa4a52f66d9e77fc943b2758706ca1a5fef470c4523bcb13964fc144617179cc"
+                },
+                "index": 5,
+                "name": "statement-06"
+              }
+            ]
+          },
+          {
+            "checksum": "2c65e81775b3f5c04abff1424fc00a93fc5da92468b58592043bbb72cf74b7ce",
+            "checksums": {
+              "sha256-v1": "2c65e81775b3f5c04abff1424fc00a93fc5da92468b58592043bbb72cf74b7ce",
+              "sha256-v2": "7b9bc1afc462648c3f968d45285a5bb8ee8ce4652274667c8dd26d4eb59a831d"
+            },
+            "description": "Reviewed complete source file 0020_replay_safe_sessions.sql",
+            "name": "0020_replay_safe_sessions",
+            "ordinal": 19,
+            "steps": [
+              {
+                "checksum": "72b66fe696cd24e58bcca310ca20edb7319398e5c4d4d8e73cf83fa6f5b140e2",
+                "checksums": {
+                  "sha256-v1": "72b66fe696cd24e58bcca310ca20edb7319398e5c4d4d8e73cf83fa6f5b140e2",
+                  "sha256-v2": "9bf970c9d4f7f91940fae84349921af8d007dfbc60dcecd7de4587c6c051dbde"
+                },
+                "index": 0,
+                "name": "statement-01"
+              },
+              {
+                "checksum": "ebfb57c11260aaf270a5d672d014a377aee3fde4dbe681876b63423d14f98f76",
+                "checksums": {
+                  "sha256-v1": "ebfb57c11260aaf270a5d672d014a377aee3fde4dbe681876b63423d14f98f76",
+                  "sha256-v2": "4f0e110f685c0dd62e91dcab8d90cce861c2fe6de76f432bd05790a0fe3dee89"
+                },
+                "index": 1,
+                "name": "statement-02"
+              },
+              {
+                "checksum": "67a55094cb253df80f6e4cc8ca911ed9633b6e2951e6f3cf0963c437ad185a94",
+                "checksums": {
+                  "sha256-v1": "67a55094cb253df80f6e4cc8ca911ed9633b6e2951e6f3cf0963c437ad185a94",
+                  "sha256-v2": "0b32d942e2f1ee53cc771dcd66a98f71bec29b1f6a0396cd1c60bf2a82fdaf51"
+                },
+                "index": 2,
+                "name": "statement-03"
+              },
+              {
+                "checksum": "ecf768e2bdd726203ea3d6d86962f7affc8ff256adee0b583f8056275ba1b31b",
+                "checksums": {
+                  "sha256-v1": "ecf768e2bdd726203ea3d6d86962f7affc8ff256adee0b583f8056275ba1b31b",
+                  "sha256-v2": "e4603c1b0f6170d9a999cb83549d4c8232b894e4fd682092fa24927afcc5fbc7"
+                },
+                "index": 3,
+                "name": "statement-04"
+              },
+              {
+                "checksum": "74134e752444bc7ca28067d311f497dfb1c0e54faa67eb9ca4341e8036dccf97",
+                "checksums": {
+                  "sha256-v1": "74134e752444bc7ca28067d311f497dfb1c0e54faa67eb9ca4341e8036dccf97",
+                  "sha256-v2": "baf6ed3c62f1c1b14fe6055ea7914131b175212d1281f5131f6b9d1f9c886f3f"
+                },
+                "index": 4,
+                "name": "statement-05"
+              },
+              {
+                "checksum": "d52dab2573798641e84036a91295c89900123f0f60f0dc61ae75307be9ce1c77",
+                "checksums": {
+                  "sha256-v1": "d52dab2573798641e84036a91295c89900123f0f60f0dc61ae75307be9ce1c77",
+                  "sha256-v2": "d293d1bc7e7161a4530026b5858a26df2ac6bcd95555f6f7b5b1153a958455ca"
+                },
+                "index": 5,
+                "name": "statement-06"
+              },
+              {
+                "checksum": "a29e3dcb3dc34772780ff0dffd1526b267f8965cff95fd8d8d4661a11a6edbc5",
+                "checksums": {
+                  "sha256-v1": "a29e3dcb3dc34772780ff0dffd1526b267f8965cff95fd8d8d4661a11a6edbc5",
+                  "sha256-v2": "99aa2a372dc57567aa20441c96888864b84ff044e2e06689c17a5d1b703ce89e"
+                },
+                "index": 6,
+                "name": "statement-07"
+              },
+              {
+                "checksum": "a79557d915e2a47828b61dc545f5d668e58ffd250f1e1dae5191d2f95071ed54",
+                "checksums": {
+                  "sha256-v1": "a79557d915e2a47828b61dc545f5d668e58ffd250f1e1dae5191d2f95071ed54",
+                  "sha256-v2": "42a2fab2ed63443992e62dc190f869f54629d22d69aeaa29ac06c8c05f3e506d"
+                },
+                "index": 7,
+                "name": "statement-08"
+              }
+            ]
+          },
+          {
+            "checksum": "6fff2291b3040d05c990ebe74343a8425651aa39688ff93a4a0d72a8b3c7c191",
+            "checksums": {
+              "sha256-v1": "6fff2291b3040d05c990ebe74343a8425651aa39688ff93a4a0d72a8b3c7c191",
+              "sha256-v2": "2d0ffb0c978e356d8dabbb94df03ac9c2f971969f16c2c25e360b87e9d693709"
+            },
+            "description": "Reviewed complete source file 0021_governed_current_user_traits.sql",
+            "name": "0021_governed_current_user_traits",
+            "ordinal": 20,
+            "steps": [
+              {
+                "checksum": "284ebf73fa9cc56a5c47b46231ad4f62aa00ae871347bbec4c39eca01e7cde1d",
+                "checksums": {
+                  "sha256-v1": "284ebf73fa9cc56a5c47b46231ad4f62aa00ae871347bbec4c39eca01e7cde1d",
+                  "sha256-v2": "656cda6db9e4b199b1bfdfcbc0fe504ab321ed43cafae0c9a99767546f89adb9"
+                },
+                "index": 0,
+                "name": "statement-01"
+              },
+              {
+                "checksum": "824e9f620b951fd8d0b3d481346a356df86082b0dc43b1a40be62a74f2b1590e",
+                "checksums": {
+                  "sha256-v1": "824e9f620b951fd8d0b3d481346a356df86082b0dc43b1a40be62a74f2b1590e",
+                  "sha256-v2": "14452fdfdaf57159310264b2b07fc40f12fbf9dce0c19e3167a85e8da0e6ee42"
+                },
+                "index": 1,
+                "name": "statement-02"
+              },
+              {
+                "checksum": "79b55b56a19bb7aaf34cc304887d965884877f660bf93000e944a754aace5b06",
+                "checksums": {
+                  "sha256-v1": "79b55b56a19bb7aaf34cc304887d965884877f660bf93000e944a754aace5b06",
+                  "sha256-v2": "2f57afa7044dc3dd6ae2a516d4f3a03bf198f6f95525fe27da98c40911608748"
+                },
+                "index": 2,
+                "name": "statement-03"
+              },
+              {
+                "checksum": "404e087b46604b94cece06d88f00aad4c709b7d07c00ce1a79e79d45da6c5d2a",
+                "checksums": {
+                  "sha256-v1": "404e087b46604b94cece06d88f00aad4c709b7d07c00ce1a79e79d45da6c5d2a",
+                  "sha256-v2": "1d40ec5cb840da63a637ccd5463b669aa795f4891aef8bad88274c509cb4ffd9"
+                },
+                "index": 3,
+                "name": "statement-04"
+              },
+              {
+                "checksum": "afc63b1680f2ddbe982770a8f8d57719e2cf1122f53d27850033a8e0a9bdda84",
+                "checksums": {
+                  "sha256-v1": "afc63b1680f2ddbe982770a8f8d57719e2cf1122f53d27850033a8e0a9bdda84",
+                  "sha256-v2": "016305b4bc8f640236d5b21ec2688a8e62adc1564bc935d56af4d01f2ff064b8"
+                },
+                "index": 4,
+                "name": "statement-05"
+              },
+              {
+                "checksum": "222789d3913a2ccd3923f27348f65179235aa82a1a3c3a1f02a52f77f759e29c",
+                "checksums": {
+                  "sha256-v1": "222789d3913a2ccd3923f27348f65179235aa82a1a3c3a1f02a52f77f759e29c",
+                  "sha256-v2": "646d2c22820c87a64383a6a2f3ec63a7815204af73f6e4d6d4f440d8f8973ccc"
+                },
+                "index": 5,
+                "name": "statement-06"
+              },
+              {
+                "checksum": "3ea0ddc58b775d2b21c7b7981cfee6fac735e7a45cb0321279988705b384187a",
+                "checksums": {
+                  "sha256-v1": "3ea0ddc58b775d2b21c7b7981cfee6fac735e7a45cb0321279988705b384187a",
+                  "sha256-v2": "efa9589f315561d36f5b473d05e54d649684b5844283e8d10666eee1783d8c06"
+                },
+                "index": 6,
+                "name": "statement-07"
+              },
+              {
+                "checksum": "6c4ca8608a442028be7ec028911a9c920e28b6dab8247c7a70e26beb8cd26893",
+                "checksums": {
+                  "sha256-v1": "6c4ca8608a442028be7ec028911a9c920e28b6dab8247c7a70e26beb8cd26893",
+                  "sha256-v2": "a256ed5891a6f5923336518e30c2e98eeaf82ff75b424269f7b6ff1f5386272e"
+                },
+                "index": 7,
+                "name": "statement-08"
+              },
+              {
+                "checksum": "a9620ad82af54dce3cc0377fa366e4d2566e15bf53cae873066795fc7c897100",
+                "checksums": {
+                  "sha256-v1": "a9620ad82af54dce3cc0377fa366e4d2566e15bf53cae873066795fc7c897100",
+                  "sha256-v2": "75d714b61475c8398de1599fd047235243ef890708255432ef1ce564b4a400e8"
+                },
+                "index": 8,
+                "name": "statement-09"
+              },
+              {
+                "checksum": "1de83a41753bf6b4376222c3298084e23ea7f7de26de9a5136b975714d859178",
+                "checksums": {
+                  "sha256-v1": "1de83a41753bf6b4376222c3298084e23ea7f7de26de9a5136b975714d859178",
+                  "sha256-v2": "66ab1f8d9375f54246bbab1c70fe6107222f902001d4641618b9eee5c8531a95"
+                },
+                "index": 9,
+                "name": "statement-10"
+              },
+              {
+                "checksum": "9f24df043851848d08cbdfa1fd3dd673b29cb5903423c4ca239dac46822544ca",
+                "checksums": {
+                  "sha256-v1": "9f24df043851848d08cbdfa1fd3dd673b29cb5903423c4ca239dac46822544ca",
+                  "sha256-v2": "15a77aa7bf6ae9af17dd6398679edc283b5dc14dac99417654dab13d23bc84be"
+                },
+                "index": 10,
+                "name": "statement-11"
+              },
+              {
+                "checksum": "922254ad6f4a8c65aedf77eaaf8770b1c5656fdad36bbcd02f205769d655a0fc",
+                "checksums": {
+                  "sha256-v1": "922254ad6f4a8c65aedf77eaaf8770b1c5656fdad36bbcd02f205769d655a0fc",
+                  "sha256-v2": "92f6dca3b326063ef198215c6e2d992d1636581b6de0dc964008787876f02909"
+                },
+                "index": 11,
+                "name": "statement-12"
+              },
+              {
+                "checksum": "70c1099133e0cac29181cb9c1a0f389c2565a9ba6ec24e58b8bb9e21c664397d",
+                "checksums": {
+                  "sha256-v1": "70c1099133e0cac29181cb9c1a0f389c2565a9ba6ec24e58b8bb9e21c664397d",
+                  "sha256-v2": "acdafd87244eb69262e99b9e60bc9853c1911dcde271917150ce7a03fee6c195"
+                },
+                "index": 12,
+                "name": "statement-13"
+              }
+            ]
+          },
+          {
+            "checksum": "3c97bcdfa1b222fb95aff35860f00b5e91f1c7b4a14e8ae351bc20edff22b65e",
+            "checksums": {
+              "sha256-v1": "3c97bcdfa1b222fb95aff35860f00b5e91f1c7b4a14e8ae351bc20edff22b65e",
+              "sha256-v2": "6b59b6358fe4c7edc2c8a85a72bd825bba37b6358335a614613ecfd6df241668"
+            },
+            "description": "Reviewed complete source file 0022_applied_retention_policy.sql",
+            "name": "0022_applied_retention_policy",
+            "ordinal": 21,
+            "steps": [
+              {
+                "checksum": "9854e529c93ea3a8da007b89f4377d0d7e57d9037132447f6fbfebb1b25d2b03",
+                "checksums": {
+                  "sha256-v1": "9854e529c93ea3a8da007b89f4377d0d7e57d9037132447f6fbfebb1b25d2b03",
+                  "sha256-v2": "2c2dfa931c72e5a463dfd154b45e6caaefbdbc7eb30f09c8b61d2d7ed7af26bc"
+                },
+                "index": 0,
+                "name": "statement-01"
+              },
+              {
+                "checksum": "ab70c0344ee97204168cb74e86da17a36d67f782f7b8115ba1086896316c5177",
+                "checksums": {
+                  "sha256-v1": "ab70c0344ee97204168cb74e86da17a36d67f782f7b8115ba1086896316c5177",
+                  "sha256-v2": "91f787d305a96ca90b8fbd4067e4b9a4626a98ecec9cddebf6d820923a71a4c7"
+                },
+                "index": 1,
+                "name": "statement-02"
+              },
+              {
+                "checksum": "180fdf541a8127131cdb17d76127b7d74cd49f09a21c0e0136a62791829ee187",
+                "checksums": {
+                  "sha256-v1": "180fdf541a8127131cdb17d76127b7d74cd49f09a21c0e0136a62791829ee187",
+                  "sha256-v2": "3f81c5fc8d760d7f9d27e478bafb5f6000ea6319dad141126296d6f4b1d2f22c"
+                },
+                "index": 2,
+                "name": "statement-03"
+              },
+              {
+                "checksum": "633dcd2d2967e5faa73e1297d9f916e9d1d23fe1dc34533a15a9936c79dda6eb",
+                "checksums": {
+                  "sha256-v1": "633dcd2d2967e5faa73e1297d9f916e9d1d23fe1dc34533a15a9936c79dda6eb",
+                  "sha256-v2": "6159f71c3c7c4f09fa6cd08cbcd38e64972094dec0dfa31ad298f392be39120f"
+                },
+                "index": 3,
+                "name": "statement-04"
+              },
+              {
+                "checksum": "4041154dbe8ceba3eab0c05fac0dd4703e7f92b3ceb8c91ca62130223ef9e5c3",
+                "checksums": {
+                  "sha256-v1": "4041154dbe8ceba3eab0c05fac0dd4703e7f92b3ceb8c91ca62130223ef9e5c3",
+                  "sha256-v2": "3b5e2b08b316d46a7064fe6e9342d14c29b5aedf5f5887955f15a44b79f94339"
+                },
+                "index": 4,
+                "name": "statement-05"
+              },
+              {
+                "checksum": "621488f426010caf27b9d84fbd1a2a25142cc6c72bae81cac6f1f425e878c094",
+                "checksums": {
+                  "sha256-v1": "621488f426010caf27b9d84fbd1a2a25142cc6c72bae81cac6f1f425e878c094",
+                  "sha256-v2": "2c5cde95e9d12fe854edf195be124b4313b77e9524da8369b93f5463061e2485"
+                },
+                "index": 5,
+                "name": "statement-06"
+              },
+              {
+                "checksum": "ab6baf5c5c85bcf4d786b283c47c0364a3d74734df6f2c664337749a2ff58311",
+                "checksums": {
+                  "sha256-v1": "ab6baf5c5c85bcf4d786b283c47c0364a3d74734df6f2c664337749a2ff58311",
+                  "sha256-v2": "ede49ef99adc992836ed09ffb6f9ebcd566468ce2fb834dd95f7ac49ff1d307d"
+                },
+                "index": 6,
+                "name": "statement-07"
+              },
+              {
+                "checksum": "9f9b04d2546d38cee921dff3fcb4edf4cc43b141a796a4044af8ec35c6436873",
+                "checksums": {
+                  "sha256-v1": "9f9b04d2546d38cee921dff3fcb4edf4cc43b141a796a4044af8ec35c6436873",
+                  "sha256-v2": "4ed1b347253e9da1dce5992e28f751083b3212f3f9cc0aa4a18a2138e6e55527"
+                },
+                "index": 7,
+                "name": "statement-08"
+              },
+              {
+                "checksum": "8e1eab047c183deacf251f6c8c583b9a4d4b98672407261b3ddfe6c2d6c1570f",
+                "checksums": {
+                  "sha256-v1": "8e1eab047c183deacf251f6c8c583b9a4d4b98672407261b3ddfe6c2d6c1570f",
+                  "sha256-v2": "37686722c1fb4f53d91c6541d51ed212a4ef1aa2b7e87c19fbbabef40ec9af04"
+                },
+                "index": 8,
+                "name": "statement-09"
+              },
+              {
+                "checksum": "5b00c623b9b9e4c041e71bf62ef71d725a4a33f07dbe697b5cf1e76112e35c77",
+                "checksums": {
+                  "sha256-v1": "5b00c623b9b9e4c041e71bf62ef71d725a4a33f07dbe697b5cf1e76112e35c77",
+                  "sha256-v2": "db1d177ea87f5d5a86561cbc98e038ba643a3d450e5ab5a609283baf7aba27ad"
+                },
+                "index": 9,
+                "name": "statement-10"
+              },
+              {
+                "checksum": "0ad1dc17b0c160fe463148cf3e460e8d2c42cc1494f55fe3625dab4840a78c98",
+                "checksums": {
+                  "sha256-v1": "0ad1dc17b0c160fe463148cf3e460e8d2c42cc1494f55fe3625dab4840a78c98",
+                  "sha256-v2": "afd62979ca2697a9a63b60d0bd9608c32565d4e6d34be4f6db8dcb7123ef4c19"
+                },
+                "index": 10,
+                "name": "statement-11"
+              },
+              {
+                "checksum": "14cb5e3171d9d6800f164262b41b3f62336727e541516573f92c1fb18277fa3d",
+                "checksums": {
+                  "sha256-v1": "14cb5e3171d9d6800f164262b41b3f62336727e541516573f92c1fb18277fa3d",
+                  "sha256-v2": "3bbb10a94cc90137fe4c4f64968693605e2d511ce7d5e31f36bc507613103316"
+                },
+                "index": 11,
+                "name": "statement-12"
+              },
+              {
+                "checksum": "2d717676faaee171fc4119a4b8f616e671d93c8e3bee3841db972959e12df193",
+                "checksums": {
+                  "sha256-v1": "2d717676faaee171fc4119a4b8f616e671d93c8e3bee3841db972959e12df193",
+                  "sha256-v2": "cba04db6f94a1ea4e32c5f2e27e8acb389cb4f0f5e95ee63b3ac568748f13056"
+                },
+                "index": 12,
+                "name": "statement-13"
+              },
+              {
+                "checksum": "077d8e32001fea97d8eae4c21087ffd9f72cc2ec123b1806222f52bd1fd43e16",
+                "checksums": {
+                  "sha256-v1": "077d8e32001fea97d8eae4c21087ffd9f72cc2ec123b1806222f52bd1fd43e16",
+                  "sha256-v2": "150cdd8b9a5f00567868eeec76d1ac53524a20b61b7ea57f33c8fdbff7ab1f22"
+                },
+                "index": 13,
+                "name": "statement-14"
+              },
+              {
+                "checksum": "c05db38c9b99ece665caa431f0ca69a544478349e13ab0bf2c826fdbde655682",
+                "checksums": {
+                  "sha256-v1": "c05db38c9b99ece665caa431f0ca69a544478349e13ab0bf2c826fdbde655682",
+                  "sha256-v2": "97fad194800d09883dc3b861d297f1f7badb9feb3492f6c4975779d00755d0a7"
+                },
+                "index": 14,
+                "name": "statement-15"
+              },
+              {
+                "checksum": "a3ee4bb9808416c035cba35f1763e94ff5adf56f950f54c1ecb0b1a4f565f3cf",
+                "checksums": {
+                  "sha256-v1": "a3ee4bb9808416c035cba35f1763e94ff5adf56f950f54c1ecb0b1a4f565f3cf",
+                  "sha256-v2": "374c10f1104b7696b7edac545a9e8b82f5b83f884d962a3b1ed4b032d41c6996"
+                },
+                "index": 15,
+                "name": "statement-16"
+              },
+              {
+                "checksum": "065a4dcbcb16398edb6fb3bf1e5f2cc79be7b14e42566ff4af0ae9685b1eea1b",
+                "checksums": {
+                  "sha256-v1": "065a4dcbcb16398edb6fb3bf1e5f2cc79be7b14e42566ff4af0ae9685b1eea1b",
+                  "sha256-v2": "10f186266f63f32dc17078df4e1080d6918f25925c17788883e9b79f9cdfbc25"
+                },
+                "index": 16,
+                "name": "statement-17"
+              },
+              {
+                "checksum": "e857cfc591ecfb0e12bd39bb0b590ef555728794f0af7a00a1fa1e9a3da4136f",
+                "checksums": {
+                  "sha256-v1": "e857cfc591ecfb0e12bd39bb0b590ef555728794f0af7a00a1fa1e9a3da4136f",
+                  "sha256-v2": "b10ef78e73ed7ef7191c0ababa6cb9f3897db67cd877bad4be535f9029807f51"
+                },
+                "index": 17,
+                "name": "statement-18"
+              },
+              {
+                "checksum": "7ed0af4d00aa0682d5aebd6339f54918051703a5e78992c174ccf4490cb576ef",
+                "checksums": {
+                  "sha256-v1": "7ed0af4d00aa0682d5aebd6339f54918051703a5e78992c174ccf4490cb576ef",
+                  "sha256-v2": "4b4d81c693d48d49d5e9cf02b055b70111e2de8f77abc7503a5e60106c29dea5"
+                },
+                "index": 18,
+                "name": "statement-19"
+              },
+              {
+                "checksum": "1ef507f369a4ef033be9c89e0811b621ebd6d1a79567762666204de1a3f39eba",
+                "checksums": {
+                  "sha256-v1": "1ef507f369a4ef033be9c89e0811b621ebd6d1a79567762666204de1a3f39eba",
+                  "sha256-v2": "54c3a531b28d1fc59f853838e0becd62c4169b10041e1bc2724e251a15774203"
+                },
+                "index": 19,
+                "name": "statement-20"
+              },
+              {
+                "checksum": "35f2546be0a36456b548ed627e4b5b7593c5c1352e1da7af2c5e762a8bc50906",
+                "checksums": {
+                  "sha256-v1": "35f2546be0a36456b548ed627e4b5b7593c5c1352e1da7af2c5e762a8bc50906",
+                  "sha256-v2": "3f49b9737b3cf768cc91d11f4ba2ca2d4a025eeed4b59970011625b81653d1c2"
+                },
+                "index": 20,
+                "name": "statement-21"
+              },
+              {
+                "checksum": "a6e6b9f19ede435c122b4a2bafdc53705304231d8bfe073141c7d3868f5e84c2",
+                "checksums": {
+                  "sha256-v1": "a6e6b9f19ede435c122b4a2bafdc53705304231d8bfe073141c7d3868f5e84c2",
+                  "sha256-v2": "ffbe48f6e14b0fa290d66b574365fb0ca7816e2fda48d2efbcca3892954ef441"
+                },
+                "index": 21,
+                "name": "statement-22"
+              },
+              {
+                "checksum": "19ba60c24b9888f0eea0d5ed2bbfdc56671cf481e015f791ad741618abe70430",
+                "checksums": {
+                  "sha256-v1": "19ba60c24b9888f0eea0d5ed2bbfdc56671cf481e015f791ad741618abe70430",
+                  "sha256-v2": "337ca28a2821675f638bfc3c0fd720bdc59384eb746ba65a46bf0937912f9f3a"
+                },
+                "index": 22,
+                "name": "statement-23"
+              }
+            ]
+          },
+          {
+            "checksum": "2ff198aba127a735ec771d3442f64ce69bffef07d7697908e8f7e2cd8a530131",
+            "checksums": {
+              "sha256-v1": "2ff198aba127a735ec771d3442f64ce69bffef07d7697908e8f7e2cd8a530131",
+              "sha256-v2": "4ca390347f36cddb2e5fcd930f22af019f397f7c46db6843e5eb623bfc48060f"
+            },
+            "description": "Reviewed complete source file 0023_stable_reader_surface.sql",
+            "name": "0023_stable_reader_surface",
+            "ordinal": 22,
+            "steps": [
+              {
+                "checksum": "ea94d19c471b6da2d3e7e41fd86a7123cf35c2a14582d862ac8dbecf883d02e7",
+                "checksums": {
+                  "sha256-v1": "ea94d19c471b6da2d3e7e41fd86a7123cf35c2a14582d862ac8dbecf883d02e7",
+                  "sha256-v2": "a7255e7bbb697d49721a6494359eb6a92e00b703dbb8e20438506ba5a3c19fc0"
+                },
+                "index": 0,
+                "name": "statement-01"
+              },
+              {
+                "checksum": "90e35a25fe18823c6ab78cd63ea12c68f24bdb89c093fdc9cf2b128c098b1e2d",
+                "checksums": {
+                  "sha256-v1": "90e35a25fe18823c6ab78cd63ea12c68f24bdb89c093fdc9cf2b128c098b1e2d",
+                  "sha256-v2": "38f9eb00345cece8968e60d05ccf942769b86c06bb61de737266f702190c780c"
+                },
+                "index": 1,
+                "name": "statement-02"
+              },
+              {
+                "checksum": "955d9639980c86501cb0a81190d16eb041b8c8a8d0a70938f313c8253ec1e3c8",
+                "checksums": {
+                  "sha256-v1": "955d9639980c86501cb0a81190d16eb041b8c8a8d0a70938f313c8253ec1e3c8",
+                  "sha256-v2": "56f1b27da0187c5371b0ebf85e5bfac1e864e0d72eba873e79763be30f0c911e"
+                },
+                "index": 2,
+                "name": "statement-03"
+              }
+            ]
+          },
+          {
+            "checksum": "f0b8f1c7512e8827d747fd0c8e145ae5588c16896cad20107f4720aa4f3bbd86",
+            "checksums": {
+              "sha256-v1": "f0b8f1c7512e8827d747fd0c8e145ae5588c16896cad20107f4720aa4f3bbd86",
+              "sha256-v2": "95b6c079acf415d1ca63e3cb2a45a024262838855e8c8f2c702c62b8cdd6553e"
+            },
+            "description": "Reviewed complete source file 0024_cohort_members.sql",
+            "name": "0024_cohort_members",
+            "ordinal": 23,
+            "steps": [
+              {
+                "checksum": "df84a5ad1517914dd65b037c9c9a5ec1894ab59f51d7417572a08361fae9d882",
+                "checksums": {
+                  "sha256-v1": "df84a5ad1517914dd65b037c9c9a5ec1894ab59f51d7417572a08361fae9d882",
+                  "sha256-v2": "42691b67825fe032884975f29c0057d77ffe184f8cdc195552530c1582defe6e"
+                },
+                "index": 0,
+                "name": "statement-01"
+              }
+            ]
+          },
+          {
+            "checksum": "9cddb7e9be641dbb2f3b9d9ee164d127168124820816839bf3a65f696a89bf82",
+            "checksums": {
+              "sha256-v1": "9cddb7e9be641dbb2f3b9d9ee164d127168124820816839bf3a65f696a89bf82",
+              "sha256-v2": "741eaf5b23e82de50ad1c68525f005ed50a87e63e4b6fd8678952437f809e1ab"
+            },
+            "description": "Reviewed complete source file 0025_organization_analytics.sql",
+            "name": "0025_organization_analytics",
+            "ordinal": 24,
+            "steps": [
+              {
+                "checksum": "4d318666c5136c47ceb3abc2b21f3b5f62daa996699f8e1aea3a48f06be772ca",
+                "checksums": {
+                  "sha256-v1": "4d318666c5136c47ceb3abc2b21f3b5f62daa996699f8e1aea3a48f06be772ca",
+                  "sha256-v2": "55d94514f2b458fc40ca0719dc4133b74051903df7a0dd6b41f002b4252b308c"
+                },
+                "index": 0,
+                "name": "statement-01"
+              },
+              {
+                "checksum": "14463efee878d41be6732206760bb4c401ffeab0dbca43343f919ca2d7020d3d",
+                "checksums": {
+                  "sha256-v1": "14463efee878d41be6732206760bb4c401ffeab0dbca43343f919ca2d7020d3d",
+                  "sha256-v2": "5bd9e00917615b9042eeddfaac49833c9a6c64fae4b94964a557ac1f44a23769"
+                },
+                "index": 1,
+                "name": "statement-02"
+              },
+              {
+                "checksum": "1c32b6541155eda84cc6e0fc12dbffa63659f222cd88521e9e0df8ee8dccce08",
+                "checksums": {
+                  "sha256-v1": "1c32b6541155eda84cc6e0fc12dbffa63659f222cd88521e9e0df8ee8dccce08",
+                  "sha256-v2": "ad3d7811895667d71137f954bbbdc69d07fd0339de5b53b914fd42c583f99f61"
+                },
+                "index": 2,
+                "name": "statement-03"
+              },
+              {
+                "checksum": "3a99e023b05adb3202f3b8c40b7a58c545e8d172a13de7189a69bc0b07936a58",
+                "checksums": {
+                  "sha256-v1": "3a99e023b05adb3202f3b8c40b7a58c545e8d172a13de7189a69bc0b07936a58",
+                  "sha256-v2": "fc18b70c1a1e3a5aac2089b100f686d2d7a693d4e9e52cf899db26a6edda1f74"
+                },
+                "index": 3,
+                "name": "statement-04"
+              },
+              {
+                "checksum": "c6e4b95a61e4773c10fad7eb0811561e46e16f58e8214870c1c0a31c40869557",
+                "checksums": {
+                  "sha256-v1": "c6e4b95a61e4773c10fad7eb0811561e46e16f58e8214870c1c0a31c40869557",
+                  "sha256-v2": "5618d1e9236ffb7df81d8b4f01031114621ad9b1d8159911d2221b001558a97b"
+                },
+                "index": 4,
+                "name": "statement-05"
+              },
+              {
+                "checksum": "4c463ba9ac6554a6a998e7b4de353a4d037057824ccb552eed3bec6af20836dc",
+                "checksums": {
+                  "sha256-v1": "4c463ba9ac6554a6a998e7b4de353a4d037057824ccb552eed3bec6af20836dc",
+                  "sha256-v2": "4186a9761bd35bc16170b380402d9803c62314d33b6379d33a7490da8e5264dc"
+                },
+                "index": 5,
+                "name": "statement-06"
+              },
+              {
+                "checksum": "b7b67ce4b590a59deb18fa2bbc39c254cd7c7f9d56e03e7a346800b24185c876",
+                "checksums": {
+                  "sha256-v1": "b7b67ce4b590a59deb18fa2bbc39c254cd7c7f9d56e03e7a346800b24185c876",
+                  "sha256-v2": "58d9f768fdf5097e3157f7a5275d68597c16bb1b0d86ae596c215e5124f53c8a"
+                },
+                "index": 6,
+                "name": "statement-07"
+              },
+              {
+                "checksum": "c112d4dbe1df6b17c261abe35c3fe4ad90a529d14a59ad2f3cdb0266ae9e4ffd",
+                "checksums": {
+                  "sha256-v1": "c112d4dbe1df6b17c261abe35c3fe4ad90a529d14a59ad2f3cdb0266ae9e4ffd",
+                  "sha256-v2": "72ef4a85a4e550d81132e59326e510f589b363f0d23efdda4115a19ae4db0bfd"
+                },
+                "index": 7,
+                "name": "statement-08"
+              },
+              {
+                "checksum": "9226da7d6622f09257074d6946c68f26077e83969f200711b71378d9d0fba6fc",
+                "checksums": {
+                  "sha256-v1": "9226da7d6622f09257074d6946c68f26077e83969f200711b71378d9d0fba6fc",
+                  "sha256-v2": "17de5a3c768d5b535336b0405a1731cff2cb5e2c20aac5badd8f91ca93a20274"
+                },
+                "index": 8,
+                "name": "statement-09"
+              },
+              {
+                "checksum": "6e2703ea29738ea974a6dd7f50e81d08c04ad7408404c27411b3e43505f44046",
+                "checksums": {
+                  "sha256-v1": "6e2703ea29738ea974a6dd7f50e81d08c04ad7408404c27411b3e43505f44046",
+                  "sha256-v2": "8c8afccdec6cd938ed004ca80b5c507fa74848e697ada4befab4df96f3a4e1a3"
+                },
+                "index": 9,
+                "name": "statement-10"
+              }
+            ]
+          }
+        ],
+        "name": "kansoku"
+      }
+    ],
+    "kind": "plan",
+    "schedule": [
+      {
+        "component": "kansoku",
+        "migration": "0001_events_raw",
+        "ordinal": 0
+      },
+      {
+        "component": "kansoku",
+        "migration": "0002_identity",
+        "ordinal": 1
+      },
+      {
+        "component": "kansoku",
+        "migration": "0003_rollups",
+        "ordinal": 2
+      },
+      {
+        "component": "kansoku",
+        "migration": "0004_events_raw_v2",
+        "ordinal": 3
+      },
+      {
+        "component": "kansoku",
+        "migration": "0005_final_free_resolution",
+        "ordinal": 4
+      },
+      {
+        "component": "kansoku",
+        "migration": "0006_rollups_v2",
+        "ordinal": 5
+      },
+      {
+        "component": "kansoku",
+        "migration": "0007_drop_events_raw_v1",
+        "ordinal": 6
+      },
+      {
+        "component": "kansoku",
+        "migration": "0008_account_scoped_metrics",
+        "ordinal": 7
+      },
+      {
+        "component": "kansoku",
+        "migration": "0009_typed_properties",
+        "ordinal": 8
+      },
+      {
+        "component": "kansoku",
+        "migration": "0010_resolved_event_properties",
+        "ordinal": 9
+      },
+      {
+        "component": "kansoku",
+        "migration": "0011_events_raw_identifiers",
+        "ordinal": 10
+      },
+      {
+        "component": "kansoku",
+        "migration": "0012_identity_signals",
+        "ordinal": 11
+      },
+      {
+        "component": "kansoku",
+        "migration": "0013_retire_identity_map",
+        "ordinal": 12
+      },
+      {
+        "component": "kansoku",
+        "migration": "0014_experiment_exposures",
+        "ordinal": 13
+      },
+      {
+        "component": "kansoku",
+        "migration": "0015_experiment_exposure_string_casts",
+        "ordinal": 14
+      },
+      {
+        "component": "kansoku",
+        "migration": "0016_events_raw_schema_version",
+        "ordinal": 15
+      },
+      {
+        "component": "kansoku",
+        "migration": "0017_replay_safe_sources",
+        "ordinal": 16
+      },
+      {
+        "component": "kansoku",
+        "migration": "0018_conservative_identity_resolution",
+        "ordinal": 17
+      },
+      {
+        "component": "kansoku",
+        "migration": "0019_web_enrichment",
+        "ordinal": 18
+      },
+      {
+        "component": "kansoku",
+        "migration": "0020_replay_safe_sessions",
+        "ordinal": 19
+      },
+      {
+        "component": "kansoku",
+        "migration": "0021_governed_current_user_traits",
+        "ordinal": 20
+      },
+      {
+        "component": "kansoku",
+        "migration": "0022_applied_retention_policy",
+        "ordinal": 21
+      },
+      {
+        "component": "kansoku",
+        "migration": "0023_stable_reader_surface",
+        "ordinal": 22
+      },
+      {
+        "component": "kansoku",
+        "migration": "0024_cohort_members",
+        "ordinal": 23
+      },
+      {
+        "component": "kansoku",
+        "migration": "0025_organization_analytics",
+        "ordinal": 24
+      }
+    ]
+  },
+  "schemaVersion": 1,
+  "status": "ok"
+}

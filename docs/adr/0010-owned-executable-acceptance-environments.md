@@ -5,7 +5,7 @@ description: Gate service changes with deterministic checks and required integra
 docId: ADR-10
 status: Accepted
 date: 2026-10-15
-timestamp: 2026-11-06T04:34:23Z
+timestamp: 2026-11-08T01:45:00Z
 generated:
   by: process:codex
   at: 2026-10-16T17:56:53Z
@@ -97,3 +97,13 @@ The initial native proof is restricted to the exact hash-qualified Darwin/arm64 
 The macOS job supplements Ubuntu acceptance; Linux remains a visible qualification blocker,
 not a skipped success or a decision to remove that platform. Configuration, local observations,
 remote CI results and deployment readiness are recorded separately.
+
+
+The additional `just ch-migrations-replicated` gate owns Keeper, two Linux replicas
+and PostgreSQL, using the exact Altinity 26.3.60.10002 candidate. A tiny test-only
+history crosses the real CLI/coordinator boundary before the full history matrix.
+Replica observations use public fixture calls independently of the routed endpoint.
+Missing Docker, image/platform prerequisites, zero examples or pending examples
+remain failures. macOS-hosted Linux containers do not qualify a Linux application
+client or a managed production endpoint. Full completion requires the evidence and
+packaged/query gates in [plan 62](../plans/62-run-clickhouse-migrations-on-a-replicated-cluster.md).

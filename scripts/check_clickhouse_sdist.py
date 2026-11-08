@@ -40,14 +40,17 @@ def main():
     server = next(path for path in packages if path.name.startswith('kansoku-server-'))
     settings = (repo / 'cabal.project').read_text().split('index-state:',1)[1].split('source-repository-package',1)[0]
     (workspace / 'cabal.project').write_text('packages:\n' + ''.join('  '+str(path)+'\n' for path in packages) + '\nindex-state:' + settings)
-    run(['clickhouse-migrate-embed-build','--input',str(server),'migrations/clickhouse/manifest.json','--','build','kansoku-server:exe:kansoku-ch-migrate'],workspace)
+    run(['clickhouse-migrate-embed-build','--input',str(server),'migrations/clickhouse/manifest.json','--input',str(server),'migrations/clickhouse-replicated/manifest.json','--','build','kansoku-server:exe:kansoku-ch-migrate'],workspace)
     binary = run(['cabal','list-bin','kansoku-server:exe:kansoku-ch-migrate'],workspace)
     (server / 'migrations').rename(root / 'withheld-migration-inputs')
     offline = {key:value for key,value in os.environ.items() if not key.startswith(('PG','CLICKHOUSE','KANSOKU_'))}
     document = json.loads(run([binary,'plan','--json'],root,offline))
     migrations = document['result']['components'][0]['migrations']
     assert len(migrations) == 25 and sum(len(item['steps']) for item in migrations) == 257
-    print('source archives: ' + str(len(packages)) + ' extracted packages built the production CLI; 25/257 offline plan passed with inputs withheld',flush=True)
+    offline.update(KANSOKU_CH_MIGRATION_CLUSTER='fixture',KANSOKU_CH_MIGRATION_REPLICA_IDS='11111111-1111-4111-8111-111111111111,22222222-2222-4222-8222-222222222222')
+    replicated = json.loads(run([binary,'plan','--json'],root,offline))['result']['components'][0]['migrations']
+    assert len(replicated) == 25 and sum(len(item['steps']) for item in replicated) == 254
+    print('source archives: ' + str(len(packages)) + ' extracted packages built the production CLI; 25/257 direct and 25/254 replicated offline plans passed with inputs withheld',flush=True)
 
 
 if __name__ == '__main__':

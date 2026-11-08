@@ -32,9 +32,10 @@ def main():
     (package / 'proof').mkdir()
     (package / 'proof/Main.hs').write_text('''module Main where
 import Kansoku.ClickHouseMigrations qualified as M
+import Kansoku.ClickHouseReplicatedMigrations qualified as R
 import ClickHouseMigrate.Plan
 import Data.List.NonEmpty qualified as NE
-main = either (fail . show) (mapM_ (print . migrationChecksumHex . migrationChecksum) . NE.toList . inspectSchedule) M.plan
+main = mapM_ (either (fail . show) (mapM_ (print . migrationChecksumHex . migrationChecksum) . NE.toList . inspectSchedule)) [M.plan,R.plan]
 ''')
     (package / 'kansoku-server.cabal').write_text('''cabal-version: 3.12
 name: kansoku-server
@@ -45,22 +46,28 @@ executable embedding-proof
   default-extensions: OverloadedStrings
   hs-source-dirs: proof src
   main-is: Main.hs
-  other-modules: Kansoku.ClickHouseMigrations
+  other-modules: Kansoku.ClickHouseMigrations Kansoku.ClickHouseReplicatedMigrations
   build-depends: base >=4.21 && <4.22, bytestring, text, clickhouse-migrate ==MIGRATION_VERSION, clickhouse-migrate-embed ==MIGRATION_VERSION
 '''.replace('MIGRATION_VERSION', migration_version))
     (package / 'cabal.project').write_text('packages: .\n' + project[project.index('index-state:'):])
-    build = ['clickhouse-migrate-embed-build', '--input', '.', 'migrations/clickhouse/manifest.json', '--', 'build', 'all']
+    build = ['clickhouse-migrate-embed-build', '--input', '.', 'migrations/clickhouse/manifest.json', '--input', '.', 'migrations/clickhouse-replicated/manifest.json', '--', 'build', 'all']
     run(build, package)
     binary = run(['cabal', 'list-bin', 'embedding-proof'], package)
     original = run([binary], package)
-    manifest = json.loads((package / 'migrations/clickhouse/manifest.json').read_text())
-    sql = package / 'migrations/clickhouse' / manifest['migrations'][-1]['steps'][-1]['file']
-    stat = sql.stat()
-    sql.write_bytes(sql.read_bytes() + b'\n-- preserved timestamp embedding proof\n')
-    os.utime(sql, ns=(stat.st_atime_ns, stat.st_mtime_ns))
-    run(build, package)
-    changed = run([binary], root)
-    assert original != changed and len(changed.splitlines()) == 25
+    for index, history in enumerate(['clickhouse','clickhouse-replicated']):
+        manifest = json.loads((package / 'migrations' / history / 'manifest.json').read_text())
+        sql = package / 'migrations' / history / manifest['migrations'][-1]['steps'][-1]['file']
+        stat = sql.stat()
+        sql.write_bytes(sql.read_bytes() + b'\n-- preserved timestamp embedding proof\n')
+        os.utime(sql, ns=(stat.st_atime_ns, stat.st_mtime_ns))
+        run(build, package)
+        changed = run([binary], root)
+        before, after = original.splitlines(), changed.splitlines()
+        assert len(after) == 50
+        assert before[index*25:(index+1)*25] != after[index*25:(index+1)*25]
+        other = 1-index
+        assert before[other*25:(other+1)*25] == after[other*25:(other+1)*25]
+        original = changed
     # Remove all inputs from the extracted source, then run the compiled result.
     (package / 'migrations').rename(root / 'withheld-inputs')
     assert run([binary], root) == changed

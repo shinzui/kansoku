@@ -1,0 +1,2 @@
+
+DROP TABLE analytics.experiment_exposures_rebuild;

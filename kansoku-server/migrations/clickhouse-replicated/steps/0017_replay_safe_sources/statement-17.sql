@@ -1,0 +1,2 @@
+
+DROP TABLE analytics.daily_event_counts_rebuild;

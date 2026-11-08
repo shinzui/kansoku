@@ -38,7 +38,8 @@ kansokuApplicationMigrations = do
   cohorts <- sqlMigration "0005-cohorts" cohortsSql
   definitions <- sqlMigration "0006-metric-definitions" metricDefinitionsSql
   administration <- sqlMigration "0007-clickhouse-administration" clickhouseAdministrationSql
-  migrationComponent "kansoku" (Set.singleton "pgmq") (apiKeys :| [rejections, acceptance, maintenance, cohorts, definitions, administration])
+  replicatedAdministration <- sqlMigration "0008-clickhouse-replicated-administration" replicatedAdministrationSql
+  migrationComponent "kansoku" (Set.singleton "pgmq") (apiKeys :| [rejections, acceptance, maintenance, cohorts, definitions, administration, replicatedAdministration])
 
 apiKeysSql :: ByteString
 apiKeysSql =
@@ -226,4 +227,24 @@ clickhouseAdministrationSql =
       RAISE EXCEPTION 'analytics maintenance is active' USING ERRCODE='55000';
     END IF;
   END $$;
+  """
+
+-- Additive: existing fences, receipts, counters and direct UUIDs survive.
+replicatedAdministrationSql :: ByteString
+replicatedAdministrationSql =
+  """
+  CREATE FUNCTION kansoku.canonical_replica_ids(ids uuid[]) RETURNS boolean
+    LANGUAGE sql IMMUTABLE STRICT AS $$
+    SELECT ids = ARRAY(SELECT DISTINCT x FROM unnest(ids) AS x WHERE x IS NOT NULL ORDER BY x)
+    $$;
+  ALTER TABLE kansoku.clickhouse_migration_sessions
+    ALTER COLUMN server_id DROP NOT NULL,
+    ADD COLUMN topology text NOT NULL DEFAULT 'direct',
+    ADD COLUMN cluster_name text,
+    ADD COLUMN replica_ids uuid[] NOT NULL DEFAULT '{}',
+    ADD CONSTRAINT clickhouse_session_topology CHECK (
+      (topology='direct' AND server_id IS NOT NULL AND cluster_name IS NULL AND replica_ids='{}') OR
+      (topology='replicated' AND server_id IS NULL AND cluster_name IS NOT NULL AND length(cluster_name)>0
+       AND cardinality(replica_ids)>0 AND kansoku.canonical_replica_ids(replica_ids))
+    );
   """

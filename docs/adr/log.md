@@ -1,29 +1,25 @@
 # Bundle Update Log
 
+## 2026-11-08
+* **Update**: Add owned replicated CLI qualification gate and retain platform/deployment boundaries.
+* **Update**: Record separate immutable replicated history, full persisted topology identity and bounded replica observations.
+
 ## 2026-11-06
-
 * **Update**: ADR-12, ADR-13 and ADR-20: Record opt-in session attachment to event populations, per-term presence guards and side-local custom ratios
-
-* **Update**: ADR-7: Publish catalog v5 maxLength and immutable client_error/web_vital v1 contracts
-
+* **Update**: ADR-7: Publish catalog v5 maxLength and immutable client\_error/web\_vital v1 contracts
 * **Update**: ADR-9: Bound acquisition conversion lists before normalization and reject invalid combinations before storage
 * **Update**: ADR-12: Document first-selected-session conversion population, timing, source and bot policies
-
 * **Update**: ADR-20 records exact R-7 percentile compilation, quantile validation, legacy JSON compatibility and sample-count pairing.
-
 * **Update**: ADR-13, ADR-14 and ADR-20 define explicit whole-range grouping and saved override semantics
 * **Update**: ADR-10: Fix owned ClickHouse timezone to UTC so calendar-day expiry fixtures do not depend on host daylight-saving rules.
 * **Update**: Document channel/enrichment version 2, bounded AI assistant attribution and immutable historical replay.
 
 ## 2026-11-02
 * **Update**: Pin the fully engine-qualified upstream source cohort for Altinity while preserving managed deployment acceptance.
-
 * **Update**: Package independently pinned TAN images from the source flake using the proven Labs runtime layout.
-
 * **Add**: ADR-23: Require explicit verified TLS for native ClickHouse writer and query connections; preserve independent migration qualification.
 
 ## 2026-11-01
-
 * **Update**: ADR-2: remove legacy liveness and diagnostic readiness handlers; keep the canonical shared probe contract and Prometheus observations.
 
 ## 2026-10-16

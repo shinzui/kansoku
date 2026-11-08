@@ -2,6 +2,7 @@
 -- a backend releases locks, never a fence or predecessor-quiescence requirement.
 module Kansoku.Admin.Coordination
   ( SessionIdentity (..),
+    SessionTarget (..),
     beginSession,
     withSessionLease,
     leaseAlive,
@@ -20,11 +21,22 @@ import Kansoku.Postgres.Direct
 import Kansoku.Prelude
 import System.Timeout (timeout)
 
+data SessionTarget = DirectTarget !Text | ReplicatedTarget !Text ![Text]
+
 data SessionIdentity = SessionIdentity
-  {sessionId :: !Text, targetKey :: !Text, serverId :: !Text, ledgerId :: !Text}
+  {sessionId :: !Text, targetKey :: !Text, sessionTarget :: !SessionTarget, ledgerId :: !Text}
 
 parameters :: SessionIdentity -> A.Value
-parameters s = A.object ["id" A..= sessionId s, "target" A..= targetKey s, "server" A..= serverId s, "ledger" A..= ledgerId s]
+parameters s =
+  A.object
+    ( ["id" A..= sessionId s, "target" A..= targetKey s, "ledger" A..= ledgerId s] ++ case sessionTarget s of
+        DirectTarget sid -> ["topology" A..= ("direct" :: Text), "server" A..= sid, "cluster" A..= A.Null, "replicas" A..= ([] :: [Text])]
+        ReplicatedTarget name ids -> ["topology" A..= ("replicated" :: Text), "server" A..= A.Null, "cluster" A..= name, "replicas" A..= ids]
+    )
+
+-- Shared exact identity predicate for both lease acquisition and diagnosis.
+identityPredicate :: Text
+identityPredicate = "s.target_key=$1->>'target' AND s.server_id IS NOT DISTINCT FROM ($1->>'server')::uuid AND s.ledger_id=($1->>'ledger')::uuid AND s.topology=$1->>'topology' AND s.cluster_name IS NOT DISTINCT FROM ($1->>'cluster') AND s.replica_ids=ARRAY(SELECT jsonb_array_elements_text($1->'replicas')::uuid ORDER BY 1)"
 
 -- Own a dedicated backend; no pooled connection may transfer the lease.
 withAdministrator :: Text -> (PQ.Connection -> IO a) -> IO a
@@ -49,13 +61,16 @@ trafficLock c = do
   pgScript c "SELECT to_jsonb(pg_advisory_lock(726401,1))"
   pgScript c "SET statement_timeout='3s'"
 
-beginSession :: Text -> Text -> Text -> Text -> A.Value -> IO A.Value
+beginSession :: Text -> Text -> SessionTarget -> Text -> A.Value -> IO A.Value
 beginSession settings target server ledger audit = withAdministrator settings $ \c -> do
   administratorLock c
   pgScript c "BEGIN"
   ready <- query c "SELECT to_jsonb(active_job IS NULL AND active_migration_session IS NULL) FROM kansoku.maintenance_fence WHERE singleton AND $1 IS NOT NULL FOR UPDATE" A.Null
   unless (ready == A.Bool True) (fail "unfinished administrator owns the fence")
-  created <- query c "INSERT INTO kansoku.clickhouse_migration_sessions(target_key,server_id,ledger_id,audit) VALUES($1->>'target',($1->>'server')::uuid,($1->>'ledger')::uuid,$1->'audit') RETURNING to_jsonb(clickhouse_migration_sessions)" (A.object ["target" A..= target, "server" A..= server, "ledger" A..= ledger, "audit" A..= audit])
+  let payload = case parameters (SessionIdentity "" target server ledger) of
+        A.Object values -> A.Object (values <> case A.object ["audit" A..= audit] of A.Object extra -> extra; _ -> mempty)
+        other -> other
+  created <- query c "INSERT INTO kansoku.clickhouse_migration_sessions(target_key,server_id,ledger_id,audit,topology,cluster_name,replica_ids) VALUES($1->>'target',($1->>'server')::uuid,($1->>'ledger')::uuid,$1->'audit',$1->>'topology',$1->>'cluster',ARRAY(SELECT jsonb_array_elements_text($1->'replicas')::uuid ORDER BY 1)) RETURNING to_jsonb(clickhouse_migration_sessions)" payload
   void $ query c "UPDATE kansoku.maintenance_fence SET active_migration_session=($1->>'id')::uuid WHERE singleton" created
   pgScript c "COMMIT"
   trafficLock c
@@ -67,7 +82,7 @@ beginSession settings target server ledger audit = withAdministrator settings $ 
 withSessionLease :: Text -> SessionIdentity -> Maybe (Integer, Text, A.Value) -> (PQ.Connection -> IO a) -> IO a
 withSessionLease settings identity mutation action = withAdministrator settings $ \c -> do
   administratorLock c
-  row <- query c "SELECT to_jsonb(s) FROM kansoku.clickhouse_migration_sessions s JOIN kansoku.maintenance_fence f ON f.active_migration_session=s.id WHERE s.id=($1->>'id')::uuid AND s.target_key=$1->>'target' AND s.server_id=($1->>'server')::uuid AND s.ledger_id=($1->>'ledger')::uuid AND s.completed_at IS NULL" (parameters identity)
+  row <- query c ("SELECT to_jsonb(s) FROM kansoku.clickhouse_migration_sessions s JOIN kansoku.maintenance_fence f ON f.active_migration_session=s.id WHERE s.id=($1->>'id')::uuid AND s.completed_at IS NULL AND " <> identityPredicate) (parameters identity)
   when (row == A.Null) (fail "migration session identity or fence mismatch")
   trafficLock c
   case mutation of
@@ -101,7 +116,7 @@ finishSession c identity = do
 sessionStatus :: Text -> SessionIdentity -> IO A.Value
 sessionStatus settings identity = withPostgres settings $ \c -> do
   pgScript c "SET statement_timeout='3s'"
-  query c "SELECT to_jsonb(s) FROM kansoku.clickhouse_migration_sessions s WHERE (s.id=nullif($1->>'id','')::uuid OR ($1->>'id'='' AND s.completed_at IS NULL)) AND s.target_key=$1->>'target' AND s.server_id=($1->>'server')::uuid AND s.ledger_id=($1->>'ledger')::uuid" (parameters identity)
+  query c ("SELECT to_jsonb(s) FROM kansoku.clickhouse_migration_sessions s WHERE (s.id=nullif($1->>'id','')::uuid OR ($1->>'id'='' AND s.completed_at IS NULL)) AND " <> identityPredicate) (parameters identity)
 
 -- Preserve exact receipt strings before releasing exclusion or reporting success.
 -- Process loss before this update still leaves the pre-submission marker.

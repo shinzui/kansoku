@@ -1,0 +1,2 @@
+
+DROP TABLE analytics.identity_context_signals_rebuild;

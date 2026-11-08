@@ -1,0 +1,2 @@
+
+EXCHANGE TABLES analytics.experiment_exposures AND analytics.experiment_exposures_rebuild;

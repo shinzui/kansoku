@@ -1,0 +1,2 @@
+
+CREATE TABLE analytics.identity_signal_users_rebuild AS analytics.identity_signal_users;

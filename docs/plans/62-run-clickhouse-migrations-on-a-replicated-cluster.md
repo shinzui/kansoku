@@ -10,6 +10,12 @@ provenance:
     model: "gpt-6-astra"
     harness: "codex-cli"
     at: 2026-11-08T00:58:43Z
+  revisions:
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-11-08T01:33:11Z
+      mode: "implement"
+      note: "Implement topology selection, immutable replicated history, and owned qualification"
 ---
 
 # Run ClickHouse migrations on a replicated cluster
@@ -28,7 +34,7 @@ This implements [IR-10](../../docs/improvement-requests/run-clickhouse-migration
 ## Progress
 
 
-- [ ] Milestone 1: Direct and replicated configuration select distinct immutable identities, and PostgreSQL maintenance sessions retain and enforce the full selected identity, including across upgrade from existing direct sessions.
+- [x] (2026-11-08; 13 pure cases, legacy PostgreSQL upgrade proof and restricted-account tiny lifecycle) Milestone 1: Direct and replicated configuration select distinct immutable identities, and PostgreSQL maintenance sessions retain and enforce the full selected identity, including across upgrade from existing direct sessions.
 - [ ] Milestone 2: Both histories are embedded; direct offline JSON and v1 checksums match `2008b67`, while the replicated baseline preserves schema semantics with 25 migrations and 254 steps.
 - [ ] Milestone 3: Fresh initialization verifies all expected replicas and pre-existing Replicated databases; a representative real CLI migration succeeds under the restricted app profile and PostgreSQL fence.
 - [ ] Milestone 4: The full two-replica lifecycle, zero-SQL repeat, native assertions, schema/data parity, and existing query/metrics examples pass on the exact candidate.
@@ -38,9 +44,15 @@ This implements [IR-10](../../docs/improvement-requests/run-clickhouse-migration
 ## Surprises & Discoveries
 
 
+2026-11-08: The exact candidate completed both 0017 Memory assertion groups, then rejected 0020/03 with HTTP 500 / Code 344 (`CREATE AS SELECT is not supported with Replicated databases`). Native syntax probing on the pinned image accepts EMPTY AS SELECT and returns an empty table. Full acceptance must be rerun with the recorded adaptation.
+
+2026-11-08: The separately built `2008b67` executable supplies the committed offline JSON fixture. Recursive equality passes with the current direct CLI, and the original migration tree has no differences. Both conversion checks pass with 31 engine adaptations and three omissions. The deterministic parser suite passes 13 cases. Milestones remain open until their owned acceptance and packaging gates pass.
+
 
 ## Decision Log
 
+
+2026-11-08: Native full-history execution rejects 0020/03 with Code 344: Replicated databases prohibit populating CREATE AS SELECT, even with WHERE 0. Add the explicit EMPTY modifier to that already-empty schema inference statement, preserving the SELECT, following separate backfill, step count, and direct history. Record this as one additional reviewed syntax adaptation in provenance and the conversion verifier. This is required compatibility work within the existing criterion, not a new capability.
 
 2026-11-08: Preserve the original direct manifest and every bound SQL byte. Create a separately named replicated component with an explicitly reviewed adaptation of the same history. Replaying the adapted history retains the two native assertion groups required by IR-10 and avoids silently omitting historical transformations from a hand-collapsed schema snapshot.
 
@@ -91,9 +103,9 @@ Milestone acceptance is the deterministic configuration suite plus owned Postgre
 ### Milestone 2 — Embed a distinct replicated history without changing direct bytes
 
 
-Create `kansoku-server/migrations/clickhouse-replicated/manifest.json`, `provenance.json`, and explicit SQL files, embedded by a new `kansoku-server/src/Kansoku/ClickHouseReplicatedMigrations.hs`. Give the component a distinct stable name, `kansoku_replicated`. Retain migration names/order and existing step names wherever retained; remove only the three CREATE DATABASE steps, producing 25 migrations and 254 executed steps. Change the 22 AggregatingMergeTree and nine ReplacingMergeTree engine tokens to their replicated variants while preserving semantic arguments, columns, keys, TTLs, views, inserts, alterations, and assertion prepare/check/cleanup steps. Prohibit explicit Keeper paths, replica-name arguments, ON CLUSTER, CREATE DATABASE, and plain persistent table engines in this baseline. Memory assertion tables remain the intentional transient exception.
+Create `kansoku-server/migrations/clickhouse-replicated/manifest.json`, `provenance.json`, and explicit SQL files, embedded by a new `kansoku-server/src/Kansoku/ClickHouseReplicatedMigrations.hs`. Give the component a distinct stable name, `kansoku_replicated`. Retain migration names/order and existing step names wherever retained; remove only the three CREATE DATABASE steps, producing 25 migrations and 254 executed steps. Add `EMPTY` to migration 0020 statement 03 (the SELECT already has `AND 0`) so replicated schema inference does not attempt population. Change the 22 AggregatingMergeTree and nine ReplacingMergeTree engine tokens to their replicated variants while preserving semantic arguments, columns, keys, TTLs, views, inserts, alterations, and assertion prepare/check/cleanup steps. Prohibit explicit Keeper paths, replica-name arguments, ON CLUSTER, CREATE DATABASE, and plain persistent table engines in this baseline. Memory assertion tables remain the intentional transient exception.
 
-Record source and destination hashes and an explicit allowlist of the three omissions and 31 engine adaptations in the new provenance document. Extend `scripts/check_clickhouse_conversion.py` to verify both histories independently and reject any unexplained byte change. SQL is adapted at authoring time and committed, never rewritten at execution time. Keep the direct manifest, provenance, original snapshots, and existing SQL untouched. Preserve version columns such as `received_at`, `version`, and `revision`.
+Record source and destination hashes and an explicit allowlist of the three omissions, 31 engine adaptations, and one EMPTY modifier in the new provenance document. Extend `scripts/check_clickhouse_conversion.py` to verify both histories independently and reject any unexplained byte change. SQL is adapted at authoring time and committed, never rewritten at execution time. Keep the direct manifest, provenance, original snapshots, and existing SQL untouched. Preserve version columns such as `received_at`, `version`, and `revision`.
 
 Refactor the plan-selection callback in `Command.hs` and both executable entry points to select by the same validated topology used for online configuration. Offline `plan --json` reads only topology selectors: direct mode still needs no environment; replicated mode needs cluster and replica IDs but no password, endpoint, ledger UUID, or PostgreSQL connection. Invalid selector combinations must not silently fall back to direct. Route status, history, up, verify, repair, reconcile, and finish through the selected history consistently. Keep test-only upgrade variants inaccessible to the production executable.
 

@@ -5,7 +5,7 @@ description: Embed immutable native migration steps, bind administration to reta
 docId: ADR-22
 status: Accepted
 date: 2026-10-16
-timestamp: 2026-11-02T04:34:08Z
+timestamp: 2026-11-08T01:45:00Z
 generated:
   by: process:codex
   at: 2026-10-16T22:55:08Z
@@ -101,6 +101,38 @@ server patches, actual deployment target and exact production candidate remain
 release/deployment gates, recorded in [adoption evidence](../evidence/clickhouse-migrate-adoption.md).
 The Kansoku release owner selects the actual target; the upstream toolkit maintainer
 qualifies/releases support for required artifacts before Kansoku updates its pin.
+
+## Replicated migration targets
+
+The replicated path uses the common `0.1.1.0` source candidate at
+`0e75c4cc1303423ba561370ee5795aa0cf2455b7` from
+`mori://shinzui/clickhouse-migrate`; this is not a Hackage release claim.
+Keep the original direct manifest and bound SQL bytes immutable. A distinct
+`kansoku_replicated` component retains the reviewed history with three database
+creation steps omitted and 31 persistent engine tokens adapted, preserving
+version columns and both Memory assertion groups (25 migrations, 254 steps).
+The already-empty 0020 schema inference uses EMPTY AS SELECT because Replicated
+databases reject populating CREATE AS SELECT, even when its predicate is false.
+The separate backfill remains unchanged; provenance records this single syntax adaptation.
+Replicated targets require a fresh v2 ledger in an already-existing Replicated
+`kansoku_migration_ledger` database, and an already-existing Replicated `analytics`
+database. Never convert a direct ledger in place.
+
+Persist topology and the entire selected identity in PostgreSQL. A direct target
+retains one server UUID. A replicated target retains the cluster name and sorted,
+unique, nonempty replica UUID array, with no representative server UUID. The
+additive 0008 migration preserves old direct sessions, fences, counters and receipts.
+Exact topology/cluster/set matching applies before resuming administrative access.
+
+Fresh initialization verifies local observations from every configured replica,
+correct database engines, and empty application schema when native history is absent.
+Matching initialized history supports recovery without requiring empty tables.
+Coverage is bounded by 35 seconds, 64 fresh observations and 64 KiB per response;
+missing or unexpected identities fail closed. The configured endpoint must route
+fresh connections across the expected inventory. This bound is not service discovery
+or certification of an arbitrary managed endpoint. Drain evidence covers all replicas.
+General replicated application/data-maintenance and deployment acceptance remain
+separate gates under the [implementation plan](../plans/62-run-clickhouse-migrations-on-a-replicated-cluster.md).
 
 ## Alternatives considered
 

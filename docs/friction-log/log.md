@@ -1,5 +1,8 @@
 # Bundle Update Log
 
+## 2026-11-08
+* **Addition**: FRIC-12 records slowdown tooling friction with mori://shinzui/clickhouse-migrate: Two embedded histories amplify content-wrapper rebuild cost
+
 ## 2026-11-06
 * **Update**: FRIC-11 accepted: Accept byte-preserving local log edits as the current workaround and retain the original adoption evidence.
 * **Update**: FRIC-10 accepted: Accept the full-recompile cost for the required migration-aware final gate; keep focused iterations on stable flags.

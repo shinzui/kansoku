@@ -53,7 +53,7 @@ parser = (,) <$> optional (O.option O.auto (O.long "predecessor" <> O.metavar "E
     upper c = if c >= 'a' && c <= 'z' then toEnum (fromEnum c - 32) else c
     audit required = AuditInput <$> value "actor" <*> value "reason" <*> (if required then some (value "evidence") else many (value "evidence"))
 
-mainWith :: ([String] -> ([String], Either PlanError MigrationPlan)) -> IO ()
+mainWith :: (T.TargetTopology -> [String] -> ([String], Either PlanError MigrationPlan)) -> IO ()
 mainWith choose = do
   result <- trySynchronous (run choose)
   case result of
@@ -66,10 +66,11 @@ mainWith choose = do
           _ -> Text.hPutStrLn stderr "ClickHouse administration failed; any persisted fence remains active. Check target configuration, session ownership and predecessor evidence; use status/history for native diagnostics."
         exitFailure
 
-run :: ([String] -> ([String], Either PlanError MigrationPlan)) -> IO ()
+run :: (T.TargetTopology -> [String] -> ([String], Either PlanError MigrationPlan)) -> IO ()
 run choose = do
   rawArgs <- getArgs
-  let (args, compiled) = choose rawArgs
+  topology <- Config.loadTopology True
+  let (args, compiled) = choose topology rawArgs
   parsed <- case O.execParserPure O.defaultPrefs (O.info (parser <**> O.helper) (O.fullDesc <> O.progDesc "Kansoku compiled ClickHouse migrations and persistent maintenance sessions; legacy import is unsupported")) args of
     O.Success value -> pure value
     O.Failure failure -> case O.renderFailure failure "kansoku-ch-migrate" of
@@ -124,7 +125,7 @@ run choose = do
         renderMaintenance format "maintenance-reconcile" (A.object ["receipts" A..= classifications, "resolved" A..= True])
     (_, SessionStatus format) -> do
       config <- Config.loadConfig
-      let session = C.SessionIdentity (maybe "" id (Config.session config)) (T.targetKeyText (Config.target config)) (T.serverIdText (Config.server config)) (T.ledgerIdText (Config.ledger config))
+      let session = C.SessionIdentity (maybe "" id (Config.session config)) (T.targetKeyText (Config.target config)) (Config.sessionTarget config) (T.ledgerIdText (Config.ledger config))
       settings <- maybe (fail "PG_CONNECTION_STRING required") pure (Config.postgres config)
       row <- C.sessionStatus settings session
       whenNull row
@@ -134,7 +135,7 @@ run choose = do
       match config expected
       audit <- auditValue input
       settings <- maybe (fail "PG_CONNECTION_STRING required") pure (Config.postgres config)
-      row <- C.beginSession settings (T.targetKeyText (Config.target config)) (T.serverIdText (Config.server config)) (T.ledgerIdText (Config.ledger config)) audit
+      row <- C.beginSession settings (T.targetKeyText (Config.target config)) (Config.sessionTarget config) (T.ledgerIdText (Config.ledger config)) audit
       renderMaintenance format "maintenance-begin" row
     (predecessor, Finish format expected input) -> do
       config <- Config.loadConfig
