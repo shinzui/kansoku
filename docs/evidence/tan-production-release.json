@@ -1,0 +1,114 @@
+{
+  "status": "pending",
+  "target": {
+    "id": "tan-production",
+    "provider": "Altinity.Cloud",
+    "environment": "topagentnetwork-5os8y",
+    "clusterId": "11282",
+    "version": "26.3.60.10002.altinitystable",
+    "shards": 1,
+    "replicas": 2,
+    "httpsEndpoint": "https://tan-production.topagentnetwork-5os8y.altinity.cloud:8443",
+    "nativeTlsEndpoint": "tan-production.topagentnetwork-5os8y.altinity.cloud:9440",
+    "applicationPlatform": "linux/amd64",
+    "declaredStorage": {
+      "nodeType": "n2d-standard-4",
+      "sizeGB": 150,
+      "class": "pd-ssd",
+      "zones": [
+        "us-west1-b",
+        "us-west1-c"
+      ]
+    },
+    "factStatus": "declared infrastructure; not live observed",
+    "serverArchitecture": {
+      "status": "pending",
+      "value": null
+    },
+    "serverBinaryDigest": {
+      "status": "pending",
+      "value": null
+    },
+    "storageAdmission": {
+      "status": "pending",
+      "reason": "Verify healthy writable Local default policy and required metadata/part fsync on every replica"
+    },
+    "replicaInventory": {
+      "status": "pending",
+      "reason": "Independently verify full UUID inventory; offline synthetic IDs are not deployment inputs"
+    },
+    "evidence": {
+      "project": "mori://tan/tan-infrastructure",
+      "revision": "ae353d303c3efa078f146de48d9ed1d2812b05cd",
+      "path": "altinity/clusters/production.json",
+      "artifactUri": "pending",
+      "checkedAt": "2026-11-08"
+    },
+    "releaseEvidence": "docs/evidence/tan-production-release.json",
+    "status": "selected; release pending"
+  },
+  "prerequisites": {
+    "62": {
+      "status": "passed",
+      "cases": 14,
+      "failures": 0,
+      "skips": 0,
+      "sourceRevision": "a40b20a",
+      "toolkitRevision": "0e75c4cc1303423ba561370ee5795aa0cf2455b7",
+      "serverImage": "docker.io/altinity/clickhouse-server@sha256:7e72405bf85df6d163205ee2e56251ebc35daf6dc71142f58bdee7a461690ffb",
+      "serverPlatform": "linux/arm64",
+      "clientPlatform": "darwin/arm64",
+      "artifactVariant": "Cabal and Nix application CLI; Cabal native driver",
+      "command": "CLICKHOUSE_MIGRATE_DOCKER_CONTEXT=colima nix develop --no-write-lock-file -c just ch-migrations-replicated",
+      "evidence": "docs/evidence/clickhouse-migrate-adoption.md"
+    },
+    "63": {
+      "status": "passed",
+      "cases": 5,
+      "failures": 0,
+      "skips": 0,
+      "sourceRevision": "2ee9a49",
+      "toolkitRevision": "0e75c4cc1303423ba561370ee5795aa0cf2455b7",
+      "serverImage": "docker.io/altinity/clickhouse-server@sha256:7e72405bf85df6d163205ee2e56251ebc35daf6dc71142f58bdee7a461690ffb",
+      "serverPlatform": "linux/arm64",
+      "clientPlatform": "darwin/arm64",
+      "artifactVariant": "Cabal and Nix application executables; Cabal native driver",
+      "command": "CLICKHOUSE_MIGRATE_DOCKER_CONTEXT=colima nix develop --no-write-lock-file -c python3 scripts/clickhouse_replicated_runtime_acceptance.py --packaged",
+      "evidence": "docs/evidence/replicated-runtime.md"
+    }
+  },
+  "candidate": null,
+  "acceptanceRuns": [],
+  "gates": {
+    "startup-crash": {
+      "status": "pending",
+      "reason": "Two Darwin pre-readiness SIGSEGV attempts remain unexplained; no proven fix or owner acceptance.",
+      "evidence": [
+        "docs/evidence/tan-production-target.md"
+      ]
+    },
+    "security-patch-review": {
+      "status": "pending",
+      "reason": "10002 includes CVE-2026-116366 fix; vendor temporarily withholds security source changes. Owner disposition still required.",
+      "evidence": [
+        "docs/evidence/tan-production-target.md"
+      ]
+    },
+    "linux-amd64-image": {
+      "status": "pending",
+      "reason": "Darwin clients passed replicated prerequisites; final Linux amd64 application image has not run all behavioral scenarios.",
+      "evidence": [
+        "docs/evidence/tan-production-target.md"
+      ]
+    },
+    "managed-endpoint": {
+      "status": "pending",
+      "reason": "Uncertified single load-balanced endpoint requires dated owner acceptance and independent inventory/storage/grant verification.",
+      "evidence": [
+        "docs/evidence/tan-production-target.md"
+      ]
+    }
+  },
+  "publication": null,
+  "hashSemantics": "SHA-256 of exact CLI stdout bytes, including final newline. Production nativePlanSha256 maps to replicatedNativePlanSha256; nativePlanSha256 in image report remains direct."
+}

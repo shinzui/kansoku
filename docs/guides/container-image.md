@@ -41,7 +41,8 @@ python3 scripts/check_container_image.py \
   --archive /tmp/kansoku-image.tar \
   --docker-context <isolated-local-context> \
   --revision "$(git rev-parse HEAD)" \
-  --report /tmp/kansoku-image-smoke.json
+  --report /tmp/kansoku-image-smoke.json \
+  --plan-dir /tmp/kansoku-image-plans
 ```
 
 Before publishing, inspect that exported archive with `skopeo inspect docker-archive:<archive>`
@@ -62,3 +63,49 @@ The published image must pass the owning environment's packaged PostgreSQL/nativ
 migration, TLS, event/query and persistent recovery rehearsal before rollout. Keep
 serving and retained migration digests separate when the deployment contract requires
 it. This guide publishes no image and authorizes no database mutation.
+
+## TAN production release evidence
+
+Plan 64 selects the managed target separately from the Darwin fixture. See
+[the target dossier](../evidence/tan-production-target.md) and
+[release record](../evidence/tan-production-release.json) for the pending gates.
+Exported image inspection now requires a fresh private `--plan-dir`. It captures
+`native-direct.json`, `native-replicated.json` and `postgres.json` twice and
+requires identical stdout bytes. SHA-256 includes the terminating newline; do not
+parse/reformat JSON before hashing. Direct remains 25 migrations/257 steps;
+replicated is 25/254. PostgreSQL includes both appended replica coordinators.
+The synthetic cluster/UUID selectors in the image report select offline history
+only. They are never deployment inventory.
+
+The image report retains `nativePlanSha256` for the direct history and adds
+`replicatedNativePlanSha256` and `postgresPlanSha256`. The production consumer's
+`nativePlanSha256` deliberately maps to the replicated hash. Preserve the tested
+archive, build receipts, three plan files and image report privately. Record its
+full clean source revision, matching Cabal/Nix toolkit revisions, package outputs,
+archive/configuration hashes, loaded image ID and layers in the release candidate.
+
+```bash
+python3 scripts/check_container_image.py \
+  --archive /tmp/kansoku-image.tar --docker-context colima \
+  --revision "$(git rev-parse HEAD)" --report /tmp/image-report.json \
+  --plan-dir /tmp/kansoku-release-plans
+python3 scripts/check_tan_release.py \
+  --evidence docs/evidence/tan-production-release.json \
+  --artifact /tmp/tan-artifact-draft.json --image-report /tmp/image-report.json \
+  --plan-dir /tmp/kansoku-release-plans --phase prepared
+```
+
+Prepared mode emits exactly eight fields with `image: null`, so the draft cannot
+serve as a usable deployment record. It exits 2 for pending readiness, 1 for
+invalid evidence and 0 when the requested phase passes without pending gates.
+Existing output files must agree exactly; use separate draft/final output paths.
+Published mode requires every disposition, explicit managed-endpoint acceptance,
+prerequisite passes and retained upload/readback receipts. Accepted gates require
+owner, UTC date, actual decision source, reason and candidate archive/image binding.
+The validator checks consistency, not the authenticity of a human decision.
+
+After publication, read back by manifest digest and inspect the resulting archive
+with a new report/plan directory. Retain original and readback archive hashes
+separately because registry representation can change. The final record belongs at
+`docs/evidence/tan-production-qualified-artifact.json` only after published-phase
+validation. Evidence commits follow the clean image source commit; record both.

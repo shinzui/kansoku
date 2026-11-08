@@ -7,6 +7,7 @@ from pathlib import Path
 import subprocess
 import tarfile
 import uuid
+from check_image_plans import PLAN_FIELDS, SELECTORS, validate_plan
 
 
 def main():
@@ -15,6 +16,7 @@ def main():
     parser.add_argument('--docker-context', required=True)
     parser.add_argument('--revision', required=True)
     parser.add_argument('--report', type=Path, required=True)
+    parser.add_argument('--plan-dir', type=Path, required=True)
     args = parser.parse_args()
     archive_path = args.archive.resolve()
     if str(archive_path).startswith('/nix/store/'):
@@ -72,35 +74,50 @@ def main():
         try:
             result = subprocess.run(docker + ['run', '--name', name, '--rm', '--network', 'none',
                 '--platform', 'linux/amd64', '--pull=never', *flags, image_id, *command],
-                text=True, capture_output=True, timeout=60)
+                capture_output=True, timeout=60)
             if (result.returncode == 0) != success:
-                raise RuntimeError('Owned image probe failed: ' + ' '.join(command) + ' (exit ' + str(result.returncode) + '): ' + result.stderr[-2000:])
+                raise RuntimeError('Owned image probe failed: ' + ' '.join(command) + ' (exit ' + str(result.returncode) + '): ' + result.stderr[-2000:].decode(errors='replace'))
             return result.stdout if success else result.stderr
         finally:
             subprocess.run(docker + ['rm', '--force', name], capture_output=True, timeout=15)
 
-    plan_text = run(supplied, 'kansoku-ch-migrate', 'plan', '--json')
-    plan = json.loads(plan_text)
-    migrations = plan['result']['components'][0]['migrations']
-    if plan['status'] != 'ok' or len(migrations) != 25 or sum(len(item['steps']) for item in migrations) != 257:
-        raise RuntimeError('Unexpected embedded migration plan')
-    mapped = dict(row.split('=', 1) for row in run(supplied, 'env').splitlines() if '=' in row)
+    captures = {}
+    for filename in PLAN_FIELDS:
+        env = {**supplied, **SELECTORS} if filename == 'native-replicated.json' else supplied
+        command = 'kansoku-migrate' if filename == 'postgres.json' else 'kansoku-ch-migrate'
+        raw = run(env, command, 'plan', '--json')
+        validate_plan(filename, raw)
+        if raw != run(env, command, 'plan', '--json'):
+            raise RuntimeError('Plan output is not byte-repeatable: ' + filename)
+        captures[filename] = raw
+    reference = Path(__file__).resolve().parents[1] / 'kansoku-server/test/fixtures/clickhouse-direct-plan-2008b67.json'
+    if json.loads(captures['native-direct.json']) != json.loads(reference.read_bytes()):
+        raise RuntimeError('Direct history changed from the retained compatibility fixture')
+    args.plan_dir.mkdir(parents=True, exist_ok=True)
+    for filename, raw in captures.items():
+        destination = args.plan_dir / filename
+        with destination.open('xb') as output:
+            output.write(raw)
+    mapped = dict(row.split('=', 1) for row in run(supplied, 'env').decode().splitlines() if '=' in row)
     for key, origin in {'PG_CONNECTION_STRING': 'DATABASE_URL', 'KANSOKU_CLICKHOUSE_HOST': 'CLICKHOUSE_HOST',
                         'KANSOKU_CLICKHOUSE_USER': 'CLICKHOUSE_USER', 'KANSOKU_CLICKHOUSE_PASSWORD': 'CLICKHOUSE_PASSWORD'}.items():
         if mapped[key] != supplied[origin]:
             raise RuntimeError('Entrypoint mapping failed: ' + key)
     if mapped['KANSOKU_CLICKHOUSE_SECURE'] != 'true' or mapped['CLICKHOUSE_TCP_PORT'] != '9440':
         raise RuntimeError('Explicit native TLS values were lost')
-    mapped = dict(row.split('=', 1) for row in run({**supplied, **explicit}, 'env').splitlines() if '=' in row)
+    mapped = dict(row.split('=', 1) for row in run({**supplied, **explicit}, 'env').decode().splitlines() if '=' in row)
     if any(mapped[key] != value for key, value in explicit.items()):
         raise RuntimeError('Explicit application settings did not win')
     missing = run({key: value for key, value in supplied.items() if key != 'DATABASE_URL'}, 'env', success=False)
-    if 'DATABASE_URL is not set' not in missing:
+    if b'DATABASE_URL is not set' not in missing:
         raise RuntimeError('Missing environment failed for an unexpected reason')
     run(supplied, 'sh', '-c', 'for name in kansoku-server kansoku-migrate kansoku-ch-migrate kansoku-admin; do command -v "$name" >/dev/null || exit 1; done; test -s "$SSL_CERT_FILE"')
     report = {'sourceRevision': args.revision, 'tag': expected, 'imageId': image_id, 'archiveConfigDigest': config_digest,
               'architecture': 'amd64', 'os': 'linux', 'migrationCount': 25, 'stepCount': 257,
-              'nativePlanSha256': hashlib.sha256(plan_text.encode()).hexdigest(),
+              **{field: hashlib.sha256(captures[name]).hexdigest() for name, field in PLAN_FIELDS.items()},
+              'replicatedSelectors': SELECTORS, 'hashSemantics': 'SHA-256 of exact stdout bytes including final newline',
+              'archiveSha256': hashlib.file_digest(archive_path.open('rb'), 'sha256').hexdigest(),
+              'layers': loaded['RootFS']['Layers'], 'labels': labels,
               'environmentMapping': True, 'explicitTlsValues': True, 'caBundle': True,
               'fourExecutablePaths': True, 'scope': 'Network-disabled exported-image smoke only; no database, managed-target or event-flow acceptance'}
     args.report.write_text(json.dumps(report, indent=2) + '\n')

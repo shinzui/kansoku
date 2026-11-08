@@ -67,7 +67,7 @@ Nix's `callHackageDirect` uses unpacked recursive hashes, recorded in
 [flake.module.nix](../../flake.module.nix), rather than these compressed archive hashes.
 Dependency bounds and deterministic dependency checks remain enabled.
 
-## Platform and production disposition
+## Historical platform and production disposition (2026-10-16)
 
 The integration host is Darwin/arm64. The direct self-managed proof uses
 ClickHouse 26.8.28.14, local synchronous storage and a new private data root.
@@ -81,7 +81,7 @@ The checked-in [matrix](../../db/clickhouse/qualification/matrix.json) records t
 upstream qualification scope and unknown-cause pre-readiness startup SIGSEGV.
 A startup failure fails acceptance; no automatic retry makes it pass.
 
-The actual deployment OS/architecture, endpoint, storage and version have not been
+At that historical checkpoint, the deployment OS/architecture, endpoint, storage and version had not been
 selected. Ubuntu remains an existing required acceptance target with unresolved
 upstream native qualification. A macOS proof does not qualify Linux or deployment.
 GitHub's [runner reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)
@@ -203,7 +203,7 @@ supplied; their real-consumer integrations were not rerun or claimed here.
 All six plan milestones are implemented and locally verified within the qualified
 development scope. The shared SDK source checkout remains clean. Existing Ubuntu
 acceptance remains required and unqualified, remote CI has not been observed,
-and no deployment target has been selected or deployed. Crash disposition and
+and no deployment had occurred at that checkpoint. The current target selection is below. Crash disposition and
 intervening patch/security review remain production gates. No producer repository
 was changed and no upstream initiative is declared complete.
 
@@ -272,3 +272,15 @@ CLICKHOUSE_MIGRATE_DOCKER_CONTEXT=colima nix develop --no-write-lock-file -c jus
 No managed endpoint, production permissions, production data, or deployment
 repository was contacted or changed. General replicated runtime maintenance and
 Linux-client deployment acceptance remain separate qualification gates.
+
+## Current TAN production disposition (2026-11-08)
+
+Select Altinity.Cloud `tan-production`, version `26.3.60.10002.altinitystable`, one
+shard/two replicas, HTTPS `https://tan-production.topagentnetwork-5os8y.altinity.cloud:8443`
+and native TLS on the same host at explicit port `9440`; application platform is
+Linux amd64. See the [source-backed target dossier](tan-production-target.md),
+[machine-readable release evidence](tan-production-release.json) and unchanged
+historical fixture plus separate deployment target in the qualification matrix.
+Plans 62 and 63 are complete within their recorded Darwin-client/Linux-arm64-server
+scope. The startup-crash, patch/security, Linux image and managed-endpoint release
+gates remain pending. No image is published or qualified by target selection.

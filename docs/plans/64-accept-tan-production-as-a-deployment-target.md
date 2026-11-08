@@ -10,6 +10,12 @@ provenance:
     model: "gpt-6-astra"
     harness: "codex-cli"
     at: 2026-11-08T01:20:26Z
+  revisions:
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-11-08T04:53:20Z
+      mode: "implement"
+      note: "Implement target dossier, exact image plan capture and fail-closed release validation"
 ---
 
 # Accept TAN production as a deployment target
@@ -30,13 +36,15 @@ This is a standalone release plan, not a child of MasterPlan 7 or of the request
 ## Progress
 
 
-- [ ] Milestone 1: The selected TAN target and every production gate have a source-backed dossier, and the local Darwin qualification fixture still selects its original artifact.
+- [x] (2026-11-08; immutable infrastructure/consumer rereads, patch review and separate target dossier; original fixture entry unchanged) Milestone 1: The selected TAN target and every production gate have a source-backed dossier, and the local Darwin qualification fixture still selects its original artifact.
 - [ ] Milestone 2: A clean candidate containing Plans 62 and 63 yields an identifiable Linux amd64 image, reproducible direct/replicated/PostgreSQL plan hashes, and a validated draft TAN artifact record.
 - [ ] Milestone 3: The exact candidate has linked replicated acceptance evidence and dated release-owner dispositions for all remaining gates, including the managed endpoint and any Linux application-image coverage gap.
 - [ ] Milestone 4: The approved image is published and verified by registry digest, and the final evidence and TAN-compatible artifact record agree on source, dependency revision, plan hashes, and acceptance scope.
 
 
 ## Surprises & Discoveries
+
+2026-11-08: Official Altinity notes explicitly identify CVE-2026-116366 remediation in 10002 and temporarily withheld security source changes. The public release tag identifies only the public baseline, not all binary inputs. The dossier retains that limitation; security disposition remains pending. Both infrastructure and consumer master heads still match the planning snapshots.
 
 
 
@@ -53,6 +61,8 @@ This is a standalone release plan, not a child of MasterPlan 7 or of the request
 
 
 ## Outcomes & Retrospective
+
+Implementation in progress. The target dossier and fail-closed release tooling are implemented; 11 focused validator cases pass, including mismatched sources/histories/bytes, absent decisions/prerequisites and configuration-ID substitution. No owner risk acceptance or publication has occurred. Candidate build and exact-image validation are the next boundary.
 
 
 

@@ -5,7 +5,7 @@ description: Build independently pinned TAN images from Kansoku's own package cl
 docId: ADR-24
 status: Accepted
 date: 2026-11-02
-timestamp: 2026-11-02T04:15:00Z
+timestamp: 2026-11-08T05:30:00Z
 originatingPlan: mori://tan/tan-app-infrastructure/plans/42-qualify-kansoku-artifacts-and-the-staging-clickhouse-contract
 generated:
   by: process:codex
@@ -72,3 +72,17 @@ contains no database password, server UUID, ledger/session identity or environme
 binding. Operators must supply the independently retained native operation inputs
 and select a supported target. Serving-only rollouts must preserve completed
 migration image/operation inputs under the downstream deployment contract.
+
+## Production release contract
+
+Plan 64 retains direct, replicated and PostgreSQL offline stdout separately and
+hashes their exact bytes, including final newlines. The eight-field TAN production
+record maps its native hash to the replicated history; the image report preserves
+the direct hash under its existing name. Prepared artifacts use a null image and
+cannot identify a qualified deployment. Final artifacts require a registry manifest
+digest, retained readback evidence and all prerequisite/owner gate dispositions.
+No model-authored dossier accepts release risk. Decisions bind the preserved clean
+candidate archive and image ID before publication, then the verified registry digest.
+Evidence commits follow candidate source commits and do not trigger a rebuild of
+the already tested content. The selected managed target remains pending acceptance;
+local fixture qualification continues to describe its actual platform scope.

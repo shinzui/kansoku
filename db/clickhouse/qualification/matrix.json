@@ -1,7 +1,7 @@
 {
   "matrixVersion": 1,
   "checkedAt": "2026-10-16",
-  "policy": "Only exact qualified patches; no prereleases, Cloud, proxies, distributed or replicated execution",
+  "policy": "Exact qualified patches only. entries retains the historical Darwin direct fixture; upstream replicated qualification and selected managed deployment acceptance have separate scope. No general Cloud certification.",
   "entries": [
     {
       "id": "lts-native",
@@ -41,5 +41,54 @@
     }
   ],
   "sourceProject": "mori://shinzui/clickhouse-migrate",
-  "sourceRevision": "6a795475fdbb441d1d42ac9b932ba2205d99a393"
+  "sourceRevision": "6a795475fdbb441d1d42ac9b932ba2205d99a393",
+  "deploymentTargets": [
+    {
+      "id": "tan-production",
+      "provider": "Altinity.Cloud",
+      "environment": "topagentnetwork-5os8y",
+      "clusterId": "11282",
+      "version": "26.3.60.10002.altinitystable",
+      "shards": 1,
+      "replicas": 2,
+      "httpsEndpoint": "https://tan-production.topagentnetwork-5os8y.altinity.cloud:8443",
+      "nativeTlsEndpoint": "tan-production.topagentnetwork-5os8y.altinity.cloud:9440",
+      "applicationPlatform": "linux/amd64",
+      "declaredStorage": {
+        "nodeType": "n2d-standard-4",
+        "sizeGB": 150,
+        "class": "pd-ssd",
+        "zones": [
+          "us-west1-b",
+          "us-west1-c"
+        ]
+      },
+      "factStatus": "declared infrastructure; not live observed",
+      "serverArchitecture": {
+        "status": "pending",
+        "value": null
+      },
+      "serverBinaryDigest": {
+        "status": "pending",
+        "value": null
+      },
+      "storageAdmission": {
+        "status": "pending",
+        "reason": "Verify healthy writable Local default policy and required metadata/part fsync on every replica"
+      },
+      "replicaInventory": {
+        "status": "pending",
+        "reason": "Independently verify full UUID inventory; offline synthetic IDs are not deployment inputs"
+      },
+      "evidence": {
+        "project": "mori://tan/tan-infrastructure",
+        "revision": "ae353d303c3efa078f146de48d9ed1d2812b05cd",
+        "path": "altinity/clusters/production.json",
+        "artifactUri": "pending",
+        "checkedAt": "2026-11-08"
+      },
+      "releaseEvidence": "docs/evidence/tan-production-release.json",
+      "status": "selected; release pending"
+    }
+  ]
 }
