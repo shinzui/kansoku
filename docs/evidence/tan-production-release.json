@@ -1,5 +1,5 @@
 {
-  "status": "pending",
+  "status": "published-and-verified",
   "target": {
     "id": "tan-production",
     "provider": "Altinity.Cloud",
@@ -174,35 +174,145 @@
   "acceptanceRuns": [],
   "gates": {
     "startup-crash": {
-      "status": "pending",
-      "reason": "Two Darwin pre-readiness SIGSEGV attempts remain unexplained; no proven fix or owner acceptance.",
+      "status": "accepted",
+      "reason": "Accept the unresolved developer-fixture startup risk for this managed Altinity deployment, retaining failures and requiring any future startup failure to fail its acceptance run.",
       "evidence": [
-        "docs/evidence/tan-production-target.md"
-      ]
+        "docs/evidence/tan-production-target.md",
+        "docs/evidence/tan-production-release-decision.md"
+      ],
+      "owner": "Requesting release owner in Codex thread 01a1b97f-df14-7d21-9474-98412788611a",
+      "at": "2026-11-08T05:24:18Z",
+      "decisionSource": "docs/evidence/tan-production-release-decision.md",
+      "candidateArchiveSha256": "db8197a8161e5cf52fdd1c7a57939d19590bcbd3c7886a84f311e898264f8e86",
+      "candidateImageId": "sha256:783b91e441775a30189cd6d4988cfa4b5dce5fc16756546331981a112b846790",
+      "publishedImage": "gcr.io/tan-ng/kansoku@sha256:a78b668dbc98567bfd2d031f9b3aaf3a22b1f3f4bd4fbfd3ca3605dfbf98d213"
     },
     "security-patch-review": {
-      "status": "pending",
-      "reason": "10002 includes CVE-2026-116366 fix; vendor temporarily withholds security source changes. Owner disposition still required.",
+      "status": "accepted",
+      "reason": "Select the vendor's exact security-fixed patch with its disclosed source limitation, retain exact-version admission, and require TAN to verify deployed version and follow vendor security updates.",
       "evidence": [
-        "docs/evidence/tan-production-target.md"
-      ]
+        "docs/evidence/tan-production-target.md",
+        "docs/evidence/tan-production-release-decision.md"
+      ],
+      "owner": "Requesting release owner in Codex thread 01a1b97f-df14-7d21-9474-98412788611a",
+      "at": "2026-11-08T05:24:18Z",
+      "decisionSource": "docs/evidence/tan-production-release-decision.md",
+      "candidateArchiveSha256": "db8197a8161e5cf52fdd1c7a57939d19590bcbd3c7886a84f311e898264f8e86",
+      "candidateImageId": "sha256:783b91e441775a30189cd6d4988cfa4b5dce5fc16756546331981a112b846790",
+      "publishedImage": "gcr.io/tan-ng/kansoku@sha256:a78b668dbc98567bfd2d031f9b3aaf3a22b1f3f4bd4fbfd3ca3605dfbf98d213"
     },
     "linux-amd64-image": {
-      "status": "pending",
-      "reason": "Darwin clients passed replicated prerequisites; final Linux amd64 application image has not run all behavioral scenarios.",
+      "status": "accepted",
+      "reason": "Accept this precisely bounded packaged-image/platform coverage gap using unchanged passing prerequisite behavior, while retaining TAN's managed migration and event-flow rehearsal obligation.",
       "evidence": [
-        "docs/evidence/tan-production-target.md"
-      ]
+        "docs/evidence/tan-production-target.md",
+        "docs/evidence/tan-production-release-decision.md"
+      ],
+      "owner": "Requesting release owner in Codex thread 01a1b97f-df14-7d21-9474-98412788611a",
+      "at": "2026-11-08T05:24:18Z",
+      "decisionSource": "docs/evidence/tan-production-release-decision.md",
+      "candidateArchiveSha256": "db8197a8161e5cf52fdd1c7a57939d19590bcbd3c7886a84f311e898264f8e86",
+      "candidateImageId": "sha256:783b91e441775a30189cd6d4988cfa4b5dce5fc16756546331981a112b846790",
+      "publishedImage": "gcr.io/tan-ng/kansoku@sha256:a78b668dbc98567bfd2d031f9b3aaf3a22b1f3f4bd4fbfd3ca3605dfbf98d213"
     },
     "managed-endpoint": {
-      "status": "pending",
-      "reason": "Uncertified single load-balanced endpoint requires dated owner acceptance and independent inventory/storage/grant verification.",
+      "status": "accepted",
+      "reason": "Accept the uncertified endpoint with independently verified full replica inventory, storage/fsync and grants, normal TLS verification, external drain and explicit uncertain-outcome recovery required during TAN onboarding.",
       "evidence": [
-        "docs/evidence/tan-production-target.md"
-      ]
+        "docs/evidence/tan-production-target.md",
+        "docs/evidence/tan-production-release-decision.md"
+      ],
+      "owner": "Requesting release owner in Codex thread 01a1b97f-df14-7d21-9474-98412788611a",
+      "at": "2026-11-08T05:24:18Z",
+      "decisionSource": "docs/evidence/tan-production-release-decision.md",
+      "candidateArchiveSha256": "db8197a8161e5cf52fdd1c7a57939d19590bcbd3c7886a84f311e898264f8e86",
+      "candidateImageId": "sha256:783b91e441775a30189cd6d4988cfa4b5dce5fc16756546331981a112b846790",
+      "publishedImage": "gcr.io/tan-ng/kansoku@sha256:a78b668dbc98567bfd2d031f9b3aaf3a22b1f3f4bd4fbfd3ca3605dfbf98d213"
     }
   },
-  "publication": null,
+  "publication": {
+    "image": "gcr.io/tan-ng/kansoku@sha256:a78b668dbc98567bfd2d031f9b3aaf3a22b1f3f4bd4fbfd3ca3605dfbf98d213",
+    "sourceRevision": "7c1132d74c8cb4fd5702b3ba8394aa1f52f66780",
+    "imageId": "sha256:783b91e441775a30189cd6d4988cfa4b5dce5fc16756546331981a112b846790",
+    "verified": true,
+    "at": "2026-11-08T05:27:06Z",
+    "uploadEvidence": ".dev/acceptance/tan-release-7c1132d/upload.log",
+    "readbackEvidence": ".dev/acceptance/tan-release-7c1132d/readback-check.log",
+    "registryEvidence": ".dev/acceptance/tan-release-7c1132d/registry.json",
+    "readback": {
+      "sourceRevision": "7c1132d74c8cb4fd5702b3ba8394aa1f52f66780",
+      "tag": "gcr.io/tan-ng/kansoku:7c1132d74c8c-p1",
+      "imageId": "sha256:783b91e441775a30189cd6d4988cfa4b5dce5fc16756546331981a112b846790",
+      "archiveConfigDigest": "sha256:644ff498581051a2c0c4aeeb3dba06180ee723033563ff1eee3cfacd3f6c5d3d",
+      "architecture": "amd64",
+      "os": "linux",
+      "dockerHostArchitecture": "arm64",
+      "clientExecution": "emulated",
+      "migrationCount": 25,
+      "stepCount": 257,
+      "nativePlanSha256": "b4ffb82c10eba49edb6155449a5bcef4ee1f3d288ea52a164be996ad8cf91d2a",
+      "replicatedNativePlanSha256": "116f8f90d5d84b957717d243610ae05db19b563bebf4f05e915c4a7b5d86b558",
+      "postgresPlanSha256": "4fcbc14449b2726a7bd1997f99b39b5baa92a6058894f676febe336bf41e0fa3",
+      "replicatedSelectors": {
+        "KANSOKU_CH_MIGRATION_CLUSTER": "fixture",
+        "KANSOKU_CH_MIGRATION_REPLICA_IDS": "11111111-1111-4111-8111-111111111111,22222222-2222-4222-8222-222222222222"
+      },
+      "hashSemantics": "SHA-256 of exact stdout bytes including final newline",
+      "archiveSha256": "d41e466020253af69f0f8a03f38379047af4fdb23f1b02a1755326cabc41197e",
+      "layers": [
+        "sha256:c2360aa44d203eda3b237f6f888ead9e3a7730b235feea2e545f1da79a976d54",
+        "sha256:b2cf7d98634cc5aedd8f7f19097c866a998ed64a2e2d1023b9a6cdd6208cf5e6",
+        "sha256:511898adcd2460e32d578f0c37b686f647ad4c6cc0099ea400af6e1aa86fd5aa",
+        "sha256:1201a0b6e0f1b21e51cc882ddab644616786b317ebc33515f0e14242685b3b76",
+        "sha256:462b4696216e05de2a85aecf8468daa9eb9898a86523b65eddcccb9458ba062c",
+        "sha256:c5707fe31d63e12bf56b7ff8320e2b7ec72a5e54783f27fd673ccf71654fa420",
+        "sha256:4cbe794d539382b6c2df05bcc0b7ea86d758c54a4fa931d32d7dffcb997258c0",
+        "sha256:7fffb9f95c6e6276d1742265c40d1779975b8d6471751c7805a681c7e211a298",
+        "sha256:4a7cd786e1c83e23324e65cdab89db7d52141af0cffb50ee8db5c466b6879243",
+        "sha256:dc9c506abf7ac7d3230e412857bf8e653c3ed528bd60f5665017c6667966ad3b",
+        "sha256:d9b0e5bc1df7d00a53ad135a81bc562699205dbb4fddbac2dba3b2c3f0dc4185",
+        "sha256:24669a59dc37f1e45afb57371cd6f289f4991d367e94c5252634653273e77710",
+        "sha256:0e3207a229a0f8ea4252e2821dd5dc9b344f84444a83c24740446e05beba3fd3",
+        "sha256:89b8c529e741693c64732a4239deab696b74bc60dfdbfca610b199b475395202",
+        "sha256:0cf8bb3631ec14911f02ac77a0f3a5be0d933d79cff2f0f5f2ef094ac0ef4c93",
+        "sha256:19e9cda1d885b0f789b12066264e0c80d93bb3e4a7f6667d760e3519353365dd",
+        "sha256:e57c9e3c0d9e7c9b54fc9254dabe95b37940d9d801a9dada527073c95d7b1662",
+        "sha256:d7819a845e88032916d2824727480857ba34fd2bebcf9caf2f61f7135fc49784",
+        "sha256:2284a30e5d6dd4bc90d730bdb77f8f7ff8fb4c716e8a0485f3fdc67c30f0608c",
+        "sha256:0c2634fcb75684440c0f1b762b2a6eac99c34f9ae5f6c40380fe3b7ba548ea84",
+        "sha256:e0dd63c9a9fdca40288b6760a47c7664261a427f87f2b49e542fcf22b63b7630",
+        "sha256:99afe4891a7f3b0f5a493884ebdbfa72583f4240e6d90afc5db7573143b56af4",
+        "sha256:22070bb3651fd6ff732a4a323039e4a707353828d3e0bdb1e0896a9ad8e14352",
+        "sha256:afecc34bdda13a7aef1220f3a7c61dd5957fd5b10a319a6ee80dda7fb7e91876",
+        "sha256:9eb8cbe53d9d8832090ddfea9bf98e606b1a5106bf5ed989a5c352fbbddc23ac",
+        "sha256:899f528acb98afe2aaa7defabde0b0691af4515480cd09a87a15ed80e2f165cc",
+        "sha256:c9ca8fc7571cb76c29cffecd5f1fb12ee59ee1ba98843fbccc28c225eb804345",
+        "sha256:b2dc8e7a6c3afdc8d632935985c4942dd98d81320eb74ede82f73c191d03d305",
+        "sha256:428f32e54da01ea4930e284a941f8aefe1b38828f356901417b260b83f2cdfb4",
+        "sha256:2a8f241bf07ef3668b579363bb5e58accea94329895f9bf6b5b3cc17914b3976",
+        "sha256:499a04a5fe6b1a45cecd2e6d81f967f24e6320c029d3067946437d87759400f1",
+        "sha256:a157462dfc6950890bdb608f4a5e53fb34d220a32c972fb85efd545e9c9a565a",
+        "sha256:e859f316ba4917c7fe82a5433036b753c2ad34bbb325c175a057b37ad11b3dbf"
+      ],
+      "labels": {
+        "org.opencontainers.image.revision": "7c1132d74c8cb4fd5702b3ba8394aa1f52f66780",
+        "org.opencontainers.image.source": "https://github.com/shinzui/kansoku",
+        "tan.dev.packaging-revision": "p1"
+      },
+      "engine": "apple",
+      "imageIdKind": "Apple Container local OCI index digest; not a published registry digest",
+      "ociArchiveSha256": "c84a000ca2567ae1c3877a140dd25062ccbfc634c6646864cc509ebc03750f9d",
+      "environmentMapping": true,
+      "explicitTlsValues": true,
+      "caBundle": true,
+      "fourExecutablePaths": true,
+      "scope": "Network-disabled exported-image smoke only; no database, managed-target or event-flow acceptance"
+    },
+    "candidateArchiveSha256": "db8197a8161e5cf52fdd1c7a57939d19590bcbd3c7886a84f311e898264f8e86",
+    "candidateImageId": "sha256:783b91e441775a30189cd6d4988cfa4b5dce5fc16756546331981a112b846790",
+    "evidenceCheckpoint": "85b499b31eb20ecff5b196664fa1d166b590057d",
+    "contentComparison": "Linux amd64, source labels, filesystem layers and all three exact plan byte streams match the preserved approved candidate. Archive/configuration/local-index identities are retained separately."
+  },
   "hashSemantics": "SHA-256 of exact CLI stdout bytes, including final newline. Production nativePlanSha256 maps to replicatedNativePlanSha256; nativePlanSha256 in image report remains direct.",
   "preparationEvidence": {
     "normalCheck": "passed: just check at .dev/acceptance/tan-release-3b66b38/check.log",
@@ -211,12 +321,14 @@
     "scope": "Apple Container 1.5.0, Rosetta, no networks or host mounts; offline plans only. No image-based database acceptance."
   },
   "publicationPreparation": {
-    "status": "ready pending owner gates",
+    "status": "completed",
     "tag": "gcr.io/tan-ng/kansoku:7c1132d74c8c-p1",
     "tagCheck": "Registry returned manifest unknown on 2026-11-08; auth/network errors were not interpreted as absence",
     "tagCheckEvidence": ".dev/acceptance/tan-release-7c1132d/tag-inspect.log",
     "credentialStatus": "private auth file prepared; not published or checked in",
     "command": "skopeo copy --authfile <private-auth-file> docker-archive:.dev/acceptance/tan-release-7c1132d/image.tar docker://gcr.io/tan-ng/kansoku:7c1132d74c8c-p1",
     "recheckTagBeforeUpload": true
-  }
+  },
+  "targetSnapshotSemantics": "target is the immutable declaration captured in candidate source; current release status and dispositions are top-level status/gates, not the historical target.status field.",
+  "releaseScope": "Target-specific release with explicit owner-accepted startup, security-source, Linux image behavioral coverage and managed-endpoint risks. No managed-cloud certification or production migration."
 }

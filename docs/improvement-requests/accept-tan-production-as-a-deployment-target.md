@@ -6,7 +6,16 @@ generated:
   by: process:claude-code
   at: "2026-11-08T00:00:15Z"
 requestId: IR-12
-status: accepted
+status: completed
+completedAt: "2026-11-08T05:28:00Z"
+resolution: >-
+  AC-1 through AC-5 completed by plan 64. The exact TAN target and four dated
+  owner-accepted residual risks are retained in docs/evidence/tan-production-target.md
+  and tan-production-release-decision.md. The Linux amd64 image is published and
+  digest-readback verified; docs/evidence/tan-production-qualified-artifact.json
+  records source 7c1132d74c8cb4fd5702b3ba8394aa1f52f66780, toolkit revision and exact
+  replicated-native/PostgreSQL stdout hashes. Managed certification and full Linux
+  image behavioral coverage are accepted gaps; production onboarding remains TAN-owned.
 targetPlan: docs/plans/64-accept-tan-production-as-a-deployment-target.md
 origin: mori://tan/tan-app-infrastructure/plans/45-onboard-kansoku-to-production-on-the-replicated-clickhouse-cluster
 dependencies:
@@ -59,7 +68,7 @@ Kansoku's production onboarding
 **Created:** 2026-11-08.
 
 **Implementation plan:** [ExecPlan 64: Accept TAN production as a deployment target](../plans/64-accept-tan-production-as-a-deployment-target.md).
-The request is accepted for implementation; implementation has not started. This does not constitute release-owner acceptance of any production risk.
+Completed by Plan 64 on 2026-11-08. [Release evidence](../evidence/tan-production-release.json), [the explicit owner decision](../evidence/tan-production-release-decision.md), and [the published artifact](../evidence/tan-production-qualified-artifact.json) establish AC-1 through AC-5. The release retains all accepted coverage and endpoint limits.
 
 This is the third of three requests filed together, after IR-10 and IR-11.
 

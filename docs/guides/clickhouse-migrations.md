@@ -354,10 +354,12 @@ The selected target is Altinity.Cloud `tan-production`, exact
 `26.3.60.10002.altinitystable`, one shard/two replicas, HTTPS on 8443 and verified
 native TLS on explicit port 9440. See the
 [target dossier](../evidence/tan-production-target.md) for source observations,
-coverage and pending owner dispositions. Selection is not managed certification.
+coverage and the dated owner-accepted residual risks. Selection is not managed certification.
 Per-connection UUID/version/cluster/settings admission fails closed but does not
 establish full provider routing or independent replica inventory. TAN must verify
 all expected UUIDs, healthy writable Local default storage/fsync, grants, external
 drain and managed migration/event-flow rehearsal. Preserve fences after uncertain
 submission. A direct staging rollout cannot replace replicated acceptance or
 retained migration image/session/ledger inputs.
+
+The published [TAN artifact record](../evidence/tan-production-qualified-artifact.json) uses the replicated offline native plan hash. Keep direct and replicated hashes distinct; raw CLI stdout includes its final newline. Publication does not create a managed ledger or perform production migrations.

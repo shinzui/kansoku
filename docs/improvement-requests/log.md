@@ -1,6 +1,7 @@
 # Bundle Update Log
 
 ## 2026-11-08
+* **Update**: Complete AC-1 through AC-5 with dated explicit owner risk acceptance and published Linux amd64 image/source/plan hashes verified from registry readback.
 * **Update**: Accept IR-12 for implementation and link targetPlan to docs/plans/64-accept-tan-production-as-a-deployment-target.md; implementation and release-owner risk acceptance have not occurred.
 * **Update**: Accept IR-11 for implementation and link targetPlan to docs/plans/63-keep-writes-and-maintenance-jobs-correct-on-a-replicated-cluster.md; implementation has not started.
 * **Add**: Propose IR-13 and IR-14 from `mori://shinzui/kansoku-ui/masterplans/4-build-the-health-tab-of-the-reports-page` for its Health tab. IR-13 stops counting client\_error and web\_vital as session engagement, so kansoku-js's opt-in capture leaves bounce rate unchanged (soft dependency on IR-8). IR-14 lets `/metrics/sessions` select sessions that contain an event, for the share of sessions with an error (soft dependency on IR-8).

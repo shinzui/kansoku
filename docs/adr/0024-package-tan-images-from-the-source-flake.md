@@ -5,7 +5,7 @@ description: Build independently pinned TAN images from Kansoku's own package cl
 docId: ADR-24
 status: Accepted
 date: 2026-11-02
-timestamp: 2026-11-08T05:30:00Z
+timestamp: 2026-11-08T05:28:00Z
 originatingPlan: mori://tan/tan-app-infrastructure/plans/42-qualify-kansoku-artifacts-and-the-staging-clickhouse-contract
 generated:
   by: process:codex
@@ -84,8 +84,8 @@ digest, retained readback evidence and all prerequisite/owner gate dispositions.
 No model-authored dossier accepts release risk. Decisions bind the preserved clean
 candidate archive and image ID before publication, then the verified registry digest.
 Evidence commits follow candidate source commits and do not trigger a rebuild of
-the already tested content. The selected managed target remains pending acceptance;
-local fixture qualification continues to describe its actual platform scope.
+the already tested content. The selected managed target has dated release-owner acceptance of its residual
+risks; local fixture qualification continues to describe its actual platform scope.
 
 On macOS the user-selected runtime is Apple Container; Colima is forbidden by
 `AGENTS.md`. Its Rosetta smoke path converts the normal exported archive to OCI,
@@ -94,3 +94,15 @@ its recorded image descriptor, then starts it. Its local OCI index digest is
 identified explicitly and is not called a Docker ID or published registry receipt.
 Rosetta execution remains emulated. Historical Docker receipts retain their original
 platform and do not prescribe future macOS execution.
+
+## Recorded production release disposition
+
+On 2026-11-08 the requesting release owner explicitly approved the four documented
+startup, patch/security-source, Linux application-image coverage and managed-endpoint
+risks. The [decision record](../evidence/tan-production-release-decision.md) retains
+the participant identity, actual approval, UTC date, reasons and immutable candidate
+binding. The [qualified artifact](../evidence/tan-production-qualified-artifact.json)
+is published and readback verified. Acceptance is target-specific: it does not
+certify provider routing or claim full replicated execution inside the amd64 image.
+TAN still owns independent production inventory, storage/fsync, grants, drain and
+managed migration/event-flow rehearsal. Publication performs no database migration.

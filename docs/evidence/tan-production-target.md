@@ -1,8 +1,8 @@
 # TAN production target dossier
 
-Selected on 2026-11-08; release remains pending. The machine-readable record is
-[tan-production-release.json](tan-production-release.json). No owner decisions
-have been supplied. This dossier is preparation, not managed-cloud certification.
+Selected on 2026-11-08; release-owner acceptance recorded on 2026-11-08. The machine-readable record is
+[tan-production-release.json](tan-production-release.json). All four residual risks were explicitly approved by the requesting release owner; see the
+[retained decision](tan-production-release-decision.md). This does not certify the managed cloud.
 
 ## Infrastructure and consumer contract
 
@@ -29,7 +29,7 @@ Backup context from
 records 05:00 UTC daily backups, seven retained, without restore proof.
 Provisioned SSD does not prove healthy writable Local default storage or required fsync.
 
-## Crash disposition remains pending
+## Crash evidence and accepted residual risk
 
 The producer `mori://shinzui/clickhouse-migrate`, project-relative
 `docs/release-evidence.md` and `docs/release-evidence/2026-11-07-altinity-10002.md`
@@ -60,10 +60,10 @@ fix and must not be presented as the production security baseline. The
 [security policy](https://github.com/ClickHouse/ClickHouse/security/policy) lists
 26.3 as supported for security updates; the public
 [advisories](https://github.com/ClickHouse/ClickHouse/security/advisories) are not
-an exhaustive assessment. Owner review of vendor disclosure, deployment exposure
-and future updates remains pending. Fixture success proves no absence of vulnerabilities.
+an exhaustive assessment. The owner accepted the vendor disclosure/source limitation and deployment exposure, with
+ongoing version/security review retained as an onboarding obligation. Fixture success proves no absence of vulnerabilities.
 
-## Managed endpoint and coverage disposition remain pending
+## Managed endpoint and coverage: accepted residual risks
 
 Every migration connection must admit an expected UUID, exact supported version,
 cluster and required settings before application/ledger SQL. A retained independent
@@ -86,9 +86,9 @@ remaining platform/image gap. The endpoint always requires explicit owner accept
 A disposition must retain owner, UTC date, actual decision source, residual risk,
 reason, candidate archive SHA-256 and loaded image ID. No model provenance or generic
 implementation permission supplies that decision. No synthetic offline UUID belongs
-in TAN's inventory. Publication and IR-12 completion remain blocked until the gates pass.
+in TAN's inventory. The actual decision is retained in [the approval record](tan-production-release-decision.md); publication and digest-addressed readback verification are complete; see the [final artifact](tan-production-qualified-artifact.json).
 
-## Prepared candidate and requested release-owner decisions
+## Accepted candidate and release-owner decisions
 
 The clean candidate is `7c1132d74c8cb4fd5702b3ba8394aa1f52f66780`, tag
 `gcr.io/tan-ng/kansoku:7c1132d74c8c-p1`. Its preserved Docker archive SHA-256 is
@@ -101,13 +101,12 @@ The draft's `image: null` deliberately prevents its use as a deployment record.
 No package, application source or dependency pins changed since the passing
 Plan 62/63 checkpoint `a40b20a`.
 
-All four decisions below remain **pending**. The rationale column proposes text
-for owner review; it is not an approval or an attribution to any person. Each actual
-acceptance must retain the owner's identity, UTC date, decision source and reason,
-bound to the archive and local image identity above. The final registry digest will
-be connected to this candidate only after publication and readback verification.
+All four decisions below were **accepted** by the requesting release owner on
+2026-11-08. The [approval record](tan-production-release-decision.md) retains the
+actual user response, context, recorded UTC date, approving participant identity
+and candidate binding. The rationale column retains the reasons presented for that approval. The final registry digest is connected to this candidate through retained publication and exact readback receipts.
 
-| Gate | Residual risk to accept | Proposed rationale for owner review |
+| Gate | Accepted residual risk | Accepted rationale |
 | --- | --- | --- |
 | Startup crash | Two unexplained Darwin native pre-readiness SIGSEGV attempts; neither later success nor platform difference proves a fix. | Accept the unresolved developer-fixture startup risk for this managed Altinity deployment, retaining failures and requiring any future startup failure to fail its acceptance run. |
 | Patch/security | Vendor 10002 declares CVE-2026-116366 fixed, but some security source is temporarily withheld; managed binary digest has not been observed. | Select the vendor's exact security-fixed patch with its disclosed source limitation, retain exact-version admission, and require TAN to verify deployed version and follow vendor security updates. |
@@ -119,3 +118,21 @@ host mounts. All three exact plan outputs repeat byte-for-byte; the direct histo
 also matches the retained compatibility fixture. The historical Colima OOM failure
 is retained in FRIC-18, resolved by Apple Container. Colima is forbidden for future
 work by repository instructions. These smoke checks do not execute a live database.
+
+## Published handoff
+
+The verified immutable image is `gcr.io/tan-ng/kansoku@sha256:a78b668dbc98567bfd2d031f9b3aaf3a22b1f3f4bd4fbfd3ca3605dfbf98d213`.
+Copy the exact eight fields from
+[tan-production-qualified-artifact.json](tan-production-qualified-artifact.json).
+The detailed [release record](tan-production-release.json),
+[registry receipt](tan-production-publication.json) and
+[readback report](tan-production-readback.json) retain separate identities and scope.
+The earlier draft remains historical and intentionally unusable (`image: null`).
+
+The owning canonical project is `mori://shinzui/kansoku`; these are repository-local
+evidence files under `docs/evidence/` (artifact-level URIs pending). The release
+source remains `7c1132d74c8cb4fd5702b3ba8394aa1f52f66780`; later evidence commits do
+not change image contents. TAN's staging rollout, full production UUID inventory,
+storage/fsync/grant checks, retained operation inputs, fresh ledger creation and
+managed migration/event-flow rehearsal remain TAN onboarding work. No deployment
+repository or database was changed by this release.

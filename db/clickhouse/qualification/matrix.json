@@ -88,7 +88,40 @@
         "checkedAt": "2026-11-08"
       },
       "releaseEvidence": "docs/evidence/tan-production-release.json",
-      "status": "selected; release pending"
+      "status": "published; target-specific owner acceptance",
+      "releaseGates": {
+        "startup-crash": {
+          "status": "accepted",
+          "owner": "Requesting release owner in Codex thread 01a1b97f-df14-7d21-9474-98412788611a",
+          "at": "2026-11-08T05:24:18Z",
+          "reason": "Accept the unresolved developer-fixture startup risk for this managed Altinity deployment, retaining failures and requiring any future startup failure to fail its acceptance run.",
+          "decisionSource": "docs/evidence/tan-production-release-decision.md"
+        },
+        "security-patch-review": {
+          "status": "accepted",
+          "owner": "Requesting release owner in Codex thread 01a1b97f-df14-7d21-9474-98412788611a",
+          "at": "2026-11-08T05:24:18Z",
+          "reason": "Select the vendor's exact security-fixed patch with its disclosed source limitation, retain exact-version admission, and require TAN to verify deployed version and follow vendor security updates.",
+          "decisionSource": "docs/evidence/tan-production-release-decision.md"
+        },
+        "linux-amd64-image": {
+          "status": "accepted",
+          "owner": "Requesting release owner in Codex thread 01a1b97f-df14-7d21-9474-98412788611a",
+          "at": "2026-11-08T05:24:18Z",
+          "reason": "Accept this precisely bounded packaged-image/platform coverage gap using unchanged passing prerequisite behavior, while retaining TAN's managed migration and event-flow rehearsal obligation.",
+          "decisionSource": "docs/evidence/tan-production-release-decision.md"
+        },
+        "managed-endpoint": {
+          "status": "accepted",
+          "owner": "Requesting release owner in Codex thread 01a1b97f-df14-7d21-9474-98412788611a",
+          "at": "2026-11-08T05:24:18Z",
+          "reason": "Accept the uncertified endpoint with independently verified full replica inventory, storage/fsync and grants, normal TLS verification, external drain and explicit uncertain-outcome recovery required during TAN onboarding.",
+          "decisionSource": "docs/evidence/tan-production-release-decision.md"
+        }
+      },
+      "image": "gcr.io/tan-ng/kansoku@sha256:a78b668dbc98567bfd2d031f9b3aaf3a22b1f3f4bd4fbfd3ca3605dfbf98d213",
+      "qualifiedArtifact": "docs/evidence/tan-production-qualified-artifact.json",
+      "acceptanceScope": "Target-specific release with explicit owner-accepted startup, security-source, Linux image behavioral coverage and managed-endpoint risks. No managed-cloud certification or production migration."
     }
   ]
 }

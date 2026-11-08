@@ -1,6 +1,8 @@
 # Bundle Update Log
 
 ## 2026-11-08
+* **Update**: Record immutable TAN publication and digest readback binding without rebuilding the approved candidate.
+* **Update**: Record actual owner-accepted TAN release scope and independently retained managed onboarding obligations.
 * **Update**: Use Apple Container on macOS, bind created container descriptors, and distinguish local OCI index identity from registry publication.
 * **Update**: Select managed TAN scope while retaining explicit owner decisions and independently verified inventory/storage obligations.
 * **Update**: Record exact plan-byte hashes, draft versus published TAN records and candidate-bound owner dispositions.

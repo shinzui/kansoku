@@ -5,7 +5,7 @@ description: Embed immutable native migration steps, bind administration to reta
 docId: ADR-22
 status: Accepted
 date: 2026-10-16
-timestamp: 2026-11-08T05:40:00Z
+timestamp: 2026-11-08T05:28:00Z
 generated:
   by: process:codex
   at: 2026-10-16T22:55:08Z
@@ -177,3 +177,15 @@ offline plan smoke and Darwin-client fixture passes cannot supply that decision.
 Startup and patch/security dispositions and Linux application-image coverage are
 tracked in the [release dossier](../evidence/tan-production-target.md). Existing
 direct history and certificate verification remain mandatory.
+
+## Recorded production release disposition
+
+On 2026-11-08 the requesting release owner explicitly approved the four documented
+startup, patch/security-source, Linux application-image coverage and managed-endpoint
+risks. The [decision record](../evidence/tan-production-release-decision.md) retains
+the participant identity, actual approval, UTC date, reasons and immutable candidate
+binding. The [qualified artifact](../evidence/tan-production-qualified-artifact.json)
+is published and readback verified. Acceptance is target-specific: it does not
+certify provider routing or claim full replicated execution inside the amd64 image.
+TAN still owns independent production inventory, storage/fsync, grants, drain and
+managed migration/event-flow rehearsal. Publication performs no database migration.

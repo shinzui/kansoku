@@ -282,5 +282,15 @@ Linux amd64. See the [source-backed target dossier](tan-production-target.md),
 [machine-readable release evidence](tan-production-release.json) and unchanged
 historical fixture plus separate deployment target in the qualification matrix.
 Plans 62 and 63 are complete within their recorded Darwin-client/Linux-arm64-server
-scope. The startup-crash, patch/security, Linux image and managed-endpoint release
-gates remain pending. No image is published or qualified by target selection.
+scope. The requesting release owner explicitly approved all four residual risks
+on 2026-11-08; [the actual decision](tan-production-release-decision.md) retains
+identity, date, context, reasons and candidate binding. These are accepted risks,
+not fixes or managed certification. The preserved Linux amd64 image is published
+and readback verified as `gcr.io/tan-ng/kansoku@sha256:a78b668dbc98567bfd2d031f9b3aaf3a22b1f3f4bd4fbfd3ca3605dfbf98d213`.
+The [final eight-field artifact](tan-production-qualified-artifact.json) maps its
+native hash to the replicated plan; the direct hash remains in detailed evidence.
+All three captured plan byte streams, filesystem layers and source labels match
+the approved source `7c1132d74c8cb4fd5702b3ba8394aa1f52f66780`. Apple Container
+uses Rosetta; full replicated database tests inside this image remain an explicitly
+accepted gap. TAN retains production inventory/storage/grant/drain and managed
+rehearsal obligations. No production migration or infrastructure change occurred.

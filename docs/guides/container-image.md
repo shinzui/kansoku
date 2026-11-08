@@ -131,3 +131,7 @@ before starting it. Each probe has no networks or host mounts. The Apple local
 index digest in `imageId` is distinct from Docker's configuration ID and the
 published registry manifest. `imageIdKind` identifies its meaning. Reports record
 Rosetta execution as emulated; it is not native Linux behavioral acceptance.
+
+## Published TAN production candidate
+
+The completed Plan 64 release is `gcr.io/tan-ng/kansoku@sha256:a78b668dbc98567bfd2d031f9b3aaf3a22b1f3f4bd4fbfd3ca3605dfbf98d213`. Use the [eight-field qualified artifact](../evidence/tan-production-qualified-artifact.json) and [target dossier](../evidence/tan-production-target.md) for the approved scope and onboarding obligations. Its source is `7c1132d74c8cb4fd5702b3ba8394aa1f52f66780`; later evidence commits do not change that source identity. All three exact plan captures were reproduced from the digest-addressed registry readback. Full image-based replicated execution and the managed endpoint remain explicitly accepted risks, not certified behavior.
