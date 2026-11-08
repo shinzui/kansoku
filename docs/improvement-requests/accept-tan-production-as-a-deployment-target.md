@@ -6,7 +6,8 @@ generated:
   by: process:claude-code
   at: "2026-11-08T00:00:15Z"
 requestId: IR-12
-status: proposed
+status: accepted
+targetPlan: docs/plans/64-accept-tan-production-as-a-deployment-target.md
 origin: mori://tan/tan-app-infrastructure/plans/45-onboard-kansoku-to-production-on-the-replicated-clickhouse-cluster
 dependencies:
   - ref: mori://shinzui/kansoku/okf/improvement-requests/concepts/IR-10
@@ -56,6 +57,9 @@ Kansoku's production onboarding
 (`mori://tan/tan-app-infrastructure/plans/45-onboard-kansoku-to-production-on-the-replicated-clickhouse-cluster`).
 **Addressed to:** `shinzui/kansoku` agents and the Kansoku release owner.
 **Created:** 2026-11-08.
+
+**Implementation plan:** [ExecPlan 64: Accept TAN production as a deployment target](../plans/64-accept-tan-production-as-a-deployment-target.md).
+The request is accepted for implementation; implementation has not started. This does not constitute release-owner acceptance of any production risk.
 
 This is the third of three requests filed together, after IR-10 and IR-11.
 
