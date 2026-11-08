@@ -14,6 +14,7 @@ def main():
     for flag in ['old-pg','old-native','pg','native']:
         parser.add_argument('--'+flag,required=True)
     args=parser.parse_args()
+    Path('.dev/acceptance').mkdir(parents=True,exist_ok=True)
     root=Path(tempfile.mkdtemp(prefix='session-upgrade-',dir='.dev/acceptance')).resolve()
     with isolated_postgres(root/'postgres') as env:
         env.update(KANSOKU_CH_MIGRATION_TARGET='kansoku/owned-upgrade',KANSOKU_CH_MIGRATION_SERVER_ID=str(uuid.uuid4()),KANSOKU_CH_MIGRATION_LEDGER_ID=str(uuid.uuid4()),KANSOKU_CH_MIGRATION_ENDPOINT='http://127.0.0.1:1',KANSOKU_CLICKHOUSE_PASSWORD='unused')

@@ -5,7 +5,7 @@ description: Gate service changes with deterministic checks and required integra
 docId: ADR-10
 status: Accepted
 date: 2026-10-15
-timestamp: 2026-11-08T01:45:00Z
+timestamp: 2026-11-08T02:21:04Z
 generated:
   by: process:codex
   at: 2026-10-16T17:56:53Z
@@ -107,3 +107,16 @@ Missing Docker, image/platform prerequisites, zero examples or pending examples
 remain failures. macOS-hosted Linux containers do not qualify a Linux application
 client or a managed production endpoint. Full completion requires the evidence and
 packaged/query gates in [plan 62](../plans/62-run-clickhouse-migrations-on-a-replicated-cluster.md).
+
+
+The migration fixture deliberately supplies asynchronous/truncated defaults. Its
+restricted app account stays in place for CLI qualification. Existing native
+query/metrics groups use a separate disposable account with synchronous, complete
+results and `distributed_ddl_output_mode=none`, which retains wait/error behavior
+without a DDL status result set. Capture baseline schema and seeded parity first;
+then disable deduplication windows for destructive native fixtures and clear owned
+data between groups while retaining retention configuration and immutable history.
+This lets repeated DELETE/reseed fixtures exercise reader semantics, rather than
+mistaking repeated test input for a retried insert. Preserve query-level replay
+assertions. These explicit test controls do not qualify production block
+deduplication, writers, or administrative data maintenance.

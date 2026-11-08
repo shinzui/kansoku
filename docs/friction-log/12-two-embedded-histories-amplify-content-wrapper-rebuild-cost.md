@@ -6,12 +6,17 @@ generated:
   by: "codex-cli/gpt-6.1-sol"
   at: "2026-11-08T01:40:24Z"
 frictionId: FRIC-12
-status: logged
+status: "accepted"
 impact: slowdown
 kind: tooling
 origin: "mori://shinzui/kansoku"
 affects: "mori://shinzui/clickhouse-migrate"
 plan: "docs/plans/62-run-clickhouse-migrations-on-a-replicated-cluster.md"
+resolution: "Retain the upstream content wrapper and its broad recompilation cost to preserve the required content-sensitive embedding proof; narrower invalidation is outside this plan."
+amended:
+  - by: "codex-cli/gpt-6.1-sol"
+    at: "2026-11-08T02:20:15Z"
+    change: "Accept the rebuild cost while retaining both manifest inputs and preserved-time rebuild checks."
 ---
 # Two embedded histories amplify content-wrapper rebuild cost
 

@@ -1,6 +1,11 @@
 # Bundle Update Log
 
 ## 2026-11-08
+* **Update**: FRIC-14 accepted: Restore the complete guide adoption inventory and accept byte-preserving log updates as the recurring workaround.
+* **Addition**: FRIC-14 records detour tooling friction with mori://shinzui/okf: OKF log updates discard adoption evidence outside parsed entries
+* **Update**: FRIC-13 accepted: Document and automate the native-query fixture setup without weakening migration app restrictions or Hspec assertions.
+* **Update**: FRIC-12 accepted: Accept the rebuild cost while retaining both manifest inputs and preserved-time rebuild checks.
+* **Addition**: FRIC-13 records detour interface friction with mori://shinzui/clickhouse-migrate: Migration fixture defaults need a separate native-test account
 * **Addition**: FRIC-12 records slowdown tooling friction with mori://shinzui/clickhouse-migrate: Two embedded histories amplify content-wrapper rebuild cost
 
 ## 2026-11-06

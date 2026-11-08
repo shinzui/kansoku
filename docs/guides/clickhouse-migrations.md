@@ -290,6 +290,8 @@ Set both `KANSOKU_CH_MIGRATION_CLUSTER` and `KANSOKU_CH_MIGRATION_REPLICA_IDS`
 entirely. Empty values are present values and are refused. UUIDs are validated, whitespace
 around CSV entries is trimmed, duplicates are refused, and the complete inventory is sorted.
 Changing the cluster, topology, or any UUID refuses a retained PostgreSQL session.
+Online native JSON reports include `selectedTarget`, naming the topology and the
+cluster/replica inventory (or direct server UUID).
 Run PostgreSQL migrations first, including `0008-clickhouse-replicated-administration`.
 Existing direct sessions retain their fences, receipts and identities across this upgrade.
 

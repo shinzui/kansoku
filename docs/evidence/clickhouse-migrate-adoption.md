@@ -206,3 +206,69 @@ acceptance remains required and unqualified, remote CI has not been observed,
 and no deployment target has been selected or deployed. Crash disposition and
 intervening patch/security review remain production gates. No producer repository
 was changed and no upstream initiative is declared complete.
+
+## Replicated migration qualification (plan 62, 2026-11-08)
+
+The source cohort remains `0e75c4cc1303423ba561370ee5795aa0cf2455b7`
+(`0.1.1.0`, source candidate) from `mori://shinzui/clickhouse-migrate`.
+The owned fixture uses Altinity `26.3.60.10002.altinitystable`, Linux/arm64,
+`docker.io/altinity/clickhouse-server@sha256:7e72405bf85df6d163205ee2e56251ebc35daf6dc71142f58bdee7a461690ffb`.
+These observations use a Darwin/arm64 application client with Linux containers;
+they do not certify a Linux application client, a managed endpoint, or deployment permissions.
+
+The independently built `2008b67` CLI supplies
+`kansoku-server/test/fixtures/clickhouse-direct-plan-2008b67.json`.
+`scripts/check_clickhouse_plans.py` recursively compares every offline field and
+checks the original migration tree against that revision. Direct remains 25/257;
+replicated is 25/254. Conversion evidence checks three omissions, 31 engine
+adaptations and one `EMPTY` modifier on the already-empty 0020 schema inference.
+The original SQL and manifest remain byte-identical.
+
+The deterministic selector suite passes 13 cases. The retained-session upgrade
+proof uses separately built `2008b67` PostgreSQL/ClickHouse CLIs, then applies the
+new migration and compares every legacy field, fence, counter and receipt. A
+changed topology refuses access without native application SQL.
+
+The full Cabal CLI proof passes the 25/254 migration lifecycle, both Memory
+assertion groups, matching initialized recovery, guarded currentness verification,
+retained/released fences, zero-SQL repeat with unchanged ledger events, a replicated
+append-only suffix, and changed-definition refusal. Direct and replicated controls
+use the same app owner and exact server candidate. Table/column definitions, keys,
+TTLs and view SELECTs agree after only engine-family and generated replica metadata
+normalization; seeded raw, rollup and reader results agree independently. Both
+replicas retain equal ordered v2 events and seeded upgrade rows. Ten fresh rejection
+fixtures all refuse with a retained fence and zero application requests.
+
+All 72 required existing query/metrics examples pass with zero failures or pending
+cases. Their destructive fixtures use an explicitly separate synchronous native-test
+account, complete results, no DDL status result set, disabled replicated table
+deduplication windows after baseline parity capture, and owned data cleared between
+groups. The restricted migration app account retains its constant engine restriction.
+These controls preserve the reader assertions and do not qualify production block
+deduplication, writers, or data-maintenance operations (see ADR-10 and IR-11).
+
+Independent source packaging extracts all ten workspace/source-cohort packages,
+builds the real CLI, withholds migration inputs and inspects both offline histories.
+The preserved-time embedding proof mutates each history separately and confirms the
+other history is unchanged. `just check` passes (500 core and 21 client deterministic
+examples, four probes, generated contracts, formatting, strict documentation and
+telemetry lifecycle checks). The direct native component gate passes four cases; the
+Nix packaged direct CLI/coordinator gate passes 17 cases, zero failures/skips.
+
+The final combined recipe exits zero: 13 owned cases plus one Nix-packaged full
+lifecycle case, zero failures/skips. The packaged run independently repeats all
+72 required query/metrics examples with zero failures/pending. It resolves the
+packaged executable from Nix JSON outputs. All owned fixture containers and child
+processes are stopped after acceptance. Commands from the repository root:
+
+```bash
+nix develop --no-write-lock-file -c just check
+nix develop --no-write-lock-file -c just ch-migrations-component
+nix develop --no-write-lock-file -c just ch-migrations-source
+nix develop --no-write-lock-file -c just ch-migrations-acceptance
+CLICKHOUSE_MIGRATE_DOCKER_CONTEXT=colima nix develop --no-write-lock-file -c just ch-migrations-replicated
+```
+
+No managed endpoint, production permissions, production data, or deployment
+repository was contacted or changed. General replicated runtime maintenance and
+Linux-client deployment acceptance remain separate qualification gates.

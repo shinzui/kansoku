@@ -1,6 +1,8 @@
 # Bundle Update Log
 
 ## 2026-11-08
+* **Update**: ADR-22: Clarify the historical Altinity cohort and current common direct/replicated source candidate.
+* **Update**: Record explicit native-query fixture profiles, deduplication windows and data isolation while preserving migration restrictions.
 * **Update**: Add owned replicated CLI qualification gate and retain platform/deployment boundaries.
 * **Update**: Record separate immutable replicated history, full persisted topology identity and bounded replica observations.
 

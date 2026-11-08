@@ -233,7 +233,9 @@ withNativeFixture action = do
 fixtureSQL :: Text -> Expectation
 fixtureSQL sql = do
   port <- getEnv "CLICKHOUSE_TCP_PORT"
-  (exitCode, _, err) <- readProcessWithExitCode "clickhouse-client" ["--host", "127.0.0.1", "--port", port, "--query", Text.unpack sql] ""
+  user <- maybe "default" id <$> lookupEnv "KANSOKU_CLICKHOUSE_USER"
+  password <- maybe "" id <$> lookupEnv "KANSOKU_CLICKHOUSE_PASSWORD"
+  (exitCode, _, err) <- readProcessWithExitCode "clickhouse-client" ["--host", "127.0.0.1", "--port", port, "--user", user, "--password", password, "--query", Text.unpack sql] ""
   if exitCode == ExitSuccess then pure () else expectationFailure err
 
 orderPrefix :: Text

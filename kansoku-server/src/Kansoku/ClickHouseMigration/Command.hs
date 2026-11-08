@@ -12,8 +12,10 @@ import Control.Applicative (many, optional, some, (<**>), (<|>))
 import Control.Exception (IOException, fromException)
 import Control.Monad (forM, unless)
 import Data.Aeson qualified as A
+import Data.Aeson.KeyMap qualified as KM
 import Data.ByteString.Char8 qualified as BS
 import Data.ByteString.Lazy.Char8 qualified as LBS
+import Data.List.NonEmpty qualified as NE
 import Data.Maybe (isJust)
 import Data.Text (Text)
 import Data.Text qualified as Text
@@ -97,7 +99,7 @@ run choose = do
             result <- handleCommand (commandEnvironment (Just (Config.nativeConfig config (firstUse command))) (Just provider) quietEvents redactedDiagnostics AdministrativeCommands) plan command
             -- Emit the native report before coordinator cleanup so a secondary
             -- PostgreSQL failure cannot hide the original primary error/receipt.
-            output format result
+            outputSelected (Config.nativeConfig config False) format result
             if isMutation command then record (successful result) (pendingReceipts result) else pure ()
             unless (successful result) exitFailure
         else execute plan (Just (Config.nativeConfig config False)) Nothing invocation
@@ -156,7 +158,11 @@ run choose = do
     firstUse = \case UpCommand (UpInput _ _ initial _) -> isJust initial; _ -> False
     execute plan config provider (Invocation format command) = do
       result <- handleCommand (commandEnvironment config provider quietEvents redactedDiagnostics AdministrativeCommands) plan command
-      display (Invocation format command) result
+      case config of
+        Nothing -> display (Invocation format command) result
+        Just settings -> do
+          outputSelected settings format result
+          unless (successful result) exitFailure
 
 entry :: Config.Config -> Maybe Integer -> Command -> IO (Integer, Text, A.Value)
 entry config predecessor command = do
@@ -182,6 +188,19 @@ output format result = do
     JsonOutput -> BS.putStrLn (renderJson result)
     TextOutput -> Text.putStrLn (renderText result)
   unless (successful result) (Text.hPutStrLn stderr "ClickHouse migration command failed; retain its structured report and any pending receipts. The session fence remains authoritative.")
+
+-- The pinned toolkit reports the observed server, but not the configured cluster.
+-- Expose the full nonsecret selector on online JSON without changing offline plans.
+outputSelected :: T.TargetConfig -> OutputFormat -> CommandResult -> IO ()
+outputSelected settings JsonOutput result = do
+  let selected = case T.configuredTopology settings of
+        T.DirectServer sid -> A.object ["topology" A..= ("direct" :: Text), "serverId" A..= T.serverIdText sid]
+        T.ReplicatedCluster name ids -> A.object ["topology" A..= ("replicated" :: Text), "cluster" A..= T.clusterNameText name, "replicaIds" A..= map T.serverIdText (NE.toList ids)]
+  case A.eitherDecodeStrict' (renderJson result) of
+    Right (A.Object row) -> LBS.putStrLn (A.encode (A.Object (KM.insert "selectedTarget" selected row)))
+    _ -> fail "Invalid native JSON report"
+  unless (successful result) (Text.hPutStrLn stderr "ClickHouse migration command failed; retain its structured report and any pending receipts. The session fence remains authoritative.")
+outputSelected _ format result = output format result
 
 renderMaintenance :: OutputFormat -> Text -> A.Value -> IO ()
 renderMaintenance format command row = case format of

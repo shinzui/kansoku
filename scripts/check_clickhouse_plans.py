@@ -25,13 +25,18 @@ def main():
     if args.capture_reference:
         fixture.parent.mkdir(parents=True,exist_ok=True)
         fixture.write_text(json.dumps(inspect(args.capture_reference),indent=2)+'\n')
-    assert inspect(args.binary) == json.loads(fixture.read_text()), 'Direct offline JSON changed from 2008b67'
+    canonical = lambda value: json.dumps(value,sort_keys=True,separators=(',',':'),ensure_ascii=False)
+    assert canonical(inspect(args.binary)) == canonical(json.loads(fixture.read_text())), 'Direct offline JSON changed from 2008b67'
     subprocess.run(['git','diff','--exit-code','2008b67','--','kansoku-server/migrations/clickhouse'],cwd=REPO,check=True)
     doc = inspect(args.binary,True)
     components = doc['result']['components']
     assert len(components) == 1 and components[0]['name'] == 'kansoku_replicated'
     migrations = components[0]['migrations']
     assert len(migrations) == 25 and sum(len(m['steps']) for m in migrations) == 254
+    assert 'sha256-v2' in doc['result']['checksumFormats']
+    for migration in migrations:
+        assert len(migration['checksums']['sha256-v2']) == 64
+        assert all(len(step['checksums']['sha256-v2']) == 64 for step in migration['steps'])
     print('offline plans: direct recursively identical to 2008b67 (25/257); replicated 25/254')
 
 

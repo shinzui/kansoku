@@ -5,7 +5,7 @@ description: Embed immutable native migration steps, bind administration to reta
 docId: ADR-22
 status: Accepted
 date: 2026-10-16
-timestamp: 2026-11-08T01:45:00Z
+timestamp: 2026-11-08T02:24:15Z
 generated:
   by: process:codex
   at: 2026-10-16T22:55:08Z
@@ -31,8 +31,8 @@ separate `kansoku-ch-migrate` executable. Application reads and writes retain th
 native driver. Normal startup applies neither store's migrations. PostgreSQL
 migrations run first and create additive session coordination state.
 
-The initial cohort came from Hackage `0.1.0.0`. Staging's Altinity engine requires
-`0.1.0.1`, selected as the immutable upstream source commit
+The initial cohort came from Hackage `0.1.0.0`. The first Altinity qualification used
+`0.1.0.1` at immutable upstream source commit
 `00afa9fa1038f2b90e7bc5f041ac1b56649b639f` across all four dependency packages.
 Hackage and the upstream release tags were checked; this is a qualified source
 candidate, not a claimed registry release. The upstream Nix and seven extracted
@@ -104,7 +104,7 @@ qualifies/releases support for required artifacts before Kansoku updates its pin
 
 ## Replicated migration targets
 
-The replicated path uses the common `0.1.1.0` source candidate at
+Both direct and replicated paths now use the common `0.1.1.0` source candidate at
 `0e75c4cc1303423ba561370ee5795aa0cf2455b7` from
 `mori://shinzui/clickhouse-migrate`; this is not a Hackage release claim.
 Keep the original direct manifest and bound SQL bytes immutable. A distinct
