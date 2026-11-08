@@ -11,6 +11,7 @@ module Kansoku.ClickHouse
     insertWriterEvents,
     newWriterConnection,
     openClickHouse,
+    validateClickHouseTopology,
     newQueryPool,
     newQueryPoolWithLimits,
     MetricsQueryLimits (..),
@@ -22,6 +23,7 @@ module Kansoku.ClickHouse
     closeQueryPool,
     selectEventProjections,
     withQueryConnection,
+    withReadbackQueryConnection,
     withIdentityQueryConnection,
     queryReachable,
   )
@@ -50,7 +52,7 @@ import ClickHaskell
     unsafeMkSelect,
   )
 import Control.Concurrent.MVar (MVar, modifyMVar, newMVar)
-import Control.Exception (SomeException, onException, throwIO, try)
+import Control.Exception (SomeException, bracket, fromException, onException, throwIO, try)
 import Data.ByteString.Builder (toLazyByteString)
 import Data.ByteString.Lazy qualified as Lazy
 import Data.Default (def)
@@ -59,19 +61,25 @@ import Data.IORef (IORef, newIORef)
 import Data.Int (Int64)
 import Data.Pool qualified as Pool
 import Data.String (fromString)
+import Kansoku.ClickHouse.Consistency (Role (Writer), initializeRole, replicaConnections, validateSchemaTopology, withConsistentReadbackOn, withReplicaConnections)
 import Kansoku.ClickHouse.EventRow
+import Kansoku.ClickHouse.Native (ConsistencyError)
+import Kansoku.ClickHouse.Topology qualified as Topology
 import Kansoku.Config qualified as Config
 import Kansoku.Event (AnalyticsEvent)
+import Kansoku.Exception (trySynchronous)
 import Kansoku.Identity.Cache (IdentityCacheState, prepareIdentityCache)
 import Kansoku.Ingest.QueuedEvent (QueuedEvent)
 import Kansoku.Prelude
 import Network.Connection qualified as TLS
 import Network.Socket (SockAddr (..), getPeerName)
+import System.Timeout (timeout)
 
 data ClickHouseConfig = ClickHouseConfig
   { clickHouseHost :: !String,
     clickHouseTcpPort :: !String,
     clickHouseSecure :: !Bool,
+    clickHouseTopology :: !Topology.Topology,
     clickHouseDatabase :: !String,
     clickHouseUser :: !String,
     clickHousePassword :: !String
@@ -84,6 +92,7 @@ clickHouseConfigFromConfig cfg =
     { clickHouseHost = Config.clickHouseHost cfg,
       clickHouseTcpPort = show (Config.clickHouseTcpPort cfg),
       clickHouseSecure = Config.clickHouseSecure cfg,
+      clickHouseTopology = Config.clickHouseTopology cfg,
       clickHouseDatabase = Config.clickHouseDatabase cfg,
       clickHouseUser = Config.clickHouseUser cfg,
       clickHousePassword = Config.clickHousePassword cfg
@@ -121,6 +130,23 @@ openClickHouse config
                 }
       openConnection (overrideInitConnection secureSocket (connectionArgs config))
 
+-- Fail startup before admitting traffic if the selected mode cannot describe
+-- the installed application schema. Every writer reconnect repeats this check.
+validateClickHouseTopology :: ClickHouseConfig -> IO ()
+validateClickHouseTopology cfg = case clickHouseTopology cfg of
+  Topology.Direct -> do
+    -- Preserve ingest availability when a direct server restarts during a
+    -- storage outage. An observed schema mismatch is fatal; unavailable schema
+    -- checks are repeated on physical query/writer acquisition before use.
+    observed <- timeout 750_000 (trySynchronous (bracket (openClickHouse cfg) closeConnection (validateSchemaTopology Topology.Direct)))
+    case observed of
+      Just (Left exception) -> case fromException exception :: Maybe ConsistencyError of
+        Just _ -> throwIO exception
+        Nothing -> pure ()
+      _ -> pure ()
+  topology -> withReplicaConnections topology (openClickHouse cfg) $ \replicas ->
+    mapM_ (initializeRole topology Writer . snd) (replicaConnections replicas)
+
 -- | A dedicated writer cache. Failed operations close the physical connection;
 -- the next queue retry opens a fresh handle.
 data WriterConnection = WriterConnection !ClickHouseConfig !(MVar (Maybe Connection))
@@ -143,7 +169,7 @@ insertWriterEvents (WriterConnection config connectionCell) events = do
   where
     openWriter = do
       connection <- openClickHouse config
-      command connection "SET async_insert=0" `onException` closeConnection connection
+      (validateSchemaTopology (clickHouseTopology config) connection >> initializeRole (clickHouseTopology config) Writer connection) `onException` closeConnection connection
       pure connection
 
 -- | A fixed-size pool of ClickHouse connections for the metrics query path.
@@ -179,8 +205,13 @@ newQueryPoolWithLimits cfg size limits = do
   QueryPool limits
     <$> Pool.newPool
       ( Pool.setNumStripes (Just 1) $
-          Pool.defaultPoolConfig (QueryConnection <$> openClickHouse cfg <*> newIORef Nothing) closeQueryConnection queryConnectionIdleSeconds size
+          Pool.defaultPoolConfig (QueryConnection <$> openValidated <*> newIORef Nothing) closeQueryConnection queryConnectionIdleSeconds size
       )
+  where
+    openValidated = do
+      connection <- openClickHouse cfg
+      validateSchemaTopology (clickHouseTopology cfg) connection `onException` closeConnection connection
+      pure connection
 
 -- | Idle physical connections are closed, as are all resources at shutdown.
 queryConnectionIdleSeconds :: Double
@@ -192,6 +223,12 @@ closeQueryPool (QueryPool _ pool) = Pool.destroyAllResources pool
 -- | Failures escape the callback: disposal completes before classification.
 withQueryConnection :: QueryPool -> (Connection -> IO a) -> IO a
 withQueryConnection (QueryPool _ pool) action = Pool.withResource pool $ \(QueryConnection connection _) -> action connection
+
+-- Privileged verification only: failure escapes the pool callback, disposing
+-- the same physical connection whose schema/table barriers preceded the SELECT.
+withReadbackQueryConnection :: Topology.Topology -> QueryPool -> (Connection -> IO a) -> IO a
+withReadbackQueryConnection topology pool action = withQueryConnection pool $ \connection ->
+  withConsistentReadbackOn topology connection action
 
 closeQueryConnection :: QueryConnection -> IO ()
 closeQueryConnection (QueryConnection connection _) = closeConnection connection

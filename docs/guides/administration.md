@@ -157,3 +157,53 @@ Listings default to metadata; `--include-payload` explicitly prints sensitive or
 Purge defaults to now minus `KANSOKU_INGEST_QUARANTINE_RETENTION_DAYS`, accepts `--before`, and
 uses the same bounded limits. Manual purge complements automatic quarantine expiry/caps; it is
 not the automatic retention guarantee.
+
+## Maintenance on a replicated cluster
+
+Use the same `KANSOKU_CH_MIGRATION_CLUSTER` and canonical comma-separated
+`KANSOKU_CH_MIGRATION_REPLICA_IDS` for the server, writer and administrative CLI.
+Both selectors must be present for replicated operation. Neither selects direct
+operation; an empty, partial, malformed or duplicate inventory is rejected.
+The native host, TCP port and verified TLS selector remain independent of the
+migration HTTP endpoint. A replicated application schema cannot run as direct.
+
+A confirmed data job records its topology, cluster and complete expected UUID set
+in the same PostgreSQL transaction that owns the persistent fence. Resume requires
+that exact identity. Historical jobs are direct-only. Do not change identities to
+make an unavailable replica disappear from a job.
+
+Maintenance retains a native connection to every expected replica through the
+configured endpoint. That endpoint must expose the full inventory; an endpoint
+pinned to one server fails closed. Kansoku never connects to a hostname returned
+by a system table. Each operation checks UUIDs on its retained connections; a
+failed connection invalidates the operation. Resume reacquires the full set.
+
+After traffic exclusion, the job drains raw INSERTs on every replica, synchronizes
+the database schema and all reviewed source/target tables, and only then discovers
+identity evidence. Mutations are submitted once and independently checked on each
+replica. Every target is cleared before a dependency-ordered rebuild, with rebuild
+insert deduplication disabled for those statements. A retry clears every target
+again so an earlier rebuild block cannot suppress replacement rows. Writer
+settings remain independent. All replicas must pass fresh final checks even when
+the saved stage is `rebuilt` or `verified`.
+
+The administrative account needs SELECT visibility into all Kansoku writer
+sessions in `system.processes`, local mutations, table/column/database metadata
+and the configured cluster inventory; INSERT, ALTER and TRUNCATE on application
+tables; `READ ON REMOTE` for cluster identity verification; and `SYSTEM SYNC
+REPLICA` and `SYSTEM SYNC DATABASE REPLICA`. Use
+`distributed_ddl_output_mode='none'` for the native command API. Configure system
+table access to expose all writer sessions, not a filtered subset. Restricted
+observation failures must be repaired, never interpreted as an empty queue.
+
+Replica acquisition is limited to 35 seconds and 64 attempts. Each native barrier
+or statement has a 60-second budget; the job can use several budgets. Diagnostics
+name nonsecret replica UUIDs and failed stages. A timeout leaves the outcome
+uncertain and the fence active. Restore the same replicas and required access,
+stop external SQL clients, and resume the original job with the capable binary.
+Do not manually advance stages or clear the fence. Do not roll back to a binary
+that ignores replicated job identity while such a job is unfinished.
+
+PostgreSQL admission fences cooperating Kansoku traffic. Pause external native
+writers and readers explicitly throughout maintenance, including repair/resume;
+arbitrary external SQL does not participate in that admission protocol.

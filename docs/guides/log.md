@@ -1,6 +1,7 @@
 # Bundle Update Log
 
 ## 2026-11-08
+* **Update**: DOC-1, DOC-4, DOC-9 and DOC-13: Document replicated runtime selection, native role permissions, all-replica maintenance and bounded read-back/retry guarantees.
 * **Update**: DOC-13: Document replicated selectors, retained identities, bounded observations and recovery.
 
 ## 2026-11-07

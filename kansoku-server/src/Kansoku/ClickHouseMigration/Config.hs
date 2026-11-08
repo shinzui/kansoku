@@ -26,13 +26,13 @@ import Data.Aeson qualified as A
 import Data.Aeson.KeyMap qualified as KM
 import Data.ByteString qualified as BS
 import Data.IORef
-import Data.List (sort)
 import Data.List.NonEmpty qualified as NE
 import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Encoding
 import Kansoku.Admin.Coordination qualified as C
+import Kansoku.ClickHouse.Topology qualified as Topology
 import Network.HTTP.Client qualified as H
 import Network.HTTP.Client.TLS (tlsManagerSettings)
 import Network.HTTP.Types.Status (statusCode)
@@ -53,16 +53,17 @@ data Config = Config
 
 -- Pure selectors are also used by offline plan; absence and empty differ.
 parseTopology :: Maybe Text -> Maybe Text -> Maybe Text -> Either Text T.TargetTopology
-parseTopology cluster replicas direct = case (cluster, replicas) of
-  (Nothing, Nothing) -> T.DirectServer <$> (maybe (Left "Missing KANSOKU_CH_MIGRATION_SERVER_ID") (checked . T.serverId) direct)
-  (Just name, Just csv) | direct == Nothing -> do
-    c <- checked (T.clusterName name)
-    ids <- traverse (checked . T.serverId . Text.strip) (Text.splitOn "," csv)
-    unless (length ids <= 64 && Set.size (Set.fromList ids) == length ids) (Left "Invalid replica inventory: duplicates or more than 64 IDs")
-    case NE.nonEmpty (sort ids) of
-      Nothing -> Left "Empty replica inventory"
-      Just expected -> Right (T.ReplicatedCluster c expected)
-  _ -> Left "Set both cluster and replica IDs, with SERVER_ID absent"
+parseTopology cluster replicas direct = do
+  selected <- Topology.parseTopology cluster replicas
+  case selected of
+    Topology.Direct -> T.DirectServer <$> maybe (Left "Missing KANSOKU_CH_MIGRATION_SERVER_ID") (checked . T.serverId) direct
+    Topology.Replicated name ids -> do
+      unless (direct == Nothing) (Left "SERVER_ID must be absent for a replicated target")
+      c <- checked (T.clusterName name)
+      expected <- traverse (checked . T.serverId) ids
+      case NE.nonEmpty expected of
+        Just values -> Right (T.ReplicatedCluster c values)
+        Nothing -> Left "Empty replica inventory"
   where
     checked = either (const (Left "Invalid migration topology")) Right
 

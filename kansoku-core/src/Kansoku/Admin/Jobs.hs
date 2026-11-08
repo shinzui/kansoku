@@ -1,7 +1,7 @@
 -- | Resumable, fenced cross-store jobs. PostgreSQL is the authoritative journal.
 module Kansoku.Admin.Jobs (runJob, resumeJob, writePrivate) where
 
-import ClickHaskell (Connection, closeConnection)
+import ClickHaskell (Connection)
 import Control.Exception (bracket, bracketOnError)
 import Control.Monad (forM, forM_)
 import Data.Aeson qualified as A
@@ -15,6 +15,9 @@ import Kansoku.Admin.ClickHouse
 import Kansoku.Admin.Store
 import Kansoku.Auth.Token (Token (..), hashToken)
 import Kansoku.ClickHouse (clickHouseConfigFromConfig, openClickHouse)
+import Kansoku.ClickHouse.Consistency
+import Kansoku.ClickHouse.Native (failConsistency)
+import Kansoku.ClickHouse.Topology (Topology (..), topologyIdentity)
 import Kansoku.Config (Config)
 import Kansoku.Event (AccountId (..), UserId (..))
 import Kansoku.PersonProperties (TraitErasureMode (..), eraseUserTraits)
@@ -40,11 +43,13 @@ merge :: A.Value -> A.Value -> A.Value
 merge (A.Object left) (A.Object right) = A.Object (right <> left)
 merge left _ = left
 
-withNative :: Config -> (Connection -> IO a) -> IO a
-withNative config action = bracket (openClickHouse (clickHouseConfigFromConfig config)) closeConnection $ \connection -> do
-  chCommand connection A.Null ("SET max_execution_time=" <> Text.pack (show (max 60 (config ^. #metricsMaxExecutionSec))))
-  chCommand connection A.Null ("SET max_memory_usage=" <> Text.pack (show (config ^. #metricsMaxMemoryBytes)))
-  action connection
+withNative :: Config -> (ReplicaConnections -> IO a) -> IO a
+withNative config action = withReplicaConnections (config ^. #clickHouseTopology) (openClickHouse (clickHouseConfigFromConfig config)) $ \replicas -> do
+  forM_ (replicaConnections replicas) $ \(_, connection) -> do
+    initializeRole (config ^. #clickHouseTopology) Maintenance connection
+    chCommand connection A.Null ("SET max_execution_time=" <> Text.pack (show (case config ^. #clickHouseTopology of Direct -> max 60 (config ^. #metricsMaxExecutionSec); _ -> 55)))
+    chCommand connection A.Null ("SET max_memory_usage=" <> Text.pack (show (config ^. #metricsMaxMemoryBytes)))
+  action replicas
 
 runJob :: Config -> PQ.Connection -> Text -> A.Value -> Bool -> Maybe FilePath -> IO A.Value
 runJob config connection kind requestedScope confirm output = do
@@ -53,14 +58,14 @@ runJob config connection kind requestedScope confirm output = do
   if not confirm
     then do
       admitMaintenanceTraffic connection
-      withNative config $ \native -> previewJob native connection tables kind scope
+      withNative config $ \replicas -> previewJob (coordinator replicas) connection tables kind scope
     else do
       administrativeLock connection
       requireNoMigrationSession connection
       pgScript connection "BEGIN"
       active <- query connection "SELECT to_jsonb(active_job) FROM kansoku.maintenance_fence WHERE singleton AND $1 IS NOT NULL FOR UPDATE" A.Null
       unless (active == A.Null) (fail "an unfinished maintenance job must be resumed")
-      job <- query connection "WITH created AS (INSERT INTO kansoku.maintenance_jobs(kind,scope) VALUES($1->>'kind',$1->'scope') RETURNING *) SELECT to_jsonb(created) FROM created" (A.object ["kind" A..= kind, "scope" A..= scope])
+      job <- query connection "WITH created AS (INSERT INTO kansoku.maintenance_jobs(kind,scope,target_identity) VALUES($1->>'kind',$1->'scope',$1->'identity') RETURNING *) SELECT to_jsonb(created) FROM created" (A.object ["kind" A..= kind, "scope" A..= scope, "identity" A..= topologyIdentity (config ^. #clickHouseTopology)])
       void $ query connection "UPDATE kansoku.maintenance_fence SET active_job=($1->>'id')::uuid WHERE singleton" job
       pgScript connection "COMMIT"
       executeJob config connection tables job output
@@ -69,6 +74,7 @@ resumeJob :: Config -> PQ.Connection -> A.Value -> Bool -> Maybe FilePath -> IO 
 resumeJob config connection parameters confirm output = do
   job <- query connection "SELECT to_jsonb(j) FROM kansoku.maintenance_jobs j WHERE id=($1->>'id')::uuid" parameters
   when (job == A.Null) (fail "unknown maintenance job")
+  unless (field "target_identity" job == topologyIdentity (config ^. #clickHouseTopology)) (failConsistency "maintenance job topology, cluster or expected replica UUID set mismatch; fence retained")
   if not confirm || field "stage" job == A.String "complete"
     then pure (receipt job)
     else do
@@ -91,8 +97,12 @@ executeJob config connection tables initial output = do
   -- New traffic already observes the persisted fence. Wait for all admitted
   -- requests/inserts/replays to finish before touching either store.
   pgScript connection "SELECT to_jsonb(pg_advisory_lock(726401,1))"
-  withNative config $ \native -> do
-    quiesceRawWrites native
+  withNative config $ \replicas -> do
+    let native = coordinator replicas
+    quiesceReplicaWrites replicas
+    synchronizeSchema replicas
+    synchronizeTables replicas maintenanceTables
+    verifyReplicaMutations replicas
     let kind = field "kind" initial
         original = field "scope" initial
     discovered <-
@@ -127,25 +137,32 @@ executeJob config connection tables initial output = do
     when (before "raw-mutated") $ do
       if kind == A.String "erase-user" then eraseNative native scope else retainNative native (merge scope (A.object ["revision" A..= field "revision" initial]))
       checkpoint "raw-mutated"
-    when (before "rebuilt") $ rebuildDerived native >> checkpoint "rebuilt"
-    when (before "verified") $ do
-      verifyMutations native
+    when (before "rebuilt") $ rebuildReplicas replicas >> checkpoint "rebuilt"
+    -- Repeat final barriers and predicates even after a saved verified stage.
+    synchronizeSchema replicas
+    verifyReplicaMutations replicas
+    verifyReplicaPopulations replicas
+    forM_ (replicaConnections replicas) $ \(sid, observedNative) -> withinBudget ("final predicates replica " <> sid) $ do
       if kind == A.String "erase-user"
         then do
           verifySources connection tables scope
-          remaining <- chJSON native scope ("SELECT toJSONString(count()) AS value FROM analytics.identity_signals FINAL WHERE " <> explicitSubject)
-          traits <- chJSON native scope ("SELECT toJSONString(count()) AS value FROM analytics.user_traits WHERE " <> explicitSubject)
-          cohortMembers <- chJSON native scope ("SELECT toJSONString(count()) AS value FROM analytics.cohort_members WHERE " <> explicitSubject)
+          remaining <- chJSON observedNative scope ("SELECT toJSONString(count()) AS value FROM analytics.identity_signals FINAL WHERE " <> explicitSubject)
+          traits <- chJSON observedNative scope ("SELECT toJSONString(count()) AS value FROM analytics.user_traits WHERE " <> explicitSubject)
+          cohortMembers <- chJSON observedNative scope ("SELECT toJSONString(count()) AS value FROM analytics.cohort_members WHERE " <> explicitSubject)
           unless (remaining == [A.Number 0] && traits == [A.Number 0] && cohortMembers == [A.Number 0]) (fail "erased evidence or current traits survived rebuild")
+          rawEvidence <- chJSON observedNative scope ("SELECT toJSONString(count()) AS value FROM analytics.events_raw WHERE (" <> affected <> ") AND (identifiers!='{}' OR anonymous_id!='' OR session_id!='' OR (event_name IN ('identify','identify_once','alias') AND properties!='{}'))")
+          unless (rawEvidence == [A.Number 0]) (fail "raw identity evidence survived erasure")
           when (field "delete" scope == A.Bool True) $ do
-            explicit <- chJSON native scope ("SELECT toJSONString(count()) AS value FROM analytics.events_canonical WHERE " <> explicitSubject)
+            explicit <- chJSON observedNative scope ("SELECT toJSONString(count()) AS value FROM analytics.events_canonical WHERE " <> explicitSubject)
             unless (explicit == [A.Number 0]) (fail "explicit-user facts survived deletion")
         else do
-          old <- chJSON native scope "SELECT toJSONString(count()) AS value FROM analytics.events_canonical WHERE occurred_at<parseDateTime64BestEffort(JSONExtractString({admin_scope:String},'cutoff'),3,'UTC')"
+          old <- chJSON observedNative scope "SELECT toJSONString(count()) AS value FROM analytics.events_canonical WHERE occurred_at<parseDateTime64BestEffort(JSONExtractString({admin_scope:String},'cutoff'),3,'UTC')"
           unless (old == [A.Number 0]) (fail "expired facts survived retention")
-          fingerprints <- chJSON native scope "SELECT toJSONString(count()) AS value FROM analytics.events_raw WHERE occurred_at<parseDateTime64BestEffort(JSONExtractString({admin_scope:String},'fingerprint_cutoff'),3,'UTC') AND JSONHas(identifiers,'fingerprint')"
+          fingerprints <- chJSON observedNative scope "SELECT toJSONString(count()) AS value FROM analytics.events_raw WHERE occurred_at<parseDateTime64BestEffort(JSONExtractString({admin_scope:String},'fingerprint_cutoff'),3,'UTC') AND JSONHas(identifiers,'fingerprint')"
           unless (fingerprints == [A.Number 0]) (fail "expired raw fingerprints survived retention")
-      checkpoint "verified"
+    checkIdentities replicas
+    checkpoint "verified"
+    checkIdentities replicas
     -- No failed stage clears the fence. Final journal reduction and release are atomic.
     let reduced = A.object ["account" A..= field "account" original, "delete" A..= field "delete" original, "days" A..= field "days" original, "cutoff" A..= field "cutoff" original, "fingerprint_cutoff" A..= field "fingerprint_cutoff" original, "user_digest" A..= hashToken (Token (case field "user" original of A.String value -> value; _ -> ""))]
     pgScript connection "BEGIN"
@@ -191,19 +208,19 @@ eraseNative native scope = do
   account <- AccountId <$> decodeValue (field "account" scope)
   user <- UserId <$> decodeValue (field "user" scope)
   let deleting = field "delete" scope == A.Bool True
-  chCommand native scope ("ALTER TABLE analytics.cohort_members DELETE WHERE " <> explicitSubject <> " SETTINGS mutations_sync=2")
+  maintenanceCommand native scope ("ALTER TABLE analytics.cohort_members DELETE WHERE " <> explicitSubject <> " SETTINGS mutations_sync=2")
   eraseUserTraits native account user (if deleting then DeleteTraitEvents else ScrubTraitEvents)
-  when deleting $ chCommand native scope ("ALTER TABLE analytics.events_raw DELETE WHERE " <> explicitSubject <> " SETTINGS mutations_sync=2")
-  chCommand native scope ("ALTER TABLE analytics.events_raw UPDATE identifiers='{}',anonymous_id='',session_id='',properties=if(event_name IN ('identify','identify_once','alias'),'{}',properties),governed_traits_valid=if(event_name IN ('identify','identify_once'),false,governed_traits_valid) WHERE " <> affected <> " SETTINGS mutations_sync=2")
-  forM_ ["properties_json", "identity_context_key", "context_json"] $ \column -> chCommand native A.Null ("ALTER TABLE analytics.events_raw MATERIALIZE COLUMN " <> column <> " SETTINGS mutations_sync=2")
+  when deleting $ maintenanceCommand native scope ("ALTER TABLE analytics.events_raw DELETE WHERE " <> explicitSubject <> " SETTINGS mutations_sync=2")
+  maintenanceCommand native scope ("ALTER TABLE analytics.events_raw UPDATE identifiers='{}',anonymous_id='',session_id='',properties=if(event_name IN ('identify','identify_once','alias'),'{}',properties),governed_traits_valid=if(event_name IN ('identify','identify_once'),false,governed_traits_valid) WHERE " <> affected <> " SETTINGS mutations_sync=2")
+  forM_ ["properties_json", "identity_context_key", "context_json"] $ \column -> maintenanceCommand native A.Null ("ALTER TABLE analytics.events_raw MATERIALIZE COLUMN " <> column <> " SETTINGS mutations_sync=2")
 
 retainNative :: Connection -> A.Value -> IO ()
 retainNative native scope = do
-  chCommand native scope "INSERT INTO analytics.retention_policy SELECT 1,toUInt64(JSONExtractInt({admin_scope:String},'revision')),parseDateTime64BestEffort(JSONExtractString({admin_scope:String},'cutoff'),3,'UTC')"
-  chCommand native scope "ALTER TABLE analytics.events_raw DELETE WHERE occurred_at<parseDateTime64BestEffort(JSONExtractString({admin_scope:String},'cutoff'),3,'UTC') SETTINGS mutations_sync=2"
-  chCommand native scope "ALTER TABLE analytics.events_raw UPDATE identifiers=toJSONString(mapFromArrays(arrayMap(kv -> kv.1,arrayFilter(kv -> kv.1!='fingerprint',JSONExtractKeysAndValues(identifiers,'String'))),arrayMap(kv -> kv.2,arrayFilter(kv -> kv.1!='fingerprint',JSONExtractKeysAndValues(identifiers,'String'))))) WHERE occurred_at<parseDateTime64BestEffort(JSONExtractString({admin_scope:String},'fingerprint_cutoff'),3,'UTC') AND JSONHas(identifiers,'fingerprint') SETTINGS mutations_sync=2"
-  chCommand native A.Null "ALTER TABLE analytics.events_raw MATERIALIZE COLUMN identity_context_key SETTINGS mutations_sync=2"
-  chCommand native scope "ALTER TABLE analytics.events_raw MODIFY TTL toDateTime(occurred_at) DELETE WHERE occurred_at<parseDateTime64BestEffort(JSONExtractString({admin_scope:String},'cutoff'),3,'UTC')"
+  maintenanceCommand native scope "INSERT INTO analytics.retention_policy SELECT 1,toUInt64(JSONExtractInt({admin_scope:String},'revision')),parseDateTime64BestEffort(JSONExtractString({admin_scope:String},'cutoff'),3,'UTC')"
+  maintenanceCommand native scope "ALTER TABLE analytics.events_raw DELETE WHERE occurred_at<parseDateTime64BestEffort(JSONExtractString({admin_scope:String},'cutoff'),3,'UTC') SETTINGS mutations_sync=2"
+  maintenanceCommand native scope "ALTER TABLE analytics.events_raw UPDATE identifiers=toJSONString(mapFromArrays(arrayMap(kv -> kv.1,arrayFilter(kv -> kv.1!='fingerprint',JSONExtractKeysAndValues(identifiers,'String'))),arrayMap(kv -> kv.2,arrayFilter(kv -> kv.1!='fingerprint',JSONExtractKeysAndValues(identifiers,'String'))))) WHERE occurred_at<parseDateTime64BestEffort(JSONExtractString({admin_scope:String},'fingerprint_cutoff'),3,'UTC') AND JSONHas(identifiers,'fingerprint') SETTINGS mutations_sync=2"
+  maintenanceCommand native A.Null "ALTER TABLE analytics.events_raw MATERIALIZE COLUMN identity_context_key SETTINGS mutations_sync=2"
+  maintenanceCommand native scope "ALTER TABLE analytics.events_raw MODIFY TTL toDateTime(occurred_at) DELETE WHERE occurred_at<parseDateTime64BestEffort(JSONExtractString({admin_scope:String},'cutoff'),3,'UTC')"
 
 reserveExpiredNative :: Connection -> PQ.Connection -> A.Value -> IO ()
 reserveExpiredNative native connection scope = page "" ""
@@ -221,3 +238,6 @@ requireNoMigrationSession :: PQ.Connection -> IO ()
 requireNoMigrationSession connection = do
   ready <- query connection "SELECT to_jsonb(active_migration_session IS NULL) FROM kansoku.maintenance_fence WHERE singleton AND $1 IS NOT NULL" A.Null
   unless (ready == A.Bool True) (fail "unfinished ClickHouse migration session owns the maintenance fence")
+
+maintenanceCommand :: Connection -> A.Value -> Text -> IO ()
+maintenanceCommand native scope sql = withinBudget "native maintenance statement" (chCommand native scope sql)

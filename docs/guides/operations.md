@@ -307,3 +307,42 @@ or explicit-fact deletion, applied event/fingerprint retention, transactional ar
 bounded purges and rejection inspection. Normal startup applies no maintenance policy. Confirmed
 jobs persist a global fence and keep it on failure; inspect and resume instead of replaying old
 migration files or manually clearing state.
+
+## Replicated runtime policy
+
+For one shard with two replicas, configure `KANSOKU_CH_MIGRATION_CLUSTER` and
+`KANSOKU_CH_MIGRATION_REPLICA_IDS` consistently in migrations, the runtime and
+administration. The inventory is a canonical set of expected server UUIDs, not a
+count or a list discovered from whichever servers answer. Native endpoint/TCP/TLS
+configuration remains separate from migration HTTP transport. Direct mode remains
+the default only when both topology selectors are absent.
+
+Every new writer connection uses synchronous insertion, quorum equal to the
+expected replica count, serial quorum inserts, a 20-second server quorum timeout,
+raw and dependent-view block deduplication, and materialized-view errors that
+propagate to the writer. Effective settings are checked rather than silently
+accepted or downgraded. A stopped replica sacrifices write availability: queue
+acknowledgement waits for complete native success. Recovery reconnects and reapplies
+the same policy, and re-evaluates dispositions/retention for its held payloads.
+An HTTP ingest 202 acknowledges PostgreSQL acceptance, not a native write.
+
+Insert-block deduplication has finite windows. An identical native batch retry can
+avoid physical duplicate raw rows within those windows; regrouped or late replay
+still depends on immutable event acceptance, canonical facts and replay-safe
+aggregate states. Do not advertise unbounded physical exactly-once storage,
+cross-table transactions or filesystem power-loss durability from quorum settings.
+
+Ordinary analytics reads remain eventually consistent. Kansoku-owned immediate
+verification uses an explicit same-connection synchronization helper; see
+[the reader guide](consume-clickhouse.md). Maintenance has the stronger all-replica
+fenced protocol in [administration](administration.md). The identity cache's
+`system.parts` size estimate remains replica-local and is not a completion barrier.
+
+Run `just ch-runtime-replicated` in the Nix shell with an explicit local
+`CLICKHOUSE_MIGRATE_DOCKER_CONTEXT` for the owned exact-candidate proof. Focused
+cases use `python3 scripts/clickhouse_replicated_runtime_acceptance.py --case
+maintenance` (or `topology`, `rebuild`, `writer`, `readback`); `--packaged` exercises
+the Nix production executables. Missing prerequisites fail rather than skip.
+Private reports under `.dev/acceptance/` retain settings, UUIDs, job/fence and
+population observations. The local Docker proof does not qualify a managed
+production endpoint, Linux application client or automatic replica replacement.

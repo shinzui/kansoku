@@ -13,6 +13,7 @@ import Control.Monad (forM_)
 import Data.String (fromString)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
+import Kansoku.ClickHouse.Consistency (withinBudget)
 import Kansoku.Event (AccountId (..), UserId (..))
 import Kansoku.Prelude
 
@@ -49,7 +50,8 @@ synchronous = " SETTINGS mutations_sync=2"
 
 execute :: Connection -> AccountId -> UserId -> Text -> IO ()
 execute connection (AccountId account) (UserId user) sql =
-  command connection $
-    passParameters
-      (addParameter "trait_account" (toChType (Text.encodeUtf8 account) :: ChString) . addParameter "trait_user" (toChType (Text.encodeUtf8 user) :: ChString))
-      (fromString (Text.unpack sql))
+  withinBudget "native trait maintenance statement" $
+    command connection $
+      passParameters
+        (addParameter "trait_account" (toChType (Text.encodeUtf8 account) :: ChString) . addParameter "trait_user" (toChType (Text.encodeUtf8 user) :: ChString))
+        (fromString (Text.unpack sql))

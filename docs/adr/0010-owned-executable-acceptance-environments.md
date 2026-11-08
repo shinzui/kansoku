@@ -5,7 +5,7 @@ description: Gate service changes with deterministic checks and required integra
 docId: ADR-10
 status: Accepted
 date: 2026-10-15
-timestamp: 2026-11-08T02:21:04Z
+timestamp: 2026-11-08T04:10:25Z
 generated:
   by: process:codex
   at: 2026-10-16T17:56:53Z
@@ -120,3 +120,28 @@ This lets repeated DELETE/reseed fixtures exercise reader semantics, rather than
 mistaking repeated test input for a retried insert. Preserve query-level replay
 assertions. These explicit test controls do not qualify production block
 deduplication, writers, or administrative data maintenance.
+
+## Native replicated runtime fixture
+
+The runtime adapter resolves loopback native ports only from the exact HTTP
+endpoints reported by the live owned fixture and verifies server UUID coverage
+through the production native constructor. Its round-robin and held-reply proxies
+record owned identifiers and preserve private evidence. It initializes the schema
+through the actual migration CLI and keeps production writer deduplication intact.
+
+The full-schema recovery case stalled before HTTP readiness under the dependency's
+tiny-fixture global/background thread pools (128/8) and passed with the owned
+servers configured to 1024/64 before application migration. Retain that explicit
+resource profile, image digest, Keeper setup and account settings in runtime
+reports; it is not a production sizing recommendation. A failed public fixture
+operation is retained and recovery must independently prove the original UUID and
+complete writable inventory. Never silently repeat a failed restart. Protocol
+deadlines invalidate the fixture channel rather than resuming with an uncertain
+request/response alignment.
+
+Strict replica synchronization also waits for merge tasks. Physical duplicate
+assertions therefore pause raw merges, use actual all-replica native acknowledgement
+and independent per-replica observations, and compare finalized targets against
+canonical-source definitions. They do not OPTIMIZE or use raw FINAL to hide physical
+copies. A separate late replay case observes Keeper deduplication identity expiry
+before replaying, and reports physical storage separately from logical correctness.

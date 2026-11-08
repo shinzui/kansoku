@@ -1,6 +1,8 @@
 # Bundle Update Log
 
 ## 2026-11-08
+* **Update**: ADR-10 and ADR-4: Record qualified native runtime fixture capacity, physical-versus-logical retry evidence and direct outage startup validation.
+* **Update**: ADR-4, ADR-17 and ADR-22: Bind runtime jobs to complete replica identities and document quorum, replay, synchronized read-back and fresh all-replica completion rules.
 * **Update**: ADR-22: Clarify the historical Altinity cohort and current common direct/replicated source candidate.
 * **Update**: Record explicit native-query fixture profiles, deduplication windows and data isolation while preserving migration restrictions.
 * **Update**: Add owned replicated CLI qualification gate and retain platform/deployment boundaries.

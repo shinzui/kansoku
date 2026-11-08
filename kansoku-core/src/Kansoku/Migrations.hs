@@ -39,7 +39,8 @@ kansokuApplicationMigrations = do
   definitions <- sqlMigration "0006-metric-definitions" metricDefinitionsSql
   administration <- sqlMigration "0007-clickhouse-administration" clickhouseAdministrationSql
   replicatedAdministration <- sqlMigration "0008-clickhouse-replicated-administration" replicatedAdministrationSql
-  migrationComponent "kansoku" (Set.singleton "pgmq") (apiKeys :| [rejections, acceptance, maintenance, cohorts, definitions, administration, replicatedAdministration])
+  replicatedJobs <- sqlMigration "0009-clickhouse-replicated-jobs" replicatedJobsSql
+  migrationComponent "kansoku" (Set.singleton "pgmq") (apiKeys :| [rejections, acceptance, maintenance, cohorts, definitions, administration, replicatedAdministration, replicatedJobs])
 
 apiKeysSql :: ByteString
 apiKeysSql =
@@ -246,5 +247,25 @@ replicatedAdministrationSql =
       (topology='direct' AND server_id IS NOT NULL AND cluster_name IS NULL AND replica_ids='{}') OR
       (topology='replicated' AND server_id IS NULL AND cluster_name IS NOT NULL AND length(cluster_name)>0
        AND cardinality(replica_ids)>0 AND kansoku.canonical_replica_ids(replica_ids))
+    );
+  """
+
+-- Historical jobs retain their direct-only identity. Never adopt a discovered
+-- replica subset or silently upgrade an unfinished direct job on resume.
+replicatedJobsSql :: ByteString
+replicatedJobsSql =
+  """
+  ALTER TABLE kansoku.maintenance_jobs
+    ADD COLUMN target_identity jsonb NOT NULL DEFAULT '{"topology":"direct","cluster":null,"replicas":[]}',
+    ADD CONSTRAINT maintenance_job_target_identity CHECK (
+      coalesce(jsonb_typeof(target_identity)='object' AND (
+        target_identity='{"topology":"direct","cluster":null,"replicas":[]}'::jsonb OR (
+          target_identity->>'topology'='replicated'
+          AND jsonb_typeof(target_identity->'cluster')='string'
+          AND target_identity->>'cluster' ~ '^[a-z_][a-z0-9_-]{0,127}$'
+          AND jsonb_typeof(target_identity->'replicas')='array'
+          AND jsonb_array_length(target_identity->'replicas') BETWEEN 1 AND 64
+        )
+      ),false)
     );
   """

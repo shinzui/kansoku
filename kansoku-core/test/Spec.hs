@@ -53,6 +53,7 @@ import Kansoku.QueryIntegrationSpec qualified
 import Kansoku.QueryPoolSpec qualified
 import Kansoku.QuerySpec qualified
 import Kansoku.ReadinessSpec qualified
+import Kansoku.ReplicaTopologySpec qualified
 import Kansoku.RequestLogSpec qualified
 import Kansoku.Writer.BatchSpec qualified
 import Kansoku.Writer.LifecycleSpec qualified
@@ -89,6 +90,7 @@ normalTests = hspec $ do
   Kansoku.Auth.TokenSpec.spec
   Kansoku.Cohort.QuerySpec.spec
   Kansoku.ConfigSpec.spec
+  Kansoku.ReplicaTopologySpec.spec
   Kansoku.ContractSpec.spec
   Kansoku.CorsSpec.spec
   Kansoku.ClickHouseSpec.spec

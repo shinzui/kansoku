@@ -145,3 +145,33 @@ state database and performs no statistics-engine calculation. The unmodified ada
 upstream TypeScript/Node settings, not a substituted SQL parser or mock.
 
 [Reproduce consumer acceptance](consumer-conformance.md) · [Query metrics](query-metrics.md) · [Operations](operations.md)
+
+## Replicas and immediate verification
+
+Ordinary analytics queries are eventually consistent with queued ingestion and
+replication. HTTP ingest 202 means PostgreSQL accepted the event; it does not mean
+the native writer has acknowledged it. On an explicitly configured replicated
+runtime, successful native writer acknowledgement requires all expected replicas.
+
+For Kansoku-owned smoke/verification after that acknowledgement,
+`Kansoku.ClickHouse.Consistency.withConsistentReadback` acquires one physical native
+connection, checks its UUID and selected schema topology, enables sequential
+consistency, synchronizes the Replicated database schema and every reviewed
+underlying source/target table with strict replica barriers, then performs the
+SELECT on that same connection. Public event reads depend on identity, retention,
+traits and membership sources as well as `events_raw`. A connection failure
+invalidates the barrier; retry the whole helper with a fresh connection. A blocked
+replica must wait or fail explicitly, never turn a stale assertion into success.
+
+This privileged helper needs the synchronization grants described in
+[administration](administration.md). Ordinary metrics requests do not execute
+SYSTEM commands. External readers needing the same contract must implement the
+same explicit dependency barriers and same-connection SELECT; a fixed sleep or a
+random second pooled connection supplies no read-back guarantee. Pause external
+SQL readers and writers for maintenance: Kansoku's PostgreSQL fence cannot stop
+their direct native sessions.
+
+`withReadbackQueryConnection` provides the same protocol inside a checked-out
+query-pool callback. A failed barrier or SELECT escapes that callback and disposes
+the physical connection. Use this verification role only for owned checks;
+ordinary metric handlers continue using the ordinary query-pool entry points.

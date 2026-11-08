@@ -16,7 +16,6 @@ result-*
 .mina/
 .envrc.local
 db/
-clickhouse/
 
 # Python acceptance helpers
 __pycache__/

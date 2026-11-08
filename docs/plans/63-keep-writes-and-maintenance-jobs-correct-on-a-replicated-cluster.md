@@ -10,6 +10,12 @@ provenance:
     model: "gpt-6-astra"
     harness: "codex-cli"
     at: 2026-11-08T01:08:07Z
+  revisions:
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-11-08T03:14:53Z
+      mode: "implement"
+      note: "Implement shared topology and native runtime integration, with prerequisite and failure acceptance evidence."
 ---
 
 # Keep writes and maintenance jobs correct on a replicated cluster
@@ -22,25 +28,41 @@ This ExecPlan is a living document. Keep Progress, Surprises & Discoveries, Deci
 
 Make Kansoku safe to write to and maintain on one ClickHouse shard with two replicas behind a connection-balancing endpoint. An erase-user or retention job must retain its persistent traffic fence until every expected replica has finished the relevant work. Writer acknowledgements must cover both replicas, and Kansoku's own read-back checks must observe completed writes. An owned two-replica acceptance command will demonstrate these guarantees with a held insert, replication lag, a stopped replica, a lost acknowledgement, and an interrupted rebuild.
 
-This implements [IR-11](../../docs/improvement-requests/keep-writes-and-maintenance-jobs-correct-on-a-replicated-cluster.md). [Plan 62](../../docs/plans/62-run-clickhouse-migrations-on-a-replicated-cluster.md), implementing the replicated migration baseline, is a hard prerequisite for native acceptance. It is presently a plan, not an implemented capability. This plan is standalone; production deployment and managed-endpoint qualification remain separate. The requesting work is `mori://tan/tan-app-infrastructure/plans/45-onboard-kansoku-to-production-on-the-replicated-clickhouse-cluster`.
+This implements [IR-11](../../docs/improvement-requests/keep-writes-and-maintenance-jobs-correct-on-a-replicated-cluster.md). [Plan 62](../../docs/plans/62-run-clickhouse-migrations-on-a-replicated-cluster.md), implementing the replicated migration baseline, is a hard prerequisite for native acceptance. Plan 62 is now implemented; its source acceptance completed all 13 owned cases during this implementation session. This plan is standalone; production deployment and managed-endpoint qualification remain separate. The requesting work is `mori://tan/tan-app-infrastructure/plans/45-onboard-kansoku-to-production-on-the-replicated-clickhouse-cluster`.
 
 
 ## Progress
 
 
-- [ ] Milestone 1: Shared topology configuration, bound job identity, and an owned native two-replica roundtrip reject incomplete or changed replica coverage.
-- [ ] Milestone 2: Quiescence, pre-discovery synchronization, and mutation verification cover every expected replica and retain the fence on failure.
-- [ ] Milestone 3: Projection rebuilds survive interruption, synchronize all replicas, and verify canonical/public contents before release.
-- [ ] Milestone 4: Explicit all-replica writer durability, retry behavior, and consistent read-back pass native failure cases while direct-mode behavior remains compatible.
+- [x] (2026-11-08; native topology case, complete cross-replica roundtrip, pinned/unexpected/direct/historical refusals and handle cleanup passed) Milestone 1: Shared topology configuration, bound job identity, and an owned native two-replica roundtrip reject incomplete or changed replica coverage.
+- [x] (2026-11-08; native maintenance case passed held INSERT, missing replica, denied observation, paused mutation, topology mismatch and retention/fingerprint recovery with retained fences) Milestone 2: Quiescence, pre-discovery synchronization, and mutation verification cover every expected replica and retain the fence on failure.
+- [x] (2026-11-08; native rebuild case passed interruption after TRUNCATE and committed INSERT, all fourteen finalized canonical-source comparisons, and missing-replica refusals/resume from rebuilt and verified) Milestone 3: Projection rebuilds survive interruption, synchronize all replicas, and verify canonical/public contents before release.
+- [x] (2026-11-08; native writer/read-back cases passed all-replica acknowledgement, lost reply, partial-view repair, regrouped/expired replay and explicit blocked-source barriers on dedicated/fresh pooled connections) Milestone 4: Explicit all-replica writer durability, retry behavior, and consistent read-back pass native failure cases while direct-mode behavior remains compatible.
 - [ ] Milestone 5: The complete replicated acceptance recipe, direct regression checks, operations guidance, and durable architecture records describe the demonstrated guarantees.
 
 
 ## Surprises & Discoveries
 
 
+2026-11-08: The native integration gate passed on `26.3.60.10002.altinitystable`: actual writer-role settings are read back on each endpoint, complete native UUID/one-shard inventory verification succeeds, an insert on A is acknowledged, and the production same-connection synchronized canonical/public read-back on B returns it. Private source evidence is under `.dev/acceptance/runtime-e8e84a2d62fb49b388ab2e5287ebaa7e/`. This is the bounded integration proof, not completion of the fault matrix.
+
+2026-11-08: Existing `countEvents`/`selectEventProjections` consumers and the existing administration/outage harnesses are direct fixtures with sanitized configuration. Their direct native assertions remain unchanged. The replicated harness uses the production dedicated read-back helper and its checked-out query-pool variant on a fresh connection; ordinary metric requests retain eventual consistency.
+
+2026-11-08: The exact candidate's native cluster inventory query requires the explicit `READ ON REMOTE` privilege. Native boolean `getSetting` rendering is not the canonical textual configuration representation; validate effective values through `system.settings.value`. Maintenance also needs `distributed_ddl_output_mode='none'` because the vendored command runner requires no data response from replicated DDL. These requirements are being qualified by the owned runtime account without weakening the migration account.
+
+2026-11-08: [FRIC-16](../friction-log/16-owned-replica-restart-readiness-ends-before-interrupted-rebuild-recovery.md) records the public fixture dropping a restart-readiness error after thirty seconds. A further bounded observation also failed because the restarted process could not answer even SELECT 1. The local adapter qualified larger owned-fixture global/background thread pools (1024/64 instead of 128/8), applied before application migration; it retains the same image, Keeper, schema, account settings and strict barriers. Recovery still starts once and requires the same UUID and complete writable table coverage; it never retries a failed restart. The full rebuild/final-checkpoint case passed after that resource adjustment, with no initial readiness refusals. Hackage/upstream tags still publish only test-support 0.1.0.0, so the pinned source cohort remains unchanged.
+
+2026-11-08: [FRIC-15](../friction-log/15-clickhouse-directory-ignore-hides-new-haskell-source-modules.md) records an unanchored ignore rule hiding new native Haskell sources from Nix on the case-insensitive filesystem. Preserve the anchored root ignore and stage new sources before packaging. The first prerequisite run passed its 13 source cases but its subsequent package build encountered this missing-source failure; final packaged acceptance must be repeated.
+
 
 ## Decision Log
 
+
+2026-11-08: Direct startup must preserve ingestion availability when a process restarts during a storage outage. An observed direct/replicated schema mismatch is fatal; an unavailable bounded startup observation is deferred to mandatory physical query/writer connection validation before native use. Replicated startup acquires and checks the full configured inventory and effective writer policy.
+
+2026-11-08: Writer physical-duplicate tests pause raw merges. STRICT synchronization also waits for paused merge tasks, so it is not usable while preserving that physical observation. After actual all-replica writer acknowledgement, revalidate native UUID coverage and inspect both replicas directly for physical rows and finalized canonical-source target equality. Maintenance/read-back keep their strict barriers; this changes no acceptance criterion.
+
+2026-11-08: Keep native SQL serialization in `Kansoku.ClickHouse.Native`, so the consistency resource layer and administrative operations share a parameterized boundary without a module cycle. The deterministic suite is named `Kansoku.ReplicaTopologySpec`, because the existing deterministic runner intentionally excludes names starting with `Kansoku.ClickHouse`.
 
 2026-11-08: Reuse Plan 62's explicit cluster name and expected server UUID set. Expected identities must come from configuration and the persisted job, not from whichever replicas happen to answer. Acquire and retain a native connection to each expected replica through the configured endpoint; an endpoint that cannot provide complete coverage fails closed.
 
@@ -53,6 +75,8 @@ This implements [IR-11](../../docs/improvement-requests/keep-writes-and-maintena
 
 ## Outcomes & Retrospective
 
+
+Implementation checkpoint on 2026-11-08: Milestones 1–4 have source behavioral evidence, including explicit blocked read-back acceptance. The writer case records physical lost-ack counts `[1,1]`, physical counts `[2,2]` after observed Keeper expiry, and finalized canonical-source equality for all fourteen targets. Rebuild interruption and saved-checkpoint recovery pass with the owned capacity profile. Direct administration passes seven non-skipped scenario families, native TLS passes all trust/hostname cases, and deterministic checks pass 507 core/21 client examples plus four probes. Complete default source and packaged recipe runs and final regression gates remain required before Milestone 5 or plan completion.
 
 
 ## Context and Orientation
@@ -68,7 +92,7 @@ A shard is one logical partition of data; replicas are servers holding copies of
 
 `analytics.events_canonical` reads `events_raw FINAL`, which chooses one accepted event version before background merges. Aggregates such as event/page counts use unique event-ID states. Existing direct tests deliberately allow two physical raw copies but require one canonical fact. Thus physical block deduplication and logical event correctness are distinct assertions. The replica-local `system.parts` query in `kansoku-core/src/Kansoku/Identity/Cache.hs` estimates cache size, not maintenance completion; leave its behavior unchanged and document that boundary.
 
-`kansoku-core/src/Kansoku/Config.hs` currently has no topology field. Plan 62 introduces `KANSOKU_CH_MIGRATION_CLUSTER` and `KANSOKU_CH_MIGRATION_REPLICA_IDS`, strict topology parsing, a replicated baseline, and an owned `just ch-migrations-replicated` recipe. Reuse its parser and identity rather than copying a second permissive parser. Native host/port/TLS settings remain independent of migration HTTP transport and credentials. Extract the shared topology type into the core package if Plan 62 initially locates it in the server package.
+`kansoku-core/src/Kansoku/Config.hs` currently has no topology field. Plan 62 introduced `KANSOKU_CH_MIGRATION_CLUSTER` and `KANSOKU_CH_MIGRATION_REPLICA_IDS`, strict topology parsing, a replicated baseline, and an owned `just ch-migrations-replicated` recipe. Reuse its parser and identity rather than copying a second permissive parser. Native host/port/TLS settings remain independent of migration HTTP transport and credentials. Extract the shared topology type into the core package if Plan 62 initially locates it in the server package.
 
 `scripts/admin_acceptance.py` exercises actual administrative commands against owned stores. `scripts/outage-acceptance.py` tests writer recovery. `scripts/acceptance.sh` exercises the packaged server. `kansoku-core/test/Kansoku/ClickHouseSpec.hs` already tests canonical replay before merges. `kansoku-core/kansoku-core.cabal`, `kansoku-server/kansoku-server.cabal`, `scripts/deterministic-tests.py`, and `justfile` select native versus deterministic checks. Keep new live tests explicitly owned and non-skipping.
 
@@ -161,7 +185,7 @@ Update relevant ADRs, especially ADR-4 and ADR-17, with the tested boundaries an
 
 Run commands from the repository root, `/Users/shinzui/Keikaku/bokuno/kansoku-project/kansoku`. Implementation requires the Nix development environment, a local Docker daemon capable of the exact Linux candidate from Plan 62, and fresh owned PostgreSQL and Keeper resources. No ambient development or production database may be substituted.
 
-Before implementation, read Plan 62's Progress and evidence. These commands must exist and pass after that prerequisite is implemented; they are not available in the current working tree:
+Before implementation, read Plan 62's Progress and evidence. Its prerequisite recipe now exists and its 13 source cases passed during this session; repeat the full recipe including packaging on the tracked final candidate:
 
 ```bash
 nix develop --no-write-lock-file -c just ch-migrations-replicated

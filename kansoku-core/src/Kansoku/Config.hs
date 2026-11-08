@@ -13,6 +13,7 @@ where
 
 import Data.Int (Int32, Int64)
 import Data.Text qualified as Text
+import Kansoku.ClickHouse.Topology qualified as Topology
 import Kansoku.Ingest.GeoIP (parseTrustedRanges)
 import Kansoku.Prelude
 import System.Environment (lookupEnv)
@@ -39,6 +40,7 @@ data Config = Config
     clickHouseTcpPort :: !Int,
     clickHouseHttpPort :: !Int,
     clickHouseSecure :: !Bool,
+    clickHouseTopology :: !Topology.Topology,
     clickHouseDatabase :: !String,
     clickHouseUser :: !String,
     clickHousePassword :: !String,
@@ -83,6 +85,8 @@ loadConfig = do
   chTcp <- lookupEnv "CLICKHOUSE_TCP_PORT"
   chHttp <- lookupEnv "CLICKHOUSE_HTTP_PORT"
   chSecure <- lookupEnv "KANSOKU_CLICKHOUSE_SECURE"
+  chCluster <- fmap Text.pack <$> lookupEnv "KANSOKU_CH_MIGRATION_CLUSTER"
+  chReplicas <- fmap Text.pack <$> lookupEnv "KANSOKU_CH_MIGRATION_REPLICA_IDS"
   chDatabase <- fromMaybe "analytics" <$> lookupEnv "KANSOKU_CLICKHOUSE_DATABASE"
   chUser <- fromMaybe "default" <$> lookupEnv "KANSOKU_CLICKHOUSE_USER"
   chPassword <- fromMaybe "" <$> lookupEnv "KANSOKU_CLICKHOUSE_PASSWORD"
@@ -112,6 +116,7 @@ loadConfig = do
   queryMemory <- lookupEnv "KANSOKU_METRICS_MAX_MEMORY_BYTES"
   srv <- lookupEnv "KANSOKU_SERVER_PORT"
   pure $ do
+    topology <- either (Left . ConfigError) Right (Topology.parseTopology chCluster chReplicas)
     tcp <- parsePort "CLICKHOUSE_TCP_PORT" 9000 chTcp
     http <- parsePort "CLICKHOUSE_HTTP_PORT" 8123 chHttp
     secure <- parseBool "KANSOKU_CLICKHOUSE_SECURE" False chSecure
@@ -151,6 +156,7 @@ loadConfig = do
           clickHouseTcpPort = tcp,
           clickHouseHttpPort = http,
           clickHouseSecure = secure,
+          clickHouseTopology = topology,
           clickHouseDatabase = chDatabase,
           clickHouseUser = chUser,
           clickHousePassword = chPassword,

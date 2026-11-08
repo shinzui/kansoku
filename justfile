@@ -228,3 +228,10 @@ ch-migrations-replicated:
     nix build .#kansoku-ch-migrate --no-link --no-write-lock-file --json > "$packaged_json"
     export KANSOKU_CH_MIGRATION_BINARY="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[0]["outputs"]["out"] + "/bin/kansoku-ch-migrate")' "$packaged_json")"
     "$(cabal list-bin kansoku-server:test:clickhouse-replicated-migrations -fnative-migration-tests)" full
+
+# Required native runtime/maintenance proof on an owned exact two-replica cluster.
+ch-runtime-replicated:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    clickhouse-migrate-embed-build --input kansoku-server migrations/clickhouse/manifest.json --input kansoku-server migrations/clickhouse-replicated/manifest.json -- build kansoku-server:exe:kansoku-server kansoku-server:exe:kansoku-admin kansoku-server:exe:kansoku-migrate kansoku-server:exe:kansoku-ch-migrate kansoku-server:test:clickhouse-replicated-runtime -fnative-migration-tests
+    python3 scripts/clickhouse_replicated_runtime_acceptance.py

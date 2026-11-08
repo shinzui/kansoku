@@ -1,7 +1,9 @@
 # Bundle Update Log
 
 ## 2026-11-08
+* **Addition**: FRIC-16 records detour interface friction with mori://shinzui/clickhouse-migrate/packages/clickhouse-migrate-test-support: Owned replica restart readiness ends before interrupted rebuild recovery
 * **Traceability**: FRIC-1, FRIC-3, FRIC-7, FRIC-9, FRIC-11 and FRIC-14 consolidated in mori://shinzui/okf/okf/bug-reports/concepts/BUG-2 and mori://shinzui/okf/okf/improvement-requests/concepts/IR-15; retain accepted local workarounds.
+* **Addition**: FRIC-15 records detour tooling friction with mori://shinzui/kansoku: ClickHouse directory ignore hides new Haskell source modules
 * **Update**: FRIC-14 accepted: Restore the complete guide adoption inventory and accept byte-preserving log updates as the recurring workaround.
 * **Addition**: FRIC-14 records detour tooling friction with mori://shinzui/okf: OKF log updates discard adoption evidence outside parsed entries
 * **Update**: FRIC-13 accepted: Document and automate the native-query fixture setup without weakening migration app restrictions or Hspec assertions.

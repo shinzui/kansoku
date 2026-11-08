@@ -5,7 +5,7 @@ description: Embed immutable native migration steps, bind administration to reta
 docId: ADR-22
 status: Accepted
 date: 2026-10-16
-timestamp: 2026-11-08T02:24:15Z
+timestamp: 2026-11-08T03:39:18Z
 generated:
   by: process:codex
   at: 2026-10-16T22:55:08Z
@@ -152,3 +152,15 @@ restores consistent backups into a separate reviewed target; it does not rewrite
 checksums, discard native events or delete only the analytics database. No joint
 PostgreSQL/ClickHouse transaction, arbitrary manual-SQL fence, power-loss guarantee
 or live deployment follows from this integration.
+
+## Shared runtime identity selectors
+
+The strict cluster/expected-UUID parser now lives in the core topology module and
+is shared with runtime configuration. Migration configuration retains its
+additional direct server UUID requirement and independent HTTP transport. Data
+jobs append their own persisted topology/cluster/canonical inventory identity in
+PostgreSQL migration 0009; this does not modify migration session identities, the
+0008 schema bytes, either native manifest, or direct/replicated ledger history.
+The runtime's native consistency and maintenance contracts are defined by
+[ADR-4](0004-queryable-event-properties-and-identity-resolved-projection.md) and
+[ADR-17](0017-fenced-resumable-administration-and-applied-retention.md).

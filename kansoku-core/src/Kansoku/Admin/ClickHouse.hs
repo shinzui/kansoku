@@ -6,6 +6,10 @@ module Kansoku.Admin.ClickHouse
     affected,
     explicitSubject,
     rebuildDerived,
+    rebuildReplicas,
+    verifyReplicaMutations,
+    quiesceReplicaWrites,
+    verifyReplicaPopulations,
     verifyMutations,
     quiesceRawWrites,
     scopeText,
@@ -13,39 +17,17 @@ module Kansoku.Admin.ClickHouse
   )
 where
 
-import ClickHaskell (ChString, ClickHaskell, Column, Connection, Select, ToChType (toChType), addParameter, command, passParameters, select, unsafeMkSelect)
+import ClickHaskell (Connection)
 import Control.Concurrent (threadDelay)
 import Control.Monad (forM, forM_)
 import Data.Aeson qualified as A
 import Data.Aeson.Types qualified as A
-import Data.ByteString qualified as BS
-import Data.ByteString.Lazy qualified as LBS
-import Data.String (fromString)
+import Data.IORef
 import Data.Text qualified as Text
-import Data.Text.Encoding qualified as Text
+import Kansoku.ClickHouse.Consistency
+import Kansoku.ClickHouse.Native
 import Kansoku.Prelude
 import System.Timeout (timeout)
-
-newtype JsonRow = JsonRow {value :: BS.ByteString}
-  deriving stock (Generic)
-  deriving anyclass (ClickHaskell '[Column "value" ChString])
-
-scopeText :: A.Value -> BS.ByteString
-scopeText = LBS.toStrict . A.encode
-
-chCommand :: Connection -> A.Value -> Text -> IO ()
-chCommand connection scope sql =
-  command connection $
-    passParameters (addParameter "admin_scope" (toChType (scopeText scope) :: ChString)) (fromString (Text.unpack sql))
-
-chJSON :: Connection -> A.Value -> Text -> IO [A.Value]
-chJSON connection scope sql = do
-  let statement =
-        passParameters
-          (addParameter "admin_scope" (toChType (scopeText scope) :: ChString))
-          (unsafeMkSelect (const (Text.encodeUtf8Builder sql)) :: Select '[Column "value" ChString] JsonRow)
-  rows <- concat . reverse <$> select statement connection pure
-  traverse (\(JsonRow bytes) -> either (const (fail "invalid maintenance native result")) pure (A.eitherDecodeStrict' bytes)) rows
 
 account, user :: Text
 account = "JSONExtractString({admin_scope:String},'account')"
@@ -76,28 +58,52 @@ discoverIdentity connection scope = do
 -- Every affected target is cleared before dependency-ordered replay. Retrying
 -- after interruption starts the same complete rebuild under the persisted fence.
 rebuildDerived :: Connection -> IO ()
-rebuildDerived connection = do
-  definitions <- forM projections $ \(viewName, target) -> do
-    rows <- chJSON connection A.Null ("SELECT toJSONString(as_select) AS value FROM system.tables WHERE database='analytics' AND name='" <> viewName <> "' AND engine='MaterializedView'")
-    source <- case rows of
-      [A.String sql] | "SELECT" `Text.isPrefixOf` sql -> pure sql
-      _ -> fail "required current maintenance projection is absent"
-    cols <- chJSON connection A.Null ("SELECT toJSONString(name) AS value FROM system.columns WHERE database='analytics' AND table='" <> target <> "' ORDER BY position")
-    names <- traverse (either (const (fail "invalid current projection column")) pure . A.parseEither A.parseJSON) cols
-    when (null names) (fail "current maintenance target has no columns")
-    let canonical = Text.replace "analytics.events_raw" "analytics.events_canonical" source
-    unless
-      ("analytics.events_canonical" `Text.isInfixOf` canonical || "analytics.identity_signals" `Text.isInfixOf` canonical)
-      (fail "unsupported current projection source; maintenance fence retained")
-    pure (target, Text.intercalate "," (map quoteName names), canonical)
-  forM_ definitions $ \(target, _, _) -> chCommand connection A.Null ("TRUNCATE TABLE analytics." <> target)
-  forM_ definitions $ \(target, columns, source) ->
-    chCommand connection A.Null ("INSERT INTO analytics." <> target <> " (" <> columns <> ") SELECT " <> columns <> " FROM (" <> source <> ")")
-  verifyMutations connection
-  -- Canonical raw facts and the frozen public projection must retain all rows.
-  values <- chJSON connection A.Null "SELECT toJSONString(count()) AS value FROM analytics.events_canonical"
-  public <- chJSON connection A.Null "SELECT toJSONString(count()) AS value FROM analytics.events_resolved"
-  unless (values == public) (fail "public projection lost canonical facts during maintenance")
+rebuildDerived = rebuildReplicas . directReplicaConnections
+
+rebuildReplicas :: ReplicaConnections -> IO ()
+rebuildReplicas replicas = do
+  synchronizeSchema replicas
+  let connection = coordinator replicas
+      readDefinitions c = forM projections $ \(viewName, target) -> do
+        rows <- chJSON c A.Null ("SELECT toJSONString(as_select) AS value FROM system.tables WHERE database='analytics' AND name='" <> viewName <> "' AND engine='MaterializedView'")
+        source <- case rows of
+          [A.String sql] | "SELECT" `Text.isPrefixOf` sql -> pure sql
+          _ -> failConsistency "required current maintenance projection is absent"
+        cols <- chJSON c A.Null ("SELECT toJSONString(name) AS value FROM system.columns WHERE database='analytics' AND table='" <> target <> "' ORDER BY position")
+        names <- traverse (either (const (failConsistency "invalid current projection column")) pure . A.parseEither A.parseJSON) cols
+        when (null names) (failConsistency "current maintenance target has no columns")
+        let canonical = Text.replace "analytics.events_raw" "analytics.events_canonical" source
+        unless ("analytics.events_canonical" `Text.isInfixOf` canonical || "analytics.identity_signals" `Text.isInfixOf` canonical) (failConsistency "unsupported current projection source; maintenance fence retained")
+        pure (target, Text.intercalate "," (map quoteName names), canonical)
+  definitions <- withinBudget "read coordinator projections" (readDefinitions connection)
+  forM_ (replicaConnections replicas) $ \(sid, c) -> do
+    installed <- withinBudget ("read projections " <> sid) (readDefinitions c)
+    unless (installed == definitions) (failConsistency ("projection definitions differ on replica " <> Text.unpack sid))
+  -- Every target is cleared before any replay. Retry starts here again, with
+  -- per-statement deduplication disabled so old block IDs cannot suppress rows.
+  forM_ definitions $ \(target, _, _) -> do
+    withinBudget ("truncate " <> target) (chCommand connection A.Null ("TRUNCATE TABLE analytics." <> target))
+    synchronizeSchema replicas
+    synchronizeTables replicas [target]
+  forM_ definitions $ \(target, columns, source) -> do
+    withinBudget ("rebuild " <> target) $ chCommand connection A.Null ("INSERT INTO analytics." <> target <> " (" <> columns <> ") SELECT " <> columns <> " FROM (" <> source <> ") SETTINGS insert_deduplicate=0,deduplicate_blocks_in_dependent_materialized_views=0")
+    synchronizeTables replicas [target]
+  verifyReplicaMutations replicas
+  verifyReplicaPopulations replicas
+
+verifyReplicaPopulations :: ReplicaConnections -> IO ()
+verifyReplicaPopulations replicas = do
+  synchronizeTables replicas maintenanceTables
+  populations <- forM (replicaConnections replicas) $ \(sid, c) -> withinBudget ("verify population " <> sid) $ do
+    -- groupArray is bounded by the server memory budget and fails explicitly;
+    -- no count-only success can conceal equal-sized different populations.
+    canonical <- chJSON c A.Null "SELECT toJSONString(arraySort(groupArray(tuple(account_id,event_id)))) AS value FROM analytics.events_canonical"
+    public <- chJSON c A.Null "SELECT toJSONString(arraySort(groupArray(tuple(account_id,event_id)))) AS value FROM analytics.events_resolved"
+    unless (canonical == public) (failConsistency ("public projection differs from canonical population on " <> Text.unpack sid))
+    pure canonical
+  case populations of
+    first : rest -> unless (all (== first) rest) (failConsistency "canonical event populations differ across replicas")
+    [] -> failConsistency "missing replica population observations"
 
 projections :: [(Text, Text)]
 projections =
@@ -118,9 +124,20 @@ projections =
   ]
 
 verifyMutations :: Connection -> IO ()
-verifyMutations connection = do
-  failed <- chJSON connection A.Null "SELECT toJSONString(count()) AS value FROM system.mutations WHERE database='analytics' AND (NOT is_done OR latest_fail_reason!='')"
-  unless (failed == [A.Number 0]) (fail "unfinished or failed native mutation; maintenance fence retained")
+verifyMutations = verifyReplicaMutations . directReplicaConnections
+
+verifyReplicaMutations :: ReplicaConnections -> IO ()
+verifyReplicaMutations replicas = do
+  -- Consume the replication logs before an empty mutation list can prove absence.
+  synchronizeTables replicas maintenanceTables
+  forM_ (replicaConnections replicas) $ \(sid, c) ->
+    withinBudget ("verify mutations " <> sid) $
+      let loop = do
+            rows <- chJSON c A.Null "SELECT toJSONString(tuple(table,mutation_id,toBool(is_done),toBool(latest_fail_reason!=''))) AS value FROM system.mutations WHERE database='analytics' AND (NOT is_done OR latest_fail_reason!='') ORDER BY table,mutation_id"
+            observations <- traverse (either (const (failConsistency "malformed mutation observation")) pure . A.parseEither A.parseJSON) rows :: IO [(Text, Text, Bool, Bool)]
+            forM_ observations $ \(table, mutation, _, failed) -> when failed (failConsistency ("mutation failed on " <> Text.unpack sid <> ": " <> Text.unpack table <> "/" <> Text.unpack mutation <> "; native failure details redacted; fence retained"))
+            unless (null observations) (threadDelay 100_000 >> loop)
+       in loop
 
 quoteName :: Text -> Text
 quoteName name = "`" <> Text.replace "`" "``" name <> "`"
@@ -130,10 +147,22 @@ quoteName name = "`" <> Text.replace "`" "``" name <> "`"
 -- still commit data is already registered in system.processes. Async inserts
 -- are explicitly disabled on the writer's physical connections.
 quiesceRawWrites :: Connection -> IO ()
-quiesceRawWrites connection = do
+quiesceRawWrites = quiesceReplicaWrites . directReplicaConnections
+
+quiesceReplicaWrites :: ReplicaConnections -> IO ()
+quiesceReplicaWrites replicas = do
+  pending <- newIORef (map fst (replicaConnections replicas))
+  let loop = do
+        checkIdentities replicas
+        observations <- forM (replicaConnections replicas) $ \(sid, c) -> do
+          active <- withinBudget ("observe raw INSERTs replica " <> sid) $ chJSON c A.Null "SELECT toJSONString(count()) AS value FROM system.processes WHERE lower(query_kind)='insert' AND position(query,'events_raw')>0 AND (current_database='analytics' OR position(query,'analytics.events_raw')>0 OR position(query,'`analytics`.`events_raw`')>0)"
+          case active of
+            [A.Number n] | n >= 0 && n == fromInteger (floor n :: Integer) -> pure (sid, n == 0)
+            _ -> failConsistency ("malformed raw INSERT observation on " <> Text.unpack sid)
+        let busy = [sid | (sid, False) <- observations]
+        writeIORef pending busy
+        unless (null busy) (threadDelay 100_000 >> loop)
   result <- timeout 60_000_000 loop
-  unless (result == Just ()) (fail "native raw writes did not quiesce; maintenance fence retained")
-  where
-    loop = do
-      active <- chJSON connection A.Null "SELECT toJSONString(count()) AS value FROM system.processes WHERE lower(query_kind)='insert' AND position(query,'events_raw')>0 AND (current_database='analytics' OR position(query,'analytics.events_raw')>0 OR position(query,'`analytics`.`events_raw`')>0)"
-      unless (active == [A.Number 0]) (threadDelay 100_000 >> loop)
+  case result of
+    Just () -> pure ()
+    Nothing -> readIORef pending >>= \ids -> failConsistency ("raw INSERT drain deadline expired; pending replicas=" <> show ids <> "; maintenance fence retained")

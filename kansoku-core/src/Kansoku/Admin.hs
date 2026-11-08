@@ -1,6 +1,7 @@
 -- | Administrative command entry point. Preview is the default for mutations.
 module Kansoku.Admin (runAdmin) where
 
+import Control.Exception (fromException)
 import Control.Monad (forM_)
 import Data.Aeson qualified as A
 import Data.Aeson.Key qualified as K
@@ -13,6 +14,7 @@ import Database.PostgreSQL.LibPQ qualified as PQ
 import Kansoku.Admin.Jobs (resumeJob, runJob, writePrivate)
 import Kansoku.Admin.Keys (runIssueKey)
 import Kansoku.Admin.Store
+import Kansoku.ClickHouse.Native (ConsistencyError (..))
 import Kansoku.Config (Config, loadConfig)
 import Kansoku.Exception (trySynchronous)
 import Kansoku.Postgres.Direct
@@ -37,7 +39,10 @@ runAdmin (command : args) = do
       "resume-job" -> resumeJob config connection parameters (flag "confirm" options) (option "out" options)
       _ -> ordinary config connection command options parameters
   case outcome of
-    Left _ -> do
+    Left exception -> do
+      case fromException exception of
+        Just (ConsistencyError reason) -> hPutStrLn stderr (Text.unpack reason)
+        Nothing -> pure ()
       hPutStrLn stderr "administration failed; the replay ledger and any persisted maintenance fence remain authoritative. Inspect job-status/list-jobs and resume unfinished jobs after resolving the failure."
       exitFailure
     Right answer -> LBS.putStrLn (A.encode answer)

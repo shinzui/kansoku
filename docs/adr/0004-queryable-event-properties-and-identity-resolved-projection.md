@@ -2,7 +2,7 @@
 type: Architecture Decision Record
 title: Queryable event properties and identity-resolved projection
 description: Store event properties as native ClickHouse JSON and expose them for metric grouping only after registry declaration.
-timestamp: 2026-10-16T17:52:47Z
+timestamp: 2026-11-08T04:10:25Z
 generated:
   by: process:codex
   at: 2026-10-16T17:52:47Z
@@ -150,3 +150,35 @@ Ingestion acquires no live ClickHouse dependency. The shared shape corpus is exe
 pure validation, real native inserts into both materialized columns, and public transport
 acceptance on fresh owned stores. Writer outage retry and acknowledgement remain unchanged.
 This is a first-release input contract; no historical queue migration is required.
+
+## Replicated writer and verification boundary
+
+An explicitly selected one-shard replica inventory gives each physical writer
+connection synchronous insertion, serial quorum acknowledgement by every expected
+replica, raw and dependent-view block deduplication, and propagated view errors.
+Settings are checked on connection initialization and reapplied after failure.
+The server quorum wait is twenty seconds inside the existing thirty-second writer
+deadline. Missing replicas reduce write availability; queue acknowledgement still
+requires a successful native insert. In-process recovery retains payloads and
+re-evaluates maintenance dispositions on every attempt.
+
+Block deduplication is finite and depends on serialized block identity. An
+identical-batch lost-acknowledgement proof must inspect physical raw counts on each
+replica without FINAL or OPTIMIZE and independently compare finalized view targets.
+It cannot establish unlimited physical exactly-once storage. Changed batch
+boundaries, restart and expired windows retain the canonical event-once contract
+and replay-safe aggregate semantics above. No event-ID-only batch token may hide a
+payload changed by maintenance dispositions.
+
+Ordinary analytics reads remain eventually consistent. Immediate Kansoku-owned
+verification explicitly checks its acquired replica, synchronizes schema and all
+reviewed dependencies, enables sequential consistency and SELECTs on that same
+physical connection. A reconnect invalidates those barriers. This privileged
+verification path does not place SYSTEM statements in ordinary metrics requests.
+HTTP ingestion acceptance still precedes native writer acknowledgement.
+
+Direct-mode process restart during a native storage outage preserves PostgreSQL
+ingestion availability. A bounded unavailable startup schema observation is
+deferred; every newly acquired query/writer connection must validate the selected
+schema before native use. An observed replicated-schema/direct-mode mismatch is
+fatal. Replicated startup checks complete native inventory and writer settings.

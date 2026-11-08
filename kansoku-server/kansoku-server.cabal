@@ -207,3 +207,23 @@ test-suite clickhouse-replicated-migrations
 
   if !flag(native-migration-tests)
     buildable: False
+
+test-suite clickhouse-replicated-runtime
+  import: common
+  type: exitcode-stdio-1.0
+  ghc-options: -threaded
+  hs-source-dirs: test
+  main-is: ClickHouseReplicatedRuntime.hs
+  build-depends:
+    ClickHaskell,
+    aeson,
+    base >=4.21 && <5,
+    bytestring,
+    clickhouse-migrate-test-support ==0.1.1.0,
+    kansoku-api,
+    kansoku-core,
+    process,
+    text,
+
+  if !flag(native-migration-tests)
+    buildable: False

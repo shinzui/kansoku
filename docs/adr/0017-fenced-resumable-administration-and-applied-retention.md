@@ -5,7 +5,7 @@ description: Coordinate cross-store jobs with persisted fences, protect stale wr
 docId: ADR-17
 status: Accepted
 date: 2026-10-16
-timestamp: 2026-10-16T22:55:08Z
+timestamp: 2026-11-08T03:39:18Z
 generated:
   by: process:codex
   at: 2026-10-16T02:47:59Z
@@ -79,7 +79,7 @@ that applied fingerprint cutoff for future writer attempts. Schedule the explici
 periodic advancement is required. New rejected diagnostics still follow their original-payload
 and bounded quarantine-retention contract until the next applicable cleanup.
 
-Rebuild the twelve current projections from their installed materialized-view SELECT definitions
+Rebuild the fourteen current projections from their installed materialized-view SELECT definitions
 and target columns, substituting canonical raw reads. Clear all targets, replay in dependency
 order, wait for mutations and verify the frozen public projection. Do not replay historical
 migrations or replace newer rich views. Readers remain fenced through verification and release.
@@ -126,3 +126,40 @@ Ordinary up/finish cannot clear failed outcomes merely because history later loo
 Explicit receipt reconciliation and native repair retain the fence until resolved, current
 history and fresh external evidence permit completion. PostgreSQL-only job recovery cannot
 clear an unfinished migration session.
+
+## Complete replica coverage for data jobs
+
+Runtime and migration configuration share a strict explicit direct/replicated
+selector. A replicated data job binds its cluster and canonical expected UUID set
+atomically with fence creation. PostgreSQL migration 0009 appends that identity;
+historical data jobs retain a direct-only default. Every resume compares the full
+identity before native work and reacquires complete verified connections through
+the configured endpoint. Missing, unexpected, replaced or unreachable replicas
+cannot shrink the inventory. Native TLS retains endpoint hostname verification;
+no system-table hostname redirects the client's connections.
+
+After exclusive traffic admission, maintenance observes raw INSERTs on every
+expected replica within one drain budget, synchronizes the Replicated database
+schema and reviewed sources, then discovers identity evidence. It submits each
+mutation once and consumes relevant replication logs before independently checking
+mutation completion on every replica. Failed observations or mutation failures
+retain the fence; lack of permission cannot become an empty successful result.
+The administrative account must see all Kansoku writer sessions.
+
+Read current materialized-view SELECTs and ordered target columns after schema
+synchronization and require matching definitions across replicas. Clear all
+fourteen targets before replay, issue each rebuild insert once, and synchronize
+each rebuilt dependency before its consumers. Disable block and dependent-view
+insert deduplication only on rebuild statements, because a repeated rebuild must
+replace rows even when an earlier attempt's block identity survives TRUNCATE.
+Interrupted rebuilds restart by clearing every target under the retained fence.
+
+Fresh final synchronization, mutation observations, canonical/public populations
+and erasure/retention predicates must cover every expected replica before atomic
+completion/release. Saved `rebuilt` and `verified` stages do not authorize release
+without fresh checks; identity checks also follow the final checkpoint. The native
+resource never silently reconnects one member after a barrier. Each native
+statement/barrier is bounded to sixty seconds; a full job can use multiple budgets.
+Resume deliberately after repairing the same inventory and privileges. External
+SQL writers/readers must be stopped separately because PostgreSQL admission cannot
+fence their sessions. Replica-local cache size estimates are not completion proof.

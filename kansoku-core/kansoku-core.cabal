@@ -54,7 +54,10 @@ library
     Kansoku.Auth.Token
     Kansoku.Auth.Types
     Kansoku.ClickHouse
+    Kansoku.ClickHouse.Consistency
     Kansoku.ClickHouse.EventRow
+    Kansoku.ClickHouse.Native
+    Kansoku.ClickHouse.Topology
     Kansoku.Cohort.Handler
     Kansoku.Cohort.Members
     Kansoku.Cohort.Query
@@ -224,6 +227,7 @@ test-suite kansoku-core-test
     Kansoku.QueryPoolSpec
     Kansoku.QuerySpec
     Kansoku.ReadinessSpec
+    Kansoku.ReplicaTopologySpec
     Kansoku.RequestLogSpec
     Kansoku.Writer.BatchSpec
     Kansoku.Writer.LifecycleSpec

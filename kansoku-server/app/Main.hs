@@ -13,6 +13,7 @@ import Kansoku.ClickHouse
     metricsQueryLimitsFromConfig,
     newQueryPoolWithLimits,
     queryReachable,
+    validateClickHouseTopology,
   )
 import Kansoku.Config (loadConfig)
 import Kansoku.Event (AccountId (..))
@@ -62,6 +63,7 @@ runServer = do
       hPutStrLn stderr ("configuration error: " <> show err)
       exitFailure
     Right cfg -> do
+      validateClickHouseTopology (clickHouseConfigFromConfig cfg)
       let queueName = eventsQueueName (cfg ^. #eventsQueueName)
       bracket ((,) <$> createPool (cfg ^. #pgConnectionString) <*> newMaintenancePool (cfg ^. #pgConnectionString)) (\(pool, maintenance) -> Pool.release pool >> closeMaintenancePool maintenance) $ \(pool, maintenance) -> do
         provisionQueue pool queueName

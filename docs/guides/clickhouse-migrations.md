@@ -327,3 +327,23 @@ not release the PostgreSQL fence. Retain identities and exact receipts for expli
 never delete only analytics or replace an existing ledger UUID. Owned round-robin acceptance
 is separate from qualification of a managed endpoint, deployment permissions, and replicated
 application or data-maintenance behavior.
+
+## Runtime topology after migration
+
+The replicated baseline alone does not establish write/read/maintenance
+consistency. Pass the same cluster and complete UUID inventory selectors to the
+runtime and data-job CLI. They share the strict core topology parser while
+migration commands retain their additional direct-server identity requirement.
+PostgreSQL migration `0009-clickhouse-replicated-jobs` appends a persisted target
+identity for data jobs; existing jobs remain direct-only. Migration session
+identity and immutable direct/replicated native histories retain their original
+contracts.
+
+Use [the runtime operating policy](operations.md) and
+[replicated administration](administration.md) for quorum acknowledgement,
+synchronized read-back and all-replica repair/resume. The owned runtime recipe
+reuses actual migration initialization on a fresh exact-candidate cluster, then
+adds native driver and production executable fault cases. Its private native
+ports are resolved only from the live fixture's reported endpoints and verified
+UUIDs; the migration fixture's special query-test deduplication controls are not
+applied to writer qualification.
