@@ -1,6 +1,7 @@
 # Bundle Update Log
 
 ## 2026-11-08
+* **Traceability**: FRIC-1, FRIC-3, FRIC-7, FRIC-9, FRIC-11 and FRIC-14 consolidated in mori://shinzui/okf/okf/bug-reports/concepts/BUG-2 and mori://shinzui/okf/okf/improvement-requests/concepts/IR-15; retain accepted local workarounds.
 * **Update**: FRIC-14 accepted: Restore the complete guide adoption inventory and accept byte-preserving log updates as the recurring workaround.
 * **Addition**: FRIC-14 records detour tooling friction with mori://shinzui/okf: OKF log updates discard adoption evidence outside parsed entries
 * **Update**: FRIC-13 accepted: Document and automate the native-query fixture setup without weakening migration app restrictions or Hspec assertions.

@@ -18,6 +18,9 @@ amended:
   - by: "codex-cli/gpt-6.1-sol"
     at: "2026-11-06T05:11:07Z"
     change: "Accepted log writer limitation with preservation workaround"
+  - by: process:codex
+    at: "2026-11-08T03:36:19Z"
+    change: "Link consolidated upstream BUG-2 and preview improvement IR-15; retain the accepted local workaround."
 ---
 # OKF log add rewrites existing log prose
 
@@ -32,3 +35,12 @@ Existing adoption evidence table disappeared from docs/guides/log.md.
 ## Workaround
 
 Restored each log from HEAD and inserted only the new entry, preserving historical evidence.
+
+## Upstream follow-up
+
+Tracked with the other occurrences in
+`mori://shinzui/okf/okf/bug-reports/concepts/BUG-2` (adoption evidence lost during
+log additions) and
+`mori://shinzui/okf/okf/improvement-requests/concepts/IR-15` (preview the exact edit
+before writing). The local workaround remains accepted; the upstream bug is
+confirmed and the improvement is proposed, with neither implemented yet.

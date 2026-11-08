@@ -18,6 +18,9 @@ amended:
   - by: "codex-cli/gpt-6.1-sol"
     at: "2026-11-06T14:35:58Z"
     change: "Accept byte-preserving local log edits as the current workaround and retain the original adoption evidence."
+  - by: process:codex
+    at: "2026-11-08T03:36:19Z"
+    change: "Link consolidated upstream BUG-2 and preview improvement IR-15; retain the accepted local workaround."
 ---
 # OKF log append rewrites historical adoption evidence
 
@@ -32,3 +35,12 @@ The guides log lost its migration inventory table and both logs had unrelated fo
 ## Workaround
 
 Restore existing log bytes from HEAD and insert only the new generated entry under the existing date heading.
+
+## Upstream follow-up
+
+Tracked with the other occurrences in
+`mori://shinzui/okf/okf/bug-reports/concepts/BUG-2` (adoption evidence lost during
+log additions) and
+`mori://shinzui/okf/okf/improvement-requests/concepts/IR-15` (preview the exact edit
+before writing). The local workaround remains accepted; the upstream bug is
+confirmed and the improvement is proposed, with neither implemented yet.

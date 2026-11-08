@@ -18,6 +18,9 @@ amended:
   - by: "codex-cli/gpt-6.1-sol"
     at: "2026-11-08T02:31:32Z"
     change: "Restore the complete guide adoption inventory and accept byte-preserving log updates as the recurring workaround."
+  - by: process:codex
+    at: "2026-11-08T03:36:19Z"
+    change: "Link consolidated upstream BUG-2 and preview improvement IR-15; retain the accepted local workaround."
 ---
 # OKF log updates discard adoption evidence outside parsed entries
 
@@ -36,3 +39,12 @@ git diff docs/guides/log.md showed the adoption-evidence table removed alongside
 ## Workaround
 
 Keep the entry emitted by okf log add, restore all previous log bytes from Git, and rerun strict profile/log validation.
+
+## Upstream follow-up
+
+Tracked with the other occurrences in
+`mori://shinzui/okf/okf/bug-reports/concepts/BUG-2` (adoption evidence lost during
+log additions) and
+`mori://shinzui/okf/okf/improvement-requests/concepts/IR-15` (preview the exact edit
+before writing). The local workaround remains accepted; the upstream bug is
+confirmed and the improvement is proposed, with neither implemented yet.
