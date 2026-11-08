@@ -1,6 +1,7 @@
 # Bundle Update Log
 
 ## 2026-11-08
+* **Update**: ADR-13 and ADR-9: record whole-session contained-name membership and the bounded containsEvent parameter.
 * **Update**: ADR-13: Exclude client errors and web vitals from engagement while preserving duration and require verified retained-session reconstruction
 * **Update**: ADR-7: Classify both diagnostic names as non-engagement for every stored version and require fenced retained-state correction
 * **Update**: Record immutable TAN publication and digest readback binding without rebuilding the approved candidate.

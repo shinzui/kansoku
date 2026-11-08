@@ -5,7 +5,7 @@ description: Merge idempotent session state before date and attribute selection 
 docId: ADR-13
 status: Accepted
 date: 2026-10-15
-timestamp: 2026-11-08T06:55:25Z
+timestamp: 2026-11-08T13:49:15Z
 generated:
   by: process:codex
   at: 2026-10-15T22:46:52Z
@@ -124,3 +124,19 @@ canonical facts. Nonquorum history outside the supported acknowledgement contrac
 operator diagnosis under the retained fence. Ledger admission and ordinary runtime settings
 keep their existing policy. Complete result limits and throwing overflow are explicit on replay
 and assertion statements.
+
+## Contained event-name selection
+
+The optional sessions-only `containsEvent` parameter selects complete session keys by
+any-of membership in canonical retained web event history. Membership is keyed by
+account, source service and nonempty session ID and has no event date, attribute,
+identity or bot predicate. The assembled session owns start-date selection, current
+traits/cohorts, first-page attribution and any-bot exclusion. Counts, bounce rates and
+average duration use each selected session once, irrespective of duplicate events or
+matching names. A witness beyond the requested date range can select an earlier-starting
+session; non-web rows cannot select it. This explicit name-membership contract does not
+permit arbitrary event-property filtering or alter the attribution `event_name` dimension.
+
+Use tuple membership after either the materialized or identity-aware canonical session
+projection. Bind names as native parameters and omit the membership scan entirely when
+the option is absent. No aggregate-state migration or backfill is required.

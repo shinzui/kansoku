@@ -4,7 +4,7 @@ title: "Query metrics"
 description: "Look up metric populations, query bounds, filters, grouping, analytical semantics, cohorts and saved definitions."
 docId: DOC-10
 tags: ["metrics", "queries", "identity", "cohorts"]
-timestamp: 2026-11-08T06:55:25Z
+timestamp: 2026-11-08T13:49:15Z
 generated:
   by: process:codex
   at: "2026-11-06T14:31:34Z"
@@ -46,6 +46,48 @@ current traits, cohorts, account isolation and limits apply. Users/page views ex
 rows by default, whereas acquisition/sessions exclude any session containing a bot event;
 custom keeps its existing event population and does not accept includeBots. Unprefixed
 entry_page/exit_page remain specific to sessions/acquisition. Other routes reject explicit none.
+
+## Sessions containing an event
+
+On `/metrics/sessions`, add `containsEvent=client_error` to select whole sessions
+with at least one retained web event of that name. A comma-separated list such as
+`containsEvent=client_error,page_leave` has any-of semantics: a session matching both
+names still contributes once. This applies to count, bounce_rate and
+average_duration_seconds; each measure uses the selected whole sessions. Omit the
+option to include the existing session population. The `event_name` attribution
+dimension still describes the first page view (or earliest event), not all contained names.
+
+The single scalar accepts 1..20 raw names before deduplication. Entries are trimmed;
+each must contain 1..128 lowercase ASCII letters, digits, underscore, dot, colon or
+hyphen. Empty entries, uppercase, Unicode, SQL punctuation, overlong names and 21 raw
+entries (even identical names) return HTTP 400 `invalid_contains_event`. Valid undeclared
+or absent names produce an empty selection. A repeated or valueless parameter returns
+`invalid_query_parameter`; other routes reject it with `unsupported_query_parameter`.
+Authentication is required before these request checks.
+
+Matching uses complete retained web history for the same account, source service and
+nonempty session ID. A final error after `to` can select a session that starts in
+`[from,to)`; only the session start determines its date and bucket. Non-web events and
+events without session IDs cannot witness a match. Session attribution, filters, current
+traits/cohorts, grouping and any-bot exclusion still apply after assembly. Arbitrary
+`prop:` session filters and grouping remain unsupported.
+
+To report the percentage of visits with errors, make these two authenticated requests
+with the same dates, population filters and bot setting:
+
+```text
+GET /metrics/sessions?from=2026-07-01&to=2026-07-02&measure=count&timeGrain=none
+GET /metrics/sessions?from=2026-07-01&to=2026-07-02&measure=count&timeGrain=none&containsEvent=client_error
+```
+
+For three sessions with one error session, the null-bucket values are 3 and 1. Display
+`100 * 1 / 3`, approximately 33.33%. When the denominator is zero, display no percentage:
+there were no observed sessions. Separate requests are not an atomic snapshot; late
+arrivals, erasure or retention can change either result between calls.
+
+The derived Haskell `Metrics.sessions metricsClient` takes an additional `Maybe Text`
+argument between measure and includeBots. Source callers must pass `Nothing` to retain
+omission behavior or `Just "client_error,page_leave"` to select names.
 
 ## Events selected by session attributes
 
@@ -211,7 +253,7 @@ Invalid JSON/filter grammar or incompatible filter types return `invalid_filter`
 | events, feature-adoption, revenue | `groupBy`, `timeGrain`, repeatable `filter` |
 | page-views | `groupBy`, `timeGrain`, repeatable `filter`, `includeBots` (default false) |
 | acquisition | `groupBy` (default channel), `timeGrain`, repeatable session-attribute `filter`, `measure` (sessions/users/converted_users/conversion_rate), `conversionEvents` (required only for conversion measures), `includeBots` (default false) |
-| sessions | `groupBy`, `timeGrain`, repeatable session-attribute `filter`, `measure` (count/bounce_rate/average_duration_seconds), `includeBots` (default false) |
+| sessions | `groupBy`, `timeGrain`, repeatable session-attribute `filter`, `measure` (count/bounce_rate/average_duration_seconds), `containsEvent` (optional 1..20 any-of event names), `includeBots` (default false) |
 | conversion | `groupBy` (no prop), repeatable `filter`; timeGrain rejected |
 | paths | optional `start` or `end`, `by`, `steps`, `top`, `window`, CSV `events`, CSV `exclude`, repeatable `filter`; event mode requires an anchor |
 | funnel | required `steps`; optional `window`, `mode`, `counting`, `attribution`, `measure`, repeatable `exclude`, `groupBy`, repeatable `filter` |

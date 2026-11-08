@@ -5,7 +5,7 @@ description: Bound metric inputs and final aggregate cardinality, returning a co
 docId: ADR-9
 status: Accepted
 date: 2026-10-15
-timestamp: 2026-11-06T13:13:28Z
+timestamp: 2026-11-08T13:49:15Z
 generated:
   by: process:codex
   at: 2026-10-15T04:44:00Z
@@ -126,3 +126,14 @@ most 210 points, but the same final 10001-row overflow witness and resource-fail
 boundary still apply. No input-event truncation is permitted. Event lists are bounded to
 100 validated names each and route anchors to 1024 UTF-8 bytes; text values are native
 parameters. The `(end)` and `(other)` markers are reserved synthetic labels.
+
+## Bounded contained-event selection
+
+Optional `containsEvent` on sessions accepts 1..20 raw event names before deduplication,
+using the shared 1..128 lowercase ASCII letter/digit/underscore/dot/colon/hyphen grammar.
+Trim entries and reject empty or invalid names with `invalid_contains_event` before
+cohort loading or query checkout. Syntax-valid names need not be declared in the event
+registry. Shared HTTP/compiler/executor validation enforces the same bound for all
+session measures. The scalar cannot repeat and is unsupported on other metric routes.
+Existing account, date, complete-point and execution/memory bounds remain in force;
+membership scans never truncate retained history to produce a partial answer.

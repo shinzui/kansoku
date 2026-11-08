@@ -1,6 +1,7 @@
 # Bundle Update Log
 
 ## 2026-11-08
+* **Update**: DOC-10: document contained-event session selection, validation and the two-request error percentage.
 * **Update**: DOC-13: Document 0026 fenced session reconstruction, all-replica barriers and explicit recovery
 * **Update**: DOC-10: Define diagnostic bounce and duration semantics for every stored version
 * **Update**: DOC-11: Clarify diagnostic engagement exclusions and retained-history upgrade boundary

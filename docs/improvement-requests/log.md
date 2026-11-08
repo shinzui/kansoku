@@ -1,6 +1,7 @@
 # Bundle Update Log
 
 ## 2026-11-08
+* **Update**: IR-14: complete bounded whole-session containsEvent selection with native, typed-client and three-mode packaged public acceptance evidence.
 * **Update**: IR-13: Complete diagnostic non-engagement classification, fenced retained-session correction and public/native upgrade acceptance in plan 65
 * **Update**: Complete AC-1 through AC-5 with dated explicit owner risk acceptance and published Linux amd64 image/source/plan hashes verified from registry readback.
 * **Update**: Accept IR-12 for implementation and link targetPlan to docs/plans/64-accept-tan-production-as-a-deployment-target.md; implementation and release-owner risk acceptance have not occurred.

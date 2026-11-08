@@ -27,6 +27,7 @@ from admin_acceptance import verify_admin
 from beacon_acceptance import verify_beacon_browser
 from identity_browser_acceptance import verify_identity_browser
 from sdk_protocol_acceptance import verify_sdk_protocol
+from session_contains_acceptance import verify_session_contains
 from enrichment_acceptance import ADDRESSES, verify_enrichment, verify_country_disabled
 from isolated_clickhouse import isolated_clickhouse, apply_migrations, free_port
 from test_support import binary, execute, hspec, probes
@@ -296,6 +297,7 @@ def main():
                                 live = dict(settings, KANSOKU_SERVER_URL=base, KANSOKU_API_KEY=credentials['client_token'])
                                 hspec([binary('kansoku-client:test:kansoku-client-test')], env=live, log=ROOT / 'client-tests.log')
                             verify_enrichment(base, credentials['enrichment_write'], credentials['enrichment_service'])
+                            verify_session_contains(base, credentials['enrichment_write'], credentials['enrichment_service'], credentials['other_token'])
                             verify_activity(base, credentials['enrichment_write'], credentials['enrichment_service'])
                             verify_funnels(base, credentials['enrichment_write'], credentials['enrichment_service'])
                             verify_traits(base, credentials['enrichment_write'], credentials['enrichment_service'])

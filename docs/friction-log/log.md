@@ -1,6 +1,8 @@
 # Bundle Update Log
 
 ## 2026-11-08
+* **Update**: FRIC-22 accepted: Accepted the manual preservation workaround for this implementation; changing the external OKF CLI is outside plan 66.
+* **Addition**: FRIC-22 records detour tooling friction with mori://shinzui/okf: OKF log add rewrites historical guide log prose
 * **Update**: FRIC-19 resolved: Remove the Docker-specific dependency fixture from the migration execution path while preserving actual coverage and refusal behavior.
 * **Update**: FRIC-21 accepted: Accept the content-fingerprint rebuild cost for this plan; preserve the observed recurrence of FRIC-17.
 * **Update**: FRIC-20 accepted: Accept the local preservation workaround; this occurrence repeats the log-writer behavior recorded in FRIC-3.

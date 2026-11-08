@@ -6,7 +6,16 @@ generated:
   by: process:claude-code
   at: "2026-11-08T01:20:00Z"
 requestId: IR-14
-status: proposed
+status: completed
+completedAt: "2026-11-08T14:10:28Z"
+timestamp: "2026-11-08T14:10:28Z"
+targetPlan: docs/plans/66-count-sessions-that-contain-an-event.md
+resolution: >-
+  AC-1 through AC-4 delivered by plan 66: bounded containsEvent any-of selection
+  over whole retained web sessions, every session measure and existing selection,
+  authenticated HTTP and typed client, generated OpenAPI and the percentage recipe.
+  Deterministic checks, native proofs at ordinary/tiny block sizes and the packaged
+  public fixture in all three telemetry modes passed on 2026-11-08.
 origin: mori://shinzui/kansoku-ui/masterplans/4-build-the-health-tab-of-the-reports-page
 dependencies:
   - ref: mori://shinzui/kansoku/okf/improvement-requests/concepts/IR-8

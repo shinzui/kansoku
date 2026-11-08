@@ -35,7 +35,7 @@ This implements all four acceptance criteria in [IR-14](docs/improvement-request
 
 - [x] Milestone 1 (2026-11-08): Whole-session selection, shared raw-list validation and native binding implemented. `nix develop --no-write-lock-file -c python3 scripts/acquisition-acceptance.py` executed acquisition/session/trait families with 9/9/6 examples at each of block sizes 65536 and 2, all with zero failures/pending; coverage includes all measures/grains, replay, late starts, cross-midnight witnesses, bots, key collisions and trait/cohort selection.
 - [x] Milestone 2 (2026-11-08): Authenticated HTTP and derived client expose the optional scalar, reject invalid input before cohort/storage access and preserve omission. `just build-with-tests` passed; `just deterministic-test` passed 512 core examples, 22 client examples and 4 probes. OpenAPI generation/freshness, lint and formatting passed.
-- [ ] Milestone 3: A packaged public ingestion/query fixture proves IR-14, and generated OpenAPI, query guidance, and durable ADR context describe the accepted behavior.
+- [x] Milestone 3 (2026-11-08): Public ingestion/query fixture passed in all three packaged telemetry modes; IR-14 is completed. The guide, generated/live OpenAPI, ADR-13 and ADR-9 document the contract. Full packaged acceptance passed with 649 core examples, 23 client examples, 4 probes, 18 migration cases and 7 administrative scenario families, with no failures/skips/pending. Strict guide/ADR/friction profiles, generated-contract freshness/lint, formatting and whitespace checks passed.
 
 ## Surprises & Discoveries
 
@@ -53,6 +53,26 @@ This implements all four acceptance criteria in [IR-14](docs/improvement-request
 
 ## Outcomes & Retrospective
 
+
+Completed 2026-11-08. `/metrics/sessions?containsEvent=client_error` now selects whole retained web sessions for every session measure. Omission preserves the previous query path and results; the optional list needs no migration or backfill. The Haskell client has the documented additional `Maybe Text` argument. IR-14 AC-1 through AC-4 are delivered.
+
+The public fixture ran against the Nix-packaged server with issued credentials and fresh owned PostgreSQL/ClickHouse stores in legacy, `http` and `http/dup` telemetry modes. Every run proved the final-event match, no-session exclusions, account isolation, first-page grouping/filtering, unchanged whole-session measures, replay, raw-list acceptance and live OpenAPI. Its observed values were:
+
+```text
+selection                  count  average_duration_seconds  bounce_rate
+omitted                    3      30                        2/3
+client_error               1      60                        0
+client_error,page_leave    2      45                        0.5
+error-session percentage   100 * 1 / 3 = approximately 33.33%
+```
+
+Acceptance commands executed from the repository root were `nix develop --no-write-lock-file -c just build-with-tests`, `just openapi`, `just deterministic-test`, `python3 scripts/acquisition-acceptance.py`, `just openapi-check`, `just openapi-lint`, `just guides-check`, strict profiled/log-enforced ADR validation, `just friction-check`, `just format-check`, and `just acceptance` (each `just`/Python/OKF command under the same Nix development environment), plus `git diff --check`. A focused `cabal build kansoku-core:test:kansoku-core-test --enable-tests` rebuilt the corrected account-isolated fixtures before their successful ordinary/tiny and full packaged native runs. Deterministic counts were 512 core examples, 22 client examples and 4 probes. Required native families passed 9 acquisition, 9 session and 6 trait examples at each block size. The packaged gate passed 649 core examples, 23 client examples, 4 probes, 18 migration cases and 7 administrative families; every required run had zero failures, pending or skipped cases.
+
+Sanitized packaged evidence is retained locally in `.dev/acceptance/run-vwnvlnvl/sanitized/`, including `core-tests.log`, `client-tests.log`, `clickhouse-migrations.log`, telemetry logs and `admin-summary.log`. The three successful EP-66 public-workflow summaries are recorded by the gate's stdout; the values above preserve the concise acceptance result in this plan. This run made no claim about optional external SDK/consumer integrations that were not configured.
+
+[FRIC-22](docs/friction-log/22-okf-log-add-rewrites-historical-guide-log-prose.md) was triaged as accepted: the released `okf log add` command removed historical guide-log prose, so the new entry was retained and the original history restored before strict validation. No logged friction remains for this plan. New fixture cases also needed distinct accounts because the native connection helper preserves store contents between examples; the final suite passes without clearing other fixtures.
+
+Durable whole-key membership semantics, omission behavior and the new public input bound are recorded in ADR-13 and ADR-9. Separate percentage requests remain observations over mutable retained history, as documented in the guide.
 
 ## Context and Orientation
 
