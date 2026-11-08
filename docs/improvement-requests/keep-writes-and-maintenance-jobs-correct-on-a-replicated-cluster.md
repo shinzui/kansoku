@@ -6,7 +6,8 @@ generated:
   by: process:claude-code
   at: "2026-11-08T00:00:15Z"
 requestId: IR-11
-status: proposed
+status: accepted
+targetPlan: docs/plans/63-keep-writes-and-maintenance-jobs-correct-on-a-replicated-cluster.md
 origin: mori://tan/tan-app-infrastructure/plans/45-onboard-kansoku-to-production-on-the-replicated-clickhouse-cluster
 dependencies:
   - ref: mori://shinzui/kansoku/okf/improvement-requests/concepts/IR-10
@@ -51,6 +52,9 @@ Kansoku's production onboarding
 (`mori://tan/tan-app-infrastructure/plans/45-onboard-kansoku-to-production-on-the-replicated-clickhouse-cluster`).
 **Addressed to:** `shinzui/kansoku` agents.
 **Created:** 2026-11-08.
+
+**Implementation plan:** [ExecPlan 63: Keep writes and maintenance jobs correct on a replicated cluster](../plans/63-keep-writes-and-maintenance-jobs-correct-on-a-replicated-cluster.md).
+The request is accepted for implementation; implementation has not started.
 
 This is the second of three requests filed together. It needs IR-10's replicated baseline.
 
