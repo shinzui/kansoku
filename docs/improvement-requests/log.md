@@ -1,8 +1,11 @@
 # Bundle Update Log
 
+## 2026-11-08
+* **Add**: Propose IR-10 to IR-12 from `mori://tan/tan-app-infrastructure/plans/45-onboard-kansoku-to-production-on-the-replicated-clickhouse-cluster` for production on the two-replica `tan-production` Altinity cluster. IR-10 runs ClickHouse migrations on a replicated target with a separate replicated baseline and fresh v2 ledger, leaving the direct target and its history unchanged. IR-11 makes writer durability, read-back checks and the erase/retention quiesce and mutation checks hold across every replica (hard dependency on IR-10). IR-12 records the production target and closes or accepts the adoption evidence production gates (hard dependencies on IR-10 and IR-11).
+
 ## 2026-11-06
 * **Update**: Complete IR-9 AC-1 through AC-4: session-scoped event filtering/grouping, retained attribution parity, saved ratios and query documentation; native, custom, deterministic and full packaged acceptance passed.
-* **Update**: Complete IR-8: enforced client_error/web_vital v1, public error/user/p75 query evidence, sending recipes and actual opt-in SDK plan; all required gates passed.
+* **Update**: Complete IR-8: enforced client\_error/web\_vital v1, public error/user/p75 query evidence, sending recipes and actual opt-in SDK plan; all required gates passed.
 * **Update**: Accept IR-3 for implementation and link targetPlan to docs/plans/61-name-the-experiment-conversion-rate-measure-correctly-in-the-query-guide.md; implementation has not started.
 * **Update**: Accept IR-9 for implementation and link targetPlan to docs/plans/59-filter-and-group-events-by-their-session-attributes.md; implementation has not started.
 * **Update**: Accept IR-4 for implementation and link targetPlan to docs/plans/60-count-unique-users-over-a-whole-query-range.md; implementation has not started.
@@ -12,7 +15,7 @@
 * **Add**: Propose IR-9 from `mori://shinzui/kansoku-ui/masterplans/3-build-the-reports-page`: session-scoped dimensions on page-views, users and custom metrics, so events can be filtered and grouped by the first-touch attributes of the session they belong to.
 
 ## 2026-11-05
-* **Add**: Propose IR-4 to IR-8 from `mori://shinzui/kansoku-ui` while planning its Reports page, modelled on the reports of an open-source web-analytics product. IR-4 counts unique users over a whole range. IR-5 attributes conversions to first-touch acquisition (soft dependency on IR-4). IR-6 adds an ai_assistant channel in a new channel rule version. IR-7 adds a percentile aggregation to custom metrics. IR-8 declares client_error and web_vital events, with a browser SDK follow-up for `mori://shinzui/kansoku-ts` (hard dependency on IR-7).
+* **Add**: Propose IR-4 to IR-8 from `mori://shinzui/kansoku-ui` while planning its Reports page, modelled on the reports of an open-source web-analytics product. IR-4 counts unique users over a whole range. IR-5 attributes conversions to first-touch acquisition (soft dependency on IR-4). IR-6 adds an ai\_assistant channel in a new channel rule version. IR-7 adds a percentile aggregation to custom metrics. IR-8 declares client\_error and web\_vital events, with a browser SDK follow-up for `mori://shinzui/kansoku-ts` (hard dependency on IR-7).
 * **Add**: Propose IR-3 from `mori://shinzui/kansoku-ui/plans/11-add-a-chart-kind-registry-composed-chart-inputs-and-a-chart-options-panel`: the query guide names the experiment conversion measure `rate` where the compiler and its tests emit `conversion_rate`.
 
 ## 2026-10-20
