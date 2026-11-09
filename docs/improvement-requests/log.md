@@ -1,6 +1,7 @@
 # Bundle Update Log
 
 ## 2026-11-09
+* **Create**: File IR-16 for an authenticated live activity WebSocket with snapshot, updates, recovery and bounded consumers.
 * **Add**: Propose IR-15 from `mori://tan/tan-app-infrastructure/plans/45-onboard-kansoku-to-production-on-the-replicated-clickhouse-cluster`: keep the server starting and accepting events while ClickHouse is unavailable.
 
 ## 2026-11-08
