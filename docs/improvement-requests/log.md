@@ -1,5 +1,8 @@
 # Bundle Update Log
 
+## 2026-11-09
+* **Add**: Propose IR-15 from `mori://tan/tan-app-infrastructure/plans/45-onboard-kansoku-to-production-on-the-replicated-clickhouse-cluster`: keep the server starting and accepting events while ClickHouse is unavailable.
+
 ## 2026-11-08
 * **Update**: IR-14: complete bounded whole-session containsEvent selection with native, typed-client and three-mode packaged public acceptance evidence.
 * **Update**: IR-13: Complete diagnostic non-engagement classification, fenced retained-session correction and public/native upgrade acceptance in plan 65
