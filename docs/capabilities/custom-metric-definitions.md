@@ -2,6 +2,7 @@
 type: Capability
 title: "Custom and saved metric definitions"
 description: "Compute ad-hoc counts, unique users, numeric sums, averages, exact percentiles and ratios, or save typed account-scoped definitions for reuse."
+timestamp: 2026-11-11T16:18:51Z
 generated:
   by: process:codex
   at: "2026-11-06T12:36:47Z"
@@ -32,7 +33,7 @@ evidence:
 
 # Custom and saved metric definitions
 
-Compile typed event selections through the normal bounded metric engine without embedding SQL. Save simple or numerator/denominator definitions, conjoin request filters and override simple grouping/time defaults. List definitions using bidirectional UUID cursor pages. See [custom metrics](../guides/query-metrics.md#custom-metrics).
+Compile typed event selections through the normal bounded metric engine without embedding SQL. Save simple or numerator/denominator definitions, conjoin request filters and override simple grouping/time defaults. List definitions using bidirectional UUID cursor pages. Simple definitions and each ratio component can independently filter [session attributes](filtered-semantic-metrics.md#session-attributes). See [custom metrics](../guides/query-metrics.md#custom-metrics).
 
 ## Compatibility
 

@@ -31,7 +31,7 @@ See the [terminology](../terminology/index.md) for vocabulary, the [guides](../R
 | ID | Capability | Description |
 | --- | --- | --- |
 | CAP-6 | [Filtered semantic metrics](filtered-semantic-metrics.md) | Query event, page-view, feature-adoption and revenue aggregates through typed dimensions and bounded parameterized filters. |
-| CAP-7 | [Web sessions and acquisition](web-sessions-acquisition.md) | Compute whole retained web-session counts, bounce, observed duration and first-touch acquisition using preserved server enrichment. |
+| CAP-7 | [Web sessions and acquisition](web-sessions-acquisition.md) | Compute whole retained web-session counts, bounce, observed duration, contained-event selection and first-touch acquisition and conversion using preserved server enrichment. |
 | CAP-8 | [Activity and retention analytics](activity-retention.md) | Compute exact active users, stickiness, lifecycle and retention over consistent resolved populations and closed UTC observation days. |
 | CAP-9 | [Deterministic funnels and conversion](deterministic-funnels.md) | Measure exact funnel reach, attempts and conversion timing with sequential, strict and any-order event matching. |
 | CAP-10 | [Event paths and page flows](paths-flows.md) | Explore forward or reverse canonical-user transitions from event or route anchors with bounded top-K folding. |
@@ -46,6 +46,8 @@ See the [terminology](../terminology/index.md) for vocabulary, the [guides](../R
 | --- | --- | --- |
 | CAP-16 | [Resumable administration and data lifecycle](administrative-lifecycle.md) | Preview and confirm fenced erasure, retention and archive maintenance with durable job status and safe resumption. |
 | CAP-17 | [Operational probes and telemetry](operational-observability.md) | Expose dependency-aware readiness, liveness, pipeline metrics and bounded correlated request telemetry for operating the service. |
+| CAP-20 | [Explicit ClickHouse migrations](explicit-clickhouse-migrations.md) | Initialize and upgrade direct or replicated ClickHouse targets through fenced, resumable native migration sessions with retained ledger identities. |
+| CAP-21 | [Source-built Linux container image](linux-container-image.md) | Build a Linux amd64 image of the Kansoku executables from the source flake with provenance labels, embedded migration plans and a smoke check. |
 
 ## Clients and consumption
 

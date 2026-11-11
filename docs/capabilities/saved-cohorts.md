@@ -2,6 +2,7 @@
 type: Capability
 title: "Saved behavioural and static cohorts"
 description: "Manage account-scoped user segments and select metric populations using query-time behaviour or uploaded membership."
+timestamp: 2026-11-11T16:18:51Z
 generated:
   by: process:codex
   at: "2026-10-16T13:11:11Z"
@@ -23,6 +24,7 @@ tags: [analytics]
 requires:
   - CAP-5
   - CAP-6
+  - CAP-15
 evidence:
   - kind: conformance
     resource: "scripts/cohorts_acceptance.py"
@@ -30,11 +32,14 @@ evidence:
   - kind: module
     resource: "kansoku-api/src/Kansoku/Cohort/Api.hs"
     proves: "Declares the served service-token routes and Relay page responses."
+  - kind: test
+    resource: "kansoku-core/test/Kansoku/Cohort/QuerySpec.hs"
+    proves: "Checks condition-local typed organisation trait sources, including OR alternatives."
 ---
 
 # Saved behavioural and static cohorts
 
-Save behavioural conditions and current-trait selectors, or replace explicit static user lists. Resolve behavioural membership over each condition’s window anchored on query to. Include/exclude cohorts or group metric results into in/out. Return cursor pages for definitions/members and a separate size resource.
+Save behavioural conditions, whose event filters can include condition-local governed `org:` traits of each resolved event's organisation, and current-trait selectors, or replace explicit static user lists. Resolve behavioural membership over each condition’s window anchored on query to. Include/exclude cohorts or group metric results into in/out. Return cursor pages for definitions/members and a separate size resource.
 
 ## Compatibility
 
@@ -48,8 +53,10 @@ Cohorts contain identified users; anonymous-only subjects are out. Up to four be
 
 - [CAP-5 — Conservative identity resolution](conservative-identity-resolution.md).
 - [CAP-6 — Filtered semantic metrics](filtered-semantic-metrics.md).
+- [CAP-15 — Organisation analytics and current membership](organization-analytics.md).
 
 ## Evidence
 
 - [cohorts_acceptance.py](../../scripts/cohorts_acceptance.py) — Checks definition CRUD, member replacement, pages, selection, erasure and account isolation.
 - [Api.hs](../../kansoku-api/src/Kansoku/Cohort/Api.hs) — Declares the served service-token routes and Relay page responses.
+- [QuerySpec.hs](../../kansoku-core/test/Kansoku/Cohort/QuerySpec.hs) — Checks condition-local typed organisation trait sources, including OR alternatives.

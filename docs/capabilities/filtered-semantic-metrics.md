@@ -2,6 +2,7 @@
 type: Capability
 title: "Filtered semantic metrics"
 description: "Query event, page-view, feature-adoption and revenue aggregates through typed dimensions and bounded parameterized filters."
+timestamp: 2026-11-11T16:18:51Z
 generated:
   by: process:codex
   at: "2026-10-16T13:11:11Z"
@@ -18,6 +19,7 @@ interface:
   - "GET /metrics/page-views"
   - "GET /metrics/feature-adoption"
   - "GET /metrics/revenue"
+  - "session: dimensions"
 tags: [analytics]
 requires:
   - CAP-1
@@ -32,6 +34,9 @@ evidence:
   - kind: guide
     resource: "docs/guides/query-metrics.md"
     proves: "Defines scalar declarations, AND/OR selection and analytical units."
+  - kind: test
+    resource: "kansoku-core/test/Kansoku/Metrics/FilterSpec.hs"
+    proves: "Checks session-attribute parsing, OR presence semantics and rejection of unsupported session namespaces."
 ---
 
 # Filtered semantic metrics
@@ -56,7 +61,12 @@ Ranges are positive, half-open UTC intervals of at most 366 days; answers contai
 - [FilterIntegrationSpec.hs](../../kansoku-core/test/Kansoku/Metrics/FilterIntegrationSpec.hs) — Exercises native typed filters and grouping.
 - [LimitsSpec.hs](../../kansoku-core/test/Kansoku/Metrics/LimitsSpec.hs) — Checks public input and complete-answer limits.
 - [query-metrics.md](../../docs/guides/query-metrics.md) — Defines scalar declarations, AND/OR selection and analytical units.
+- [FilterSpec.hs](../../kansoku-core/test/Kansoku/Metrics/FilterSpec.hs) — Checks session-attribute parsing, OR presence semantics and rejection of unsupported session namespaces.
 
 ## Whole-range queries
 
 Explicit `timeGrain=none` returns one null-bucket point per populated group on calendar users, simple custom metrics, acquisition, events, page views and sessions. Exact distinct identities are counted over the whole range; session rates and averages use selected sessions directly. Omission preserves defaults; saved simple grains can be overridden explicitly. See [query metrics](../guides/query-metrics.md#whole-range-totals) for the route matrix and empty-result semantics.
+
+## Session attributes
+
+Page views, calendar and rolling users and custom metrics accept `session:<attribute>` filters and grouping for 19 intrinsic attributes of each event's retained web visit, such as `session:channel`, `session:entry_page` and `session:is_bot`. Attribution comes from the session's first page view (or first event) over whole retained history, so a visit landing before `from` still describes later in-range events. Events without an eligible session group under null and satisfy no session filter; other routes reject the namespace. See [query metrics](../guides/query-metrics.md#events-selected-by-session-attributes).

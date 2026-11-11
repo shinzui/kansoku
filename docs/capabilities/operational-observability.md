@@ -2,6 +2,7 @@
 type: Capability
 title: "Operational probes and telemetry"
 description: "Expose dependency-aware readiness, liveness, pipeline metrics and bounded correlated request telemetry for operating the service."
+timestamp: 2026-11-11T16:18:51Z
 generated:
   by: process:codex
   at: "2026-10-16T13:11:11Z"
@@ -38,7 +39,7 @@ Keep process liveness separate from ordered writer, PostgreSQL, ClickHouse, back
 
 ## Compatibility
 
-Available in the current checkout. No release tags establish a released version, so since is unreleased. This experimental interface has no stable compatibility promise; pin the server and clients to a reviewed revision and regenerate contracts together.
+Available in the current checkout. No release tags establish a released version, so since is unreleased. This experimental interface has no stable compatibility promise; pin the server and clients to a reviewed revision and regenerate contracts together. The former `/health` and `/ready` routes were removed and return 404; probes must use `/health/live` and `/health/ready`.
 
 ## Limits
 

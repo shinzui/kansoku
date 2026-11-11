@@ -1,5 +1,13 @@
 # Bundle Update Log
 
+## 2026-11-11
+
+* **Population**: Add CAP-20 (explicit direct and replicated ClickHouse migrations via `kansoku-ch-migrate`) and CAP-21 (source-built Linux container image) from current source, tests and guides.
+* **Update**: CAP-2 rejects storage-incompatible flattened JSON paths before acceptance; CAP-3 publishes catalog v5 `maxLength` and declares `client_error` v1 and `web_vital` v1.
+* **Update**: CAP-4 adds verified native TLS and the replicated quorum writer policy; CAP-16 adds replica-bound maintenance jobs; CAP-19 documents eventually consistent reads and synchronized read-back.
+* **Update**: CAP-6, CAP-8 and CAP-14 accept `session:` attributes on page views, users and custom metrics; CAP-7 adds `containsEvent` session selection, first-touch acquisition conversions and the `ai_assistant` channel.
+* **Update**: CAP-13 cohort conditions accept condition-local `org:` traits and require CAP-15; CAP-17 records removal of legacy `/health` and `/ready`; CAP-18 points browser producers at the published `mori://shinzui/kansoku-ts` packages.
+
 ## 2026-11-08
 
 * **Update**: CAP-7: Describe diagnostic classification and retained session correction

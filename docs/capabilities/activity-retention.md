@@ -2,6 +2,7 @@
 type: Capability
 title: "Activity and retention analytics"
 description: "Compute exact active users, stickiness, lifecycle and retention over consistent resolved populations and closed UTC observation days."
+timestamp: 2026-11-11T16:18:51Z
 generated:
   by: process:codex
   at: "2026-10-16T13:11:11Z"
@@ -32,7 +33,7 @@ evidence:
 
 # Activity and retention analytics
 
-Count calendar or rolling7/rolling30 active subjects, report daily/rolling30 stickiness and classify lifecycle activity. Retention supports exact-day and on-or-after return modes with window or retained-history lifetime cohorts. Reuse the same filters, identity and default bot exclusion across lookback. See [query metrics](../guides/query-metrics.md).
+Count calendar or rolling7/rolling30 active subjects, report daily/rolling30 stickiness and classify lifecycle activity. Retention supports exact-day and on-or-after return modes with window or retained-history lifetime cohorts. Reuse the same filters, identity and default bot exclusion across lookback. Calendar and rolling user counts also accept [session attributes](filtered-semantic-metrics.md#session-attributes). See [query metrics](../guides/query-metrics.md).
 
 ## Compatibility
 

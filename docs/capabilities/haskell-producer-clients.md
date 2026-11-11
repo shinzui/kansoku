@@ -2,6 +2,7 @@
 type: Capability
 title: "Haskell producer SDK and typed clients"
 description: "Buffer and retry producer events in Haskell and call ingestion, schema, metric and resource routes through shared typed clients."
+timestamp: 2026-11-11T16:18:51Z
 generated:
   by: process:codex
   at: "2026-10-16T13:11:11Z"
@@ -39,7 +40,7 @@ Available in the current checkout. No release tags establish a released version,
 
 ## Limits
 
-The producer buffer is in memory: overflow drops newest events, and permanent failures or batch rejections increase droppedCount. Flush returns no per-event result. Packages are consumed from a pinned checkout; this repository provides no browser/React producer implementation.
+The producer buffer is in memory: overflow drops newest events, and permanent failures or batch rejections increase droppedCount. Flush returns no per-event result. Packages are consumed from a pinned checkout. Browser and React producers are the separately published `kansoku-js` and `kansoku-react` packages from `mori://shinzui/kansoku-ts`, outside this capability.
 
 ## Requires
 

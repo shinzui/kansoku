@@ -2,6 +2,7 @@
 type: Capability
 title: "Immutable event ingestion"
 description: "Accept single events, partial batches and browser exit beacons with durable event identity and explicit retry outcomes."
+timestamp: 2026-11-11T16:18:51Z
 generated:
   by: process:codex
   at: "2026-10-16T13:11:11Z"
@@ -31,11 +32,14 @@ evidence:
   - kind: guide
     resource: "docs/guides/send-events.md"
     proves: "Specifies byte/count/rate limits, timestamp normalization and partial acknowledgements."
+  - kind: test
+    resource: "kansoku-core/test/Kansoku/EventSpec.hs"
+    proves: "Checks rejection of colliding flattened JSON paths in properties and context with the fixed incompatible_json_paths reason."
 ---
 
 # Immutable event ingestion
 
-Validate and normalize events, transactionally claim account/event IDs and publish accepted payloads to PostgreSQL. Equal retries reuse first acceptance; changed producer content under an accepted ID fails. Batches retain original rejection indexes. The beacon envelope supports text/plain and application/json with a body write key. Bounded per-credential admission returns 429 with Retry-After.
+Validate and normalize events, transactionally claim account/event IDs and publish accepted payloads to PostgreSQL. Equal retries reuse first acceptance; changed producer content under an accepted ID fails. Batches retain original rejection indexes. The beacon envelope supports text/plain and application/json with a body write key. Bounded per-credential admission returns 429 with Retry-After. Before any acceptance claim, reject properties or context whose non-null values collide on a flattened native JSON path (`incompatible_json_paths`): single events fail with 400, batches and beacons reject only that index, and a corrected payload can reuse the event ID.
 
 ## Compatibility
 
@@ -54,3 +58,4 @@ HTTP 202 acknowledges durable acceptance, with per-event rejections in batches; 
 - [AcceptanceSpec.hs](../../kansoku-core/test/Kansoku/Ingest/AcceptanceSpec.hs) — Checks equal retries, conflicting payloads, concurrent publication, rollback and uncertain commit acknowledgement.
 - [BeaconSpec.hs](../../kansoku-core/test/Kansoku/Ingest/BeaconSpec.hs) — Checks body-only write-key authentication, both media types, CORS and shared admission.
 - [send-events.md](../../docs/guides/send-events.md) — Specifies byte/count/rate limits, timestamp normalization and partial acknowledgements.
+- [EventSpec.hs](../../kansoku-core/test/Kansoku/EventSpec.hs) — Checks rejection of colliding flattened JSON paths in properties and context with the fixed incompatible_json_paths reason.
