@@ -1,5 +1,9 @@
 # Bundle Update Log
 
+## 2026-11-12
+
+* **Add**: Propose IR-17 and IR-18 from `mori://shinzui/kansoku-ui/masterplans/6-build-the-users-directory-and-user-profile-pages`, modelled on the People screen of an open-source web-analytics product. IR-17 adds a read-only users resource: a directory of identified users with current traits and first and last activity, one user's profile and identity evidence counts, one user's resolved event history with declared properties only, and exact identified and anonymous counts for a range. IR-18 adds a filter dimension selecting one identified user on metric routes (soft dependency on IR-17).
+
 ## 2026-11-09
 * **Create**: File IR-16 for an authenticated live activity WebSocket with snapshot, updates, recovery and bounded consumers.
 * **Add**: Propose IR-15 from `mori://tan/tan-app-infrastructure/plans/45-onboard-kansoku-to-production-on-the-replicated-clickhouse-cluster`: keep the server starting and accepting events while ClickHouse is unavailable.
