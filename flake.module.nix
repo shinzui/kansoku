@@ -294,10 +294,6 @@
         pkgs.hurl
         pkgs.vacuum-go
         pkgs.python3
-        (pkgs.writeShellScriptBin "okf" ''
-          # Released mori://shinzui/okf/packages/okf-cli 0.10.0.0.
-          exec nix run github:shinzui/okf/b57510200f949a72d48cb009d932be1d1cc11888 -- "$@"
-        '')
       ];
       # Extend the managed shell through its existing named compiler shell.
       # The default shell must put the qualified artifact before the template tool.
