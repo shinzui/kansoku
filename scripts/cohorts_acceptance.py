@@ -339,7 +339,7 @@ def verify_organization_conditions(base, write_key, token, other_token, api, pre
     print('Organization cohort conditions: exact members/pages, numeric/OR/null filters, complements, current traits/replay, account isolation, metrics and session bounds passed.', flush=True)
 
 
-def main(verify=verify_cohorts, *, pass_environment=False, erase_delete_events=False):
+def main(verify=verify_cohorts, *, pass_environment=False, erase_delete_events=False, server_environment=None):
     from contextlib import contextmanager
     import time
     import signal
@@ -402,6 +402,7 @@ def main(verify=verify_cohorts, *, pass_environment=False, erase_delete_events=F
                 for kind,account in [('write','cohorts'),('service','cohorts'),('service','other')]:
                     result=subprocess.check_output([server,'issue-key','--kind',kind,'--account',account,'--description','cohort acceptance'],env=native,text=True)
                     tokens.append(result.splitlines()[-2])
+                native.update(server_environment or {})
                 native['KANSOKU_SERVER_PORT']=str(free_port())
                 base='http://127.0.0.1:'+native['KANSOKU_SERVER_PORT']
                 with child([server],native,'cohort-server') as process:

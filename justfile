@@ -241,3 +241,7 @@ ch-runtime-replicated:
 # Own disposable stores and verify identified user reads and lifecycle.
 users-acceptance: build-with-tests
     python3 scripts/users_acceptance.py
+
+# Own disposable stores and verify saved analyses, conflicts, pages and quota.
+analyses-acceptance: build-with-tests
+    python3 scripts/analyses_acceptance.py

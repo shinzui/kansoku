@@ -27,7 +27,7 @@ import Data.Text.Encoding qualified as Text.Encoding
 import GHC.TypeLits (Symbol)
 import Kansoku.Prelude
 import Network.HTTP.Media ((//))
-import Network.HTTP.Types.Status (status400, status401, status403, status404, status405, status406, status413, status415, status429, status500, status503, statusMessage)
+import Network.HTTP.Types.Status (status400, status401, status403, status404, status405, status406, status409, status413, status415, status429, status500, status503, statusMessage)
 import Servant.API (Accept (..), Header, JSON, MimeRender (..), MimeUnrender (..))
 import Servant.API.MultiVerb (AsUnion (..), RespondAs, WithHeaders)
 
@@ -171,6 +171,7 @@ problem status code detail =
                   404 -> status404
                   405 -> status405
                   406 -> status406
+                  409 -> status409
                   413 -> status413
                   415 -> status415
                   429 -> status429
@@ -197,7 +198,12 @@ unavailable = catalogProblem 503
 -- from 'problem'; human-readable detail is supplied by the failure producer.
 problemCatalog :: [(Text, Int)]
 problemCatalog =
-  [ ("invalid_cohort", 400),
+  [ ("invalid_analysis", 400),
+    ("analysis_not_found", 404),
+    ("analysis_revision_conflict", 409),
+    ("analysis_limit_reached", 409),
+    ("analysis_store_unavailable", 503),
+    ("invalid_cohort", 400),
     ("cohort_not_found", 404),
     ("cohort_store_unavailable", 503),
     ("invalid_date_range", 400),

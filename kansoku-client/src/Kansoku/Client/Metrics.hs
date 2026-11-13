@@ -11,11 +11,13 @@ module Kansoku.Client.Metrics
     kansokuMetricsCredential,
     metricsClient,
     cohortsClient,
+    analysesClient,
     metricDefinitionsClient,
   )
 where
 
 import Data.Time (Day)
+import Kansoku.Analysis.Api (Analyses)
 import Kansoku.Api.Response (KansokuResult)
 import Kansoku.Auth.Api (MetricsAuth)
 import Kansoku.Cohort.Api (Cohorts)
@@ -64,3 +66,7 @@ pathsClient = Metrics.paths metricsClient
 
 metricDefinitionsClient :: MetricDefinitions (AsClientT ClientM)
 metricDefinitionsClient = ServantClient.client (Proxy @(NamedRoutes MetricDefinitions))
+
+-- | Account-owned opaque analysis documents and revision-checked editing.
+analysesClient :: Analyses (AsClientT ClientM)
+analysesClient = ServantClient.client (Proxy @(NamedRoutes Analyses))

@@ -1,6 +1,7 @@
 # Bundle Update Log
 
 ## 2026-11-13
+* **Added**: ADR-26 defines account-owned opaque saved analyses, serialized editing and quotas, and timestamp keyset pages.
 
 * **Update**: ADR-9, ADR-16 and ADR-20: record bounded explicit identified-user selection, resolved event/session ownership and saved component composition.
 

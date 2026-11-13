@@ -10,9 +10,11 @@ where
 
 import Data.Aeson qualified as A
 import Data.Char (toLower, toUpper)
+import Data.Int (Int64)
 import Data.OpenApi qualified as O
 import Data.OpenApi.Declare (runDeclare)
 import Data.Text qualified as Text
+import Kansoku.Analysis.Types
 import Kansoku.Api (kansokuAPI)
 import Kansoku.Api.Response (ProblemDetails, problemFieldName)
 import Kansoku.Cohort.Types
@@ -566,3 +568,46 @@ withUserPageProblems =
     bound (O.Inline parameter)
       | parameter ^. O.name `elem` ["first", "last"] = O.Inline (parameter & O.schema . _Just %~ (\case O.Inline schema -> O.Inline (schema & O.minimum_ ?~ 1); reference -> reference))
     bound parameter = parameter
+
+instance O.ToSchema AnalysisKind where
+  declareNamedSchema = O.genericDeclareNamedSchema lowerEnumOptions
+
+instance O.ToParamSchema AnalysisKind where
+  toParamSchema = O.genericToParamSchema lowerEnumOptions
+
+instance O.ToSchema Revision where
+  declareNamedSchema _ = pure (O.NamedSchema (Just "Revision") (O.toSchema (Proxy @Int64) & O.minimum_ ?~ 1))
+
+instance O.ToParamSchema Revision where
+  toParamSchema _ = O.toParamSchema (Proxy @Int64) & O.minimum_ ?~ 1
+
+instance O.ToSchema AnalysisInput where
+  declareNamedSchema proxy = analysisEnvelopeSchema <$> O.genericDeclareNamedSchema O.defaultSchemaOptions proxy
+
+instance O.ToSchema AnalysisReplace where
+  declareNamedSchema proxy = analysisEnvelopeSchema <$> O.genericDeclareNamedSchema O.defaultSchemaOptions proxy
+
+instance O.ToSchema SavedAnalysis where
+  declareNamedSchema proxy = do
+    named <- O.genericDeclareNamedSchema O.defaultSchemaOptions proxy
+    pure (analysisEnvelopeSchema named & O.schema . O.required %~ ("description" :))
+
+analysisEnvelopeSchema :: O.NamedSchema -> O.NamedSchema
+analysisEnvelopeSchema named =
+  named
+    & O.schema
+    . O.properties
+    . ix "name"
+    .~ O.Inline (mempty & O.type_ ?~ O.OpenApiTypeSingle O.OpenApiString & O.minLength ?~ 1 & O.maxLength ?~ 120 & O.description ?~ "Trimmed name; Unicode character count; no zero characters")
+    & O.schema
+    . O.properties
+    . ix "document"
+    .~ O.Inline (mempty & O.type_ ?~ O.OpenApiTypeSingle O.OpenApiObject & O.description ?~ "Opaque JSON object, never executed or interpreted. Maximum 32768 bytes of compact Aeson UTF-8 encoding; nested values, including escaped zero characters, are preserved.")
+    & O.schema
+    . O.properties
+    . ix "documentVersion"
+    .~ O.Inline (mempty & O.type_ ?~ O.OpenApiTypeSingle O.OpenApiInteger & O.minimum_ ?~ 1 & O.description ?~ "Positive integral client document version")
+    & O.schema
+    . O.properties
+    . ix "description"
+    %~ (\case O.Inline schema -> O.Inline (schema & O.type_ ?~ O.OpenApiTypeArray [O.OpenApiString, O.OpenApiNull] & O.maxLength ?~ 500 & O.description ?~ "Optional or null; whitespace retained; maximum 500 Unicode characters; no zero characters"); reference -> reference)

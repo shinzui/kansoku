@@ -32,6 +32,8 @@ library
   import: common
   hs-source-dirs: src
   exposed-modules:
+    Kansoku.Analysis.Api
+    Kansoku.Analysis.Types
     Kansoku.Api
     Kansoku.Api.OpenApi
     Kansoku.Api.Response

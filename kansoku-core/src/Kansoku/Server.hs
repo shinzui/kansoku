@@ -30,6 +30,7 @@ import Effectful (Eff, IOE, runEff, type (:>))
 import Effectful.Error.Static qualified as Error
 import Effectful.Reader.Static (Reader, asks)
 import Hasql.Pool qualified as Pool
+import Kansoku.Analysis.Handler (analysesServer)
 import Kansoku.Api (KansokuAPI (..), kansokuAPI)
 import Kansoku.Api.OpenApi (kansokuOpenApi)
 import Kansoku.Api.Response (ProblemDetails, badRequest, tooLarge)
@@ -85,11 +86,12 @@ data ReadyProbe = ReadyProbe
   }
   deriving stock (Generic)
 
-kansokuServer :: Pool.Pool -> Text -> IngestService -> QueryPool -> KansokuAPI (AsServerT Handler)
-kansokuServer pgPool settings service queryPool =
+kansokuServer :: Pool.Pool -> Text -> Int -> IngestService -> QueryPool -> KansokuAPI (AsServerT Handler)
+kansokuServer pgPool settings analysisLimit service queryPool =
   KansokuAPI
     { ingest = ingestServer service,
       metrics = metricsServerWithCohorts pgPool queryPool,
+      analyses = analysesServer settings analysisLimit pgPool,
       metricDefinitions = definitionsServer pgPool,
       users = usersServer pgPool queryPool,
       cohorts = cohortsServer settings pgPool queryPool,
@@ -119,6 +121,7 @@ maintenanceTraffic pool app request respond
       "users" : _ -> True
       "cohorts" : _ -> True
       "metric-definitions" : _ -> True
+      "analyses" : _ -> True
       _ -> False
 
 -- | Production assembly with independently injectable checks. The conformance kit
@@ -146,7 +149,7 @@ appWithGate maintenanceGate liveCheck readyCheck _pipelineMetrics config pool se
                               :. metricsAuthHandler pool
                               :. EmptyContext
                           )
-                          (kansokuServer pool (config ^. #pgConnectionString) service queryPool)
+                          (kansokuServer pool (config ^. #pgConnectionString) (config ^. #analysesMaxPerAccount) service queryPool)
                       )
               )
           )

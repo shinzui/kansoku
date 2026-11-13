@@ -15,6 +15,7 @@ import Data.List qualified as List
 import Data.Map.Strict qualified as Map
 import Data.OpenApi (ToSchema, validateToJSON)
 import Data.Text qualified as Text
+import Kansoku.Analysis.Types qualified as Analysis
 import Kansoku.Api (kansokuAPI)
 import Kansoku.Api.OpenApi (kansokuOpenApi)
 import Kansoku.Api.Response (ProblemDetails (..), problem)
@@ -41,6 +42,18 @@ import Test.Hspec
 
 spec :: Spec
 spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
+  it "publishes bounded opaque analyses and required revision conflicts" $ do
+    forM_ [("/analyses", "post"), ("/analyses/{id}", "get"), ("/analyses/{id}", "put"), ("/analyses/{id}", "delete")] $ \(path, method) -> do
+      let operation = fromMaybe Aeson.Null (valueAt ["paths", path, method] documentValue)
+      forM_ ["400", "404", "409", "503"] $ \status ->
+        valueAt ["responses", status, "content", "application/problem+json", "schema"] operation `shouldSatisfy` isJust
+    lookupTextArray ["components", "schemas", "AnalysisKind", "enum"] documentValue `shouldBe` Just ["trends", "funnel", "retention"]
+    lookupText ["components", "schemas", "AnalysisInput", "properties", "document", "type"] documentValue `shouldBe` Just "object"
+    lookupTextArray ["components", "schemas", "AnalysisReplace", "required"] documentValue `shouldSatisfy` maybe False (elem "revision")
+    let input = Analysis.AnalysisInput "named" Nothing Analysis.Trends 999999999999999999999999 (Aeson.object ["nested" Aeson..= [Aeson.Null, Aeson.String "雪\0"]])
+    validateToJSON input `shouldBe` []
+    validateToJSON (Analysis.AnalysisReplace "named" Nothing Analysis.Funnel 1 (input ^. #document) (Analysis.Revision 1)) `shouldBe` []
+
   it "publishes identified-user bounds, ownership and unsupported-route contract" $ do
     forM_ ["events", "page-views", "users", "sessions", "acquisition", "revenue", "feature-adoption", "custom", "conversion", "organizations", "paths", "funnel", "retention", "lifecycle", "stickiness", "experiments"] $ \route -> do
       let operation = fromMaybe Aeson.Null (valueAt ["paths", "/metrics/" <> route, "get"] documentValue)

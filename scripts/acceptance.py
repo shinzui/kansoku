@@ -24,6 +24,7 @@ from traits_acceptance import verify_traits
 from user_selection_acceptance import verify_user_selection
 from cohorts_acceptance import verify_cohorts
 from users_acceptance import verify_users
+from analyses_acceptance import verify_analyses
 from custom_metrics_acceptance import verify_custom_metrics
 from admin_acceptance import verify_admin
 from beacon_acceptance import verify_beacon_browser
@@ -282,6 +283,9 @@ def main():
                     bad = subprocess.run([server], env=dict(env, KANSOKU_SERVER_PORT='not-a-number'), capture_output=True, text=True, timeout=10)
                     (ROOT / 'invalid-startup.log').write_text(bad.stdout + bad.stderr)
                     assert bad.returncode != 0 and 'configuration error' in bad.stderr, 'invalid startup accepted'
+                    run(['python3', 'scripts/analyses_acceptance.py', '--quota-only'],
+                        dict(env, KANSOKU_COHORT_SERVER=server, KANSOKU_COHORT_MIGRATE=migrate),
+                        'analyses-packaged-quota', timeout=240)
                     for mode in ('', 'http', 'http/dup'):
                         name = 'server-' + (mode.replace('/', '-') or 'legacy')
                         port = free_port()
@@ -296,7 +300,7 @@ def main():
                                 hurl(['ingest.hurl', 'perimeter/perimeter.hurl'], env, 'hurl-stateful', variables)
                                 verify_ingest(base, credentials['client_token'], env)
                                 verify_json_storage(base, credentials['json_write'], credentials['json_other_write'], env)
-                                live = dict(settings, KANSOKU_SERVER_URL=base, KANSOKU_API_KEY=credentials['client_token'])
+                                live = dict(settings, KANSOKU_SERVER_URL=base, KANSOKU_API_KEY=credentials['client_token'], KANSOKU_ANALYSES_SERVICE_TOKEN=credentials['enrichment_service'])
                                 hspec([binary('kansoku-client:test:kansoku-client-test')], env=live, log=ROOT / 'client-tests.log')
                             verify_enrichment(base, credentials['enrichment_write'], credentials['enrichment_service'])
                             verify_session_contains(base, credentials['enrichment_write'], credentials['enrichment_service'], credentials['other_token'])
@@ -304,6 +308,7 @@ def main():
                             verify_funnels(base, credentials['enrichment_write'], credentials['enrichment_service'])
                             verify_traits(base, credentials['enrichment_write'], credentials['enrichment_service'])
                             verify_user_selection(base, credentials['enrichment_write'], credentials['enrichment_service'], credentials['other_token'])
+                            verify_analyses(base, credentials['enrichment_write'], credentials['enrichment_service'], credentials['other_token'])
                             verify_cohorts(base, credentials['enrichment_write'], credentials['enrichment_service'], credentials['other_token'])
                             def erase_read_user(user):
                                 output = run([admin, 'erase-user', '--account', 'mp4_enrichment', '--user', user,

@@ -22,6 +22,7 @@ configVariables =
     "KANSOKU_CLICKHOUSE_PASSWORD",
     "KANSOKU_CLICKHOUSE_SECURE",
     "KANSOKU_CH_QUERY_POOL_SIZE",
+    "KANSOKU_ANALYSES_MAX_PER_ACCOUNT",
     "KANSOKU_METRICS_MAX_EXECUTION_SEC",
     "KANSOKU_METRICS_MAX_MEMORY_BYTES",
     "CLICKHOUSE_TCP_PORT",
@@ -98,6 +99,16 @@ spec = around_ preserveConfigEnvironment $ describe "Kansoku.Config.loadConfig" 
         (cfg ^. #readyMaxQueueDepth) `shouldBe` 100000
         (cfg ^. #readyMaxFlushAgeSec) `shouldBe` 120
         (cfg ^. #serverPort) `shouldBe` 8080
+        (cfg ^. #analysesMaxPerAccount) `shouldBe` 1000
+
+  it "requires a positive bounded analysis allowance" $ do
+    forM_ ["0", "-1", "1.5", "bogus", "18446744073709551617"] $ \value -> do
+      clearEnv
+      setEnv "KANSOKU_ANALYSES_MAX_PER_ACCOUNT" value
+      loadConfig >>= (`shouldSatisfy` isLeft)
+    setEnv "KANSOKU_ANALYSES_MAX_PER_ACCOUNT" "2"
+    result <- loadConfig
+    (result <&> (^. #analysesMaxPerAccount)) `shouldBe` Right 2
 
   it "requires positive bounded execution and memory budgets" $ do
     forM_ ["KANSOKU_METRICS_MAX_EXECUTION_SEC", "KANSOKU_METRICS_MAX_MEMORY_BYTES"] $ \name ->

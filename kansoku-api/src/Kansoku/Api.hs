@@ -6,6 +6,7 @@ module Kansoku.Api
   )
 where
 
+import Kansoku.Analysis.Api (Analyses)
 import Kansoku.Cohort.Api (Cohorts)
 import Kansoku.Event.Contract (SchemaCatalog)
 import Kansoku.Ingest.Api (IngestRoutes)
@@ -21,6 +22,7 @@ data KansokuAPI mode = KansokuAPI
   { ingest :: mode :- NamedRoutes IngestRoutes,
     metrics :: mode :- NamedRoutes MetricsRoutes,
     metricDefinitions :: mode :- NamedRoutes MetricDefinitions,
+    analyses :: mode :- NamedRoutes Analyses,
     users :: mode :- NamedRoutes Users,
     cohorts :: mode :- NamedRoutes Cohorts,
     schemas :: mode :- SchemaAPI

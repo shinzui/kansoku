@@ -27,6 +27,7 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Time (Day, fromGregorian)
 import Data.UUID qualified as UUID
+import Kansoku.Analysis.Handler (analysesServer)
 import Kansoku.Api qualified as Api
 import Kansoku.Api.Response qualified as Response
 import Kansoku.Auth.Api (IngestAuth, MetricsAuth)
@@ -332,6 +333,7 @@ sentinelKansokuServer =
   Api.KansokuAPI
     { Api.ingest = sentinelIngestServer,
       Api.metrics = sentinelMetricsServer,
+      Api.analyses = analysesServer "unused" 1000 (error "unused analysis pool"),
       Api.metricDefinitions = sentinelDefinitions,
       Api.users = sentinelUsers,
       Api.cohorts = sentinelCohorts,

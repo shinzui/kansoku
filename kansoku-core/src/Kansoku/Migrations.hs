@@ -40,7 +40,8 @@ kansokuApplicationMigrations = do
   administration <- sqlMigration "0007-clickhouse-administration" clickhouseAdministrationSql
   replicatedAdministration <- sqlMigration "0008-clickhouse-replicated-administration" replicatedAdministrationSql
   replicatedJobs <- sqlMigration "0009-clickhouse-replicated-jobs" replicatedJobsSql
-  migrationComponent "kansoku" (Set.singleton "pgmq") (apiKeys :| [rejections, acceptance, maintenance, cohorts, definitions, administration, replicatedAdministration, replicatedJobs])
+  analyses <- sqlMigration "0010-saved-analyses" analysesSql
+  migrationComponent "kansoku" (Set.singleton "pgmq") (apiKeys :| [rejections, acceptance, maintenance, cohorts, definitions, administration, replicatedAdministration, replicatedJobs, analyses])
 
 apiKeysSql :: ByteString
 apiKeysSql =
@@ -268,4 +269,23 @@ replicatedJobsSql =
         )
       ),false)
     );
+  """
+
+analysesSql :: ByteString
+analysesSql =
+  """
+  CREATE TABLE kansoku.analyses (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    account_id text NOT NULL,
+    name text NOT NULL CHECK (char_length(name) BETWEEN 1 AND 120),
+    description text CHECK (char_length(description) <= 500),
+    kind text NOT NULL CHECK (kind IN ('trends','funnel','retention')),
+    document_version numeric NOT NULL CHECK (document_version > 0 AND document_version = trunc(document_version) AND document_version <> 'Infinity'::numeric),
+    document_text text NOT NULL CHECK (octet_length(document_text) <= 32768),
+    revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0),
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    updated_at timestamptz NOT NULL DEFAULT clock_timestamp()
+  );
+  CREATE INDEX analyses_account_updated ON kansoku.analyses(account_id,updated_at DESC,id ASC);
+  CREATE INDEX analyses_account_kind_updated ON kansoku.analyses(account_id,kind,updated_at DESC,id ASC);
   """

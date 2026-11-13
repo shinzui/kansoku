@@ -207,6 +207,7 @@ validationApplicationWithPool pool =
     sentinelContext
     Api.KansokuAPI
       { Api.ingest = sentinelIngestServer,
+        Api.analyses = error "analysis routes unused in metric handler tests",
         Api.metricDefinitions = error "definition routes unused in metric handler tests",
         Api.users = usersServer (error "users PostgreSQL unused") (error "users ClickHouse unused"),
         Api.cohorts = error "cohort routes are unused in metric handler tests",
@@ -222,6 +223,7 @@ authenticatedValidationApplication =
     (envelopeFormatters :. authContextWith (const (pure (Right (Just sentinelPrincipal)))))
     Api.KansokuAPI
       { Api.ingest = sentinelIngestServer,
+        Api.analyses = error "analysis routes unused in metric handler tests",
         Api.metricDefinitions = error "definition lookup must not run",
         Api.users = usersServer (error "users unused") (error "users unused"),
         Api.cohorts = error "cohort routes unused",

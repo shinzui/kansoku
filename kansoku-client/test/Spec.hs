@@ -18,11 +18,14 @@ import Data.Map.Strict qualified as Map
 import Data.Text qualified as Text
 import Data.Time.Format (defaultTimeLocale, formatTime)
 import GHC.Clock (getMonotonicTime)
+import Kansoku.Analysis.Api qualified as Analysis
+import Kansoku.Analysis.Types qualified as Analysis
 import Kansoku.Api.Response (KansokuResult (..), problem)
 import Kansoku.Api.Response qualified as Response
 import Kansoku.Client
 import Kansoku.Client qualified as Client
 import Kansoku.Client.Metrics
+import Kansoku.Cohort.Api (PageResult (..))
 import Kansoku.Event
 import Kansoku.Ingest.Api (BatchAck (..), BeaconAPI, BeaconEnvelope (..), PlainTextJSON, ingestEvent)
 import Kansoku.Metrics.Api (MetricResult (..), TimeGrain (Day))
@@ -34,6 +37,7 @@ import Network.HTTP.Types (Status, status200, status202, status400, status401, s
 import Network.HTTP.Types.Header (hAuthorization, hContentType)
 import Network.Wai (Application, Request, pathInfo, queryString, requestHeaders, requestMethod, responseLBS, strictRequestBody)
 import Network.Wai.Handler.Warp qualified as Warp
+import Relay.Pagination qualified as Relay
 import Servant.API (JSON)
 import Servant.Client (mkClientEnv, parseBaseUrl, runClientM)
 import Servant.Client qualified as SC
@@ -349,6 +353,62 @@ spec = describe "Kansoku.Client" $ do
     Warp.testWithApplication (pure schemaRecorderApp) $ \port ->
       withClient (testConfig port) $ \client ->
         fetchSchemaCatalog client `shouldReturn` Right (schemaCatalog defaultRegistry)
+
+  it "live integration saved analysis clients round-trip and decode typed conflicts" $ do
+    required <- lookupEnv "KANSOKU_REQUIRED_INTEGRATION"
+    server <- lookupEnv "KANSOKU_SERVER_URL"
+    credential <- lookupEnv "KANSOKU_ANALYSES_SERVICE_TOKEN"
+    writeKey <- lookupEnv "KANSOKU_API_KEY"
+    case (server, credential) of
+      (Just url, Just token) -> do
+        manager <- HTTP.newManager HTTP.defaultManagerSettings
+        base <- parseBaseUrl url
+        let env = mkClientEnv manager base
+            auth = kansokuMetricsCredential (Text.pack token)
+            input = Analysis.AnalysisInput "client analysis" Nothing Analysis.Funnel 1 (Aeson.object ["nested" Aeson..= [Aeson.Null, Aeson.String "雪\0"]])
+            run :: SC.ClientM a -> IO a
+            run action = runClientM action env >>= either (fail . show) pure
+        created <-
+          run (Analysis.createAnalysis analysesClient auth input) >>= \case
+            Analysis.AnalysisOk saved -> pure saved
+            failure -> fail (show failure)
+        let ident = created ^. #id
+            replacement = Analysis.AnalysisReplace "client replacement" Nothing Analysis.Retention 2 (input ^. #document) (Analysis.Revision 1)
+        run (Analysis.getAnalysis analysesClient auth ident) `shouldReturn` Analysis.AnalysisOk created
+        run (Analysis.listAnalyses analysesClient auth (Just Analysis.Funnel) (Relay.PageRequest 100 Relay.Forward Nothing)) >>= \case
+          PageOk page -> map (view #id . Relay.node) (Relay.edges page) `shouldContain` [ident]
+          _ -> expectationFailure "analysis client page failed"
+        changed <-
+          run (Analysis.replaceAnalysis analysesClient auth ident replacement) >>= \case
+            Analysis.AnalysisOk saved -> pure saved
+            failure -> fail (show failure)
+        changed ^. #revision `shouldBe` Analysis.Revision 2
+        changed ^. #document `shouldBe` input ^. #document
+        run (Analysis.replaceAnalysis analysesClient auth ident replacement) >>= \case
+          Analysis.AnalysisConflict problem -> do
+            Response.code problem `shouldBe` "analysis_revision_conflict"
+            Response.status problem `shouldBe` 409
+            Response.retryable problem `shouldBe` False
+          failure -> expectationFailure (show failure)
+        run (Analysis.deleteAnalysis analysesClient auth ident (Analysis.Revision 1)) >>= \case
+          Analysis.AnalysisConflict problem -> Response.code problem `shouldBe` "analysis_revision_conflict"
+          failure -> expectationFailure (show failure)
+        run (Analysis.deleteAnalysis analysesClient auth ident (Analysis.Revision 2)) `shouldReturn` Analysis.AnalysisOk True
+        run (Analysis.getAnalysis analysesClient auth ident) >>= \case
+          Analysis.AnalysisNotFound problem -> Response.code problem `shouldBe` "analysis_not_found"
+          failure -> expectationFailure (show failure)
+        runClientM (Analysis.getAnalysis analysesClient (kansokuMetricsCredential "invalid") ident) env >>= \case
+          Left (SC.FailureResponse _ response) -> do
+            statusCode (SC.responseStatusCode response) `shouldBe` 401
+            fmap Response.code (Aeson.eitherDecode (SC.responseBody response)) `shouldBe` Right "unauthorized"
+          result -> expectationFailure (show result)
+        case writeKey of
+          Just key ->
+            runClientM (Analysis.getAnalysis analysesClient (kansokuMetricsCredential (Text.pack key)) ident) env >>= \case
+              Left (SC.FailureResponse _ response) -> statusCode (SC.responseStatusCode response) `shouldBe` 403
+              result -> expectationFailure (show result)
+          Nothing -> expectationFailure "required live write key missing"
+      _ -> if required == Just "1" then expectationFailure "required live analysis endpoint/credential missing" else pendingWith "live analysis endpoint not configured"
 
   it "skips the live integration test unless KANSOKU_SERVER_URL is set" $ do
     required <- lookupEnv "KANSOKU_REQUIRED_INTEGRATION"

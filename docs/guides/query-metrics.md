@@ -4,7 +4,7 @@ title: "Query metrics"
 description: "Look up metric populations, query bounds, filters, grouping, analytical semantics, cohorts and saved definitions."
 docId: DOC-10
 tags: ["metrics", "queries", "identity", "cohorts"]
-timestamp: 2026-11-13T02:09:59Z
+timestamp: 2026-11-13T05:10:00Z
 generated:
   by: process:codex
   at: "2026-11-06T14:31:34Z"
@@ -1244,3 +1244,67 @@ resurrect deleted facts. Unknown/repeated scalar parameters,
 invalid ranges/search/sort/filter combinations and exhausted resources return complete
 errors. Errors use `application/problem+json`, except Relay pagination 400 wire errors use
 JSON. Expensive retained-history reads can return retryable 503 rather than truncated input.
+
+## Save and reopen client analyses
+
+Use service tokens for `/analyses` to share named client state within an account.
+Kansoku stores and returns the object without interpreting or executing it. This is
+independent of executable `/metric-definitions` and cohort population definitions.
+Names may repeat. All five operations require a service token; write keys receive 403,
+missing credentials 401, and foreign or unknown IDs 404.
+
+```bash
+curl -fsS "$KANSOKU_URL/analyses" \
+  -H "Authorization: Bearer $KANSOKU_SERVICE_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"name":"Weekly activation","description":null,"kind":"funnel","documentVersion":1,"document":{"steps":["signup","activate"],"windowDays":7}}' > analysis.json
+id=$(jq -r '.id' analysis.json)
+revision=$(jq -r '.revision' analysis.json)
+
+curl -fsS "$KANSOKU_URL/analyses?kind=funnel&first=20" \
+  -H "Authorization: Bearer $KANSOKU_SERVICE_TOKEN"
+curl -fsS "$KANSOKU_URL/analyses/$id" \
+  -H "Authorization: Bearer $KANSOKU_SERVICE_TOKEN"
+
+jq '{name,description,kind,documentVersion,document,revision} | .name="Activation revised"' \
+  analysis.json > replacement.json
+curl -fsS -X PUT "$KANSOKU_URL/analyses/$id" \
+  -H "Authorization: Bearer $KANSOKU_SERVICE_TOKEN" -H 'Content-Type: application/json' \
+  --data-binary @replacement.json > analysis.json
+revision=$(jq -r '.revision' analysis.json)
+curl -fsS -X DELETE "$KANSOKU_URL/analyses/$id?revision=$revision" \
+  -H "Authorization: Bearer $KANSOKU_SERVICE_TOKEN"
+```
+
+POST and PUT return the flat saved envelope with UUID id, revision, createdAt and
+updatedAt at 200. PUT fully replaces name, description, kind, documentVersion and
+document; kind may change. Omitted or null description means absent and returns null.
+Every successful PUT increments revision, including identical content. DELETE returns
+JSON true at 200; repeating it returns 404. The documentVersion is a positive integer
+owned by the client; it is independent of the service's editing revision.
+
+Names are trimmed and require 1..120 Unicode characters. Descriptions keep whitespace
+and allow at most 500 Unicode characters. Metadata cannot contain zero characters.
+Kinds are exactly trends, funnel and retention. Documents must be objects whose compact
+Aeson UTF-8 JSON encoding uses at most 32768 bytes. Nested arrays, scalars, nulls and
+escaped zero characters are preserved; character limits and document byte limits differ.
+Invalid fields, missing mutation revision and malformed revisions return field-naming
+400 problems. Failed validation leaves the prior resource unchanged.
+
+Replacements and deletions require the last read positive revision. A stale revision
+returns non-retryable 409 analysis_revision_conflict and changes nothing. Read the ID
+again, reconcile the shared changes, then submit the new revision. If a PUT response is
+lost, read before retrying. POST is not idempotent and blind retries may create duplicate
+analyses. Backend failures return retryable 503 analysis_store_unavailable.
+
+Collection results have edges (node and opaque cursor) and pageInfo. Default page size
+is 20, maximum 100. Use first/after for forward pages or last/before for backward pages;
+both preserve updatedAt descending, id ascending order. Pass a returned cursor through
+URL encoding, keep the same kind filter, and refresh the first page after edits. Cursors
+preserve timestamp microseconds and remain usable after their source row is deleted or
+replaced. Pages are current reads without a snapshot, so concurrent edits can move rows
+across earlier boundaries. Invalid pagination uses the established Relay error shape.
+
+The positive `KANSOKU_ANALYSES_MAX_PER_ACCOUNT` setting defaults to 1000 and must match
+on all server replicas. Creates beyond it return non-retryable 409 analysis_limit_reached.
+Deleting frees a slot. Lowering the limit preserves existing rows and permits reads,
+replacement and deletion. See [ADR-26](../adr/0026-account-owned-opaque-saved-analyses.md).

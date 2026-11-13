@@ -45,6 +45,7 @@ data Config = Config
     clickHouseUser :: !String,
     clickHousePassword :: !String,
     clickHouseQueryPoolSize :: !Int,
+    analysesMaxPerAccount :: !Int,
     metricsMaxExecutionSec :: !Int,
     metricsMaxMemoryBytes :: !Int64,
     eventsQueueName :: !Text,
@@ -114,6 +115,7 @@ loadConfig = do
   maxFlushAge <- lookupEnv "KANSOKU_READY_MAX_FLUSH_AGE_SEC"
   queryExecution <- lookupEnv "KANSOKU_METRICS_MAX_EXECUTION_SEC"
   queryMemory <- lookupEnv "KANSOKU_METRICS_MAX_MEMORY_BYTES"
+  analysesMax <- lookupEnv "KANSOKU_ANALYSES_MAX_PER_ACCOUNT"
   srv <- lookupEnv "KANSOKU_SERVER_PORT"
   pure $ do
     topology <- either (Left . ConfigError) Right (Topology.parseTopology chCluster chReplicas)
@@ -148,6 +150,7 @@ loadConfig = do
     enableMetrics <- parseBool "KANSOKU_INTERNAL_METRICS_ENABLED" True metricsEnabled
     readyQueueDepth <- parseNonNegativeInt64 "KANSOKU_READY_MAX_QUEUE_DEPTH" 100000 maxQueueDepth
     readyFlushAge <- parsePositiveInt "KANSOKU_READY_MAX_FLUSH_AGE_SEC" 120 maxFlushAge
+    analysisLimit <- parsePositiveBounded "KANSOKU_ANALYSES_MAX_PER_ACCOUNT" 1000 analysesMax
     port <- parsePort "KANSOKU_SERVER_PORT" defaultServerPort srv
     Right
       Config
@@ -161,6 +164,7 @@ loadConfig = do
           clickHouseUser = chUser,
           clickHousePassword = chPassword,
           clickHouseQueryPoolSize = queryPoolSize,
+          analysesMaxPerAccount = analysisLimit,
           metricsMaxExecutionSec = executionSeconds,
           metricsMaxMemoryBytes = memoryBytes,
           eventsQueueName = queue,

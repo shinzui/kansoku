@@ -48,6 +48,9 @@ library
     Kansoku.Admin.Jobs
     Kansoku.Admin.Keys
     Kansoku.Admin.Store
+    Kansoku.Analysis.Handler
+    Kansoku.Analysis.Store
+    Kansoku.Analysis.Validation
     Kansoku.Auth.Handler
     Kansoku.Auth.Issue
     Kansoku.Auth.Store
@@ -182,6 +185,8 @@ test-suite kansoku-core-test
   hs-source-dirs: test
   main-is: Spec.hs
   other-modules:
+    Kansoku.Analysis.HandlerSpec
+    Kansoku.Analysis.StoreSpec
     Kansoku.Auth.HandlerSpec
     Kansoku.Auth.TokenSpec
     Kansoku.ClickHouseSpec

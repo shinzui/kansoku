@@ -16,6 +16,11 @@ provenance:
       at: 2026-11-13T01:03:04Z
       mode: "update"
       note: "Correct Mori availability after refreshing stale inherited shell environment"
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-11-13T04:54:31Z
+      mode: "implement"
+      note: "Implement saved analysis persistence, revision safety, pagination and public contracts"
 ---
 
 # Save named analyses for an account
@@ -32,12 +37,14 @@ The observable result is a `/analyses` library with bounded, bidirectional pages
 
 ## Progress
 
-- [ ] Milestone 1: A saved analysis round-trips through authenticated HTTP and PostgreSQL, preserving document values and account isolation.
-- [ ] Milestone 2: Atomic replacement/deletion, concurrent quota enforcement, and bidirectional filtered pagination pass real database tests.
+- [x] Milestone 1 (2026-11-13): Saved analyses round-trip through authenticated HTTP and private PostgreSQL with opaque document equality, foreign-ID 404 and write-key 403. Focused Kansoku.Analysis suite: 6 examples, 0 failures, no pending cases.
+- [x] Milestone 2 (2026-11-13): Real PostgreSQL tests and owned executable HTTP acceptance pass atomic replacement/deletion, independent concurrent update/create connections, quota=2, separate account allowances, and forward/backward filtered keyset traversal. Equal-timestamp fixtures preserve microseconds and deleted cursor rows remain usable.
 - [ ] Milestone 3: Published contracts, generated client, and owned packaged HTTP acceptance cover all five request criteria and regressions.
 
 
 ## Surprises & Discoveries
+
+The existing Relay timestamp codec stores integer microseconds and round-trips persisted timestamps exactly, so no custom ordering projection or dependency upgrade was needed. Its established pagination contract accepts first=0/last=0 and returns pagination errors as JSON; field and resource problems retain application/problem+json. Both contracts are exercised independently.
 
 
 ## Decision Log
