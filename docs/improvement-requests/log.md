@@ -2,6 +2,8 @@
 
 ## 2026-11-13
 
+* **Update**: Complete IR-20: Plan 70 delivers calendar-period retention with separate start/return activity; native, HTTP/client, contract and full packaged acceptance pass.
+
 * **Update**: Link IR-20 to ExecPlan 70 for calendar-period retention with separate start and return events; implementation has not started.
 
 

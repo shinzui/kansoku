@@ -6,9 +6,16 @@ generated:
   by: process:claude-code
   at: "2026-11-13T05:30:00Z"
 requestId: IR-20
-status: proposed
+status: completed
+completedAt: "2026-11-13T14:27:06Z"
+resolution: >-
+  AC-1 through AC-5 delivered by plan 70: exact UTC day/week/month cohorts,
+  independent start/return event selections and filters, aligned period starts,
+  complete-period maturity, existing population and resource bounds, typed clients,
+  generated/served OpenAPI and query guidance. Deterministic, owned native/public
+  and full Nix-packaged acceptance pass on Darwin arm64.
 targetPlan: docs/plans/70-measure-retention-by-calendar-period-with-separate-start-and-return-events.md
-timestamp: "2026-11-13T13:51:22Z"
+timestamp: "2026-11-13T14:27:06Z"
 origin: mori://shinzui/kansoku-ui/plans/36-analyse-retention-by-daily-weekly-or-monthly-cohorts-with-start-and-return-events
 acceptanceCriteria:
   - id: AC-1
@@ -52,7 +59,7 @@ a child of `mori://shinzui/kansoku-ui/masterplans/7-build-the-insights-library-o
 **Created:** 2026-11-12.
 
 **Implementation plan:** [ExecPlan 70: Measure retention by calendar period with separate start and return events](../plans/70-measure-retention-by-calendar-period-with-separate-start-and-return-events.md).
-Implementation has not started.
+Implementation is complete; all five criteria are verified by the evidence below.
 
 
 ## Why
@@ -104,3 +111,26 @@ because cohorts are disjoint.
 kansoku-ui builds the feature against its fake Kansoku first. Its reconciliation and a real-Kansoku
 session are a gated milestone that waits for this request. Until then, a real Kansoku answers
 `unsupported_query_parameter` for the new parameters, and the consumer shows a notice instead.
+
+
+## Delivery evidence
+
+Plan 70 implements and verifies AC-1 through AC-5. `scripts/retention-acceptance.py`
+seeds the public weekly signup/document and leap-February fixtures, checks independent
+side filters, groups, defaults, budgets, shared saved membership and organization
+aggregation, compares served/generated OpenAPI, and executes one required typed-client
+example. The focused native harness passes 82 examples across ordinary/two-row blocks,
+including weekly 10000/10001-point and memory-limit behavior. `just check` passes 537 core,
+23 client and four probe examples plus formatting, generated contracts, profiles and
+telemetry. Full `just acceptance` passes 18 migration cases, 682 core examples, 26 client
+examples, the public reporting matrix in all three telemetry modes and seven administrative
+families. Required cases have no failures or skips. Qualification is Darwin arm64 with
+ClickHouse 26.8.28.14; no Linux qualification or release is claimed.
+
+The final wire names are `period`, `days`, `startEvent`, `returnEvent`, `startFilter` and
+`returnFilter`. `days` uses the chosen period; no `offsets` alias was added. Shared filters
+apply to both sides. Starts supply group labels and only returns with matching group values
+count. Side subject/session terms return `invalid_retention_filter`; week/month misalignment
+returns `invalid_retention_period`. See the [Retention guide](../guides/query-metrics.md#retention)
+and [Plan 70](../plans/70-measure-retention-by-calendar-period-with-separate-start-and-return-events.md)
+for full acceptance evidence and the Haskell source-signature compatibility boundary.
