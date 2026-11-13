@@ -91,7 +91,9 @@ withSessionLease settings identity mutation action = withAdministrator settings 
       unless (field "entry" row == A.toJSON predecessor) (fail "stale predecessor-quiescence evidence")
       when (entryName `elem` ["up", "maintenance-finish"]) $ unless (field "outcome" row `elem` [A.String "pre-session", A.String "acknowledged"]) (fail "previous native entry requires explicit repair or reconciliation")
       unless (evidence /= A.Null) (fail "explicit predecessor-quiescence evidence required")
-      void $ query c "UPDATE kansoku.clickhouse_migration_sessions SET entry=entry+1,pending_entry=$1->>'command',quiescence=$1->'evidence',outcome='submitted' WHERE id=($1->>'id')::uuid" (A.object ["id" A..= sessionId identity, "command" A..= entryName, "evidence" A..= evidence])
+      -- One PostgreSQL statement retains the proof and advances its counter.
+      -- An audit failure rolls back the marker before any native action runs.
+      void $ query c "WITH submitted AS (UPDATE kansoku.clickhouse_migration_sessions SET entry=entry+1,pending_entry=$1->>'command',quiescence=$1->'evidence',outcome='submitted' WHERE id=($1->>'id')::uuid RETURNING id,entry,pending_entry,quiescence) INSERT INTO kansoku.clickhouse_migration_entry_audit(session_id,entry,command,evidence) SELECT id,entry,pending_entry,quiescence FROM submitted" (A.object ["id" A..= sessionId identity, "command" A..= entryName, "evidence" A..= evidence])
   action c
 
 -- Bounded test of the actual retained backend's exclusive session locks. Never

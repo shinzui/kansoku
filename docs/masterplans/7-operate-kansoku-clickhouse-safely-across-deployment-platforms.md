@@ -249,8 +249,8 @@ if missing or skipped; live production endpoints are never acceptance fixtures.
 EP-50 is In Progress. M1's initial portable contract and owned native
 producer/consumer proof passed on 2026-11-13. M2 adds expiry rechecks, per-attempt
 audits, visible-writer refusal and denied/own-user observations under external
-evidence; full sufficiency enforcement remains open. M3
-upstream repair/package qualification remain open. EP-51's M1 dependency is now
+evidence; migration entry proofs now persist atomically with counter advancement. Full
+sufficiency enforcement and M3 upstream repair/package qualification remain open. EP-51's M1 dependency is now
 satisfied, but default execution remains EP-50 first. EP-52 is independently ready;
 EP-53 remains blocked on all three completed children. All final IR criteria and
 deployment integration gates remain open. Mori discovery works after refreshing

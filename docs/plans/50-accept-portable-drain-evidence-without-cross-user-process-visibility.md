@@ -76,9 +76,15 @@ only separately validated external evidence authorizes the portable path. Option
 observations run on separate native connections so a rejected query cannot poison
 the maintenance connection (FRIC-37, still logged pending final triage).
 
+Migration entry audit retention was added on 2026-11-13 in appended migration
+0013. A single PostgreSQL statement advances the counter and inserts its full
+proof, preserving all prior entry envelopes and digests. The owned producer/consumer
+case checks two retained proofs and injects an audit constraint failure to prove
+counter rollback before native entry.
+
 M2/M3 remain open. Portable input is currently opt-in; legacy paths still use their
 existing drain checks. Complete sufficiency enforcement, denial/own-user process
-acceptance, full migration entry-audit retention and the upstream repair delivery gate are not yet accepted. No packaged
+acceptance, the upstream repair delivery gate are not yet accepted. No packaged
 or Nagare/shared production release claim follows from M1.
 
 ## Surprises & Discoveries

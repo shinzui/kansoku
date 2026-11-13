@@ -2,6 +2,9 @@
 
 ## 2026-11-13
 
+* **Update**: DOC-13: document migration entry proof retention and audit-failure refusal.
+
+
 * **Update**: Document prepare-only fenced data jobs and returned attempt identity.
 
 

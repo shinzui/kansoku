@@ -43,7 +43,8 @@ kansokuApplicationMigrations = do
   analyses <- sqlMigration "0010-saved-analyses" analysesSql
   drainAttempts <- sqlMigration "0011-maintenance-drain-attempts" drainAttemptsSql
   drainAudit <- sqlMigration "0012-maintenance-drain-audit" drainAuditSql
-  migrationComponent "kansoku" (Set.singleton "pgmq") (apiKeys :| [rejections, acceptance, maintenance, cohorts, definitions, administration, replicatedAdministration, replicatedJobs, analyses, drainAttempts, drainAudit])
+  migrationAudit <- sqlMigration "0013-clickhouse-entry-audit" migrationAuditSql
+  migrationComponent "kansoku" (Set.singleton "pgmq") (apiKeys :| [rejections, acceptance, maintenance, cohorts, definitions, administration, replicatedAdministration, replicatedJobs, analyses, drainAttempts, drainAudit, migrationAudit])
 
 apiKeysSql :: ByteString
 apiKeysSql =
@@ -313,5 +314,19 @@ drainAuditSql =
     observations jsonb NOT NULL DEFAULT '[]',
     created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
     PRIMARY KEY (job_id, attempt)
+  );
+  """
+
+-- The session row is a current-state view; each consumed proof is retained here.
+migrationAuditSql :: ByteString
+migrationAuditSql =
+  """
+  CREATE TABLE kansoku.clickhouse_migration_entry_audit (
+    session_id uuid NOT NULL REFERENCES kansoku.clickhouse_migration_sessions(id),
+    entry bigint NOT NULL CHECK (entry > 0),
+    command text NOT NULL,
+    evidence jsonb NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    PRIMARY KEY (session_id, entry)
   );
   """

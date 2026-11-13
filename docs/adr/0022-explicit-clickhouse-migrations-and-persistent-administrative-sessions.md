@@ -5,7 +5,7 @@ description: Embed immutable native migration steps, bind administration to reta
 docId: ADR-22
 status: Accepted
 date: 2026-10-16
-timestamp: 2026-11-13T18:40:00Z
+timestamp: 2026-11-13T18:59:08Z
 generated:
   by: process:codex
   at: 2026-10-16T22:55:08Z
@@ -217,3 +217,9 @@ native connections, because a rejected exchange must not compromise the connecti
 used for subsequent maintenance. Appended PostgreSQL migration 0012 retains each
 accepted data-job attempt's envelope, exact file digest and observations. Consumers
 recheck accepted evidence expiry after acquiring exclusion before native entry.
+
+Migration sessions also retain each consumed entry's complete audit document in
+`kansoku.clickhouse_migration_entry_audit` (appended PostgreSQL migration 0013).
+The current session row remains the status view. Counter advancement and audit
+insertion share one PostgreSQL statement: a failed audit write rolls back the
+marker and prevents native entry. Later entries never replace earlier proof rows.

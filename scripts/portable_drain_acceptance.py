@@ -62,6 +62,23 @@ def verify(root, native, pg_migrate, admin):
             assert h.counter() == 1
             retained = h.run(['psql', '-XAt', '-c', "SELECT quiescence->'drainEvidence'->'owner'->>'predecessor' FROM kansoku.clickhouse_migration_sessions"]).stdout.strip()
             assert retained == '0'
+            original_digest = hashlib.sha256(receipt.read_bytes()).hexdigest()
+            document['owner']['predecessor'] = 1
+            document['drainedAt'] = datetime.now(timezone.utc).isoformat()
+            receipt.write_text(json.dumps(document))
+            h.run([native, '--predecessor', '1', '--drain-evidence', str(receipt), 'maintenance', 'reconcile', '--json', *h.audit()])
+            audits = h.run(['psql', '-XAt', '-c', "SELECT entry::text || ':' || (evidence->>'drainEvidenceSha256') FROM kansoku.clickhouse_migration_entry_audit ORDER BY entry"]).stdout.strip().splitlines()
+            assert audits == ['1:' + original_digest, '2:' + hashlib.sha256(receipt.read_bytes()).hexdigest()]
+            h.run(['psql', '-XAt', '-v', 'ON_ERROR_STOP=1', '-c', 'ALTER TABLE kansoku.clickhouse_migration_entry_audit ADD CONSTRAINT owned_reject_entry CHECK (entry <> 3)'])
+            document['owner']['predecessor'] = 2
+            document['drainedAt'] = datetime.now(timezone.utc).isoformat()
+            receipt.write_text(json.dumps(document))
+            h.run([native, '--predecessor', '2', '--drain-evidence', str(receipt), 'maintenance', 'reconcile', '--json', *h.audit()], success=False)
+            assert h.counter() == 2
+            assert h.run(['psql', '-XAt', '-c', 'SELECT count(*) FROM kansoku.clickhouse_migration_entry_audit']).stdout.strip() == '2'
+            h.run(['psql', '-XAt', '-v', 'ON_ERROR_STOP=1', '-c', 'ALTER TABLE kansoku.clickhouse_migration_entry_audit DROP CONSTRAINT owned_reject_entry'])
+
+
             assert sentinel.poll() is None, sentinel.communicate()[1].decode()
             h.run(client('other_app', 'SELECT 1 FROM system.one'))
             after = h.sql('SELECT toString(serverUUID()), toString(uptime())').strip().split('\t')

@@ -4,7 +4,7 @@ title: "Initialize and upgrade ClickHouse"
 description: "Initialize a fresh owned ClickHouse target, retain native identities, coordinate maintenance and recover explicit migration attempts."
 docId: DOC-13
 tags: ["clickhouse", "migrations", "maintenance", "recovery"]
-timestamp: 2026-11-13T18:40:00Z
+timestamp: 2026-11-13T18:59:08Z
 generated:
   by: process:codex
   at: "2026-11-07T20:24:51Z"
@@ -459,3 +459,9 @@ nix develop -c python3 scripts/portable_drain_acceptance.py
 This uses fixture-owned PostgreSQL and ClickHouse instances and the locally built
 migration/admin executables. It does not claim packaged, Nagare, complete data-job
 or backup/recovery acceptance.
+
+Each consumed migration entry retains its audit document in
+`kansoku.clickhouse_migration_entry_audit`, including the portable envelope and
+exact input-file digest when supplied. Advancing an entry cannot overwrite a
+previous entry's evidence. Audit-write failure prevents native entry and leaves
+the previous counter and persistent fence authoritative.

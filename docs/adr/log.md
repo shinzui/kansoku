@@ -2,6 +2,9 @@
 
 ## 2026-11-13
 
+* **Update**: ADR-22: retain every migration entry proof atomically with predecessor advancement.
+
+
 * **Update**: Document the initial portable operator-attestation boundary and prepared job attempt state; full shared maintenance acceptance remains open.
 
 
