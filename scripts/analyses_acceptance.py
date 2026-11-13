@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Saved analysis contracts on fresh owned stores and the real HTTP executable."""
 from concurrent.futures import ThreadPoolExecutor
+from decimal import Decimal
 import json
 import urllib.error
 import urllib.parse
@@ -22,7 +23,7 @@ def verifier(base, token):
         except urllib.error.HTTPError as error:
             response = error
         with response:
-            value = json.load(response)
+            value = json.load(response, parse_float=Decimal)
             assert response.status == expected, (method, path, response.status, expected, value)
             if expected >= 400 and 'status' in value:
                 assert response.headers.get_content_type() == 'application/problem+json'
@@ -105,7 +106,7 @@ def verify_analyses(base, write_key, token, other_token, **_):
         request = urllib.request.Request(base + '/analyses', data=raw, method='POST',
                                         headers={'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'})
         with urllib.request.urlopen(request, timeout=40) as response:
-            value = json.load(response)
+            value = json.load(response, parse_float=Decimal)
         owned[value['id']] = value['revision']
         assert api('/analyses/' + value['id'])['document'] == value['document']
         delete(value)
