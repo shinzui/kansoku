@@ -26,6 +26,7 @@
             ]
           },
           "document": {
+            "additionalProperties": true,
             "description": "Opaque JSON object, never executed or interpreted. Maximum 32768 bytes of compact Aeson UTF-8 encoding; nested values, including escaped zero characters, are preserved.",
             "type": "object"
           },
@@ -71,6 +72,7 @@
             ]
           },
           "document": {
+            "additionalProperties": true,
             "description": "Opaque JSON object, never executed or interpreted. Maximum 32768 bytes of compact Aeson UTF-8 encoding; nested values, including escaped zero characters, are preserved.",
             "type": "object"
           },
@@ -988,6 +990,7 @@
             ]
           },
           "document": {
+            "additionalProperties": true,
             "description": "Opaque JSON object, never executed or interpreted. Maximum 32768 bytes of compact Aeson UTF-8 encoding; nested values, including escaped zero characters, are preserved.",
             "type": "object"
           },

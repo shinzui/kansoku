@@ -5,7 +5,7 @@ description: Persist bounded client analysis documents with account isolation, r
 docId: ADR-26
 status: Accepted
 date: 2026-11-13
-timestamp: 2026-11-13T05:10:00Z
+timestamp: 2026-11-13T05:13:53Z
 generated:
   by: codex-cli/gpt-6.1-sol
   at: 2026-11-13T05:10:00Z
@@ -43,7 +43,9 @@ Haskell Integer and a positive integral PostgreSQL numeric column.
 Create, replace and delete use a dedicated PostgreSQL connection and an account-wide,
 namespaced advisory transaction lock. Under READ COMMITTED the lock is acquired in a
 separate statement before count or row reads, so a waiter observes its predecessor's
-commit. Connection cleanup rolls back exceptions and cancellation. Every query and
+commit. Connection cleanup rolls back exceptions and cancellation. A failed rollback during an
+in-flight query must preserve the original exception; closing the dedicated connection
+provides the final rollback boundary. Every query and
 mutation also binds account_id; lock hash collisions affect scheduling only.
 
 POST starts revision 1. Full PUT requires the last read revision, increments even for

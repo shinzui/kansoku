@@ -1,8 +1,8 @@
 module Kansoku.Analysis.StoreSpec (spec, withStore, validInput, stored) where
 
-import Control.Concurrent (newEmptyMVar, putMVar, readMVar)
+import Control.Concurrent (forkIO, killThread, newEmptyMVar, putMVar, readMVar, takeMVar, threadDelay)
 import Control.Concurrent.Async (concurrently)
-import Control.Exception (bracket)
+import Control.Exception (AsyncException (ThreadKilled), bracket, finally, try)
 import Control.Monad (forM, forM_)
 import Data.Aeson qualified as A
 import Data.Generics.Labels ()
@@ -24,6 +24,7 @@ import Kansoku.Postgres (createPool)
 import Kansoku.Postgres.Direct
 import Kansoku.Prelude
 import Relay.Pagination qualified as R
+import System.Timeout (timeout)
 import Test.Hspec
 
 validInput :: AnalysisInput
@@ -85,6 +86,29 @@ spec = describe "Kansoku.Analysis.Store" $ do
     Store.deleteAnalysis settings (AccountId "a") (first ^. #id) (Revision 2) `shouldReturn` Store.Stored True
     _ <- Store.createAnalysis settings 2 (AccountId "a") value >>= stored
     pure ()
+
+  it "propagates cancellation while waiting for an account lock and releases its session" $ withStore $ \settings _ -> do
+    value <- either (fail . show) pure (validateAnalysis validInput)
+    withPostgres settings $ \connection -> do
+      void $ pg connection "SELECT to_jsonb(pg_advisory_lock(hashtextextended($1->>'key',0)))" (A.object ["key" A..= ("kansoku:analyses:a" :: Text)])
+      done <- newEmptyMVar
+      worker <- forkIO $ do
+        result <- try (Store.createAnalysis settings 2 (AccountId "a") value)
+        putMVar done (result :: Either AsyncException (Store.StoreResult SavedAnalysis))
+      let awaitWaiter 0 = fail "writer never waited for account lock"
+          awaitWaiter attempts = do
+            count <- pg connection "SELECT to_jsonb(count(*)) FROM pg_stat_activity WHERE datname=current_database() AND wait_event='advisory'" A.Null
+            if count == A.Number 1 then pure () else threadDelay 10000 >> awaitWaiter (attempts - 1)
+      ( do
+          awaitWaiter (200 :: Int)
+          killThread worker
+          timeout 5000000 (takeMVar done) `shouldReturn` Just (Left ThreadKilled)
+        )
+        `finally` killThread worker
+    result <- timeout 5000000 (Store.createAnalysis settings 2 (AccountId "a") value)
+    case result of
+      Just (Store.Stored _) -> pure ()
+      other -> expectationFailure ("cancelled session retained lock: " <> show other)
 
   it "checks bigint exhaustion without wrapping or changing the resource" $ withStore $ \settings pool -> do
     value <- either (fail . show) pure (validateAnalysis validInput)

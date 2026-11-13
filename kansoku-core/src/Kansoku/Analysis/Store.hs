@@ -1,7 +1,7 @@
 -- | Account-scoped current reads and serialized, revision-checked mutations.
 module Kansoku.Analysis.Store where
 
-import Control.Exception (bracket_)
+import Control.Exception (onException)
 import Data.Aeson qualified as A
 import Data.Aeson.KeyMap qualified as KM
 import Data.Aeson.Types (parseEither)
@@ -88,12 +88,18 @@ decodeSaved value =
 -- see commits made by the prior lock holder, even when this session waited.
 mutate :: Text -> AccountId -> (PQ.Connection -> IO (StoreResult a)) -> IO (StoreResult a)
 mutate settings (AccountId account) action = do
-  result <- trySynchronous $ withPostgres settings $ \connection ->
-    bracket_ (pgScript connection "BEGIN ISOLATION LEVEL READ COMMITTED") (pgScript connection "ROLLBACK") $ do
-      void $ pg connection "SELECT to_jsonb(pg_advisory_xact_lock(hashtextextended($1->>'key',0)))" (A.object ["key" A..= ("kansoku:analyses:" <> account)])
-      outcome <- action connection
-      pgScript connection "COMMIT"
-      pure outcome
+  result <- trySynchronous $ withPostgres settings $ \connection -> do
+    pgScript connection "BEGIN ISOLATION LEVEL READ COMMITTED"
+    -- A cancelled in-flight query may prevent sending ROLLBACK. Keep the
+    -- original exception; closing the bracketed connection also rolls back.
+    let rollback = void (trySynchronous (pgScript connection "ROLLBACK"))
+    ( do
+        void $ pg connection "SELECT to_jsonb(pg_advisory_xact_lock(hashtextextended($1->>'key',0)))" (A.object ["key" A..= ("kansoku:analyses:" <> account)])
+        outcome <- action connection
+        pgScript connection "COMMIT"
+        pure outcome
+      )
+      `onException` rollback
   pure (either (const StoreUnavailable) (\x -> x) result)
 
 createAnalysis :: Text -> Int -> AccountId -> ValidatedAnalysis -> IO (StoreResult SavedAnalysis)

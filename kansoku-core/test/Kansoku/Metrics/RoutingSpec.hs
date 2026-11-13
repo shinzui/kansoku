@@ -27,7 +27,8 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Time (Day, fromGregorian)
 import Data.UUID qualified as UUID
-import Kansoku.Analysis.Handler (analysesServer)
+import Kansoku.Analysis.Api qualified as Analysis
+import Kansoku.Analysis.Types qualified as Analysis
 import Kansoku.Api qualified as Api
 import Kansoku.Api.Response qualified as Response
 import Kansoku.Auth.Api (IngestAuth, MetricsAuth)
@@ -333,7 +334,7 @@ sentinelKansokuServer =
   Api.KansokuAPI
     { Api.ingest = sentinelIngestServer,
       Api.metrics = sentinelMetricsServer,
-      Api.analyses = analysesServer "unused" 1000 (error "unused analysis pool"),
+      Api.analyses = sentinelAnalyses,
       Api.metricDefinitions = sentinelDefinitions,
       Api.users = sentinelUsers,
       Api.cohorts = sentinelCohorts,
@@ -436,3 +437,15 @@ sentinelUsers =
       Users.getProfile = \_ ident -> pure (Response.KansokuOk (Users.UserProfile ident Map.empty Nothing Nothing 0 Map.empty 0 Nothing)),
       Users.events = \_ _ _ _ _ _ _ -> pure (Cohort.PageOk (Relay.Connection [] (Relay.PageInfo False False Nothing Nothing)))
     }
+
+sentinelAnalyses :: Analysis.Analyses (AsServerT Handler)
+sentinelAnalyses =
+  Analysis.Analyses
+    { Analysis.createAnalysis = \_ _ -> pure (Analysis.AnalysisOk saved),
+      Analysis.getAnalysis = \_ _ -> pure (Analysis.AnalysisOk saved),
+      Analysis.listAnalyses = \_ _ _ -> pure (Cohort.PageOk (Relay.Connection [] (Relay.PageInfo False False Nothing Nothing))),
+      Analysis.replaceAnalysis = \_ _ _ -> pure (Analysis.AnalysisOk saved),
+      Analysis.deleteAnalysis = \_ _ _ -> pure (Analysis.AnalysisOk True)
+    }
+  where
+    saved = Analysis.SavedAnalysis UUID.nil "sentinel" Nothing Analysis.Trends 1 (Aeson.object []) (Analysis.Revision 1) (read "2026-01-01 00:00:00 UTC") (read "2026-01-01 00:00:00 UTC")

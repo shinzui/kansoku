@@ -266,7 +266,9 @@ spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
 expectedServedPaths :: [Text]
 expectedServedPaths =
   List.sort
-    [ "/metric-definitions",
+    [ "/analyses",
+      "/analyses/{id}",
+      "/metric-definitions",
       "/metric-definitions/{id}",
       "/cohorts",
       "/cohorts/{id}",
@@ -305,7 +307,12 @@ operationalPaths = ["/health/live", "/health/ready", "/internal/metrics", "/open
 
 expectedOperationIds :: [(Text, Text, Text)]
 expectedOperationIds =
-  [ ("/metric-definitions", "get", "getMetricDefinitions"),
+  [ ("/analyses", "get", "getAnalyses"),
+    ("/analyses", "post", "postAnalyses"),
+    ("/analyses/{id}", "get", "getAnalysesId"),
+    ("/analyses/{id}", "put", "putAnalysesId"),
+    ("/analyses/{id}", "delete", "deleteAnalysesId"),
+    ("/metric-definitions", "get", "getMetricDefinitions"),
     ("/metric-definitions", "post", "postMetricDefinitions"),
     ("/metric-definitions/{id}", "get", "getMetricDefinitionsId"),
     ("/metric-definitions/{id}", "put", "putMetricDefinitionsId"),
@@ -372,13 +379,14 @@ operationIdentity (path, method, operation) =
 assertStatuses :: OperationValue -> Expectation
 assertStatuses (path, method, operation) = do
   let actual = List.sort (Key.toText <$> KeyMap.keys (objectAt ["responses"] operation))
-      success = if method == "post" && not ("/cohorts" `Text.isPrefixOf` path || "/metric-definitions" `Text.isPrefixOf` path) then "202" else "200"
+      success = if method == "post" && not ("/analyses" `Text.isPrefixOf` path || "/cohorts" `Text.isPrefixOf` path || "/metric-definitions" `Text.isPrefixOf` path) then "202" else "200"
       authStatuses
-        | "/metrics/" `Text.isPrefixOf` path || "/metric-definitions" `Text.isPrefixOf` path || "/cohorts" `Text.isPrefixOf` path || "/users" `Text.isPrefixOf` path || path == "/v1/beacon" = ["401", "403"]
+        | "/metrics/" `Text.isPrefixOf` path || "/analyses" `Text.isPrefixOf` path || "/metric-definitions" `Text.isPrefixOf` path || "/cohorts" `Text.isPrefixOf` path || "/users" `Text.isPrefixOf` path || path == "/v1/beacon" = ["401", "403"]
         | otherwise = ["401"]
       expected
         | path == "/v1/schemas" = ["200", "405", "406", "413", "500"]
         | isRelayPage path method = ["200", "400", "401", "403", "404", "405", "406", "413", "500", "503"]
+        | "/analyses" `Text.isPrefixOf` path = ["200", "400", "401", "403", "404", "405", "406", "409", "413", "500", "503"] <> ["415" | method `elem` ["post", "put"]]
         | otherwise = [success, "400", "404", "405", "406", "413", "429", "500", "503"] <> authStatuses <> ["415" | method `elem` ["post", "put"]]
   actual `shouldBe` List.sort expected
   when (path /= "/v1/schemas") $ do
@@ -386,7 +394,7 @@ assertStatuses (path, method, operation) = do
       `shouldBe` Just "string"
     valueAt ["responses", "401", "headers", "WWW-Authenticate", "required"] operation
       `shouldBe` Just (Aeson.Bool True)
-  when (path /= "/v1/schemas" && not (isRelayPage path method)) $ do
+  when (path /= "/v1/schemas" && not ("/analyses" `Text.isPrefixOf` path) && not (isRelayPage path method)) $ do
     lookupText ["responses", "429", "headers", "Retry-After", "schema", "type"] operation
       `shouldBe` Just "integer"
     valueAt ["responses", "429", "headers", "Retry-After", "required"] operation
@@ -403,7 +411,7 @@ assertSecurity (path, _method, operation) =
     ("/v1/schemas", securityValue) ->
       expectationFailure ("public schema operation unexpectedly secured: " <> show securityValue)
     (_, Just (Aeson.Array requirements))
-      | "/metrics/" `Text.isPrefixOf` path || "/metric-definitions" `Text.isPrefixOf` path || "/cohorts" `Text.isPrefixOf` path || "/users" `Text.isPrefixOf` path ->
+      | "/metrics/" `Text.isPrefixOf` path || "/analyses" `Text.isPrefixOf` path || "/metric-definitions" `Text.isPrefixOf` path || "/cohorts" `Text.isPrefixOf` path || "/users" `Text.isPrefixOf` path ->
           requirements `shouldSatisfy` any (containsObjectKey "serviceToken")
       | otherwise ->
           requirements `shouldSatisfy` any (containsObjectKey "writeKey")
@@ -548,6 +556,6 @@ operationParameterNames operation =
       ]
     _ -> []
 
--- These two Relay endpoints use the released pagination 400 JSON exemption.
+-- These Relay endpoints use the released pagination 400 JSON exemption.
 isRelayPage :: Text -> Text -> Bool
-isRelayPage path method = method == "get" && path `elem` ["/metric-definitions", "/cohorts", "/cohorts/{id}/members", "/users", "/users/{userId}/events"]
+isRelayPage path method = method == "get" && path `elem` ["/analyses", "/metric-definitions", "/cohorts", "/cohorts/{id}/members", "/users", "/users/{userId}/events"]

@@ -602,7 +602,7 @@ analysisEnvelopeSchema named =
     & O.schema
     . O.properties
     . ix "document"
-    .~ O.Inline (mempty & O.type_ ?~ O.OpenApiTypeSingle O.OpenApiObject & O.description ?~ "Opaque JSON object, never executed or interpreted. Maximum 32768 bytes of compact Aeson UTF-8 encoding; nested values, including escaped zero characters, are preserved.")
+    .~ O.Inline (mempty & O.type_ ?~ O.OpenApiTypeSingle O.OpenApiObject & O.additionalProperties ?~ O.AdditionalPropertiesAllowed True & O.description ?~ "Opaque JSON object, never executed or interpreted. Maximum 32768 bytes of compact Aeson UTF-8 encoding; nested values, including escaped zero characters, are preserved.")
     & O.schema
     . O.properties
     . ix "documentVersion"

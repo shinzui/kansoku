@@ -47,6 +47,9 @@ The observable result is a `/analyses` library with bounded, bidirectional pages
 The existing Relay timestamp codec stores integer microseconds and round-trips persisted timestamps exactly, so no custom ordering projection or dependency upgrade was needed. Its established pagination contract accepts first=0/last=0 and returns pagination errors as JSON; field and resource problems retain application/problem+json. Both contracts are exercised independently.
 
 
+Cancellation while an advisory-lock query is in flight can make the connection reject an explicit rollback. Cleanup now preserves the original exception and closes the dedicated connection as the final rollback boundary. A real lock-wait cancellation test proves propagation and subsequent lock availability; the final focused suite passes 8 examples.
+
+
 ## Decision Log
 
 On 2026-11-13, choose `/analyses`, PostgreSQL persistence, service-token authentication, and an independent analysis envelope. Existing metric definitions are executable and cohorts define populations; neither is an appropriate storage contract for opaque client state. Duplicate names are allowed, and replacement may change kind.

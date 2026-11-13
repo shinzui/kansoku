@@ -1,6 +1,9 @@
 # Bundle Update Log
 
 ## 2026-11-13
+
+* **Update**: ADR-26: preserve cancellation when an in-flight query rejects rollback; dedicated connection cleanup remains the final transaction boundary.
+
 * **Added**: ADR-26 defines account-owned opaque saved analyses, serialized editing and quotas, and timestamp keyset pages.
 
 * **Update**: ADR-9, ADR-16 and ADR-20: record bounded explicit identified-user selection, resolved event/session ownership and saved component composition.
