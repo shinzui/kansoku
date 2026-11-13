@@ -11,7 +11,7 @@ import Data.Text qualified as Text
 import Data.Time (addUTCTime)
 import Data.UUID qualified as UUID
 import Database.PostgreSQL.LibPQ qualified as PQ
-import Kansoku.Admin.Jobs (resumeJob, runJob, writePrivate)
+import Kansoku.Admin.Jobs (resumeJob, runPreparedJob, writePrivate)
 import Kansoku.Admin.Keys (runIssueKey)
 import Kansoku.Admin.Store
 import Kansoku.ClickHouse.Native (ConsistencyError (..))
@@ -34,8 +34,8 @@ runAdmin (command : args) = do
   parameters <- commandParameters config command options
   outcome <- trySynchronous $ withPostgres (config ^. #pgConnectionString) $ \connection ->
     case command of
-      "erase-user" -> runJob config connection "erase-user" parameters (flag "confirm" options) (option "out" options)
-      "apply-retention" -> runJob config connection "retention" parameters (flag "confirm" options) (option "out" options)
+      "erase-user" -> runPreparedJob config connection "erase-user" parameters (flag "confirm" options) (flag "prepare" options) (option "out" options)
+      "apply-retention" -> runPreparedJob config connection "retention" parameters (flag "confirm" options) (flag "prepare" options) (option "out" options)
       "resume-job" -> resumeJob config connection parameters (flag "confirm" options) (option "out" options)
       _ -> ordinary config connection command options parameters
   case outcome of
@@ -63,9 +63,9 @@ parseOptions command = go Map.empty
     allowed = case command of
       "list-keys" -> ["account", "limit"]
       "revoke-key" -> ["id", "account", "confirm"]
-      "erase-user" -> ["account", "user", "delete-events", "confirm", "out"]
-      "apply-retention" -> ["confirm", "out"]
-      "resume-job" -> ["id", "confirm", "out"]
+      "erase-user" -> ["account", "user", "delete-events", "confirm", "prepare", "out"]
+      "apply-retention" -> ["confirm", "prepare", "out"]
+      "resume-job" -> ["id", "confirm", "out", "drain-evidence"]
       "job-status" -> ["id"]
       "list-jobs" -> ["limit"]
       "replay-archive" -> ["limit", "before", "after", "confirm", "out"]
@@ -73,7 +73,7 @@ parseOptions command = go Map.empty
       "list-rejections" -> ["limit", "account", "event", "since", "include-payload"]
       "purge-rejections" -> ["limit", "account", "before", "confirm"]
       _ -> []
-    switches = ["confirm", "delete-events", "include-payload"]
+    switches = ["prepare", "confirm", "delete-events", "include-payload"]
     go found []
       | null allowed = Left "unknown administrative command; run kansoku-admin --help"
       | otherwise = Right found
@@ -92,6 +92,7 @@ parseOptions command = go Map.empty
 
 commandParameters :: Config -> String -> AdminOptions -> IO A.Value
 commandParameters config command options = do
+  when (flag "prepare" options && flag "confirm" options) (bad "--prepare and --confirm are mutually exclusive")
   limit <- case Map.lookup "limit" options of
     Nothing -> pure (100 :: Int)
     Just raw -> maybe (bad "--limit must be in 1..10000") pure (readMaybe (Text.unpack raw) >>= \n -> if n >= 1 && n <= 10000 then Just n else Nothing)
@@ -136,7 +137,7 @@ ordinary config connection command options parameters = case command of
     when (result == A.Null) (fail "unknown credential ID")
     if flag "confirm" options then query connection "WITH changed AS (UPDATE kansoku.api_keys SET revoked_at=coalesce(revoked_at,now()) WHERE id=($1->>'id')::uuid RETURNING id,kind,account_id,description,created_at,revoked_at) SELECT to_jsonb(changed) FROM changed" parameters else pure (A.object ["preview" A..= True, "key" A..= result])
   "list-jobs" -> query connection "SELECT coalesce(jsonb_agg(to_jsonb(j)),'[]') FROM (SELECT id,kind,stage,created_at,completed_at,scope->>'account' AS account FROM kansoku.maintenance_jobs ORDER BY revision DESC LIMIT ($1->>'limit')::integer) j" parameters
-  "job-status" -> query connection "SELECT jsonb_build_object('id',id,'kind',kind,'stage',stage,'created_at',created_at,'completed_at',completed_at,'fenced',id=(SELECT active_job FROM kansoku.maintenance_fence)) FROM kansoku.maintenance_jobs WHERE id=($1->>'id')::uuid" parameters
+  "job-status" -> query connection "SELECT jsonb_build_object('id',id,'kind',kind,'stage',stage,'next_attempt',native_attempt+1,'created_at',created_at,'completed_at',completed_at,'fenced',id=(SELECT active_job FROM kansoku.maintenance_fence)) FROM kansoku.maintenance_jobs WHERE id=($1->>'id')::uuid" parameters
   "list-rejections" -> query connection ("SELECT coalesce(jsonb_agg(to_jsonb(r)),'[]') FROM (SELECT id,account_id,received_at,event_name,schema_version,reason_codes,transport,payload_truncated,original_payload_bytes" <> (if flag "include-payload" options then ",payload" else "") <> " FROM kansoku.ingest_rejections WHERE ($1->>'account' IS NULL OR account_id=$1->>'account') AND ($1->>'event' IS NULL OR event_name=$1->>'event') AND ($1->>'since' IS NULL OR received_at>=($1->>'since')::timestamptz) ORDER BY received_at,id LIMIT ($1->>'limit')::integer) r") parameters
   "purge-rejections" -> do
     let predicate = "($1->>'account' IS NULL OR account_id=$1->>'account') AND received_at<coalesce(($1->>'before')::timestamptz,($1->>'rejection_cutoff')::timestamptz)"
@@ -195,9 +196,9 @@ help =
   unlines
     [ "kansoku-admin issue-key --kind write|service --account ID [--description TEXT]",
       "list-keys [--account ID] [--limit 1..10000] | revoke-key --id UUID [--account ID] [--confirm]",
-      "erase-user --account ID --user ID [--delete-events] [--out PATH] [--confirm]",
-      "apply-retention [--out PATH] [--confirm] (KANSOKU_EVENTS_RETENTION_DAYS; 0/unset unlimited)",
-      "resume-job --id UUID --confirm [--out PATH] | job-status --id UUID | list-jobs [--limit N]",
+      "erase-user --account ID --user ID [--delete-events] [--out PATH] [--confirm | --prepare]",
+      "apply-retention [--out PATH] [--confirm | --prepare] (KANSOKU_EVENTS_RETENTION_DAYS; 0/unset unlimited)",
+      "resume-job --id UUID --confirm [--out PATH] [--drain-evidence FILE] | job-status --id UUID | list-jobs [--limit N]",
       "replay-archive [--limit N] [--before UTC] [--after UTC] [--out PATH] [--confirm]",
       "purge-archive --before UTC [--limit N] [--confirm]",
       "list-rejections [--account ID] [--event NAME] [--since UTC] [--limit N] [--include-payload]",

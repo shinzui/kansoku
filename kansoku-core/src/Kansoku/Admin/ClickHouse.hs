@@ -9,6 +9,8 @@ module Kansoku.Admin.ClickHouse
     rebuildReplicas,
     verifyReplicaMutations,
     quiesceReplicaWrites,
+    WriteObservation (..),
+    observeReplicaWrites,
     verifyReplicaPopulations,
     verifyMutations,
     quiesceRawWrites,
@@ -26,6 +28,7 @@ import Data.IORef
 import Data.Text qualified as Text
 import Kansoku.ClickHouse.Consistency
 import Kansoku.ClickHouse.Native
+import Kansoku.Exception (trySynchronous)
 import Kansoku.Prelude
 import System.Timeout (timeout)
 
@@ -166,3 +169,19 @@ quiesceReplicaWrites replicas = do
   case result of
     Just () -> pure ()
     Nothing -> readIORef pending >>= \ids -> failConsistency ("raw INSERT drain deadline expired; pending replicas=" <> show ids <> "; maintenance fence retained")
+
+-- These are supplementary observations, never evidence that old clients cannot
+-- submit more work. A hidden/denied view is explicitly unavailable, not zero.
+data WriteObservation = ObservationUnavailable | NoVisibleWrites | VisibleWrites
+  deriving (Eq, Show)
+
+observeReplicaWrites :: ReplicaConnections -> IO [(Text, WriteObservation)]
+observeReplicaWrites replicas = forM (replicaConnections replicas) $ \(sid, c) -> do
+  observation <- trySynchronous $ withinBudget ("supplementary raw INSERT observation " <> sid) $ chJSON c A.Null "SELECT toJSONString(count()) AS value FROM system.processes WHERE lower(query_kind)='insert' AND position(query,'events_raw')>0 AND (current_database='analytics' OR position(query,'analytics.events_raw')>0 OR position(query,'`analytics`.`events_raw`')>0)"
+  pure
+    ( sid,
+      case observation of
+        Right [A.Number n] | n > 0 -> VisibleWrites
+        Right [A.Number 0] -> NoVisibleWrites
+        _ -> ObservationUnavailable
+    )

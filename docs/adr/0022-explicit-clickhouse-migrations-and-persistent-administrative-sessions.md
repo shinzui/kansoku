@@ -5,7 +5,7 @@ description: Embed immutable native migration steps, bind administration to reta
 docId: ADR-22
 status: Accepted
 date: 2026-10-16
-timestamp: 2026-11-08T05:28:00Z
+timestamp: 2026-11-13T18:40:00Z
 generated:
   by: process:codex
   at: 2026-10-16T22:55:08Z
@@ -189,3 +189,31 @@ is published and readback verified. Acceptance is target-specific: it does not
 certify provider routing or claim full replicated execution inside the amd64 image.
 TAN still owns independent production inventory, storage/fsync, grants, drain and
 managed migration/event-flow rehearsal. Publication performs no database migration.
+
+## Portable operator drain boundary
+
+The initial portable drain contract lives in `Kansoku.Admin.DrainEvidence` and
+binds a bounded versioned operator attestation to the complete expected server
+inventory, databases, ledger, owner and predecessor/attempt. Trusted coverage comes
+from deployment configuration and retained coordination state, independently of
+the document. Parsing does not authenticate external procedures or platform
+signatures. Platform control remains outside the application. Migration entries
+can retain validated envelopes in their existing audit JSON without rewriting
+native receipts or migration history. Preparation of data jobs persists a scope
+and fence without connecting to ClickHouse; appended PostgreSQL migration 0011
+adds monotonic native-attempt state. Direct and replicated identities retain their
+existing semantics.
+
+This is an incremental implementation under ExecPlan 50. Full job-bound evidence
+consumption, sufficiency enforcement, upstream repair qualification and integrated
+backup/platform acceptance remain open; the initial CLI option does not replace
+the dedicated procedure or establish the completed shared-server guarantee.
+
+Supplementary process observations are not proof of drain. Portable data jobs
+record visible writes, no visible writes or unavailable observation separately;
+visible writes contradict the attestation and prevent discovery. Denied reads do
+not become zero-count observations. Run optional diagnostic exchanges on separate
+native connections, because a rejected exchange must not compromise the connection
+used for subsequent maintenance. Appended PostgreSQL migration 0012 retains each
+accepted data-job attempt's envelope, exact file digest and observations. Consumers
+recheck accepted evidence expiry after acquiring exclusion before native entry.

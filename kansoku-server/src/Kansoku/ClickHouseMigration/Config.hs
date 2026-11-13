@@ -4,6 +4,7 @@ module Kansoku.ClickHouseMigration.Config
   ( Config,
     loadConfig,
     target,
+    username,
     topology,
     parseTopology,
     loadTopology,

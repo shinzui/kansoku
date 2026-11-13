@@ -2,6 +2,9 @@
 
 ## 2026-11-13
 
+* **Update**: Document the initial portable operator-attestation boundary and prepared job attempt state; full shared maintenance acceptance remains open.
+
+
 * **Create**: Add proposed ADR-27: isolate best-effort live activity from writing and explicitly permit stale UI.
 
 

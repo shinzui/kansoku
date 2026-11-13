@@ -104,6 +104,7 @@ executable kansoku-ch-migrate
     kansoku-core,
     optparse-applicative,
     text,
+    time,
 
 flag migration-acceptance-probe
   description: Compile a separate CLI with a test-only appended native migration
@@ -140,6 +141,7 @@ executable kansoku-ch-migrate-upgrade-proof
     kansoku-core,
     optparse-applicative,
     text,
+    time,
 
   if !flag(migration-acceptance-probe)
     buildable: False

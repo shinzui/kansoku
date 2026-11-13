@@ -145,10 +145,10 @@ class Harness:
 
 
 @contextmanager
-def owned(root, native, upgrade, pg_migrate, admin):
+def owned(root, native, upgrade, pg_migrate, admin, *, access_management=False):
     controller = {}
     with isolated_postgres(root / 'postgres') as pg:
-        with isolated_clickhouse(directory=root / 'clickhouse', controller=controller) as ch:
+        with isolated_clickhouse(directory=root / 'clickhouse', controller=controller, access_management=access_management) as ch:
             env = dict(pg)
             env.update({key: value for key, value in ch.items() if key.startswith(('CLICKHOUSE_', 'KANSOKU_CLICKHOUSE_', 'KANSOKU_OWNED_CLICKHOUSE_'))})
             yield Harness(root, native, upgrade, pg_migrate, admin, env, controller)
@@ -367,6 +367,8 @@ def verify(root, native, upgrade, pg_migrate, admin, server):
         cases += recovery_case(root / ('retry' if retry else 'accept'), native, upgrade, pg_migrate, admin, retry)
     from clickhouse_coordination_acceptance import verify_coordination
     cases += verify_coordination(root / 'coordination',native,upgrade,pg_migrate,admin,server,owned,FaultProxy,repair_arguments)
+    from portable_drain_acceptance import verify as verify_portable_drain
+    cases += verify_portable_drain(root / 'portable-drain', native, pg_migrate, admin)
     print(f'ClickHouse migrations: {cases} cases, 0 failures, 0 skipped', flush=True)
     return cases
 

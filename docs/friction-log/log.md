@@ -2,6 +2,15 @@
 
 ## 2026-11-13
 
+* **Addition**: FRIC-37 records detour interface friction with mori://KovalevDima/ClickHaskell/packages/ClickHaskell: Rejected native process observation invalidates the maintenance exchange
+
+
+* **Update**: FRIC-36 resolved: Corrected diagnosis: agent environment mismatch, not unavailable PostgreSQL service.
+
+
+* **Addition**: FRIC-36 records blocked environment friction with mori://shinzui/mori: Mori dependency discovery unavailable during portable drain implementation
+
+
 * **Addition**: FRIC-35 records detour environment friction with mori://shinzui/mori: Mori registry discovery unavailable during live activity planning
 
 

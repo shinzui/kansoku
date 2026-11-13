@@ -21,6 +21,11 @@ provenance:
       at: 2026-11-04T05:38:58Z
       mode: "update"
       note: "Corrected toolkit pin location and coordinator schema location; added shared parser/harness ownership and local-checkout lag discovery"
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-11-13T18:06:03Z
+      mode: "implement"
+      note: "Started EP-50 and recorded unmet Mori dependency-discovery prerequisite"
 ---
 
 # Operate Kansoku ClickHouse safely across deployment platforms
@@ -123,7 +128,7 @@ privilege inventory and platform-specific instructions.
 
 | # | Title | Path | Hard Deps | Soft Deps | Status |
 |---|-------|------|-----------|-----------|--------|
-| 50 | Accept portable drain evidence without cross-user process visibility | [ExecPlan](../plans/50-accept-portable-drain-evidence-without-cross-user-process-visibility.md) | None | None | Not Started |
+| 50 | Accept portable drain evidence without cross-user process visibility | [ExecPlan](../plans/50-accept-portable-drain-evidence-without-cross-user-process-visibility.md) | None | None | In Progress |
 | 51 | Establish consistent maintenance backups and restored-server identity recovery | [ExecPlan](../plans/51-establish-consistent-maintenance-backups-and-restored-server-identity-recovery.md) | EP-50 M1: accepted evidence contract and owner binding | EP-52 for early restored-copy roundtrip | Not Started |
 | 52 | Verify renamed ClickHouse restores without writes | [ExecPlan](../plans/52-verify-renamed-clickhouse-restores-without-writes.md) | None | EP-51 recovery-set manifest | Not Started |
 | 53 | Prove shared-server maintenance across deployment platforms | [ExecPlan](../plans/53-prove-shared-server-maintenance-across-deployment-platforms.md) | EP-50; EP-51; EP-52, all Complete | None | Not Started |
@@ -241,16 +246,15 @@ if missing or skipped; live production endpoints are never acceptance fixtures.
 
 ## Progress
 
-Planning complete on 2026-11-03. Four child ExecPlans exist; none has started.
-EP-50 M1 is next. Nagare prerequisites are recorded upstream as completed, but their
-Kansoku integration and the toolkit repair change remain unproven. All five IR criteria
-and the final deployment matrix remain open. IR-2 retains its proposed status.
-
-Reviewed on 2026-11-03 against the working tree; verified repository mismatches were
-corrected in the same pass (see the revision note below). No friction-log bundle exists
-yet; the first child implementation bootstraps `docs/friction-log/` through
-`agents/skills/exec-plan/record-friction.ts` as described in
-`agents/skills/exec-plan/FRICTION.md`.
+EP-50 is In Progress. M1's initial portable contract and owned native
+producer/consumer proof passed on 2026-11-13. M2 adds expiry rechecks, per-attempt
+audits, visible-writer refusal and denied/own-user observations under external
+evidence; full sufficiency enforcement remains open. M3
+upstream repair/package qualification remain open. EP-51's M1 dependency is now
+satisfied, but default execution remains EP-50 first. EP-52 is independently ready;
+EP-53 remains blocked on all three completed children. All final IR criteria and
+deployment integration gates remain open. Mori discovery works after refreshing
+the agent shell's inherited environment (resolved FRIC-36).
 
 
 ## Surprises & Discoveries

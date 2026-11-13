@@ -2,6 +2,12 @@
 
 ## 2026-11-13
 
+* **Update**: Document prepare-only fenced data jobs and returned attempt identity.
+
+
+* **Update**: Document the initial portable drain envelope, trusted coverage configuration and executable proof.
+
+
 * **Update**: DOC-9 separates admission and delivery probes; DOC-2 assigns existing thresholds to pipeline health and finite disk budgets.
 
 

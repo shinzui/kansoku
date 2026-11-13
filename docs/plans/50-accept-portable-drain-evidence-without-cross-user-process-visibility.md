@@ -22,6 +22,11 @@ provenance:
       at: 2026-11-04T05:38:58Z
       mode: "update"
       note: "Point coordinator schema work at Kansoku/Migrations.hs; note pinned commit versus local checkout; add ADR bundle validation"
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-11-13T18:06:03Z
+      mode: "implement"
+      note: "Recorded mandatory dependency-discovery blocker; M1 remains unaccepted"
 ---
 
 # Accept portable drain evidence without cross-user process visibility
@@ -44,12 +49,49 @@ platform login controller or claim Nagare deployment acceptance by itself.
 
 ## Progress
 
-- [ ] M1: A bounded portable evidence contract binds an actual maintenance owner and passes a real producer/consumer drain proof while the migration principal remains usable.
+- [x] (2026-11-13) M1: A bounded portable evidence contract binds an actual maintenance owner and passes a real producer/consumer drain proof while the migration principal remains usable.
 - [ ] M2: Migration sessions and prepared/resumed data jobs enforce sufficient evidence; unavailable or restricted process observations never imply drain.
 - [ ] M3: Qualified upstream repair behavior and packaged Kansoku acceptance cover denied and own-user process visibility, stale evidence and interrupted requests.
 
 
+M1 evidence: eight focused validator examples pass. The locally built CLI/native
+producer-consumer proof in `scripts/portable_drain_acceptance.py` passes two owned
+cases with zero failures/skips. It proves runtime login exclusion, prior-request
+completion, a still-running other-app query and fresh other-app queries, unchanged
+server PID, stale predecessor refusal without counter advancement, retained
+migration evidence, ClickHouse-independent job preparation, owner exclusion,
+wrong-attempt refusal, visible prior INSERT refusal, denied-process retention and
+own-user-view erasure resumes with consumed-attempt evidence. Existing administration
+acceptance also passes all seven scenario families under
+`.dev/acceptance/admin-smoke-6i6ujo14/`.
+The final successful run retained private evidence under
+`.dev/acceptance/portable-drain-0da9s6b8/`.
+
+M2 is partially implemented: migration and job consumers recheck expiration after
+waiting for exclusion; migration audits retain the exact input-file SHA-256. Job
+attempt proofs/digests and supplementary process observations are retained in the
+appended 0012 audit table. A visible raw INSERT contradicts an attestation and
+blocks discovery. An unavailable process observation is a distinct recorded state;
+only separately validated external evidence authorizes the portable path. Optional
+observations run on separate native connections so a rejected query cannot poison
+the maintenance connection (FRIC-37, still logged pending final triage).
+
+M2/M3 remain open. Portable input is currently opt-in; legacy paths still use their
+existing drain checks. Complete sufficiency enforcement, denial/own-user process
+acceptance, full migration entry-audit retention and the upstream repair delivery gate are not yet accepted. No packaged
+or Nagare/shared production release claim follows from M1.
+
 ## Surprises & Discoveries
+
+The working tree now selects toolkit 0.2.0.0 from Hackage and supports replicated
+runtime/job topology. The original 0.1.0.1 source-pin context below is historical;
+no dependency version was changed by this implementation. Evidence binds the full
+server inventory. PostgreSQL migrations through 0010 already exist, so the new
+attempt columns are appended in 0011 rather than changing any earlier SQL.
+
+Initial Mori failures came from the agent's inherited connection string and Home
+Manager sourced flag, not the configured service. FRIC-36 is resolved; a fresh
+shell with the initialization flag cleared successfully performs discovery.
 
 
 ## Decision Log

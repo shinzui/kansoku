@@ -41,7 +41,9 @@ kansokuApplicationMigrations = do
   replicatedAdministration <- sqlMigration "0008-clickhouse-replicated-administration" replicatedAdministrationSql
   replicatedJobs <- sqlMigration "0009-clickhouse-replicated-jobs" replicatedJobsSql
   analyses <- sqlMigration "0010-saved-analyses" analysesSql
-  migrationComponent "kansoku" (Set.singleton "pgmq") (apiKeys :| [rejections, acceptance, maintenance, cohorts, definitions, administration, replicatedAdministration, replicatedJobs, analyses])
+  drainAttempts <- sqlMigration "0011-maintenance-drain-attempts" drainAttemptsSql
+  drainAudit <- sqlMigration "0012-maintenance-drain-audit" drainAuditSql
+  migrationComponent "kansoku" (Set.singleton "pgmq") (apiKeys :| [rejections, acceptance, maintenance, cohorts, definitions, administration, replicatedAdministration, replicatedJobs, analyses, drainAttempts, drainAudit])
 
 apiKeysSql :: ByteString
 apiKeysSql =
@@ -288,4 +290,28 @@ analysesSql =
   );
   CREATE INDEX analyses_account_updated ON kansoku.analyses(account_id,updated_at DESC,id ASC);
   CREATE INDEX analyses_account_kind_updated ON kansoku.analyses(account_id,kind,updated_at DESC,id ASC);
+  """
+
+-- Append-only preparation/attempt identity for externally produced evidence.
+drainAttemptsSql :: ByteString
+drainAttemptsSql =
+  """
+  ALTER TABLE kansoku.maintenance_jobs
+    ADD COLUMN native_attempt bigint NOT NULL DEFAULT 0 CHECK (native_attempt >= 0),
+    ADD COLUMN drain_evidence jsonb;
+  """
+
+-- Retain accepted proofs per attempt; never overwrite an earlier attempt audit.
+drainAuditSql :: ByteString
+drainAuditSql =
+  """
+  CREATE TABLE kansoku.maintenance_drain_attempts (
+    job_id uuid NOT NULL REFERENCES kansoku.maintenance_jobs(id),
+    attempt bigint NOT NULL CHECK (attempt > 0),
+    evidence jsonb NOT NULL,
+    evidence_sha256 text NOT NULL CHECK (evidence_sha256 ~ '^[0-9a-f]{64}$'),
+    observations jsonb NOT NULL DEFAULT '[]',
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    PRIMARY KEY (job_id, attempt)
+  );
   """

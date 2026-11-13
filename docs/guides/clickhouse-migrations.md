@@ -4,7 +4,7 @@ title: "Initialize and upgrade ClickHouse"
 description: "Initialize a fresh owned ClickHouse target, retain native identities, coordinate maintenance and recover explicit migration attempts."
 docId: DOC-13
 tags: ["clickhouse", "migrations", "maintenance", "recovery"]
-timestamp: 2026-11-08T06:55:25Z
+timestamp: 2026-11-13T18:40:00Z
 generated:
   by: process:codex
   at: "2026-11-07T20:24:51Z"
@@ -413,3 +413,49 @@ target remains the rollback procedure.
 `just ch-migrations-replicated` uses Apple Container with the exact digest-qualified Linux arm64
 image, owned Keeper and two replicas with 4 GiB per replica for the full native query fixtures. Failed fixture evidence is retained under `.dev/acceptance`.
 This local execution is separate from managed endpoint qualification.
+
+## Portable drain envelope (initial implementation)
+
+The outer `--drain-evidence FILE` option accepts a version-1 operator attestation
+for `up`, repair, maintenance reconciliation and finish. Put it before the
+subcommand, alongside `--predecessor`. Existing `--quiescent`, audit references
+and target checks remain required. Without this new option the existing dedicated
+procedure remains available; this initial implementation does not yet establish
+the completed shared-server maintenance ceremony.
+
+Set `KANSOKU_CH_DRAIN_SUBMITTERS` to a JSON array listing every deployment principal
+that can submit Kansoku work, including migration, backup and scheduled-reader
+principals. This trusted configuration must be independent of the evidence file.
+The evidence must list the current migrator in `availablePrincipals`: the migrator
+can remain available while its earlier work is drained and other submitters are
+excluded. No platform subprocess is launched by Kansoku.
+
+The bounded JSON object has exactly these fields: `schemaVersion` (1), `target`,
+`servers` (complete UUID array), `ledger` (UUID or null), `databases` (exact names),
+`submitters`, `availablePrincipals`, `owner`, `exclusionStartedAt`, `drainedAt`,
+`expiresAt`, `procedureReference`, `procedureSha256`, `submittersBlocked`,
+`schedulesPaused`, `backgroundChangesSettled`, and `operatorAttested`. All four
+attestation booleans must be true. A migration owner is an object containing
+`kind: "migration-session"`, `id` and nonnegative `predecessor`; a data-job owner
+uses `kind: "data-job"`, `id` and positive `attempt`. The latter shape is accepted by `kansoku-admin resume-job --drain-evidence FILE`.
+
+The file is limited to 64 KiB; inventory arrays contain at most 128 distinct,
+nonempty entries. Text fields contain at most 1024 characters and no control
+characters. Times are UTC JSON timestamps: exclusion starts after session creation,
+drain follows exclusion, and expiration follows the current time. An exclusion
+interval cannot exceed 24 hours. The procedure digest is 64 hexadecimal characters
+identifying externally retained proof. The envelope is retained in the entry's
+PostgreSQL audit together with the exact file SHA-256. Expiration is rechecked
+after waiting for exclusion. Validation checks identity and declarations; it does not read the
+external proof, authenticate a platform signature or prove the attestation true.
+A deployment operator must establish and retain the actual exclusion/drain proof.
+
+Run the owned initial producer/consumer proof with:
+
+```bash
+nix develop -c python3 scripts/portable_drain_acceptance.py
+```
+
+This uses fixture-owned PostgreSQL and ClickHouse instances and the locally built
+migration/admin executables. It does not claim packaged, Nagare, complete data-job
+or backup/recovery acceptance.

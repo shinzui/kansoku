@@ -207,3 +207,30 @@ that ignores replicated job identity while such a job is unfinished.
 PostgreSQL admission fences cooperating Kansoku traffic. Pause external native
 writers and readers explicitly throughout maintenance, including repair/resume;
 arbitrary external SQL does not participate in that admission protocol.
+
+## Prepare an externally drained data job
+
+`erase-user` and `apply-retention` accept `--prepare` instead of `--confirm`.
+Preparation persists the requested scope and installation-wide fence and returns
+`job_id` and `next_attempt` without connecting to ClickHouse or discovering data.
+Use `job-status` after a lost response; creating another job is refused while that
+fence is active. Native attempts increment the retained counter before opening
+ClickHouse, including attempts that fail. This preparation interface supports the
+portable drain work in ExecPlan 50. Resume accepts `--drain-evidence FILE` bound
+to that job and next attempt. Set the trusted `KANSOKU_CH_MIGRATION_TARGET`,
+`KANSOKU_CH_MIGRATION_LEDGER_ID`, `KANSOKU_CH_DRAIN_SERVERS`,
+`KANSOKU_CH_DRAIN_SUBMITTERS` and `KANSOKU_CH_DRAIN_AVAILABLE_PRINCIPALS`
+configuration independently of the envelope. The three inventory variables are
+JSON string arrays. Native server UUIDs are checked against the evidence inventory
+before discovery. A failed resumed attempt consumes its counter, so inspect the
+new next attempt before producing fresh evidence. Accepted evidence is retained
+on the job. The envelope format is documented in the migration runbook. Legacy
+resume remains available; full sufficiency and restricted-process acceptance are
+still open under ExecPlan 50.
+
+Portable attempts retain each accepted envelope and exact input-file digest in
+`kansoku.maintenance_drain_attempts`. Supplementary process observations are recorded
+separately: visible raw writes block progress; denied/failed observations are
+unavailable rather than an empty process list. Valid external evidence supplies
+the drain authority in that case. Optional diagnostics use separate connections.
+`job-status` exposes `next_attempt` for producing fresh evidence after failure.

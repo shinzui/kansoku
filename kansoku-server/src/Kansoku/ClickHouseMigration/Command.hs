@@ -19,13 +19,16 @@ import Data.List.NonEmpty qualified as NE
 import Data.Maybe (isJust)
 import Data.Text (Text)
 import Data.Text qualified as Text
+import Data.Text.Encoding qualified as Encoding
 import Data.Text.IO qualified as Text
+import Data.Time (UTCTime, getCurrentTime)
 import Kansoku.Admin.Coordination qualified as C
+import Kansoku.Admin.DrainEvidence qualified as Drain
 import Kansoku.ClickHouseMigration.Config qualified as Config
 import Kansoku.ClickHouseMigration.Coordinator (sessionEvents, verifySessions, withCoordinator)
 import Kansoku.Exception (trySynchronous)
 import Options.Applicative qualified as O
-import System.Environment (getArgs)
+import System.Environment (getArgs, lookupEnv)
 import System.Exit (ExitCode (..), exitFailure, exitWith)
 import System.IO (stderr)
 import System.IO.Error (ioeGetErrorString, isUserError)
@@ -34,8 +37,8 @@ data ApplicationCommand = Native !Invocation | Begin !OutputFormat !T.TargetKey 
 
 -- The toolkit parser remains authoritative for its command syntax. The outer
 -- option binds quiescence to a specific persisted application session entry.
-parser :: O.Parser (Maybe Integer, ApplicationCommand)
-parser = (,) <$> optional (O.option O.auto (O.long "predecessor" <> O.metavar "ENTRY" <> O.help "Quiescence evidence applies to this exact session entry counter")) <*> (Native <$> commandParser <|> maintenance)
+parser :: O.Parser (Maybe Integer, Maybe FilePath, ApplicationCommand)
+parser = (,,) <$> optional (O.option O.auto (O.long "predecessor" <> O.metavar "ENTRY" <> O.help "Quiescence evidence applies to this exact session entry counter")) <*> optional (O.strOption (O.long "drain-evidence" <> O.metavar "FILE" <> O.help "Bounded portable operator drain attestation")) <*> (Native <$> commandParser <|> maintenance)
   where
     maintenance = O.hsubparser (O.command "maintenance" (O.info commands (O.progDesc "Persist or finish a fenced administrative session")))
     receipts = many (O.option (O.eitherReader (either (const (Left "Invalid append receipt")) Right . L.parseAppendReceipt . Text.pack)) (O.long "pending-append" <> O.metavar "RECEIPT"))
@@ -80,21 +83,22 @@ run choose = do
     _ -> exitWith ExitSuccess
   plan <- either (const (fail "Invalid compiled migration plan")) pure compiled
   case parsed of
-    (_, Native (Invocation _ AdoptCommand {})) -> Text.hPutStrLn stderr "Legacy import is unsupported; create a fresh owned stack." >> exitFailure
-    (_, Native invocation@(Invocation _ PlanCommand)) -> execute plan Nothing Nothing invocation
-    (predecessor, Native invocation@(Invocation format command)) -> do
+    (_, _, Native (Invocation _ AdoptCommand {})) -> Text.hPutStrLn stderr "Legacy import is unsupported; create a fresh owned stack." >> exitFailure
+    (_, _, Native invocation@(Invocation _ PlanCommand)) -> execute plan Nothing Nothing invocation
+    (predecessor, evidenceFile, Native invocation@(Invocation format command)) -> do
       config <- Config.loadConfig
       case command of
         UpCommand (UpInput _ _ (Just initialization) _) -> unless (initialization == Config.ledger config) (fail "Initialization ledger differs from retained identity")
         _ -> pure ()
       if isMutation command || guarded command
         then do
-          mutation <- if isMutation command then Just <$> entry config predecessor command else pure Nothing
+          mutation <- if isMutation command then Just <$> entry config predecessor evidenceFile command else pure Nothing
           withCoordinator config mutation $ \provider _ record requireReceipts -> do
             case command of UpCommand (UpInput _ _ (Just _) _) -> Config.ensureFreshInitialization config; _ -> pure ()
             case command of
               RepairCommand _ (RepairInput _ _ _ _ _ _ receipts) -> requireReceipts (map L.appendReceiptText receipts)
               _ -> pure ()
+            mapM_ (\(_, _, audit) -> checkAuditDrain audit) mutation
             result <- handleCommand (commandEnvironment (Just (Config.nativeConfig config (firstUse command))) (Just provider) (sessionEvents config plan) redactedDiagnostics AdministrativeCommands) plan command
             -- Emit the native report before coordinator cleanup so a secondary
             -- PostgreSQL failure cannot hide the original primary error/receipt.
@@ -102,13 +106,14 @@ run choose = do
             if isMutation command then record (successful result) (pendingReceipts result) else pure ()
             unless (successful result) exitFailure
         else execute plan (Just (Config.nativeConfig config False)) Nothing invocation
-    (predecessor, Reconcile format expected input receipts) -> do
+    (predecessor, evidenceFile, Reconcile format expected input receipts) -> do
       config <- Config.loadConfig
       match config expected
-      audit <- auditValue input
       n <- requirePredecessor predecessor
+      audit <- auditValue input >>= bindDrain config n evidenceFile
       withCoordinator config (Just (n, "maintenance-reconcile", audit)) $ \provider _ record requireReceipts -> do
         requireReceipts (map L.appendReceiptText receipts)
+        checkAuditDrain audit
         classifications <- forM receipts $ \receipt -> do
           reconciled <- L.reconcileAppend (Config.nativeConfig config False) provider receipt
           case reconciled of
@@ -124,27 +129,28 @@ run choose = do
             Text.hPutStrLn stderr "Native history is unresolved or incompatible; use explicit repair. The fence remains active."
             exitFailure
         renderMaintenance format "maintenance-reconcile" (A.object ["receipts" A..= classifications, "resolved" A..= True])
-    (_, SessionStatus format) -> do
+    (_, _, SessionStatus format) -> do
       config <- Config.loadConfig
       let session = C.SessionIdentity (maybe "" id (Config.session config)) (T.targetKeyText (Config.target config)) (Config.sessionTarget config) (T.ledgerIdText (Config.ledger config))
       settings <- maybe (fail "PG_CONNECTION_STRING required") pure (Config.postgres config)
       row <- C.sessionStatus settings session
       whenNull row
       renderMaintenance format "maintenance-status" row
-    (_, Begin format expected input) -> do
+    (_, _, Begin format expected input) -> do
       config <- Config.loadConfig
       match config expected
       audit <- auditValue input
       settings <- maybe (fail "PG_CONNECTION_STRING required") pure (Config.postgres config)
       row <- C.beginSession settings (T.targetKeyText (Config.target config)) (Config.sessionTarget config) (T.ledgerIdText (Config.ledger config)) audit
       renderMaintenance format "maintenance-begin" row
-    (predecessor, Finish format expected input) -> do
+    (predecessor, evidenceFile, Finish format expected input) -> do
       config <- Config.loadConfig
       match config expected
-      audit <- auditValue input
       n <- requirePredecessor predecessor
+      audit <- auditValue input >>= bindDrain config n evidenceFile
       withCoordinator config (Just (n, "maintenance-finish", audit)) $ \_ finish _ requireReceipts -> do
         requireReceipts []
+        checkAuditDrain audit
         verified <- I.verify I.Observe (Config.nativeConfig config False) (I.verifyOptions True) plan
         case verified of
           Left failure -> output format (CommandResult "maintenance-finish" (Left (InspectionFailed failure))) >> exitFailure
@@ -163,14 +169,57 @@ run choose = do
           outputSelected settings format result
           unless (successful result) exitFailure
 
-entry :: Config.Config -> Maybe Integer -> Command -> IO (Integer, Text, A.Value)
-entry config predecessor command = do
+entry :: Config.Config -> Maybe Integer -> Maybe FilePath -> Command -> IO (Integer, Text, A.Value)
+entry config predecessor evidenceFile command = do
   quiet <- either (const (fail "Explicit target-bound quiescence evidence required")) pure (quiescenceForCommand (Config.target config) command)
   unless (isJust quiet) (fail "Explicit quiescence evidence required even before the first entry")
   n <- requirePredecessor predecessor
   input <- case command of UpCommand (UpInput _ a _ _) -> pure a; RepairCommand _ (RepairInput _ _ _ _ a _ _) -> pure a; _ -> fail "Unsupported mutation"
-  evidence <- auditValue input
+  evidence <- auditValue input >>= bindDrain config n evidenceFile
   pure (n, commandName command, evidence)
+
+-- The evidence inventory is deployment configuration, not a claim supplied by
+-- the attestation. The lease subsequently verifies the same session/predecessor
+-- atomically before recording the native entry.
+bindDrain :: Config.Config -> Integer -> Maybe FilePath -> A.Value -> IO A.Value
+bindDrain _ _ Nothing audit = pure audit
+bindDrain config predecessor (Just path) audit = do
+  ident <- maybe (fail "KANSOKU_CH_MIGRATION_SESSION required") pure (Config.session config)
+  settings <- maybe (fail "PG_CONNECTION_STRING required") pure (Config.postgres config)
+  row <- C.sessionStatus settings (C.SessionIdentity ident (T.targetKeyText (Config.target config)) (Config.sessionTarget config) (T.ledgerIdText (Config.ledger config)))
+  created <- case row of
+    A.Object fields -> case KM.lookup "created_at" fields of
+      Just value -> case A.fromJSON value :: A.Result UTCTime of
+        A.Success time -> pure time
+        _ -> fail "Invalid persisted session creation time"
+      _ -> fail "Unknown persisted session"
+    _ -> fail "Unknown persisted session"
+  raw <- lookupEnv "KANSOKU_CH_DRAIN_SUBMITTERS" >>= maybe (fail "KANSOKU_CH_DRAIN_SUBMITTERS must declare every submitting principal as a JSON array") pure
+  submitters <- either (const (fail "Invalid trusted drain submitter inventory")) pure (A.eitherDecodeStrict' (Encoding.encodeUtf8 (Text.pack raw)))
+  let servers = case Config.sessionTarget config of
+        C.DirectTarget sid -> [sid]
+        C.ReplicatedTarget _ ids -> ids
+      required = Drain.DrainRequirement (T.targetKeyText (Config.target config)) servers (Just (T.ledgerIdText (Config.ledger config))) ["analytics", "kansoku_migration_ledger"] (Config.username config : submitters) [Config.username config] (Drain.MigrationSession ident predecessor) created
+  now <- getCurrentTime
+  accepted <- Drain.readDrainEvidence now required path >>= either (fail . Text.unpack) pure
+  case audit of
+    A.Object fields -> pure (A.Object (KM.insert "drainEvidenceSha256" (A.toJSON (Drain.acceptedDigest accepted)) (KM.insert "drainEvidence" (Drain.acceptedDocument accepted) fields)))
+    _ -> fail "Invalid audit"
+
+-- Recheck the already accepted, retained envelope after lease acquisition;
+-- never reopen the operator's file or substitute a different audit document.
+checkAuditDrain :: A.Value -> IO ()
+checkAuditDrain (A.Object audit) = case KM.lookup "drainEvidence" audit of
+  Nothing -> pure ()
+  Just (A.Object evidence) -> case KM.lookup "expiresAt" evidence of
+    Just expiry -> case A.fromJSON expiry :: A.Result UTCTime of
+      A.Success time -> do
+        now <- getCurrentTime
+        unless (now < time) (fail "Drain evidence expired while waiting for exclusion; fence retained")
+      _ -> fail "Invalid retained drain expiry"
+    _ -> fail "Missing retained drain expiry"
+  _ -> fail "Invalid retained drain envelope"
+checkAuditDrain _ = fail "Invalid retained audit"
 
 requirePredecessor :: Maybe Integer -> IO Integer
 requirePredecessor (Just n) | n >= 0 = pure n

@@ -1,17 +1,19 @@
 -- | Resumable, fenced cross-store jobs. PostgreSQL is the authoritative journal.
-module Kansoku.Admin.Jobs (runJob, resumeJob, writePrivate) where
+module Kansoku.Admin.Jobs (runJob, runPreparedJob, resumeJob, writePrivate) where
 
 import ClickHaskell (Connection)
 import Control.Exception (bracket, bracketOnError)
 import Control.Monad (forM, forM_)
 import Data.Aeson qualified as A
 import Data.ByteString.Lazy qualified as LBS
-import Data.List (elemIndex, nub)
+import Data.List (elemIndex, nub, sort)
 import Data.Text qualified as Text
+import Data.Text.Encoding qualified as Encoding
 import Data.UUID qualified as UUID
 import Data.UUID.V4 (nextRandom)
 import Database.PostgreSQL.LibPQ qualified as PQ
 import Kansoku.Admin.ClickHouse
+import Kansoku.Admin.DrainEvidence qualified as Drain
 import Kansoku.Admin.Store
 import Kansoku.Auth.Token (Token (..), hashToken)
 import Kansoku.ClickHouse (clickHouseConfigFromConfig, openClickHouse)
@@ -52,10 +54,15 @@ withNative config action = withReplicaConnections (config ^. #clickHouseTopology
   action replicas
 
 runJob :: Config -> PQ.Connection -> Text -> A.Value -> Bool -> Maybe FilePath -> IO A.Value
-runJob config connection kind requestedScope confirm output = do
+runJob config connection kind requestedScope confirm output = runPreparedJob config connection kind requestedScope confirm False output
+
+-- Preparation retains the same immutable scope and fence as confirmation but
+-- returns before opening ClickHouse or discovering any application data.
+runPreparedJob :: Config -> PQ.Connection -> Text -> A.Value -> Bool -> Bool -> Maybe FilePath -> IO A.Value
+runPreparedJob config connection kind requestedScope confirm prepare output = do
   scope <- if kind == "retention" then query connection "SELECT $1||jsonb_build_object('fingerprint_cutoff',greatest(($1->>'fingerprint_cutoff')::timestamptz,fingerprint_cutoff)) FROM kansoku.retention_policy WHERE singleton" requestedScope else pure requestedScope
   tables <- queueTables connection (config ^. #eventsQueueName)
-  if not confirm
+  if not confirm && not prepare
     then do
       admitMaintenanceTraffic connection
       withNative config $ \replicas -> previewJob (coordinator replicas) connection tables kind scope
@@ -68,7 +75,7 @@ runJob config connection kind requestedScope confirm output = do
       job <- query connection "WITH created AS (INSERT INTO kansoku.maintenance_jobs(kind,scope,target_identity) VALUES($1->>'kind',$1->'scope',$1->'identity') RETURNING *) SELECT to_jsonb(created) FROM created" (A.object ["kind" A..= kind, "scope" A..= scope, "identity" A..= topologyIdentity (config ^. #clickHouseTopology)])
       void $ query connection "UPDATE kansoku.maintenance_fence SET active_job=($1->>'id')::uuid WHERE singleton" job
       pgScript connection "COMMIT"
-      executeJob config connection tables job output
+      if prepare then pure (receipt job) else executeJob config connection tables job output
 
 resumeJob :: Config -> PQ.Connection -> A.Value -> Bool -> Maybe FilePath -> IO A.Value
 resumeJob config connection parameters confirm output = do
@@ -83,7 +90,7 @@ resumeJob config connection parameters confirm output = do
       active <- query connection "SELECT to_jsonb(active_job) FROM kansoku.maintenance_fence WHERE singleton AND $1 IS NOT NULL" A.Null
       unless (active == field "id" job) (fail "maintenance fence ownership differs from resumed job")
       tables <- queueTables connection (config ^. #eventsQueueName)
-      executeJob config connection tables job output
+      executeJobWithEvidence config connection tables job output (case field "drain-evidence" parameters of A.String path -> Just (Text.unpack path); _ -> Nothing)
 
 administrativeLock :: PQ.Connection -> IO ()
 administrativeLock connection = do
@@ -91,15 +98,38 @@ administrativeLock connection = do
   unless (admitted == A.Bool True) (fail "another administrator is active")
 
 executeJob :: Config -> PQ.Connection -> [Text] -> A.Value -> Maybe FilePath -> IO A.Value
-executeJob config connection tables initial output = do
+executeJob config connection tables originalJob output = executeJobWithEvidence config connection tables originalJob output Nothing
+
+executeJobWithEvidence :: Config -> PQ.Connection -> [Text] -> A.Value -> Maybe FilePath -> Maybe FilePath -> IO A.Value
+executeJobWithEvidence config connection tables originalJob output evidencePath = do
+  initial <- query connection "UPDATE kansoku.maintenance_jobs SET native_attempt=native_attempt+1 WHERE id=($1->>'id')::uuid RETURNING to_jsonb(maintenance_jobs)" originalJob
+  accepted <- traverse (jobDrainEvidence config originalJob initial) evidencePath
+  forM_ accepted $ \document -> void $ query connection "UPDATE kansoku.maintenance_jobs SET drain_evidence=$1->'evidence' WHERE id=($1->>'id')::uuid" (A.object ["id" A..= field "id" initial, "evidence" A..= Drain.acceptedDocument document])
+  forM_ accepted $ \document -> void $ query connection "INSERT INTO kansoku.maintenance_drain_attempts(job_id,attempt,evidence,evidence_sha256) VALUES(($1->>'id')::uuid,($1->>'attempt')::bigint,$1->'evidence',$1->>'digest')" (A.object ["id" A..= field "id" initial, "attempt" A..= field "native_attempt" initial, "evidence" A..= Drain.acceptedDocument document, "digest" A..= Drain.acceptedDigest document])
   identifier <- decodeValue (field "id" initial) :: IO Text
   hPutStrLn stderr ("maintenance job " <> Text.unpack identifier <> "; persisted fence active")
   -- New traffic already observes the persisted fence. Wait for all admitted
   -- requests/inserts/replays to finish before touching either store.
   pgScript connection "SELECT to_jsonb(pg_advisory_lock(726401,1))"
   withNative config $ \replicas -> do
+    forM_ accepted $ \_ -> do
+      expectedServers <- lookupEnv "KANSOKU_CH_DRAIN_SERVERS" >>= maybe (fail "Missing trusted drain server inventory") (either (const (fail "Invalid trusted drain server inventory")) pure . A.eitherDecodeStrict' . Encoding.encodeUtf8 . Text.pack)
+      observed <- forM (replicaConnections replicas) $ \(_, nativeConnection) -> do
+        rows <- chJSON nativeConnection A.Null "SELECT toJSONString(toString(serverUUID())) AS value"
+        case rows of
+          [A.String sid] -> pure sid
+          _ -> fail "Invalid native drain server identity"
+      unless (sort observed == sort (expectedServers :: [Text])) (fail "Native drain server inventory differs from trusted evidence binding")
+    forM_ accepted $ \evidence -> getCurrentTime >>= \now -> either (fail . Text.unpack) pure (Drain.checkDrainCurrent now evidence)
     let native = coordinator replicas
-    quiesceReplicaWrites replicas
+    case accepted of
+      Nothing -> quiesceReplicaWrites replicas
+      Just _ -> do
+        -- A rejected native query can leave unread protocol frames. Never run
+        -- optional diagnostics on connections used for subsequent maintenance.
+        observations <- withNative config observeReplicaWrites
+        void $ query connection "UPDATE kansoku.maintenance_drain_attempts SET observations=$1->'observations' WHERE job_id=($1->>'id')::uuid AND attempt=($1->>'attempt')::bigint" (A.object ["id" A..= field "id" initial, "attempt" A..= field "native_attempt" initial, "observations" A..= [A.object ["server" A..= sid, "result" A..= show observation] | (sid, observation) <- observations]])
+        when (any ((== VisibleWrites) . snd) observations) (fail "Visible native writes remain active; external drain attestation is insufficient; fence retained")
     synchronizeSchema replicas
     synchronizeTables replicas maintenanceTables
     verifyReplicaMutations replicas
@@ -172,7 +202,7 @@ executeJob config connection tables initial output = do
     pure (merge (receipt finished) (A.object ["snapshot" A..= snapshot]))
 
 receipt :: A.Value -> A.Value
-receipt job = A.object ["job_id" A..= field "id" job, "kind" A..= field "kind" job, "stage" A..= field "stage" job, "completed_at" A..= field "completed_at" job]
+receipt job = A.object ["job_id" A..= field "id" job, "next_attempt" A..= (case field "native_attempt" job of A.Number n -> A.Number (n + 1); _ -> A.Null), "kind" A..= field "kind" job, "stage" A..= field "stage" job, "completed_at" A..= field "completed_at" job]
 
 discovery :: Connection -> PQ.Connection -> [Text] -> A.Value -> IO A.Value
 discovery native connection tables scope = do
@@ -241,3 +271,25 @@ requireNoMigrationSession connection = do
 
 maintenanceCommand :: Connection -> A.Value -> Text -> IO ()
 maintenanceCommand native scope sql = withinBudget "native maintenance statement" (chCommand native scope sql)
+
+-- Resolve trusted job binding independently of the operator's envelope. The
+-- observed native UUID is checked again after opening each physical connection.
+jobDrainEvidence :: Config -> A.Value -> A.Value -> FilePath -> IO Drain.AcceptedDrain
+jobDrainEvidence config original current path = do
+  target <- required "KANSOKU_CH_MIGRATION_TARGET"
+  ledger <- required "KANSOKU_CH_MIGRATION_LEDGER_ID"
+  servers <- jsonEnvironment "KANSOKU_CH_DRAIN_SERVERS"
+  submitters <- jsonEnvironment "KANSOKU_CH_DRAIN_SUBMITTERS"
+  available <- jsonEnvironment "KANSOKU_CH_DRAIN_AVAILABLE_PRINCIPALS"
+  ident <- decodeValue (field "id" current)
+  attempt <- decodeValue (field "native_attempt" current)
+  created <- decodeValue (field "created_at" original)
+  now <- getCurrentTime
+  let expected = Drain.DrainRequirement target servers (Just ledger) ["analytics", "kansoku_migration_ledger"] (Text.pack (config ^. #clickHouseUser) : submitters) (Text.pack (config ^. #clickHouseUser) : available) (Drain.DataJob ident attempt) created
+  Drain.readDrainEvidence now expected path >>= either (fail . Text.unpack) pure
+  where
+    required name = lookupEnv name >>= maybe (fail ("Missing trusted drain configuration: " <> name)) (pure . Text.pack)
+    jsonEnvironment name =
+      required name >>= \raw -> case A.eitherDecodeStrict' (Encoding.encodeUtf8 raw) of
+        Left _ -> fail ("Invalid trusted drain inventory: " <> name)
+        Right values -> pure values

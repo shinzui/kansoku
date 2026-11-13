@@ -2,6 +2,7 @@ module Main (main) where
 
 import ClickHaskell (closeConnection, ping)
 import Control.Exception (bracket)
+import Kansoku.Admin.DrainEvidenceSpec qualified
 import Kansoku.Analysis.HandlerSpec qualified
 import Kansoku.Analysis.StoreSpec qualified
 import Kansoku.Auth.HandlerSpec qualified
@@ -89,6 +90,7 @@ main = do
 
 normalTests :: IO ()
 normalTests = hspec $ do
+  Kansoku.Admin.DrainEvidenceSpec.spec
   metrics <- runIO registerPipelineMetrics
   Kansoku.Analysis.StoreSpec.spec
   Kansoku.Analysis.HandlerSpec.spec
