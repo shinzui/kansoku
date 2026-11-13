@@ -1,6 +1,6 @@
 cabal-version: 3.0
 name: kansoku-api
-version: 0.1.0.0
+version: 0.2.0.0
 synopsis: Servant API and wire DTO types for Kansoku.
 description:
   Shared Servant route types, analytics event types, metric DTOs, validation,
@@ -11,6 +11,7 @@ author: Nadeem Bitar
 maintainer: nadeem@gmail.com
 category: Web
 build-type: Simple
+extra-source-files: CHANGELOG.md
 
 common common
   ghc-options:
