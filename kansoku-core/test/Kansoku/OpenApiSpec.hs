@@ -93,6 +93,12 @@ spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
     lookupText ["components", "securitySchemes", "serviceToken", "scheme"] documentValue `shouldBe` Just "bearer"
     traverse_ assertSecurity operationValues
 
+  it "documents the users page minimum as one" $ do
+    let parameters = case valueAt ["paths", "/users", "get", "parameters"] documentValue of Just (Aeson.Array values) -> Foldable.toList values; _ -> []
+        pages = [parameter | parameter <- parameters, lookupText ["name"] parameter `elem` [Just "first", Just "last"]]
+    length pages `shouldBe` 2
+    traverse_ (\parameter -> valueAt ["schema", "minimum"] parameter `shouldBe` Just (Aeson.Number 1)) pages
+
   it "documents always-present nullable user fields" $ do
     valueAt ["components", "schemas", "UserSummary", "properties", "firstActivityAt", "type"] documentValue
       `shouldBe` Just (Aeson.toJSON (["string", "null"] :: [Text]))

@@ -7790,7 +7790,7 @@
             "schema": {
               "default": 20,
               "maximum": 100,
-              "minimum": 0,
+              "minimum": 1,
               "type": "integer"
             }
           },
@@ -7811,7 +7811,7 @@
             "required": false,
             "schema": {
               "maximum": 100,
-              "minimum": 0,
+              "minimum": 1,
               "type": "integer"
             }
           },
@@ -8366,7 +8366,7 @@
             "schema": {
               "default": 20,
               "maximum": 100,
-              "minimum": 0,
+              "minimum": 1,
               "type": "integer"
             }
           },
@@ -8387,7 +8387,7 @@
             "required": false,
             "schema": {
               "maximum": 100,
-              "minimum": 0,
+              "minimum": 1,
               "type": "integer"
             }
           },

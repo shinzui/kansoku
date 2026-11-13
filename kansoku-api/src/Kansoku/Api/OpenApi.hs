@@ -554,10 +554,15 @@ withUserPageProblems =
                 & O.get
                 . _Just
                 %~ ( \operation -> case operation ^. at 400 of
-                       Just (O.Inline response) -> operation & at 400 ?~ O.Inline (response & O.content . at "application/problem+json" ?~ (mempty & O.schema ?~ problemSchema))
-                       _ -> operation
+                       Just (O.Inline response) -> pageBounds operation & at 400 ?~ O.Inline (response & O.content . at "application/problem+json" ?~ (mempty & O.schema ?~ problemSchema))
+                       _ -> pageBounds operation
                    )
             else item
       )
   where
     (_, problemSchema) = runDeclare (O.declareSchemaRef (Proxy @ProblemDetails)) mempty
+
+    pageBounds operation = operation & O.parameters %~ map bound
+    bound (O.Inline parameter)
+      | parameter ^. O.name `elem` ["first", "last"] = O.Inline (parameter & O.schema . _Just %~ (\case O.Inline schema -> O.Inline (schema & O.minimum_ ?~ 1); reference -> reference))
+    bound parameter = parameter
