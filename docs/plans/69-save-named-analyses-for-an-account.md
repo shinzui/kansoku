@@ -52,6 +52,8 @@ Cancellation while an advisory-lock query is in flight can make the connection r
 
 ## Decision Log
 
+On 2026-11-13, keep a separate 5 MiB raw request limit for analyses, independent of the ingest body setting. Packaged acceptance configures ingest at 4096 bytes; applying that setting globally rejected a valid 32768-byte document before field validation. Preserve the existing default transport bound for analysis parsing and keep compact document validation at 32768 bytes.
+
 On 2026-11-13, choose `/analyses`, PostgreSQL persistence, service-token authentication, and an independent analysis envelope. Existing metric definitions are executable and cohorts define populations; neither is an appropriate storage contract for opaque client state. Duplicate names are allowed, and replacement may change kind.
 
 On 2026-11-13, choose a positive numeric `revision`, initially 1, supplied in PUT bodies and as the required DELETE query parameter `revision`. Successful PUT increments it even for identical content. Stale writes return 409, missing/foreign IDs return 404. Use a resource-specific typed result with a conflict alternative rather than adding 409 to every existing endpoint.

@@ -1,6 +1,9 @@
 # Bundle Update Log
 
 ## 2026-11-13
+
+* **Update**: DOC-10: distinguish the 5 MiB analysis transport bound from the 32 KiB compact document bound and configurable ingest limit.
+
 * **Updated**: DOC-10 documents opaque saved analysis CRUD, revision conflicts, quota and current-read pagination.
 * **Updated**: DOC-10 documents bounded identified-user metric selection, ownership and execution costs.
 * **Updated**: DOC-10 documents identified-user directory, profiles, history, exact counts and read boundaries.

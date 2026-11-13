@@ -1550,7 +1550,7 @@
         ]
       },
       "post": {
-        "description": "Save opaque client state without executing or interpreting it. Names are trimmed, 1..120 Unicode characters; descriptions retain whitespace, maximum 500 characters. Metadata rejects zero characters. documentVersion is a positive integer; document must be an object, maximum 32768 compact Aeson UTF-8 bytes. Duplicate names are allowed. The positive KANSOKU_ANALYSES_MAX_PER_ACCOUNT limit defaults to 1000 and must match on all replicas. A full account returns non-retryable 409 analysis_limit_reached.",
+        "description": "Save opaque client state without executing or interpreting it. Names are trimmed, 1..120 Unicode characters; descriptions retain whitespace, maximum 500 characters. Metadata rejects zero characters. documentVersion is a positive integer; document must be an object, maximum 32768 compact Aeson UTF-8 bytes. Raw analysis request bodies have a separate 5 MiB transport limit, independent of the ingest body setting. Duplicate names are allowed. The positive KANSOKU_ANALYSES_MAX_PER_ACCOUNT limit defaults to 1000 and must match on all replicas. A full account returns non-retryable 409 analysis_limit_reached.",
         "operationId": "postAnalyses",
         "requestBody": {
           "content": {

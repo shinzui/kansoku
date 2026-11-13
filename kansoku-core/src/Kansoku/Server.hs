@@ -4,6 +4,7 @@
 module Kansoku.Server
   ( ReadyProbe (..),
     bodySizeLimit,
+    requestBodyLimits,
     problemBoundary,
     envelopeFormatters,
     ingestCors,
@@ -139,7 +140,7 @@ appWithGate maintenanceGate liveCheck readyCheck _pipelineMetrics config pool se
               (config ^. #corsAllowedOrigins)
               ( problemBoundary $
                   maintenanceGate $
-                    bodySizeLimit
+                    requestBodyLimits
                       (config ^. #ingestMaxBodyBytes)
                       ( serveWithContext
                           kansokuAPI
@@ -225,6 +226,16 @@ ingestCors allowedOrigins inner req respond =
           Cors.corsExposedHeaders = Just ["Retry-After"],
           Cors.corsMaxAge = Just 3600
         }
+
+-- | Analysis envelopes retain the default 5 MiB transport bound even when an
+-- operator lowers the ingest limit. The compact document has its own 32 KiB bound.
+requestBodyLimits :: Int -> Middleware
+requestBodyLimits ingestLimit inner request respond =
+  bodySizeLimit selected inner request respond
+  where
+    selected = case pathInfo request of
+      "analyses" : _ -> 5_242_880
+      _ -> ingestLimit
 
 -- | Bound request bodies before Servant parses them. CORS wraps this
 -- middleware in 'kansokuApp', so browser callers can read the JSON 413.

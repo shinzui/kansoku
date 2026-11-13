@@ -5,7 +5,7 @@ description: Persist bounded client analysis documents with account isolation, r
 docId: ADR-26
 status: Accepted
 date: 2026-11-13
-timestamp: 2026-11-13T05:13:53Z
+timestamp: 2026-11-13T05:53:22Z
 generated:
   by: codex-cli/gpt-6.1-sol
   at: 2026-11-13T05:10:00Z
@@ -35,7 +35,8 @@ characters. Duplicate names are allowed and replacements can change kind.
 
 PostgreSQL owns resource UUIDs, account predicates, positive bigint revisions and
 microsecond timestamps. The compact Aeson UTF-8 document encoding is bounded to 32768
-bytes and stored as text, never cast to JSONB. Transport parameters carry this encoding
+bytes and stored as text, never cast to JSONB. A separate 5 MiB raw analysis request
+limit bounds parsing independently of the configurable ingest body limit. Transport parameters carry this encoding
 as a string. Decoding on reads preserves JSON value equality, including escaped zero
 characters and numbers outside PostgreSQL JSONB's range. Client documentVersion uses
 Haskell Integer and a positive integral PostgreSQL numeric column.

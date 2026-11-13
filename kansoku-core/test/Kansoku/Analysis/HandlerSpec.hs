@@ -19,7 +19,7 @@ import Kansoku.Auth.Token (Token (..))
 import Kansoku.Auth.Types (CredentialKind (..))
 import Kansoku.Event (AccountId (..))
 import Kansoku.Prelude
-import Kansoku.Server (envelopeFormatters)
+import Kansoku.Server (envelopeFormatters, requestBodyLimits)
 import Network.HTTP.Client qualified as HTTP
 import Network.HTTP.Types (hContentType, statusCode)
 import Network.Wai.Handler.Warp qualified as Warp
@@ -47,7 +47,7 @@ spec = describe "Kansoku.Analysis.Handler" $ do
     Token token <- issueKey pool ServiceToken (AccountId "a") "analyses" >>= either (fail . show) (pure . snd)
     Token other <- issueKey pool ServiceToken (AccountId "b") "analyses" >>= either (fail . show) (pure . snd)
     Token write <- issueKey pool WriteKey (AccountId "a") "analyses" >>= either (fail . show) (pure . snd)
-    let app = serveWithContext (Proxy @(NamedRoutes Analyses)) (envelopeFormatters :. authContext pool) (analysesServer settings 10 pool)
+    let app = requestBodyLimits 4096 $ serveWithContext (Proxy @(NamedRoutes Analyses)) (envelopeFormatters :. authContext pool) (analysesServer settings 10 pool)
     Warp.testWithApplication (pure app) $ \port -> do
       manager <- HTTP.newManager HTTP.defaultManagerSettings
       let request credential method path body expected = do
@@ -64,6 +64,12 @@ spec = describe "Kansoku.Analysis.Handler" $ do
           A.Object fields = toJSON validInput
           replacement = A.Object (KM.insert "revision" (toJSON (Revision 1)) fields)
       request token "GET" path Nothing 200 `shouldReturn` saved
+      let boundaryDocument = A.object ["x" A..= Text.replicate 8190 "😀"]
+      boundary <- request token "POST" "/analyses" (Just (toJSON (validInput & #document .~ boundaryDocument))) 200
+      case A.fromJSON boundary of
+        A.Success (large :: SavedAnalysis) -> large ^. #document `shouldBe` boundaryDocument
+        A.Error e -> fail e
+
       forM_ [("GET", Nothing), ("PUT", Just replacement), ("DELETE", Nothing)] $ \(method, body) -> do
         let route = path <> if method == "DELETE" then "?revision=1" else ""
         _ <- request other method route body 404

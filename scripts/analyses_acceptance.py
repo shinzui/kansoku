@@ -236,5 +236,5 @@ def verify_quota(base, write_key, token, other_token, **_):
 if __name__ == '__main__':
     import sys
     if '--quota-only' not in sys.argv:
-        main(verify_analyses, pass_environment=True)
+        main(verify_analyses, pass_environment=True, server_environment={'KANSOKU_INGEST_MAX_BODY_BYTES': '4096'})
     main(verify_quota, server_environment={'KANSOKU_ANALYSES_MAX_PER_ACCOUNT': '2'})

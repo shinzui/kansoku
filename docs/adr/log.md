@@ -2,6 +2,9 @@
 
 ## 2026-11-13
 
+* **Update**: ADR-26: preserve the analysis transport bound independently of the configured ingest body limit.
+
+
 * **Update**: ADR-26: preserve cancellation when an in-flight query rejects rollback; dedicated connection cleanup remains the final transaction boundary.
 
 * **Added**: ADR-26 defines account-owned opaque saved analyses, serialized editing and quotas, and timestamp keyset pages.

@@ -4,7 +4,7 @@ title: "Query metrics"
 description: "Look up metric populations, query bounds, filters, grouping, analytical semantics, cohorts and saved definitions."
 docId: DOC-10
 tags: ["metrics", "queries", "identity", "cohorts"]
-timestamp: 2026-11-13T05:10:00Z
+timestamp: 2026-11-13T05:53:22Z
 generated:
   by: process:codex
   at: "2026-11-06T14:31:34Z"
@@ -1287,6 +1287,8 @@ and allow at most 500 Unicode characters. Metadata cannot contain zero character
 Kinds are exactly trends, funnel and retention. Documents must be objects whose compact
 Aeson UTF-8 JSON encoding uses at most 32768 bytes. Nested arrays, scalars, nulls and
 escaped zero characters are preserved; character limits and document byte limits differ.
+Analysis request bodies have a separate 5 MiB transport limit, independent of
+`KANSOKU_INGEST_MAX_BODY_BYTES`; this bounds parsing before compact-document validation.
 Invalid fields, missing mutation revision and malformed revisions return field-naming
 400 problems. Failed validation leaves the prior resource unchanged.
 
