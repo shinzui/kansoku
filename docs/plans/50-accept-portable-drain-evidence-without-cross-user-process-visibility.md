@@ -67,7 +67,7 @@ acceptance also passes all seven scenario families under
 The final successful run retained private evidence under
 `.dev/acceptance/portable-drain-0da9s6b8/`.
 
-M2 is partially implemented: migration and job consumers recheck expiration after
+M2 enforcement is implemented: migration and job consumers recheck expiration after
 waiting for exclusion; migration audits retain the exact input-file SHA-256. Job
 attempt proofs/digests and supplementary process observations are retained in the
 appended 0012 audit table. A visible raw INSERT contradicts an attestation and
@@ -89,6 +89,20 @@ mandatory-evidence administration harness passes seven scenario families
 (`.dev/acceptance/runtime-c7822361c95a4fdc9c2bce1d8bda4d8d/`), including held
 writer drain, interrupted mutation recovery, denied process observations and
 retention. Nine focused validator examples pass.
+
+M3 upstream implementation has started in
+`mori://shinzui/clickhouse-migrate/plans/13-accept-explicit-external-drain-authority-when-repair-process-diagnostics-are-unavailable`.
+Its first real scoped-role producer/consumer passes on 26.8.28.14: the unchanged
+strict API refuses a denied process read; the explicit opt-in CLI retry and SDK
+resume succeed with separately reported unavailable diagnostics; stale positions,
+observer failure and cancellation remain blocking. Further native/source
+qualification and real upstream delivery remain open. Kansoku still selects the
+released 0.2.0.0 cohort and does not consume an unpublished local library patch. The upstream source implementation is committed as `f4bc4e6` in
+`mori://shinzui/clickhouse-migrate`, with strict-default SDK/CLI compatibility,
+six real scoped repair flows, interrupted-receipt and active-work tests. Its
+full exact-server and extracted-source qualification is running; Apple Container
+replaces the old Docker-specific Linux fixture. This is an upstream checkpoint,
+not delivered dependency selection or completed M3.
 
 Evidence is mandatory for migration mutation/reconciliation/finish and unfinished
 confirmed data-job resume. An initial data confirmation persists a prepared owner
