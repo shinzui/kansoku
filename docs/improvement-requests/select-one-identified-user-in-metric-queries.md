@@ -6,8 +6,9 @@ generated:
   by: process:claude-code
   at: "2026-11-12T23:39:58Z"
 requestId: IR-18
-status: proposed
-timestamp: "2026-11-12T23:39:58Z"
+status: accepted
+targetPlan: docs/plans/68-select-identified-users-in-metric-queries.md
+timestamp: "2026-11-13T00:28:23Z"
 origin: mori://shinzui/kansoku-ui/masterplans/6-build-the-users-directory-and-user-profile-pages
 dependencies:
   - ref: mori://shinzui/kansoku/okf/improvement-requests/concepts/IR-17
@@ -41,6 +42,8 @@ reviews:
 # Select one identified user in metric queries
 
 Requested by `mori://shinzui/kansoku-ui/masterplans/6-build-the-users-directory-and-user-profile-pages` under intention `intention_01m79211k6exp96qd67t2b3zmx`. The consumer is `mori://shinzui/kansoku-ui/plans/32-enrich-the-user-profile-with-per-user-activity-charts`.
+
+**Implementation plan:** [ExecPlan 68: Select identified users in metric queries](../plans/68-select-identified-users-in-metric-queries.md). Accepted for implementation; implementation has not started.
 
 ## Why
 

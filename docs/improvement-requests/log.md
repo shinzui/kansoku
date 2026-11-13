@@ -2,6 +2,9 @@
 
 ## 2026-11-13
 
+* **Update**: Accept IR-18 for implementation and link targetPlan to docs/plans/68-select-identified-users-in-metric-queries.md; implementation has not started.
+
+
 * **Update**: Accept IR-17 for implementation and link targetPlan to docs/plans/67-read-identified-users-profiles-and-event-history.md; implementation has not started.
 
 ## 2026-11-12
