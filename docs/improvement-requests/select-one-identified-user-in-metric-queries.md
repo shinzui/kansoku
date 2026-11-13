@@ -6,9 +6,17 @@ generated:
   by: process:claude-code
   at: "2026-11-12T23:39:58Z"
 requestId: IR-18
-status: accepted
+status: completed
+completedAt: "2026-11-13T02:21:54Z"
+resolution: >-
+  AC-1 through AC-3 delivered by plan 68: bounded resolved user_id selection across
+  all eight routes, saved and ad-hoc custom metrics, whole-session ownership,
+  cohort composition, explicit unsupported-route errors, query guide and generated
+  OpenAPI. The focused owned-store public workflow, deterministic/compiler/client
+  checks and native ownership checks pass. Full packaged regression was intentionally
+  stopped to keep verification within the user-requested scope.
 targetPlan: docs/plans/68-select-identified-users-in-metric-queries.md
-timestamp: "2026-11-13T00:28:23Z"
+timestamp: "2026-11-13T02:21:54Z"
 origin: mori://shinzui/kansoku-ui/masterplans/6-build-the-users-directory-and-user-profile-pages
 dependencies:
   - ref: mori://shinzui/kansoku/okf/improvement-requests/concepts/IR-17

@@ -5,7 +5,7 @@ description: Persist first-acceptance schema eligibility for typed current trait
 docId: ADR-16
 status: Accepted
 date: 2026-10-16
-timestamp: 2026-11-13T02:15:00Z
+timestamp: 2026-11-13T02:09:59Z
 generated:
   by: process:codex
   at: 2026-10-16T01:01:59Z

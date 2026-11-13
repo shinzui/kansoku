@@ -4,7 +4,7 @@ title: "Query metrics"
 description: "Look up metric populations, query bounds, filters, grouping, analytical semantics, cohorts and saved definitions."
 docId: DOC-10
 tags: ["metrics", "queries", "identity", "cohorts"]
-timestamp: 2026-11-13T02:10:00Z
+timestamp: 2026-11-13T02:09:59Z
 generated:
   by: process:codex
   at: "2026-11-06T14:31:34Z"

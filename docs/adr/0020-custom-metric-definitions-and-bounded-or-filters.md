@@ -5,7 +5,7 @@ description: Compile account-scoped saved and ad-hoc metric definitions through 
 docId: ADR-20
 status: Accepted
 date: 2026-10-16
-timestamp: 2026-11-13T02:15:00Z
+timestamp: 2026-11-13T02:09:59Z
 generated:
   by: process:codex
   at: 2026-10-16T12:30:07Z

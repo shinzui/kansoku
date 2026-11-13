@@ -2,6 +2,12 @@
 
 ## 2026-11-13
 
+* **Update**: FRIC-25 accepted: Local compilation progressed with remote builders disabled; retain the observation without claiming an upstream Nix defect.
+
+
+* **Addition**: FRIC-25 records detour environment friction with https://github.com/NixOS/nix: Packaged acceptance waited in Nix remote dispatch
+
+
 * **Update**: FRIC-24 resolved: Make preview acceptance compose with real user-erasure fixtures in the shared owned stores.
 
 

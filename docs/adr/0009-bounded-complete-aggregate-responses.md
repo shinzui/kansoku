@@ -5,7 +5,7 @@ description: Bound metric inputs and final aggregate cardinality, returning a co
 docId: ADR-9
 status: Accepted
 date: 2026-10-15
-timestamp: 2026-11-13T02:15:00Z
+timestamp: 2026-11-13T02:09:59Z
 generated:
   by: process:codex
   at: 2026-10-15T04:44:00Z

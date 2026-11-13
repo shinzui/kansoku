@@ -35,14 +35,16 @@ The filter works on events, page views, users, sessions, acquisition, revenue, f
 
 - [x] Milestone 1 (2026-11-13): Core compilers select resolved identified users with bounded operands, correct event/session ownership, and passing deterministic and native behavior tests.
 - [x] Milestone 2 (2026-11-13): Public HTTP and saved/ad-hoc custom metrics satisfy the eight-route contract, reject unsupported uses before execution, and pass an owned-store acceptance workflow.
-- [ ] Milestone 3: Query guide and generated OpenAPI publish the contract; packaged acceptance and relevant regression gates pass with recorded evidence.
+- [x] Milestone 3 (2026-11-13): Query guide, generated OpenAPI and ADRs publish the contract; focused acceptance and documentation checks pass. The broad packaged gate was stopped to honor the user’s testing scope.
 
-Acceptance evidence: `just build-with-tests` succeeds; the acquisition acceptance runner passes 50 native cases across block sizes 65536 and 2, including lone-ID stitching, anonymous collisions, same-ID account isolation and complete first-user session ownership. `just deterministic-test` passes 524 core examples, 22 client examples and four production probes. The owned-store identified-user workflow passes all eight routes, opaque IDs, saved simple/side-local ratios, cohort in/out, mixed OR, bounds and a cross-midnight session with identity evidence outside the start-date range. Existing custom metrics acceptance passes unchanged. OpenAPI generation/check/lint, guide validation and strict ADR validation pass. Packaged acceptance is running; milestone 3 remains open until its result is known.
+Acceptance evidence: `just build-with-tests` succeeds; the acquisition acceptance runner passes 50 native cases across block sizes 65536 and 2, including lone-ID stitching, anonymous collisions, same-ID account isolation and complete first-user session ownership. `just deterministic-test` passes 524 core examples, 22 client examples and four production probes. The owned-store identified-user workflow passes all eight routes, opaque IDs, saved simple/side-local ratios, cohort in/out, mixed OR, bounds and a cross-midnight session with identity evidence outside the start-date range. Existing custom metrics acceptance passes unchanged. OpenAPI generation/check/lint, guide validation and strict ADR validation pass. The packaged server/client build and its 662-example core run also passed, but the full packaged workflow was intentionally stopped before completion; no three-telemetry-mode acceptance is claimed.
 
 ## Surprises & Discoveries
 
 
 ## Decision Log
+
+2026-11-13: Honor the user’s instruction to keep testing focused on this API change. The eight-route owned-store workflow, native ownership checks, deterministic tests and documentation checks provide completion evidence. Stop the unrelated broad packaged regression run; completing that run is not required for this implementation.
 
 
 2026-11-12: Name the dimension `user_id` and make it filter-only. Support `eq`, `neq`, and `in` with 1..20 raw string entries per list, checked before deduplication. The request targets one or a few users; twenty is an explicit small-population bound below the generic grammar's 100-value ceiling. The `user:<trait>` namespace, including a possible governed trait called `id`, remains separate. Values are original opaque IDs, not namespaced subjects or SQL names.
@@ -54,6 +56,8 @@ Acceptance evidence: `just build-with-tests` succeeds; the acquisition acceptanc
 2026-11-12: Use existing resolved relations and whole-session assembly. Do not add a raw-user predicate, identity-specific storage projection, migration, persisted one-user cohort, or dependency upgrade. A user filter alone must trigger the same identity-aware source and preparation scope that traits/cohorts already require.
 
 ## Outcomes & Retrospective
+
+Implemented bounded, filter-only `user_id` selection on all eight requested route families, including saved/simple/component custom populations, resolved event ownership and complete first-user sessions. Focused public acceptance satisfies IR-18 AC-1 through AC-3; compiler/client/native checks and generated documentation checks pass. No dependency, migration or execution-budget change was needed. ADR-9, ADR-16 and ADR-20 retain the durable contract. The broad packaged gate was stopped after the user reiterated the focused scope; it is not reported as passing. FRIC-25 in `docs/friction-log/` is accepted: use a per-invocation local Nix builder override when remote dispatch delays an owned acceptance run.
 
 
 ## Context and Orientation

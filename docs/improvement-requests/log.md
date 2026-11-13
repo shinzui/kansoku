@@ -2,6 +2,9 @@
 
 ## 2026-11-13
 
+* **Update**: Complete IR-18: plan 68 delivers identified-user metric selection; focused eight-route HTTP, native, compiler/client and documentation checks pass.
+
+
 * **Update**: Accept IR-18 for implementation and link targetPlan to docs/plans/68-select-identified-users-in-metric-queries.md; implementation has not started.
 
 
