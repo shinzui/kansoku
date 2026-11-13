@@ -2,6 +2,9 @@
 
 ## 2026-11-13
 
+* **Update**: DOC-13: map verified Nagare v0.20.0 maintenance and backup receipts into the portable three-store contract; live integration remains open.
+
+
 * **Update**: DOC-13: document qualified direct rebuilt-server adoption and correct the released toolkit cohort.
 
 

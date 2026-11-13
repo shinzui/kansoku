@@ -4,7 +4,7 @@ title: "Initialize and upgrade ClickHouse"
 description: "Initialize a fresh owned ClickHouse target, retain native identities, coordinate maintenance and recover explicit migration attempts."
 docId: DOC-13
 tags: ["clickhouse", "migrations", "maintenance", "recovery"]
-timestamp: 2026-11-13T20:38:02Z
+timestamp: 2026-11-13T20:51:43Z
 generated:
   by: process:codex
   at: "2026-11-07T20:24:51Z"
@@ -270,6 +270,53 @@ resupply its exact bytes, but still needs fresh owner-bound drain. Another owner
 changed plan needs a new set. A proven-empty native installation records a separate
 fresh-empty exception; initialization flags cannot exempt a populated target.
 Changing the configured UUID does not authorize recovery; use explicit adoption below.
+
+## Nagare receipt mapping
+
+The maintenance facility tracked by
+`mori://shinzui/nagare/okf/improvement-requests/concepts/IR-31` is already delivered.
+The recipe was checked against the upstream `v0.20.0` tag on 2026-11-13; this is
+source-level mapping, not evidence of an exercised Nagare installation. EP-53
+retains the actual deployment execution gate.
+
+Persist Kansoku's fence first. Stop all remaining submitters/read schedules,
+including old clients using migration credentials. For each PostgreSQL and
+ClickHouse app-database membership, review and apply a runtime-only quiesce plan:
+
+```bash
+nagarectl db app-database quiesce "$APP_DATABASE" -n "$NAMESPACE" \
+  --users runtime --save-plan /secure/nagare/quiesce
+nagarectl inventory apply /secure/nagare/quiesce --yes
+nagarectl db app-database evidence "$APP_DATABASE" -n "$NAMESPACE" --json
+```
+
+Use distinct retained plan directories for the two memberships. Runtime-only
+quiescence pauses their backup schedules and leaves the migration principal usable
+for the coordinator, backups and migration. It does not exclude arbitrary external
+clients using that principal; retain their separate exclusion/drain proof. Confirm
+background logical changes are settled and map the evidence into Kansoku's exact
+owner/predecessor envelope. Refuse if any required exclusion is missing.
+
+Within that same stable interval, review/apply one on-demand backup per membership,
+then ingest each resulting Job UID as a verified receipt:
+
+```bash
+nagarectl db app-database backup "$APP_DATABASE" -n "$NAMESPACE" \
+  --save-plan /secure/nagare/backup
+nagarectl inventory apply /secure/nagare/backup --yes
+nagarectl db app-database backup-receipts "$APP_DATABASE" -n "$NAMESPACE" \
+  --backup-id "$JOB_UID" --save-plan /secure/nagare/ingest
+nagarectl inventory apply /secure/nagare/ingest --yes
+```
+
+Require the PostgreSQL receipt to cover the complete Kansoku/queue/coordinator
+state. Require the ClickHouse membership and archive to cover both analytics and
+the native ledger; represent that archive with two explicit manifest entries.
+Map actual capture times, immutable artifact hashes and verified receipt references
+into the generic recovery set. Two successful Jobs without that coverage and stable
+interval are insufficient. Keep the final manifest outside both snapshots. Complete
+Kansoku's migration/verification/finish ceremony before separately reviewing/applying
+`db app-database resume` for each membership and resuming external schedules.
 
 ## Rebuilt direct-server adoption
 

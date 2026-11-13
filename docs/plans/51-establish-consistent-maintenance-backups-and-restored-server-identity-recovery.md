@@ -52,7 +52,7 @@ backup engine, production restore orchestration or a new automatic failover poli
 
 - [x] M1 (2026-11-13): Bounded recovery manifests gate pending `up`/repair before consuming an entry. Thirty contract cases pass; actual native suffix acceptance and missing/partial-set refusal pass in the owned roundtrip below. Retained sets bind the owner and compiled plan; retries still require fresh drain.
 - [x] M2 (2026-11-13): Owned native roundtrip `.dev/acceptance/recovery-6frn052e/` restored PostgreSQL, analytics and ledger with exact pre-change application/coordinator/history agreement. A real ClickHouse backup failure after PostgreSQL completed, missing evidence and partial coverage all refused migration with counter zero and fence retained. Another application stayed available; server PID was unchanged. One required scenario, zero failures/skips.
-- [ ] M3: A rebuilt-server restore is explicitly re-bound with retained provenance and recovery state; automatic or wrong-target re-binding fails.
+- [x] M3 (2026-11-13): Explicit direct rebuilt-server adoption preserves exact counters, fences and unresolved receipts, validates original recovery provenance and new-server drain, and returns one retained audit on replay. Both clean and actual interrupted-receipt restores pass in the packaged 22-case harness at `.dev/acceptance/ch-migrations-mglpd6gt/`; zero failures/skips. The public component suite passes four native cases, and `just check` passes including 562 core examples, 23 client examples, four probes and 30 recovery-contract cases.
 
 
 M1 implementation started on 2026-11-13 after EP-50 M1/M2 native acceptance.
@@ -66,7 +66,7 @@ ordinary loading refused, scratch-only evidence and conflicting IDs refused,
 identical replay returned one audit, and counters/fences/receipts survived adoption.
 The interrupted case refused ordinary `up` and omitted receipts, then completed
 explicit repair with the exact retained receipt and fresh drain. Packaged and full
-regression qualification remain before milestone acceptance. Rebuilt replicated
+regression qualification subsequently passed. Rebuilt replicated
 inventory adoption is explicitly refused rather than inferred from one server.
 
 ## Surprises & Discoveries
@@ -101,6 +101,19 @@ Replacing a server UUID in the environment alone is not an adequate recovery cer
 
 ## Outcomes & Retrospective
 
+Delivered complete three-store recovery manifests, native-SQL gating, real
+same-server and rebuilt-server roundtrips, and explicit audited direct-server
+adoption with retained uncertainty. Commit `fd29aa3` contains the implementation;
+the subsequent packaged run accepts all 22 scenarios. ADR-22 and the migration
+guide retain the contract, restore procedure and verified Nagare v0.20.0 receipt
+mapping. No new backup engine or dependency cohort was introduced.
+
+There are no friction entries recorded under this child. A packaging rerun caused
+by unstaged new files was an implementation error, corrected before final native
+qualification. Nagare execution remains EP-53's unpassed infrastructure gate;
+rebuilding a replicated inventory is explicitly outside this qualified direct
+adoption path. This child does not establish the master plan's full shared-server
+or IR completion claim.
 
 ## Context and Orientation
 
