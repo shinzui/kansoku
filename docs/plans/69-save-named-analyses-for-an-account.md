@@ -39,13 +39,15 @@ The observable result is a `/analyses` library with bounded, bidirectional pages
 
 - [x] Milestone 1 (2026-11-13): Saved analyses round-trip through authenticated HTTP and private PostgreSQL with opaque document equality, foreign-ID 404 and write-key 403. Focused Kansoku.Analysis suite: 6 examples, 0 failures, no pending cases.
 - [x] Milestone 2 (2026-11-13): Real PostgreSQL tests and owned executable HTTP acceptance pass atomic replacement/deletion, independent concurrent update/create connections, quota=2, separate account allowances, and forward/backward filtered keyset traversal. Equal-timestamp fixtures preserve microseconds and deleted cursor rows remain usable.
-- [ ] Milestone 3: Published contracts, generated client, and owned packaged HTTP acceptance cover all five request criteria and regressions.
+- [x] Milestone 3 (2026-11-13): Contracts, generated client and all five request criteria pass owned packaged HTTP acceptance in legacy, http and http/dup modes. Final just check passes 534 core examples, 22 deterministic client examples, four probe tests, all telemetry modes/lifecycles, generated contracts, OpenAPI lint and strict documentation checks. Packaged acceptance passes 672 core examples, 24 live/client examples, 18 migration cases without skips, quota=2, the complete HTTP matrix and administrative regressions.
 
 
 ## Surprises & Discoveries
 
 The existing Relay timestamp codec stores integer microseconds and round-trips persisted timestamps exactly, so no custom ordering projection or dependency upgrade was needed. Its established pagination contract accepts first=0/last=0 and returns pagination errors as JSON; field and resource problems retain application/problem+json. Both contracts are exercised independently.
 
+
+Packaged acceptance initially returned 413 for a valid 32768-byte document because its 4096-byte ingest setting applied globally. Analysis request transport now has a separate bounded allowance; focused and packaged tests cover that configuration.
 
 Cancellation while an advisory-lock query is in flight can make the connection reject an explicit rollback. Cleanup now preserves the original exception and closes the dedicated connection as the final rollback boundary. A real lock-wait cancellation test proves propagation and subsequent lock availability; the final focused suite passes 8 examples.
 
@@ -64,6 +66,14 @@ On 2026-11-13, choose serialized JSON text storage for the opaque document, with
 
 
 ## Outcomes & Retrospective
+
+All three milestones and IR-19 AC-1 through AC-5 are complete. Accounts can save, reopen, replace, delete and page opaque analysis envelopes through service-token HTTP and the typed Haskell client. PostgreSQL text preserves JSON values that JSONB cannot represent, account transaction locks serialize quota and revision checks, and current-read cursors preserve microsecond ordering through row deletion or replacement. The query guide, checked-in and served OpenAPI and [ADR-26](../adr/0026-account-owned-opaque-saved-analyses.md) describe the delivered contract.
+
+Validation ran on aarch64-darwin with fresh owned PostgreSQL and native ClickHouse processes. Final `just check`, the focused owned analyses verifier (including a 4096-byte ingest setting), and full `just acceptance` passed. The packaged verifier covers all three HTTP telemetry modes, with a separate quota=2 stack and real typed-client conflicts and authentication failures. Private sanitized packaged evidence is retained under `.dev/acceptance/run-qksbec0u/sanitized/`. Migration verification and repeat application pass with AlreadyApplied outcomes. No required tests are pending.
+
+Packaged testing exposed a cross-resource integration defect: a small ingest body limit also rejected otherwise valid analysis documents. `Kansoku.Server.requestBodyLimits` now gives analysis envelopes their own bounded 5 MiB transport allowance, while compact document validation remains 32768 bytes. The real HTTP boundary test and focused acceptance deliberately use an ingest limit of 4096 bytes to retain this regression proof. Cancellation during an advisory-lock wait also propagates correctly, even if the in-flight query prevents an explicit rollback.
+
+[FRIC-26](../friction-log/26-required-validation-commands-rebuild-unchanged-cabal-components.md) is triaged as accepted: required embedding and telemetry commands rebuild unchanged Cabal components, and their validation was retained. Durable persistence, concurrency, pagination, cancellation and transport decisions are distilled in ADR-26.
 
 
 ## Context and Orientation
@@ -91,6 +101,8 @@ Add `kansoku-api/src/Kansoku/Analysis/Types.hs` and `kansoku-api/src/Kansoku/Ana
 Add `kansoku-core/src/Kansoku/Analysis/Validation.hs`, `Store.hs`, and `Handler.hs`. Trim names and require 1..120 Unicode characters; descriptions retain whitespace and have at most 500 Unicode characters. Count Unicode characters, not UTF-8 bytes. Require a JSON object document, with compact serialized bytes at most 32,768. Validate documentVersion as an integral positive number. Reject unknown kinds, missing fields, wrong types and malformed revisions with 400 problems that name the field. Keep field-aware decoding errors through the framework formatter. Metadata names/descriptions must reject zero characters with a field-specific 400 because PostgreSQL text cannot store them; zero characters inside the encoded opaque document remain escaped and must round-trip.
 
 Append `0010-saved-analyses` (or the next unused migration if the tree advances) in `kansoku-core/src/Kansoku/Migrations.hs`. Create `kansoku.analyses` with UUID primary key, account_id, name, nullable description, kind, numeric document_version constrained positive and integral, document_text, bigint revision initially 1, and timestamptz created_at/updated_at. Add metadata and encoded-size constraints where they match application validation. Do not convert document_text to JSONB in constraints, parameters or read projections. Index `(account_id, updated_at DESC, id ASC)` and `(account_id, kind, updated_at DESC, id ASC)`. No name uniqueness constraint or analytics-store table is needed.
+
+At the WAI request boundary, use `Kansoku.Server.requestBodyLimits` to retain a separate 5 MiB raw analysis envelope limit independently of the ingest setting. Verify the 32768-byte compact document boundary with ingest capped at 4096 bytes.
 
 Wire the new resource into the API, server, query-route classification, and package module lists in `kansoku-api/kansoku-api.cabal` and `kansoku-core/kansoku-core.cabal`. Implement POST and GET first as an end-to-end slice. POST returns 200, consistent with metric definitions; GET returns 200 or account-scoped 404. Every SQL read and mutation binds account_id. Test a real HTTP POST/GET with nested Unicode, numeric and null document values before expanding the surface. This proves envelope decoding, storage encoding and response decoding together. Add migration and pure validation tests; milestone acceptance is this roundtrip plus foreign-ID 404 and write-key 403.
 
@@ -188,3 +200,5 @@ The public surface is POST/GET `/analyses` and GET/PUT/DELETE `/analyses/{id}`. 
 Reuse existing Aeson, UUID, time, Hasql, PostgreSQL and Relay dependencies. No ClickHouse document storage, new service, background worker, schema interpretation, or consumer-specific dependency is introduced. The request file is the complete upstream acceptance source; no external consumer repository is needed to implement or validate this plan.
 
 Revision note (2026-11-13): Corrected Mori availability after successful discovery with refreshed shell environment; the implementation scope is unchanged.
+
+Revision note (2026-11-13): Packaged acceptance exposed ingestion-limit coupling; the implementation and regression instructions now preserve a separate 5 MiB analysis transport bound while retaining the requested 32768-byte compact document limit.

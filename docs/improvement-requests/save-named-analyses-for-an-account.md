@@ -6,8 +6,16 @@ generated:
   by: process:claude-code
   at: "2026-11-12T23:50:00Z"
 requestId: IR-19
-status: proposed
-timestamp: "2026-11-12T23:50:00Z"
+status: completed
+completedAt: "2026-11-13T06:15:17Z"
+resolution: >-
+  AC-1 through AC-5 delivered by plan 69: account-scoped opaque analysis CRUD,
+  checked revisions, serialized quota enforcement, bidirectional filtered pages,
+  typed Haskell clients, OpenAPI and query guide. Final deterministic checks,
+  owned HTTP/client verification and full Nix-packaged acceptance pass, including
+  all three telemetry modes and valid 32 KiB documents under a 4 KiB ingest limit.
+targetPlan: docs/plans/69-save-named-analyses-for-an-account.md
+timestamp: "2026-11-13T06:15:17Z"
 origin: mori://shinzui/kansoku-ui/masterplans/7-build-the-insights-library-of-saved-analyses
 acceptanceCriteria:
   - id: AC-1

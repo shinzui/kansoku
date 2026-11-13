@@ -2,6 +2,8 @@
 
 ## 2026-11-13
 
+* **Update**: Complete IR-19: plan 69 delivers saved analyses with revision safety, quotas, filtered pages, typed clients and documented contracts; full packaged acceptance passes.
+
 * **Update**: Complete IR-18: plan 68 delivers identified-user metric selection; focused eight-route HTTP, native, compiler/client and documentation checks pass.
 
 
