@@ -259,14 +259,15 @@
 
       # Package subtrees keep docs/harness edits from invalidating the compiled closure.
       # Hurl is an external executable suite, not part of the API library's Cabal source.
-      kansokuApi = haskellPackages.callCabal2nix "kansoku-api" (builtins.path { path = inputs.self + "/kansoku-api"; name = "kansoku-api-source"; filter = path: _type: builtins.baseNameOf path != "hurl"; }) { };
-      kansokuCore = pkgs.haskell.lib.dontCheck (haskellPackages.callCabal2nix "kansoku-core" (builtins.path { path = inputs.self + "/kansoku-core"; name = "kansoku-core-source"; }) {
+      # Haddock is skipped: no output uses the generated docs, and its parallel run has hung on the builder.
+      kansokuApi = pkgs.haskell.lib.dontHaddock (haskellPackages.callCabal2nix "kansoku-api" (builtins.path { path = inputs.self + "/kansoku-api"; name = "kansoku-api-source"; filter = path: _type: builtins.baseNameOf path != "hurl"; }) { });
+      kansokuCore = pkgs.haskell.lib.dontHaddock (pkgs.haskell.lib.dontCheck (haskellPackages.callCabal2nix "kansoku-core" (builtins.path { path = inputs.self + "/kansoku-core"; name = "kansoku-core-source"; }) {
         kansoku-api = kansokuApi;
         libmaxminddb = geoipReader;
-      });
-      kansokuClient = haskellPackages.callCabal2nix "kansoku-client" (builtins.path { path = inputs.self + "/kansoku-client"; name = "kansoku-client-source"; }) {
+      }));
+      kansokuClient = pkgs.haskell.lib.dontHaddock (haskellPackages.callCabal2nix "kansoku-client" (builtins.path { path = inputs.self + "/kansoku-client"; name = "kansoku-client-source"; }) {
         kansoku-api = kansokuApi;
-      };
+      });
       kansokuServer = haskellPackages.callCabal2nix "kansoku-server" (builtins.path { path = inputs.self + "/kansoku-server"; name = "kansoku-server-source"; }) {
         kansoku-api = kansokuApi;
         kansoku-core = kansokuCore;
