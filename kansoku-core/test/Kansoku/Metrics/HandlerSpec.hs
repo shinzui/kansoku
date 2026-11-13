@@ -31,6 +31,25 @@ spec = describe "Kansoku.Metrics.Handler" $ do
         [("conversion", ""), ("organizations", ""), ("paths", "&start=page_view"), ("funnel", "&steps=a,b"), ("retention", ""), ("lifecycle", ""), ("stickiness", ""), ("experiments", "&experiment=exp"), ("experiments/conversion", "&experiment=exp&event=page_view"), ("experiments/funnel", "&experiment=exp&steps=a,b")]
       traverse_ (\route -> assertBadRequest manager port ("/metrics/" <> route <> "?from=2026-07-01&to=2026-07-02&filter=user_id:contains:alice&filter=cohort:eq:00000000-0000-0000-0000-000000000001") "invalid_metric" "") ["events", "custom"]
 
+  it "rejects retention options before saved-cohort loading or native storage" $
+    Warp.testWithApplication (pure authenticatedValidationApplication) $ \port -> do
+      manager <- HTTP.newManager HTTP.defaultManagerSettings
+      let query suffix code = assertBadRequest manager port ("/metrics/retention?from=2026-07-06&to=2026-07-27&filter=cohort:eq:00000000-0000-0000-0000-000000000001&" <> suffix) code ""
+      traverse_ (\suffix -> query suffix "invalid_retention_event") ["startEvent=", "returnEvent=", "startEvent=Bad", "returnEvent=a,b", "startEvent=%20", "returnEvent=bad%27name", "startEvent=" <> replicate 129 'a']
+      traverse_ (\suffix -> query suffix "invalid_retention_days") ["period=week&days=53", "period=month&days=13", "days=366", "days=0", "days=-1", "days=99999999999999999999999999"]
+      query ("period=week&days=" <> Text.unpack (Text.intercalate "," (map (Text.pack . show) [1 .. 33 :: Int]))) "too_many_retention_days"
+      traverse_ (\dimension -> query ("startFilter=" <> dimension <> ":eq:x") "invalid_retention_filter") ["cohort", "user:plan", "org:plan", "user_id", "session:country_code"]
+      query "startFilter=%7B%22dimension%22:%22cohort:x%22,%22op%22:%22eq%22,%22value%22:%22x%22%7D" "invalid_retention_filter"
+      query "returnFilter=country_code:eq:US|user:plan:eq:pro" "invalid_retention_filter"
+      query "startFilter" "invalid_filter"
+      query "returnFilter=" "invalid_filter"
+      query "period=week&period=day" "invalid_query_parameter"
+      query "startEvent=a&startEvent=b" "invalid_query_parameter"
+      query "period=month" "invalid_retention_period"
+      assertBadRequest manager port "/metrics/retention?from=2026-07-07&to=2026-07-27&period=week&filter=cohort:eq:00000000-0000-0000-0000-000000000001" "invalid_retention_period" ""
+      query (concat (replicate 8 "startFilter=country_code:eq:US&")) "invalid_filter"
+      assertBadRequest manager port "/metrics/events?from=2026-07-06&to=2026-07-27&period=week" "unsupported_query_parameter" ""
+
   it "rejects malformed contained-event names before cohort loading or query checkout" $
     Warp.testWithApplication (pure validationApplication) $ \port -> do
       manager <- HTTP.newManager HTTP.defaultManagerSettings

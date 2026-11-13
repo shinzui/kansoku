@@ -1,10 +1,11 @@
 ---
 type: Term
 title: "retention offset"
-description: "A number of days after a retention cohort’s start at which return activity is evaluated."
+description: "A number of UTC calendar periods after a retention cohort’s start at which return activity is evaluated."
 generated:
   by: process:codex
   at: "2026-10-16T13:15:03Z"
+timestamp: 2026-11-13T14:03:22Z
 termId: TERM-49
 status: current
 tags: [activity]
@@ -20,9 +21,9 @@ anchors:
 
 # retention offset
 
-A number of days after a retention cohort’s start at which return activity is evaluated.
+A number of UTC calendar periods after a retention cohort’s start at which return activity is evaluated.
 
-Offsets are distinct values in 1..365, at most 32, with an implicit zero cohort point. Mode=on tests the exact day. On_or_after tests any day from that offset through the largest requested offset, including unrequested intervening days. Immature horizons are omitted rather than reported as zero.
+Offsets are at most 32 distinct values: 1..365 for day (default), 1..52 for Monday weeks, or 1..12 for actual calendar months. An implicit zero always gives observed cohort size. Mode=on tests the full target period. On_or_after tests from that period through the end of the largest requested period, including unrequested periods. Exact subjects count once despite several return days. Immature target periods, or all cumulative offsets before the full horizon closes, are omitted rather than reported as zero.
 
 Related: [retention cohort](retention-cohort.md), [retained-history lifetime](retained-history-lifetime.md).
 

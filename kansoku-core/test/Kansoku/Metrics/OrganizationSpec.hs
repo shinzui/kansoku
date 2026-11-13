@@ -12,7 +12,7 @@ import Kansoku.Admin.ClickHouse (rebuildDerived)
 import Kansoku.ClickHouse
 import Kansoku.ClickHouseTestSupport
 import Kansoku.Event
-import Kansoku.Metrics.Api (CohortMode (..), MetricResult, RetentionMode (..))
+import Kansoku.Metrics.Api (CohortMode (..), MetricResult, RetentionMode (..), RetentionPeriod (..))
 import Kansoku.Metrics.Filter qualified as Filter
 import Kansoku.Metrics.Query qualified as Q
 import Kansoku.Metrics.Query.Validate (mkSqlName)
@@ -89,6 +89,21 @@ spec = do
         total pool "organizations" req {Q.userOrganization = True, Q.filters = [onlyPages, pro]} `shouldReturn` 0
         rebuildDerived connection
         total pool "organizations" req {Q.userOrganization = True} `shouldReturn` 1
+    it "merges distinct members across weekly event pairs with shared traits and current membership fallback" $ withClickHouse $ \connection -> do
+      let rows = [sample "weekly-start" "signup_completed" "starter" "A" "2026-07-06 00:00:00 UTC", sample "weekly-return" "document_created" "returner" "A" "2026-07-13 00:00:00 UTC", sample "weekly-group" "group" "starter" "A" "2026-07-14 00:00:00 UTC" & #schemaVersion ?~ 2 & #properties .~ KM.singleton "plan" (Aeson.String "pro"), sample "weekly-empty-start" "signup_completed" "fallback" "" "2026-07-06 00:00:00 UTC", sample "weekly-empty-return" "document_created" "fallback" "" "2026-07-13 00:00:00 UTC", sample "weekly-member" "group" "fallback" "B" "2026-07-14 00:00:00 UTC"]
+      insertEvents connection (rows <> rows)
+      pro <- either (fail . Text.unpack) pure (Filter.parseMetricFilter "org:plan:eq:free|org:plan:eq:pro")
+      withPool $ \pool -> do
+        let req = request {Q.from = fromGregorian 2026 7 6, Q.to = fromGregorian 2026 7 20}
+            options = Q.RetentionOptions RetentionWeek (Just "signup_completed") (Just "document_created") [] []
+            query request = values <$> (runEff (Q.runRetentionMetricWithOptions defaultRegistry pool RetentionOn WindowCohort options request [1]) >>= either (fail . show) pure)
+        query req `shouldReturn` [1, 1]
+        query req {Q.aggregateOrganizations = False} `shouldReturn` [2, 1]
+        query req {Q.userOrganization = True} `shouldReturn` [2, 2]
+        query req {Q.userOrganization = True, Q.filters = [pro], Q.groupBy = Just ["org:plan"]} `shouldReturn` [1, 1]
+        -- An explicit stamped A survives a different current membership B.
+        insertEvents connection [sample "weekly-move" "group" "starter" "B" "2026-07-15 00:00:00 UTC"]
+        query req {Q.userOrganization = True, Q.filters = [pro]} `shouldReturn` [1, 1]
     it "returns complete point-cap and resource errors for organization populations" $ withClickHouse $ \connection -> do
       command connection "INSERT INTO analytics.events_raw(event_id,event_name,account_id,organization_id,occurred_at,received_at,properties,context) SELECT concat('org-cap-',toString(number)),'activity','organization-cap',concat('org-',toString(number)),toDateTime64('2026-07-01',3,'UTC'),toDateTime64('2026-07-01',3,'UTC'),'{}','{}' FROM numbers(10001)"
       withPool $ \pool -> do

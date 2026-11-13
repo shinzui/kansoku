@@ -4,7 +4,7 @@ title: "Query metrics"
 description: "Look up metric populations, query bounds, filters, grouping, analytical semantics, cohorts and saved definitions."
 docId: DOC-10
 tags: ["metrics", "queries", "identity", "cohorts"]
-timestamp: 2026-11-13T05:53:22Z
+timestamp: 2026-11-13T14:03:22Z
 generated:
   by: process:codex
   at: "2026-11-06T14:31:34Z"
@@ -221,7 +221,7 @@ The public limits are fixed:
 | Paths | 1..10 transitions; top 1..20 per step; window 1..7776000 seconds |
 | Funnels | 1..20 non-empty steps; repeated names retain their meaning |
 | Acquisition conversion events | 1..20 supplied names, validated before deduplication |
-| Retention offsets | At most 32 distinct values in 1..365, normalized to ascending unique order |
+| Retention offsets | At most 32 distinct values: day 1..365, week 1..52, month 1..12; ascending unique order |
 | Complete metric answer | At most 10,000 points |
 | AND-combined filters | At most 8 JSON objects |
 | `in` operands | 1..100 values of one scalar type |
@@ -229,12 +229,12 @@ The public limits are fixed:
 | Decoded filter JSON combined | At most 16 KiB, including whitespace |
 
 Retention always includes the implicit offset-zero cohort point; do not send zero as
-an offset. Default offsets remain 1, 7, 14 and 30. A funnel's existing maximum window
+an offset. Defaults are day 1,7,14,30; week 1,2,4,8; month 1,3,6,12. A funnel's existing maximum window
 is still 90 days within the bounded query interval.
 
 All bounds fail with HTTP 400, `application/problem+json`, and `retryable: false`.
 Stable codes are `invalid_date_range`, `query_range_too_large`,
-`invalid_path_options`, `invalid_conversion_events`, `too_many_funnel_steps`, `invalid_retention_days`, `too_many_retention_days`, and
+`invalid_path_options`, `invalid_conversion_events`, `too_many_funnel_steps`, `invalid_retention_days`, `too_many_retention_days`, `invalid_retention_period`, `invalid_retention_event`, `invalid_retention_filter`, and
 `metric_result_too_large`. A result overflow returns no partial metric payload:
 
 ```json
@@ -312,7 +312,7 @@ Invalid JSON/filter grammar or incompatible filter types return `invalid_filter`
 | funnel | required `steps`; optional `window`, `mode`, `counting`, `attribution`, `measure`, repeatable `exclude`, `groupBy`, repeatable `filter` |
 | users | `groupBy`, `timeGrain`, repeatable `filter`, `window` (calendar/rolling7/rolling30), `includeBots` |
 | stickiness, lifecycle | `groupBy`, `timeGrain` (day only), repeatable `filter`, `includeBots` |
-| retention | `groupBy`, `timeGrain` (day only), repeatable `filter`, `days`, `mode` (on/on_or_after), `cohort` (window/lifetime), `includeBots` |
+| retention | `groupBy`, `timeGrain` (day only), repeatable `filter`, `days`, `mode` (on/on_or_after), `cohort` (window/lifetime), `includeBots`, `period` (day/week/month), `startEvent`, `returnEvent`, repeatable `startFilter` and `returnFilter` |
 | experiments | `experiment`, `timeGrain` (day/week/month), `measure` (exposures/diagnostics), user-trait-only `groupBy` and repeatable `filter` |
 | experiments/conversion | required `experiment`, `event`; user-trait-only `groupBy` and repeatable `filter` |
 | experiments/funnel | required `experiment`, `steps`; optional `window`, `mode`, `counting`, `attribution`, `measure`, repeatable `exclude`, `groupBy`, repeatable `filter` |
@@ -353,7 +353,7 @@ conversion returns a single zero when its denominator is zero.
 | `/metrics/sessions` | Whole retained web sessions, assigned to their earliest event bucket; count, bounce rate and observed duration, excluding any-bot sessions by default. |
 | `/metrics/paths` | Exact canonical-user event paths or page flows, forward or backward. |
 | `/metrics/funnel` | Exact identity-resolved users or nonoverlapping attempts, with ordered or any-order reach and timing. |
-| `/metrics/retention` | Exact closed-day on/on-or-after retention for window or retained-history lifetime cohorts, omitting immature offsets. |
+| `/metrics/retention` | Exact UTC calendar day/week/month on/on-or-after retention with separate starts and returns for window or retained-history lifetime cohorts, omitting immature offsets. |
 | `/metrics/feature-adoption` | Exact identity-resolved users emitting `feature_used`, grouped by its `feature` property by default. |
 | `/metrics/conversion` | Ordered signup completers among starters within the bounded default window; 0 for empty denominator, always 0..1. |
 | `/metrics/users` | Exact calendar or rolling7/rolling30 active subjects, excluding profile-only and default bot rows. |
@@ -523,19 +523,57 @@ curl --get "$KANSOKU_URL/metrics/users" \
 
 ## Retention
 
-`days` defaults to `1,7,14,30`, with at most 32 distinct positive offsets in 1..365. Offset 0
-always gives cohort size. `cohort=window` (default) means first matching activity inside the
-observed range; a previously active subject can appear as new again. `cohort=lifetime` means
-first matching activity over retained account history, with identical historical filters and
-current identity/trait population; subjects whose first retained activity predates `from` are
-excluded. There is no permanent first-seen store or first-ever claim after history expires.
+`period=day|week|month` chooses the cohort and offset unit, defaulting to day. Weeks start
+on UTC Monday; months use actual calendar boundaries. `from` must be Monday for weeks or
+the first of the month for months, otherwise 400 `invalid_retention_period`. `to` is exclusive,
+need not align, and must be no later than the current UTC date. `timeGrain` remains independently
+limited to omitted or `day`; other grains return `invalid_time_grain`.
 
-`mode=on` (default) counts activity on exactly cohort+N, emitting an offset only when that entire
-UTC day has closed by `to`. `mode=on_or_after` counts any activity from cohort+N through the
-largest requested offset, including intermediate days not requested. For example, with offsets
-1,7 a day-5-only return counts for cumulative offset 1 and not 7. Cumulative nonzero offsets
-are omitted unless the whole maximum horizon is closed. Offset 0 is always present. A mature
-missing return is zero; an immature result is absent. Day grain only.
+`days` supplies offsets in that unit: at most 32 distinct positive values in 1..365 days,
+1..52 weeks or 1..12 months, normalized to ascending order. Defaults are `1,7,14,30` for day,
+`1,2,4,8` for week and `1,3,6,12` for month. There is no `offsets` alias. Out-of-range values
+return `invalid_retention_days`; too many otherwise-valid distinct values return
+`too_many_retention_days`. Offset 0 is implicit and always gives the observed cohort size.
+The final cohort may be partial and counts only starters observed before `to`.
+
+`startEvent` and `returnEvent` each independently default to any matching activity. A supplied
+name is trimmed and must be one 1..128-character name using lowercase ASCII letters, digits,
+underscore, dot, colon or hyphen; empty names and lists return `invalid_retention_event`.
+Names need no ingest declaration: an unmatched valid start gives no cohorts, while an unmatched
+return gives mature zeros. Governed properties still need compatible scalar declarations for
+the events selected on their side.
+
+Repeatable `startFilter` and `returnFilter` use the same JSON/OR/shorthand grammar as `filter`.
+Shared `filter` applies to both sides; each side filter applies only to its side. All three
+lists share one eight-filter and 16,384 decoded UTF-8 byte budget (`invalid_filter`). Side
+filters accept event dimensions, event organization IDs (`organization`) and declared
+properties. They reject `cohort`, `cohort:<id>`, `user:*`, `org:*`, `user_id` and `session:*`
+with `invalid_retention_filter`, including inside OR groups. Put saved membership and current
+user/organization traits in shared filters. Retention still rejects shared `user_id` and
+session selectors under their existing contract.
+
+`cohort=window` (default) uses each subject's first matching start inside the observed range;
+a previously active subject can appear as new again. `cohort=lifetime` uses first matching
+start over retained account history, with the same start filters and current identity/trait
+population. Unrelated earlier activity cannot move an explicit signup cohort. Starts before
+`from` are excluded; there is no permanent first-seen store or first-ever claim after expiry.
+Cohort labels are the period's first day in `YYYY-MM-DD` form. Repeated starts within a group
+do not create later cohorts; return-only subjects do not join the starting population.
+
+`mode=on` (default) counts each subject once for any return in `[cohort+N,cohort+N+1)` and emits
+that offset only when the whole target period closes by `to`. `mode=on_or_after` counts once
+from the target period's start to the end of the largest requested period, including
+unrequested intermediate periods. All its nonzero offsets wait for the full maximum horizon
+to close. For day offsets 1,7, a day-5-only return contributes to cumulative offset 1 but not 7.
+A mature missing return is zero; an immature result is absent.
+
+Start activity supplies each group's dimension values. Only returns with the same dimension
+values count for that group, including nullable values. A start in source A and return only
+in B gives zero for group A; grouping by `event_name` with different start/return names also
+gives mature zero returns. A subject can enter multiple dimension groups, so groups are
+separate populations and cannot be summed into a unique count. Organization aggregation,
+current membership fallback, identity stitching and bot exclusions apply on both sides;
+profile-only updates cannot start or return.
 
 ```bash
 curl --get "$KANSOKU_URL/metrics/retention" \
@@ -544,6 +582,40 @@ curl --get "$KANSOKU_URL/metrics/retention" \
   --data-urlencode 'days=1,7,14' --data-urlencode 'mode=on_or_after' \
   --data-urlencode 'cohort=lifetime'
 ```
+
+For weekly signups returning to create documents:
+
+```bash
+curl --get "$KANSOKU_URL/metrics/retention" \
+  --header "Authorization: Bearer $KANSOKU_SERVICE_TOKEN" \
+  --data-urlencode 'from=2026-07-06' --data-urlencode 'to=2026-07-27' \
+  --data-urlencode 'period=week' --data-urlencode 'days=1,2' \
+  --data-urlencode 'startEvent=signup_completed' --data-urlencode 'returnEvent=document_created' \
+  --data-urlencode 'startFilter=country_code:eq:GB'
+```
+
+The start country filter does not restrict return countries when ungrouped. July 6's offset 1
+counts people returning July 13–19 once, even across several days; offset 2 counts July 20–26.
+July 20's partial cohort emits its size without immature returns. With `on_or_after` and
+`days=1,2`, July 13's nonzero offsets wait until August 3.
+
+For leap-February monthly retention:
+
+```bash
+curl --get "$KANSOKU_URL/metrics/retention" \
+  --header "Authorization: Bearer $KANSOKU_SERVICE_TOKEN" \
+  --data-urlencode 'from=2024-01-01' --data-urlencode 'to=2024-03-01' \
+  --data-urlencode 'period=month' --data-urlencode 'days=1' \
+  --data-urlencode 'startEvent=signup_completed' --data-urlencode 'returnEvent=document_created'
+```
+
+January's offset 1 observes all of February, including February 29. With `to=2024-02-29` the
+January cohort still has a size, but its February return is immature and omitted.
+
+The generated Haskell route and `Kansoku.Client.Metrics.retentionClient` append period, start
+name, return name, start filters and return filters after the existing arguments. Existing HTTP
+requests retain daily behavior; Haskell callers must append `Nothing Nothing Nothing [] []`
+for old behavior. This is an additive wire change and a source signature change.
 
 Each point puts `cohort` and `offset` beside any requested dimensions in `group`; `bucket` is
 null and `value` is an exact subject count. Lifetime/lifecycle scans can read all retained

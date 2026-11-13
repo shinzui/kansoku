@@ -355,6 +355,49 @@ spec = describe "Kansoku.Client" $ do
       withClient (testConfig port) $ \client ->
         fetchSchemaCatalog client `shouldReturn` Right (schemaCatalog defaultRegistry)
 
+  it "live integration retention counts the seeded weekly signup/document cohort" $ do
+    required <- lookupEnv "KANSOKU_REQUIRED_INTEGRATION"
+    server <- lookupEnv "KANSOKU_SERVER_URL"
+    credential <- lookupEnv "KANSOKU_RETENTION_SERVICE_TOKEN"
+    source <- lookupEnv "KANSOKU_RETENTION_SOURCE"
+    case (server, credential, source) of
+      (Just url, Just token, Just selection) -> do
+        manager <- HTTP.newManager HTTP.defaultManagerSettings
+        base <- parseBaseUrl url
+        predicate <- either (fail . Text.unpack) pure (Filter.mkMetricFilter "source_service" Filter.FilterEq (Just (Aeson.String (Text.pack selection))))
+        result <- runClientM (retentionClient (kansokuMetricsCredential (Text.pack token)) (read "2026-07-06") (read "2026-07-27") Nothing Nothing [predicate] (Just "1,2") Nothing Nothing Nothing Nothing Nothing (Just Metrics.RetentionWeek) (Just "signup_completed") (Just "document_created") [] []) (mkClientEnv manager base)
+        case result of
+          Right (KansokuOk value) -> do
+            let values = [(Map.lookup "cohort" (point ^. #group), Map.lookup "offset" (point ^. #group), point ^. #value) | point <- value ^. #points]
+            values `shouldBe` [(Just (Just cohort), Just (Just offset), amount) | (cohort, offset, amount) <- [("2026-07-06", "0", 4), ("2026-07-06", "1", 2), ("2026-07-06", "2", 2), ("2026-07-13", "0", 1), ("2026-07-13", "1", 1), ("2026-07-20", "0", 1)]]
+          other -> expectationFailure (show other)
+      _ | required == Just "1" -> expectationFailure "required retention integration coordinates are missing"
+      _ -> pendingWith "retention integration requires the owned public fixture"
+
+  it "derived retention clients omit optional parameters and preserve separate repeatable side filters" $ do
+    captured <- newTVarIO []
+    let app request respond = do
+          lookup hAuthorization (requestHeaders request) `shouldBe` Just "Bearer test-service-token"
+          pathInfo request `shouldBe` ["metrics", "retention"]
+          atomically (modifyTVar' captured (<> [queryString request]))
+          respond (responseLBS status200 [(hContentType, "application/json")] (Aeson.encode (MetricResult "retention" [])))
+    Warp.testWithApplication (pure app) $ \port -> do
+      manager <- HTTP.newManager HTTP.defaultManagerSettings
+      base <- parseBaseUrl ("http://127.0.0.1:" <> show port)
+      let env = mkClientEnv manager base
+          query = retentionClient (kansokuMetricsCredential "test-service-token") (read "2026-07-06") (read "2026-07-27") Nothing Nothing
+      runClientM (query [] Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing [] []) env `shouldReturn` Right (KansokuOk (MetricResult "retention" []))
+      f <- either (fail . Text.unpack) pure (Filter.mkMetricFilter "country_code" Filter.FilterEq (Just (Aeson.String "US")))
+      runClientM (query [f] (Just "1,2") Nothing Nothing Nothing Nothing Nothing (Just Metrics.RetentionWeek) (Just "signup_completed") (Just "document_created") [f, f] [f, f]) env `shouldReturn` Right (KansokuOk (MetricResult "retention" []))
+    [legacy, selected] <- readTVarIO captured
+    map fst legacy `shouldBe` ["from", "to"]
+    lookup "period" selected `shouldBe` Just (Just "week")
+    lookup "startEvent" selected `shouldBe` Just (Just "signup_completed")
+    lookup "returnEvent" selected `shouldBe` Just (Just "document_created")
+    length (filter ((== "filter") . fst) selected) `shouldBe` 1
+    length (filter ((== "startFilter") . fst) selected) `shouldBe` 2
+    length (filter ((== "returnFilter") . fst) selected) `shouldBe` 2
+
   it "live integration saved analysis clients round-trip and decode typed conflicts" $ do
     required <- lookupEnv "KANSOKU_REQUIRED_INTEGRATION"
     server <- lookupEnv "KANSOKU_SERVER_URL"

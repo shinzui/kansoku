@@ -7,6 +7,8 @@ module Kansoku.Metrics.Limits
     maxFunnelSteps,
     maxRetentionDays,
     maxRetentionOffset,
+    maxRetentionWeekOffset,
+    maxRetentionMonthOffset,
     maxMetricPoints,
     maxPathSteps,
     maxPathTop,
@@ -38,3 +40,7 @@ maxSessionContainsEvents = 20
 
 maxSelectedUserIds :: Int
 maxSelectedUserIds = 20
+
+maxRetentionWeekOffset, maxRetentionMonthOffset :: Int
+maxRetentionWeekOffset = 52
+maxRetentionMonthOffset = 12

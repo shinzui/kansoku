@@ -16,6 +16,10 @@ module Kansoku.Metrics.Query
     buildFunnelSQL,
     buildRetentionSQL,
     buildRetentionMetricSQL,
+    buildRetentionMetricSQLWithOptions,
+    RetentionOptions (..),
+    defaultRetentionOptions,
+    validateRetentionOptions,
     buildUsersSQL,
     buildStickinessSQL,
     buildLifecycleSQL,
@@ -44,6 +48,7 @@ module Kansoku.Metrics.Query
     runExperimentDiagnostics,
     runRetention,
     runRetentionMetric,
+    runRetentionMetricWithOptions,
     runUsers,
     runStickiness,
     runLifecycle,
@@ -74,7 +79,7 @@ import Data.Aeson qualified as Aeson
 import Data.Bifunctor (first)
 import Data.ByteString (ByteString)
 import Data.ByteString qualified
-import Data.Foldable (traverse_)
+import Data.Foldable (forM_, traverse_)
 import Data.Generics.Labels ()
 import Data.List qualified as List
 import Data.Map.Strict qualified as Map
@@ -93,7 +98,7 @@ import Kansoku.Event
     defaultRegistry,
   )
 import Kansoku.Exception (trySynchronous)
-import Kansoku.Metrics.Api (AcquisitionMeasure (..), CohortMode (..), FunnelAttribution (..), FunnelCounting (..), FunnelMeasure (..), FunnelMode (..), MetricPoint (..), MetricResult (..), PathBy (..), RetentionMode (..), SessionMeasure (..), TimeGrain (..), UserWindow (..))
+import Kansoku.Metrics.Api (AcquisitionMeasure (..), CohortMode (..), FunnelAttribution (..), FunnelCounting (..), FunnelMeasure (..), FunnelMode (..), MetricPoint (..), MetricResult (..), PathBy (..), RetentionMode (..), RetentionPeriod (..), SessionMeasure (..), TimeGrain (..), UserWindow (..))
 import Kansoku.Metrics.Definition (Aggregation (..), MetricDefinition (..), RatioMetric (..))
 import Kansoku.Metrics.Filter (MetricFilter)
 import Kansoku.Metrics.Filter qualified as WireFilter
@@ -113,7 +118,7 @@ import Kansoku.Metrics.Query.Property
 import Kansoku.Metrics.Query.Session (attachSessionAttributes, materializedSessionProjection, sessionProjection)
 import Kansoku.Metrics.Query.Traits qualified as Traits
 import Kansoku.Metrics.Query.UserSelection qualified as UserSelection
-import Kansoku.Metrics.Query.Validate (QueryLimitError (..), SqlName, mkSqlName, renderSqlName, validateAcquisitionConversions, validateDateRange, validateObservationCutoff, validateOffsets, validateSessionContainsEvents, validateSteps)
+import Kansoku.Metrics.Query.Validate (QueryLimitError (..), SqlName, mkSqlName, renderSqlName, validateAcquisitionConversions, validateDateRange, validateObservationCutoff, validatePeriodOffsets, validateSessionContainsEvents, validateSteps)
 import Kansoku.Metrics.Registry (BuiltinMetric (..), activeUsers)
 import Kansoku.Prelude
 import System.Timeout (timeout)
@@ -144,6 +149,7 @@ data QueryCompileError
   | QueryCompileFilterError !Text
   | QueryCompileContainsEvent !QueryLimitError
   | QueryCompileConversionEvents !QueryLimitError
+  | QueryCompileRetention !QueryLimitError
   deriving stock (Generic, Eq, Show)
 
 data CompiledMetric = CompiledMetric
@@ -308,10 +314,13 @@ runRetention :: (IOE :> es) => QueryPool -> QueryRequest -> [Int] -> Eff es (Eit
 runRetention pool = runRetentionMetric defaultRegistry pool RetentionOn WindowCohort
 
 runRetentionMetric :: (IOE :> es) => EventRegistry -> QueryPool -> RetentionMode -> CohortMode -> QueryRequest -> [Int] -> Eff es (Either QueryExecutionError MetricResult)
-runRetentionMetric registry pool mode cohort req offsets =
-  case validateOffsets offsets of
+runRetentionMetric registry pool mode cohort = runRetentionMetricWithOptions registry pool mode cohort defaultRetentionOptions
+
+runRetentionMetricWithOptions :: (IOE :> es) => EventRegistry -> QueryPool -> RetentionMode -> CohortMode -> RetentionOptions -> QueryRequest -> [Int] -> Eff es (Either QueryExecutionError MetricResult)
+runRetentionMetricWithOptions registry pool mode cohort options req offsets =
+  case validateRetentionOptions options req offsets of
     Left failure -> pure (Left (QueryLimitFailure failure))
-    Right normalized -> runObserved pool "retention" req (if cohort == LifetimeCohort then historicalScope req else req) (dailyGrain req) (compileRetention registry mode cohort req normalized)
+    Right normalized -> runObserved pool "retention" req (if cohort == LifetimeCohort then historicalScope req else req) (Right ()) (compileRetention registry mode cohort options req normalized)
 
 runUsers :: (IOE :> es) => EventRegistry -> QueryPool -> UserWindow -> QueryRequest -> Eff es (Either QueryExecutionError MetricResult)
 runUsers registry pool window req =
@@ -1115,30 +1124,88 @@ buildRetentionSQL :: QueryRequest -> [Int] -> Either QueryCompileError Text
 buildRetentionSQL = buildRetentionMetricSQL defaultRegistry RetentionOn WindowCohort
 
 buildRetentionMetricSQL :: EventRegistry -> RetentionMode -> CohortMode -> QueryRequest -> [Int] -> Either QueryCompileError Text
-buildRetentionMetricSQL registry mode cohort req offsets = boundedCompiled (compileRetention registry mode cohort req offsets)
+buildRetentionMetricSQL registry mode cohort = buildRetentionMetricSQLWithOptions registry mode cohort defaultRetentionOptions
 
-compileRetention :: EventRegistry -> RetentionMode -> CohortMode -> QueryRequest -> [Int] -> Either QueryCompileError CompiledMetric
-compileRetention registry mode cohort req offsets = do
+data RetentionOptions = RetentionOptions
+  { period :: !RetentionPeriod,
+    startEvent :: !(Maybe Text),
+    returnEvent :: !(Maybe Text),
+    startFilters :: ![MetricFilter],
+    returnFilters :: ![MetricFilter]
+  }
+  deriving stock (Generic, Eq, Show)
+
+defaultRetentionOptions :: RetentionOptions
+defaultRetentionOptions = RetentionOptions RetentionDay Nothing Nothing [] []
+
+-- | Pure validation shared by HTTP, compilation and direct execution, before storage.
+validateRetentionOptions :: RetentionOptions -> QueryRequest -> [Int] -> Either QueryLimitError [Int]
+validateRetentionOptions options req offsets = do
+  normalized <- validatePeriodOffsets (options ^. #period) offsets
+  dailyGrain req
+  let (_, _, day) = toGregorian (req ^. #from)
+      aligned = case options ^. #period of
+        RetentionDay -> True
+        RetentionWeek -> show (dayOfWeek (req ^. #from)) == "Monday"
+        RetentionMonth -> day == 1
+  unless aligned (Left (QueryLimitError "invalid_retention_period" "from must be a UTC Monday for week or the first day of a month for month"))
+  forM_ [options ^. #startEvent, options ^. #returnEvent] $ \name ->
+    void (first (const (QueryLimitError "invalid_retention_event" "event names require 1..128 lowercase ASCII letters, digits, underscore, dot, colon or hyphen")) (traverse (mkSqlName . Text.strip) name))
+  void (first (QueryLimitError "invalid_filter") (WireFilter.validateMetricFilters (req ^. #filters <> options ^. #startFilters <> options ^. #returnFilters)))
+  forM_ (concatMap WireFilter.filterTerms (options ^. #startFilters <> options ^. #returnFilters)) $ \term -> do
+    let name = WireFilter.dimension term
+    when (name `elem` ["cohort", "user_id"] || any (`Text.isPrefixOf` name) ["cohort:", "user:", "org:", "session:"]) $
+      Left (QueryLimitError "invalid_retention_filter" "side filters accept event dimensions and properties; subject and session selectors belong in shared filters")
+  pure normalized
+
+buildRetentionMetricSQLWithOptions :: EventRegistry -> RetentionMode -> CohortMode -> RetentionOptions -> QueryRequest -> [Int] -> Either QueryCompileError Text
+buildRetentionMetricSQLWithOptions registry mode cohort options req offsets = boundedCompiled (compileRetention registry mode cohort options req offsets)
+
+-- Each side has an independent property scope and native parameter namespace.
+retentionPopulation :: EventRegistry -> QueryRequest -> QueryRequest -> String -> Maybe Text -> [MetricFilter] -> Either QueryCompileError ([GroupDimension], Filters.CompiledFilters, Text)
+retentionPopulation registry req scope prefix event side = do
+  let inputs = req ^. #filters <> side
+      events = Filters.filteredEventScope (maybe [] (pure . EventName . Text.strip) event) inputs
+  grouping <- requestGrouping req registry events (req ^. #groupBy) []
+  compiled <- first QueryCompileFilterError (requestFilters req prefix registry events inputs)
+  let eventParameter = prefix <> "_event"
+      eventClause = ["event_name={" <> Text.pack eventParameter <> ":String}" | isJust event]
+      population =
+        Text.unlines
+          [ "SELECT DISTINCT canonical_user,toDate(occurred_at) AS active_day," <> groupProjection grouping,
+            "FROM " <> eventSessionSource grouping req (resolvedSource scope),
+            "WHERE " <> accountPredicate <> " AND canonical_user!='' AND " <> activityPredicate,
+            "AND " <> timestampPredicate scope <> propertyFilterClause (["NOT is_bot" | not (req ^. #includeBots)] <> eventClause <> Filters.predicates compiled)
+          ]
+      bound = compiled {Filters.parameters = Filters.parameters compiled <> maybe [] (\name -> [(eventParameter, Text.strip name)]) event}
+  pure (grouping, bound, population)
+
+compileRetention :: EventRegistry -> RetentionMode -> CohortMode -> RetentionOptions -> QueryRequest -> [Int] -> Either QueryCompileError CompiledMetric
+compileRetention registry mode cohort options req offsets = do
+  valid <- first QueryCompileRetention (validateRetentionOptions options req offsets)
   validateSelection False (req ^. #filters)
-  first (QueryCompileFilterError . Text.pack . show) (dailyGrain req)
-  void (first (QueryCompileFilterError . Text.pack . show) (validateOffsets offsets))
   let scope = if cohort == LifetimeCohort then historicalScope req else req
-  (grouping, filters, population) <- activityPopulation registry req scope
-  let normalized = normalizeOffsets offsets
+  (grouping, startFilter, starts) <- retentionPopulation registry req scope "retention_start_filter" (options ^. #startEvent) (options ^. #startFilters)
+  (returnGrouping, returnFilter, returns) <- retentionPopulation registry req req "retention_return_filter" (options ^. #returnEvent) (options ^. #returnFilters)
+  unless (map dimensionType grouping == map dimensionType returnGrouping) (Left (QueryCompileInvalidGroupBy "start and return grouping types must agree"))
+  let normalized = normalizeOffsets valid
       horizon = maximum normalized
+      (align, advance) = case options ^. #period of
+        RetentionDay -> (\day -> day, "addDays")
+        RetentionWeek -> (\day -> "toMonday(" <> day <> ")", "addWeeks")
+        RetentionMonth -> (\day -> "toStartOfMonth(" <> day <> ")", "addMonths")
+      target n = advance <> "(f.cohort_day," <> n <> ")"
       maturity = case mode of
-        RetentionOn -> "addDays(f.cohort_day,f.offset+1)<=toDate(" <> sqlString (renderDay (req ^. #to)) <> ")"
-        RetentionOnOrAfter -> "addDays(f.cohort_day," <> Text.pack (show (horizon + 1)) <> ")<=toDate(" <> sqlString (renderDay (req ^. #to)) <> ")"
-      returned = case mode of
-        RetentionOn -> "a.active_day=addDays(f.cohort_day,f.offset)"
-        RetentionOnOrAfter -> "a.active_day>=addDays(f.cohort_day,f.offset) AND a.active_day<=addDays(f.cohort_day," <> Text.pack (show horizon) <> ")"
+        RetentionOn -> target "f.offset+1" <> "<=toDate(" <> sqlString (renderDay (req ^. #to)) <> ")"
+        RetentionOnOrAfter -> target (Text.pack (show (horizon + 1))) <> "<=toDate(" <> sqlString (renderDay (req ^. #to)) <> ")"
+      returned = "a.active_day>=" <> target "f.offset" <> " AND a.active_day<" <> target (case mode of RetentionOn -> "f.offset+1"; RetentionOnOrAfter -> Text.pack (show (horizon + 1)))
       sql =
         Text.unlines
-          [ "WITH population AS (" <> population <> "),first_seen AS (",
-            "SELECT canonical_user,group_key,sort_group_1,sort_group_2,min(active_day) AS cohort_day FROM population GROUP BY canonical_user,group_key,sort_group_1,sort_group_2",
+          [ "WITH population AS (" <> starts <> "),first_seen AS (",
+            "SELECT canonical_user,group_key,sort_group_1,sort_group_2," <> align "min(active_day)" <> " AS cohort_day FROM population GROUP BY canonical_user,group_key,sort_group_1,sort_group_2",
             "HAVING cohort_day>=toDate(" <> sqlString (renderDay (req ^. #from)) <> ") AND cohort_day<toDate(" <> sqlString (renderDay (req ^. #to)) <> ")),",
             "cohort_offsets AS (SELECT *,arrayJoin([" <> Text.intercalate "," (map (Text.pack . show) normalized) <> "]) AS offset FROM first_seen),",
-            "activity AS (SELECT canonical_user,group_key,active_day FROM population WHERE active_day>=toDate(" <> sqlString (renderDay (req ^. #from)) <> "))",
+            "activity AS (" <> returns <> ")",
             "SELECT f.cohort_day AS sort_cohort,f.offset AS sort_offset,f.sort_group_1 AS sort_group_1,f.sort_group_2 AS sort_group_2,'' AS bucket,",
             "toJSONString(arrayConcat(JSONExtract(f.group_key,'Array(Nullable(String))'),[toString(f.cohort_day),toString(f.offset)])) AS group_key,",
             "toFloat64(uniqExactIf(f.canonical_user,f.offset=0 OR (a.canonical_user!='' AND " <> returned <> "))) AS value",
@@ -1146,7 +1213,7 @@ compileRetention registry mode cohort req offsets = do
             "WHERE f.offset=0 OR " <> maturity,
             "GROUP BY f.cohort_day,f.offset,f.group_key,f.sort_group_1,f.sort_group_2"
           ]
-  pure CompiledMetric {sql, groupLabels = map dimensionLabel grouping <> ["cohort", "offset"], filterParameters = Filters.parameters filters, ordering = RetentionDimensionsOrder}
+  pure CompiledMetric {sql, groupLabels = map dimensionLabel grouping <> ["cohort", "offset"], filterParameters = Filters.parameters startFilter <> Filters.parameters returnFilter, ordering = RetentionDimensionsOrder}
 
 -- | Both public routes use the same millisecond/id-ordered selected chain.
 buildFunnelSQL :: QueryRequest -> Int -> [SqlName] -> Text
@@ -1406,6 +1473,7 @@ queryCompileErrorCode = \case
   QueryCompileUserSelection _ -> "invalid_metric"
   QueryCompileContainsEvent failure -> limitCode failure
   QueryCompileConversionEvents failure -> limitCode failure
+  QueryCompileRetention failure -> limitCode failure
   QueryCompileInvalidQuantile -> "invalid_metric_definition"
   QueryCompileInvalidTimeGrain -> "invalid_time_grain"
   QueryCompilePropertyError PropertyErrorUndeclared {} -> "unknown_property"
@@ -1421,6 +1489,7 @@ queryCompileErrorMessage = \case
   QueryCompileUserSelection message -> message
   QueryCompileContainsEvent failure -> limitMessage failure
   QueryCompileConversionEvents failure -> limitMessage failure
+  QueryCompileRetention failure -> limitMessage failure
   QueryCompileInvalidQuantile -> "percentile requires a finite quantile strictly between zero and one; other aggregations cannot specify quantile"
   QueryCompileInvalidTimeGrain -> "timeGrain none is unsupported for this metric"
   QueryCompilePropertyError (PropertyErrorBadName property) ->

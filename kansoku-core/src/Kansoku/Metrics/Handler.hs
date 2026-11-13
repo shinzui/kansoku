@@ -10,7 +10,7 @@ where
 import Data.Aeson qualified as Aeson
 import Data.List (nub)
 import Data.Text qualified as Text
-import Data.Time (Day, diffDays)
+import Data.Time (Day, diffDays, utctDay)
 import Data.UUID qualified as UUID
 import Effectful (Eff, IOE, runEff)
 import Hasql.Pool qualified as Pool
@@ -28,14 +28,14 @@ import Kansoku.Cohort.Store qualified as CohortStore
 import Kansoku.Event (AccountId, defaultRegistry)
 import Kansoku.Exception (trySynchronous)
 import Kansoku.Logging (logError, runLogStderr)
-import Kansoku.Metrics.Api (AcquisitionMeasure (..), AggregateBy (..), CohortMode (..), ExperimentMeasure (..), FunnelAttribution (..), FunnelCounting (..), FunnelMeasure (..), FunnelMode (..), MetricResult, MetricsRoutes (..), OrganizationAttribution (..), PathBy (..), RetentionMode (..), SessionMeasure (..), TimeGrain (..), UserWindow (..), parseFunnelAttribution)
+import Kansoku.Metrics.Api (AcquisitionMeasure (..), AggregateBy (..), CohortMode (..), ExperimentMeasure (..), FunnelAttribution (..), FunnelCounting (..), FunnelMeasure (..), FunnelMode (..), MetricResult, MetricsRoutes (..), OrganizationAttribution (..), PathBy (..), RetentionMode (..), RetentionPeriod (..), SessionMeasure (..), TimeGrain (..), UserWindow (..), parseFunnelAttribution)
 import Kansoku.Metrics.Custom
 import Kansoku.Metrics.Definition
 import Kansoku.Metrics.DefinitionStore qualified as DefinitionStore
 import Kansoku.Metrics.Filter (MetricFilter)
 import Kansoku.Metrics.Filter qualified as Filter
 import Kansoku.Metrics.Query qualified as Query
-import Kansoku.Metrics.Query.Validate (QueryLimitError (..), SqlName, mkSqlName, renderSqlName, validateAcquisitionConversions, validateDateRange, validateSessionContainsEvents)
+import Kansoku.Metrics.Query.Validate (QueryLimitError (..), SqlName, mkSqlName, renderSqlName, validateAcquisitionConversions, validateDateRange, validateObservationCutoff, validateSessionContainsEvents)
 import Kansoku.Metrics.Registry (builtinMetric)
 import Kansoku.Prelude
 import Servant (Handler)
@@ -192,12 +192,20 @@ metricsServerUsing pg pool =
                     Right window ->
                       withExclusions excludes $ \excluded -> effToHandler (withCohorts pg (queryRequest (principal ^. #accountId) fromDay toDay groupBy Nothing filters) (\request -> Query.runFunnelMetric defaultRegistry pool request {Query.aggregateOrganizations = org, Query.userOrganization = current} Nothing (Query.FunnelOptions (fromMaybe FunnelSequential mode) (fromMaybe FunnelCount measure) excluded (fromMaybe FunnelUniques counting) touch) window steps))
 
-    retentionHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> [MetricFilter] -> Maybe Text -> Maybe RetentionMode -> Maybe CohortMode -> Maybe Bool -> Maybe AggregateBy -> Maybe OrganizationAttribution -> Handler (KansokuResult MetricResult)
-    retentionHandler (MetricsPrincipal principal) fromDay toDay groupBy timeGrain filters daysParam mode cohort bots aggregate attribution =
-      withOrganizationOptions False aggregate attribution $ \org current ->
-        case parseOffsets daysParam of
+    retentionHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> [MetricFilter] -> Maybe Text -> Maybe RetentionMode -> Maybe CohortMode -> Maybe Bool -> Maybe AggregateBy -> Maybe OrganizationAttribution -> Maybe RetentionPeriod -> Maybe Text -> Maybe Text -> [MetricFilter] -> [MetricFilter] -> Handler (KansokuResult MetricResult)
+    retentionHandler (MetricsPrincipal principal) fromDay toDay groupBy timeGrain filters daysParam mode cohort bots aggregate attribution period startEvent returnEvent startFilters returnFilters =
+      withOrganizationOptions False aggregate attribution $ \org current -> do
+        let options = Query.RetentionOptions (fromMaybe RetentionDay period) startEvent returnEvent startFilters returnFilters
+            req = (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain filters) {Query.includeBots = fromMaybe False bots, Query.aggregateOrganizations = org, Query.userOrganization = current}
+        case parseOffsets (fromMaybe RetentionDay period) daysParam of
           Left message -> pure (KansokuBadRequest (badRequest "invalid_retention_days" message))
-          Right offsets -> effToHandler (withCohorts pg (queryRequest (principal ^. #accountId) fromDay toDay groupBy timeGrain filters) (\request -> Query.runRetentionMetric defaultRegistry pool (fromMaybe RetentionOn mode) (fromMaybe WindowCohort cohort) request {Query.includeBots = fromMaybe False bots, Query.aggregateOrganizations = org, Query.userOrganization = current} offsets))
+          Right offsets -> case Query.validateRetentionOptions options req offsets of
+            Left failure -> pure (KansokuBadRequest (badRequest (failure ^. #limitCode) (failure ^. #limitMessage)))
+            Right normalized -> do
+              today <- liftIO (utctDay <$> getCurrentTime)
+              case validateDateRange fromDay toDay >> validateObservationCutoff today toDay of
+                Left failure -> pure (KansokuBadRequest (badRequest (failure ^. #limitCode) (failure ^. #limitMessage)))
+                Right () -> effToHandler (withCohorts pg req (\request -> Query.runRetentionMetricWithOptions defaultRegistry pool (fromMaybe RetentionOn mode) (fromMaybe WindowCohort cohort) options request normalized))
 
     experimentsHandler :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> Maybe ExperimentMeasure -> Maybe Text -> [MetricFilter] -> Handler (KansokuResult MetricResult)
     experimentsHandler (MetricsPrincipal principal) fromDay toDay experimentParam timeGrain measure groupBy filters =
@@ -331,9 +339,12 @@ nonEmptyCsv :: Text -> [Text]
 nonEmptyCsv =
   filter (not . Text.null) . fmap Text.strip . Text.splitOn ","
 
-parseOffsets :: Maybe Text -> Either Text [Int]
-parseOffsets Nothing = Right [1, 7, 14, 30]
-parseOffsets (Just raw) =
+parseOffsets :: RetentionPeriod -> Maybe Text -> Either Text [Int]
+parseOffsets period Nothing = Right $ case period of
+  RetentionDay -> [1, 7, 14, 30]
+  RetentionWeek -> [1, 2, 4, 8]
+  RetentionMonth -> [1, 3, 6, 12]
+parseOffsets _ (Just raw) =
   traverse parseOne (nonEmptyCsv raw)
   where
     parseOne piece =

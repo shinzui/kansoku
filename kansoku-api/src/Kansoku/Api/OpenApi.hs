@@ -37,7 +37,7 @@ import Kansoku.Event
     VersionedEventSchema,
   )
 import Kansoku.Ingest.Api (BatchAck, BeaconEnvelope, IngestAck, IngestEvent, RejectedEvent)
-import Kansoku.Metrics.Api (AcquisitionMeasure, AggregateBy, CohortMode, ExperimentMeasure, FunnelAttribution, FunnelCounting, FunnelMeasure, FunnelMode, MetricPoint, MetricResult, OrganizationAttribution, PathBy, RetentionMode, SessionMeasure, TimeGrain, UserWindow)
+import Kansoku.Metrics.Api (AcquisitionMeasure, AggregateBy, CohortMode, ExperimentMeasure, FunnelAttribution, FunnelCounting, FunnelMeasure, FunnelMode, MetricPoint, MetricResult, OrganizationAttribution, PathBy, RetentionMode, RetentionPeriod, SessionMeasure, TimeGrain, UserWindow)
 import Kansoku.Metrics.Definition
 import Kansoku.Metrics.Filter (FilterOp, MetricFilter)
 import Kansoku.Metrics.Limits (maxMetricPoints)
@@ -198,6 +198,9 @@ instance O.ToParamSchema OrganizationAttribution where
 
 instance O.ToParamSchema UserWindow where
   toParamSchema _ = O.toParamSchema (Proxy @Text) & O.enum_ ?~ ["calendar", "rolling7", "rolling30"]
+
+instance O.ToParamSchema RetentionPeriod where
+  toParamSchema _ = O.toParamSchema (Proxy @Text) & O.enum_ ?~ ["day", "week", "month"]
 
 instance O.ToParamSchema RetentionMode where
   toParamSchema _ = O.toParamSchema (Proxy @Text) & O.enum_ ?~ ["on", "on_or_after"]

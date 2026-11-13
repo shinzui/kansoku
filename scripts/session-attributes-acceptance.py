@@ -8,6 +8,6 @@ for block_size in (65536, 2):
         apply_migrations(env)
         for family in ('Kansoku.Session attributes native',
                        'Kansoku.Sessions native', 'Kansoku.Acquisition native',
-                       'Kansoku.Activity native'):
+                       'Kansoku.Activity native', 'Organization native'):
             hspec([binary('kansoku-core:test:kansoku-core-test'),
                    '--match=' + family], env=env, timeout=300)

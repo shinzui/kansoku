@@ -385,8 +385,8 @@ sentinelMetricsServer =
     funnelSentinel :: MetricsPrincipal -> Day -> Day -> Text -> Maybe Int -> Maybe Metrics.FunnelMode -> Maybe Metrics.FunnelMeasure -> Maybe Metrics.FunnelCounting -> Maybe Text -> [Text] -> Maybe Text -> [MetricFilter] -> Maybe Metrics.AggregateBy -> Handler (Response.KansokuResult Metrics.MetricResult)
     funnelSentinel _principal _fromDay _toDay _steps _window _mode _measure _counting _attribution _exclude _group _filters _aggregate = pure (Response.KansokuOk (sentinelResult "funnel"))
 
-    retentionSentinel :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe Metrics.TimeGrain -> [MetricFilter] -> Maybe Text -> Maybe Metrics.RetentionMode -> Maybe Metrics.CohortMode -> Maybe Bool -> Maybe Metrics.AggregateBy -> Maybe Metrics.OrganizationAttribution -> Handler (Response.KansokuResult Metrics.MetricResult)
-    retentionSentinel _principal _fromDay _toDay _group _grain _filters _days _mode _cohort _bots _aggregate _attribution = pure (Response.KansokuOk (sentinelResult "retention"))
+    retentionSentinel :: MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe Metrics.TimeGrain -> [MetricFilter] -> Maybe Text -> Maybe Metrics.RetentionMode -> Maybe Metrics.CohortMode -> Maybe Bool -> Maybe Metrics.AggregateBy -> Maybe Metrics.OrganizationAttribution -> Maybe Metrics.RetentionPeriod -> Maybe Text -> Maybe Text -> [MetricFilter] -> [MetricFilter] -> Handler (Response.KansokuResult Metrics.MetricResult)
+    retentionSentinel _principal _fromDay _toDay _group _grain _filters _days _mode _cohort _bots _aggregate _attribution _period _startEvent _returnEvent _startFilters _returnFilters = pure (Response.KansokuOk (sentinelResult "retention"))
 
     experimentConversionSentinel :: MetricsPrincipal -> Text -> Text -> Day -> Day -> Maybe Text -> [MetricFilter] -> Handler (Response.KansokuResult Metrics.MetricResult)
     experimentConversionSentinel _principal _experiment _event _fromDay _toDay _group _filters =

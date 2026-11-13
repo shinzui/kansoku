@@ -1,5 +1,10 @@
 # Bundle Update Log
 
+
+## 2026-11-13
+
+* **Update**: CAP-8: describe exact calendar retention and verified public/native weekly and monthly behavior.
+
 ## 2026-11-11
 
 * **Population**: Add CAP-20 (explicit direct and replicated ClickHouse migrations via `kansoku-ch-migrate`) and CAP-21 (source-built Linux container image) from current source, tests and guides.

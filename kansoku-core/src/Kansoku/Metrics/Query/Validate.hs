@@ -10,6 +10,7 @@ module Kansoku.Metrics.Query.Validate
     validateAcquisitionConversions,
     validateSessionContainsEvents,
     validateOffsets,
+    validatePeriodOffsets,
     SqlName,
     mkSqlName,
     renderSqlName,
@@ -20,7 +21,7 @@ import Data.Char (isAsciiLower, isDigit)
 import Data.List qualified as List
 import Data.Text qualified as Text
 import Data.Time (Day, diffDays)
-import Kansoku.Metrics.Api (AcquisitionMeasure (..))
+import Kansoku.Metrics.Api (AcquisitionMeasure (..), RetentionPeriod (..))
 import Kansoku.Metrics.Limits
 import Kansoku.Prelude
 
@@ -73,14 +74,21 @@ validateSteps steps
   | otherwise = Right ()
 
 validateOffsets :: [Int] -> Either QueryLimitError [Int]
-validateOffsets offsets
-  | any (\n -> n < 1 || n > maxRetentionOffset) unique =
-      Left (QueryLimitError "invalid_retention_days" "retention day offsets must be in 1..365")
+validateOffsets = validatePeriodOffsets RetentionDay
+
+validatePeriodOffsets :: RetentionPeriod -> [Int] -> Either QueryLimitError [Int]
+validatePeriodOffsets period offsets
+  | any (\n -> n < 1 || n > bound) unique =
+      Left (QueryLimitError "invalid_retention_days" ("retention offsets must be in 1.." <> Text.pack (show bound) <> " for the selected period"))
   | length unique > maxRetentionDays =
-      Left (QueryLimitError "too_many_retention_days" "at most 32 distinct retention day offsets are supported")
+      Left (QueryLimitError "too_many_retention_days" "at most 32 distinct retention offsets are supported")
   | otherwise = Right unique
   where
     unique = List.sort (List.nub offsets)
+    bound = case period of
+      RetentionDay -> maxRetentionOffset
+      RetentionWeek -> maxRetentionWeekOffset
+      RetentionMonth -> maxRetentionMonthOffset
 
 -- | Bound the supplied list before normalization; duplicate names have OR semantics.
 validateAcquisitionConversions :: AcquisitionMeasure -> Maybe [Text] -> Either QueryLimitError [SqlName]

@@ -22,14 +22,15 @@ validateMetricRequest request = case allowedParameters requestPath of
     case filter (`notElem` allowed) names of
       invalid : _ -> Left ("unsupported_query_parameter", "unsupported query parameter: " <> Text.take 128 invalid)
       [] -> pure ()
-    let repeatable = if requestPath == ["metrics", "paths"] then ["filter"] else ["filter", "exclude"]
+    let filterNames = if requestPath == ["metrics", "retention"] then ["filter", "startFilter", "returnFilter"] else ["filter"]
+        repeatable = if requestPath == ["metrics", "paths"] then filterNames else filterNames <> ["exclude"]
     unless (length (filter (`notElem` repeatable) names) == length (nub (filter (`notElem` repeatable) names))) $
       Left ("invalid_query_parameter", "only " <> Text.intercalate " and " repeatable <> " may be repeated")
-    unless (all (\(name, operand) -> name == "filter" || isJust operand) query) $
+    unless (all (\(name, operand) -> name `elem` map Text.encodeUtf8 filterNames || isJust operand) query) $
       Left ("invalid_query_parameter", "query parameters require a value")
     let exclusions = [operand | ("exclude", operand) <- query]
     unless (requestPath == ["metrics", "paths"] || length (nub exclusions) <= 20 && all (maybe False (not . BS.null)) exclusions) (Left ("invalid_funnel_exclusion", "at most 20 distinct nonempty exclusions are supported"))
-    let rawFilters = [operand | ("filter", operand) <- query]
+    let rawFilters = [operand | (name, operand) <- query, name `elem` map Text.encodeUtf8 filterNames]
     unless (length rawFilters <= (if take 1 requestPath == ["users"] then 9 else maxFilters)) (Left ("invalid_filter", "at most eight filters are supported"))
     unless (sum (map (maybe 0 BS.length) rawFilters) <= maxFilterBytes) (Left ("invalid_filter", "decoded filters are limited to 16384 UTF-8 bytes"))
     filters <- first ("invalid_filter",) $ traverse parseOne rawFilters
@@ -52,7 +53,8 @@ validateMetricRequest request = case allowedParameters requestPath of
         ["users", _, "events"] -> validateDates lo hi >> validateHistory filters
         _ -> validateDates lo hi
     when (take 1 requestPath == ["metrics"]) $ do
-      first ("invalid_metric",) (UserSelection.validateUserSelection (requestPath `elem` [["metrics", route] | route <- UserSelection.supportedUserSelectionRoutes]) filters)
+      sharedFilters <- first ("invalid_filter",) $ traverse parseOne [operand | ("filter", operand) <- query]
+      first ("invalid_metric",) (UserSelection.validateUserSelection (requestPath `elem` [["metrics", route] | route <- UserSelection.supportedUserSelectionRoutes]) sharedFilters)
       when (any (\(key, operand) -> key == "groupBy" && maybe False (elem "user_id" . BS.split 44) operand) query) (Left ("invalid_group_by", "user_id is filter-only"))
     if take 1 requestPath == ["users"] then mapM_ (\f -> void (first ("invalid_filter",) (validateMetricFilters [f]))) filters else void (first ("invalid_filter",) (validateMetricFilters filters))
   where
@@ -78,7 +80,7 @@ allowedParameters = \case
   ["metrics", "sessions"] -> Just ["from", "to", "groupBy", "timeGrain", "filter", "measure", "containsEvent", "includeBots"]
   ["metrics", "paths"] -> Just ["from", "to", "start", "end", "steps", "top", "window", "events", "exclude", "by", "filter"]
   ["metrics", "funnel"] -> Just ["from", "to", "steps", "window", "mode", "measure", "counting", "attribution", "exclude", "groupBy", "filter", "aggregate"]
-  ["metrics", "retention"] -> Just ["from", "to", "groupBy", "timeGrain", "filter", "days", "mode", "cohort", "includeBots", "aggregate", "attribution"]
+  ["metrics", "retention"] -> Just ["from", "to", "groupBy", "timeGrain", "filter", "days", "mode", "cohort", "includeBots", "aggregate", "attribution", "period", "startEvent", "returnEvent", "startFilter", "returnFilter"]
   ["metrics", "experiments"] -> Just ["from", "to", "experiment", "timeGrain", "measure", "groupBy", "filter"]
   ["metrics", "experiments", "conversion"] -> Just ["from", "to", "experiment", "event", "groupBy", "filter"]
   ["metrics", "experiments", "funnel"] -> Just ["from", "to", "experiment", "steps", "window", "mode", "measure", "counting", "attribution", "exclude", "groupBy", "filter"]

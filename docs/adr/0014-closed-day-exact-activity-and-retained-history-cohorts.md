@@ -5,7 +5,7 @@ description: Use exact canonical activity populations across rolling users, stic
 docId: ADR-14
 status: Accepted
 date: 2026-10-15
-timestamp: 2026-11-06T05:10:00Z
+timestamp: 2026-11-13T14:03:22Z
 generated:
   by: process:codex
   at: 2026-10-15T23:17:08Z
@@ -43,14 +43,40 @@ numeric points per group/day: daily_active, rolling30_active and ratio, with rat
 an empty denominator and otherwise daily/rolling30. Do not encode numbers in dimension labels.
 Ungrouped rolling/daily measure series include zero days; nonexistent attribute groups are omitted.
 
-Retention defaults to mode=on and cohort=window. Window cohort means first matching activity
-inside the observed range. Lifetime cohort means first matching activity in retained history;
-only cohorts starting in the requested range are returned. Offset zero always gives cohort
-size. On counts activity on exactly cohort+N, emitting only offsets whose full target UTC day
-has closed by `to`. On-or-after counts any activity from cohort+N through cohort+largest
-requested offset, including unrequested intermediate days. Its nonzero offsets are emitted
-only when the entire maximum horizon has closed. Mature missing activity emits zero; immature
-observation is omitted. Historical scans apply the same filters and current identity policy.
+Retention defaults to period=day, mode=on and cohort=window. Separate startEvent and
+returnEvent each independently default to any matching activity. Shared filters apply to both
+populations; repeatable startFilter and returnFilter apply only to their side, with distinct
+native parameter prefixes and event/property scopes. A single eight-filter/16384-byte budget
+covers all three lists. Side filters accept event dimensions, organization IDs and governed
+properties; subject selectors (cohort membership, current user/organization traits, user_id)
+and session attributes are rejected with invalid_retention_filter, also inside OR groups.
+Shared traits and membership preserve their existing selection contract; user_id and sessions
+remain unsupported on retention. Saved membership stays anchored to original exclusive to.
+
+Window cohort means first matching start inside the observed range. Lifetime means first
+matching start in retained history, with the same start selection; unrelated earlier activity
+does not move a signup cohort. Prepare one identity scope covering both populations and cohort
+lookbacks. Return rows need only the observed range. No persisted first-seen state is added.
+
+Period is independent of timeGrain: retention still accepts only omitted/day output grain.
+Weeks begin UTC Monday, months use calendar month arithmetic. Require aligned from (Monday or
+month day one), returning invalid_retention_period rather than moving it. Exclusive to can be
+unaligned but must satisfy closed-day observation. Cohort labels are the period first day as
+YYYY-MM-DD. A partial final cohort contributes its observed starters. Offset zero always gives
+cohort size regardless of returns. Start events supply group values; independently grouped
+returns count only when subject and nullable group key both match. A subject may enter several
+dimension groups; these populations need not be disjoint. Grouping by event_name with distinct
+start/return names therefore yields mature zero returns. Organization timelines can combine a
+start by one member with a return by another under the existing attribution policy.
+
+On counts exact subjects with a selected return in [advance(C,N),advance(C,N+1)), emitting only
+when the target period is fully closed by to. Advance uses actual days/weeks/months, never
+30-day approximations. On-or-after counts once in [advance(C,N),advance(C,H+1)) for maximum
+requested offset H, including unrequested intermediate periods; all nonzero offsets wait for
+that full horizon to close. Mature missing returns are zero; immature offsets are absent.
+Multiple returns on different days cannot multiply a subject count. The old daily functions
+remain wrappers, while the typed HTTP/client route appends new arguments and requires callers
+to supply Nothing/empty lists for old behavior.
 
 Lifecycle new means first retained matching activity today; returning means active today and
 yesterday; resurrecting means active today after an inactive yesterday with earlier retained

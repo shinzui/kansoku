@@ -1,5 +1,10 @@
 # Bundle Update Log
 
+
+## 2026-11-13
+
+* **Update**: TERM-47 and TERM-49: define calendar cohort labels, period offsets and independent starts/returns.
+
 ## 2026-11-08
 
 * **Update**: TERM-56: Preserve diagnostic timestamps in observed session duration

@@ -5,7 +5,7 @@ description: Bound metric inputs and final aggregate cardinality, returning a co
 docId: ADR-9
 status: Accepted
 date: 2026-10-15
-timestamp: 2026-11-13T02:09:59Z
+timestamp: 2026-11-13T14:03:22Z
 generated:
   by: process:codex
   at: 2026-10-15T04:44:00Z
@@ -32,7 +32,7 @@ semantics and no-data success. These contracts remain in force.
 
 Every implemented metrics execution function enforces a positive half-open date
 range of at most 366 days, at most 20 non-empty ordered funnel steps, and at most
-32 distinct retention offsets between 1 and 365. Repeated funnel names retain
+32 distinct retention offsets: 1..365 days, 1..52 weeks or 1..12 calendar months. Repeated funnel names retain
 ordered repetition semantics; retention values normalize to ascending unique order,
 with offset zero added implicitly for cohort size. The existing 90-day funnel window
 remains. Acquisition conversion measures require 1..20 raw conversion-event names of

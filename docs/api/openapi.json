@@ -7570,7 +7570,7 @@
     },
     "/metrics/retention": {
       "get": {
-        "description": "user_id is filter-only: eq/neq accept one nonempty opaque string; in accepts 1..20 raw string IDs before deduplication (1024 UTF-8 bytes each). Only identified subjects match, including neq; anonymous/missing subjects fail each term. Resolved event identity includes pre-login history; sessions/acquisition select the first resolved user and retain the whole session. Supported only on events, page-views, users (calendar/rolling7/rolling30), sessions, acquisition, revenue, feature-adoption and custom. Other routes return invalid_metric; groupBy=user_id returns invalid_group_by. Saved simple defaults AND with requests; ratio component selection stays side-local. Existing route grains, populations, budgets and 10000 complete-point cap apply; selecting one user is not a keyed lookup. Exact canonical retention over closed UTC days. mode=on (default) counts the exact offset day; on_or_after counts any day from offset through the largest requested offset, including unrequested intermediate days. cohort=window (default) means first matching activity in range; lifetime means first matching activity in retained history, not first ever. Date bounds select the observed activity interval and cohort dates. Offset 0 always emits cohort size. Omit immature on offsets; on_or_after omits nonzero offsets unless the full maximum horizon is closed by to. to cannot exceed the current UTC day. Day grain only; filters/grouping define identical populations throughout lookback. Bot rows are excluded unless includeBots=true. Up to two dimensions, eight bounded JSON filters, 32 distinct offsets 1..365, range at most 366 days and 10000 complete points.aggregate=users (default) or organizations merges member timelines and excludes empty organization IDs. The organizations route always counts organizations. attribution=event (default) preserves event organization IDs; user_organization fills only missing IDs from the resolved user current group membership. Current org:plan, org:industry, org:country and numeric org:seats traits reclassify historical reports. Experiments retain user aggregation. See Organisations in the query guide.",
+        "description": "user_id is filter-only: eq/neq accept one nonempty opaque string; in accepts 1..20 raw string IDs before deduplication (1024 UTF-8 bytes each). Only identified subjects match, including neq; anonymous/missing subjects fail each term. Resolved event identity includes pre-login history; sessions/acquisition select the first resolved user and retain the whole session. Supported only on events, page-views, users (calendar/rolling7/rolling30), sessions, acquisition, revenue, feature-adoption and custom. Other routes return invalid_metric; groupBy=user_id returns invalid_group_by. Saved simple defaults AND with requests; ratio component selection stays side-local. Existing route grains, populations, budgets and 10000 complete-point cap apply; selecting one user is not a keyed lookup. Exact canonical retention over closed UTC periods. period=day (default), week (UTC Monday), or calendar month controls cohorts and days offset units independently of timeGrain (omit or day only). from must be Monday for week or day one for month; misalignment is invalid_retention_period. to may be unaligned but cannot exceed the current UTC day. Cohort labels are the period first day, YYYY-MM-DD. days is ascending distinct positive offsets: at most 32 in 1..365 days, 1..52 weeks, 1..12 months; invalid_retention_days or too_many_retention_days rejects overflow. Defaults are [1,7,14,30], [1,2,4,8], [1,3,6,12] respectively. Offset 0 always emits observed cohort size, including partial final cohorts. mode=on (default) counts once in the full target period [cohort+N,cohort+N+1); omit immature offsets. on_or_after counts once from target start through the largest requested period, including unrequested intermediate periods; omit all nonzero offsets unless that full maximum horizon is closed by to. Mature missing returns are zero. cohort=window (default) means first matching activity in range; lifetime means first matching activity in retained history using start selection, not first ever. startEvent and returnEvent each independently default to any matching activity. Supplied names are trimmed single 1..128 lowercase ASCII letters, digits, underscore, dot, colon or hyphen; invalid_retention_event rejects empty/invalid names, valid unmatched names give empty starts or zero returns. Repeatable startFilter and returnFilter use the shared filter grammar and apply only on that side; shared filter applies to both. Across all three lists one eight-filter/16384 decoded UTF-8 byte budget applies (invalid_filter). Side filters accept event dimensions and governed scalar properties, including organization IDs; cohort, cohort:id, user:*, org:*, user_id and session:* terms (also inside OR) are invalid_retention_filter. Shared current traits and saved membership retain their existing contract; user_id and session selectors remain unsupported on retention. Start activity labels each group; only return activity with equal dimension values counts, including nullable groups and event_name. Groups are separate populations and need not be disjoint. Bot/profile-only exclusions apply on both sides; includeBots=true includes bot rows. Up to two dimensions, range at most 366 days, 10000 complete points; metric_result_too_large and query_resource_limit return complete errors.aggregate=users (default) or organizations merges member timelines and excludes empty organization IDs. The organizations route always counts organizations. attribution=event (default) preserves event organization IDs; user_organization fills only missing IDs from the resolved user current group membership. Current org:plan, org:industry, org:country and numeric org:seats traits reclassify historical reports. Experiments retain user aggregation. See Organisations in the query guide.",
         "operationId": "getMetricsRetention",
         "parameters": [
           {
@@ -7688,6 +7688,57 @@
               ],
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "period",
+            "required": false,
+            "schema": {
+              "enum": [
+                "day",
+                "week",
+                "month"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "startEvent",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "returnEvent",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "startFilter",
+            "schema": {
+              "items": {
+                "description": "A URL-decoded JSON term or {or:[term,...]} (1..8 non-nested terms), or shorthand dimension:op:value terms separated by | for OR. Repeat filter for AND (at most 8 groups, 16384 total decoded bytes). Literal | in values requires JSON. Operators: eq, neq, in, contains, gt, lt, set, unset; set/unset omit value.",
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          {
+            "in": "query",
+            "name": "returnFilter",
+            "schema": {
+              "items": {
+                "description": "A URL-decoded JSON term or {or:[term,...]} (1..8 non-nested terms), or shorthand dimension:op:value terms separated by | for OR. Repeat filter for AND (at most 8 groups, 16384 total decoded bytes). Literal | in values requires JSON. Operators: eq, neq, in, contains, gt, lt, set, unset; set/unset omit value.",
+                "type": "string"
+              },
+              "type": "array"
+            }
           }
         ],
         "responses": {
@@ -7714,7 +7765,7 @@
                 }
               }
             },
-            "description": "Malformed request or `attribution` or `aggregate` or `includeBots` or `cohort` or `mode` or `days` or `filter` or `timeGrain` or `groupBy` or `to` or `from`"
+            "description": "Malformed request or `returnFilter` or `startFilter` or `returnEvent` or `startEvent` or `period` or `attribution` or `aggregate` or `includeBots` or `cohort` or `mode` or `days` or `filter` or `timeGrain` or `groupBy` or `to` or `from`"
           },
           "401": {
             "content": {

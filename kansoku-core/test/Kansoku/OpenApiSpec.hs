@@ -167,6 +167,17 @@ spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
     lookupText ["description"] retentionOperation
       `shouldSatisfy` maybe False (Text.isInfixOf "Offset 0")
 
+  it "documents calendar retention enums, independent selections, bounds and repeatable side filters" $ do
+    let operation = fromMaybe Aeson.Null (valueAt ["paths", "/metrics/retention", "get"] documentValue)
+        parameters = fromMaybe [] (valueAt ["parameters"] operation >>= \case Aeson.Array xs -> Just (Foldable.toList xs); _ -> Nothing)
+        parameter name = fromMaybe Aeson.Null (List.find ((== Just name) . lookupText ["name"]) parameters)
+    operationParameterNames operation `shouldContain` ["period", "startEvent", "returnEvent", "startFilter", "returnFilter"]
+    lookupTextArray ["schema", "enum"] (parameter "period") `shouldBe` Just ["day", "week", "month"]
+    forM_ ["startFilter", "returnFilter"] $ \name -> lookupText ["schema", "type"] (parameter name) `shouldBe` Just "array"
+    forM_ ["period", "startEvent", "returnEvent"] $ \name -> lookupText ["schema", "type"] (parameter name) `shouldBe` Just "string"
+    forM_ ["invalid_retention_period", "invalid_retention_event", "invalid_retention_filter", "1..52", "1..12", "full maximum horizon", "16384"] $ \fragment ->
+      lookupText ["description"] operation `shouldSatisfy` maybe False (Text.isInfixOf fragment)
+
   it "documents declared-property grouping and the two-dimension limit" $ do
     let revenueOperation = fromMaybe Aeson.Null (valueAt ["paths", "/metrics/revenue", "get"] documentValue)
     lookupText ["description"] revenueOperation

@@ -2,6 +2,24 @@
 
 ## 2026-11-13
 
+* **Update**: FRIC-29 accepted: Accept the required gate recompilation cost.
+
+
+* **Update**: FRIC-28 accepted: Accept the preserving append workaround.
+
+
+* **Update**: FRIC-27 accepted: Accept registry availability boundary for this plan.
+
+
+* **Addition**: FRIC-29 records slowdown tooling friction with mori://shinzui/clickhouse-migrate: Embedded migration build recompiles the graph for calendar query checks
+
+
+* **Addition**: FRIC-28 records detour tooling friction with mori://shinzui/kansoku: OKF log append rewrites retained guide history during retention work
+
+
+* **Addition**: FRIC-27 records nuisance environment friction with mori://shinzui/mori: Mori registry unavailable during calendar retention implementation
+
+
 * **Update**: FRIC-26 accepted: Accept the observed gate cost without weakening validation or expanding this saved-analysis feature into build-tool changes.
 
 

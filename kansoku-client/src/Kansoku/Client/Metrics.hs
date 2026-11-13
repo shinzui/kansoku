@@ -5,6 +5,7 @@
 -- | Typed servant-client access to Kansoku's experiment metrics.
 module Kansoku.Client.Metrics
   ( pathsClient,
+    retentionClient,
     experimentConversionClient,
     experimentFunnelClient,
     experimentsClient,
@@ -70,3 +71,7 @@ metricDefinitionsClient = ServantClient.client (Proxy @(NamedRoutes MetricDefini
 -- | Account-owned opaque analysis documents and revision-checked editing.
 analysesClient :: Analyses (AsClientT ClientM)
 analysesClient = ServantClient.client (Proxy @(NamedRoutes Analyses))
+
+-- | Calendar retention with independent starting and returning activity selections.
+retentionClient :: AuthenticatedRequest MetricsAuth -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> [MetricFilter] -> Maybe Text -> Maybe Metrics.RetentionMode -> Maybe Metrics.CohortMode -> Maybe Bool -> Maybe Metrics.AggregateBy -> Maybe Metrics.OrganizationAttribution -> Maybe Metrics.RetentionPeriod -> Maybe Text -> Maybe Text -> [MetricFilter] -> [MetricFilter] -> ClientM (KansokuResult MetricResult)
+retentionClient = Metrics.retention metricsClient

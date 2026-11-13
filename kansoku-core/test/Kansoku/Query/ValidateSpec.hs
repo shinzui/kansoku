@@ -1,8 +1,9 @@
 module Kansoku.Query.ValidateSpec (spec) where
 
 import Data.Either (isRight)
-import Data.Foldable (toList, traverse_)
+import Data.Foldable (forM_, toList, traverse_)
 import Data.Text qualified as Text
+import Kansoku.Metrics.Api (RetentionPeriod (..))
 import Kansoku.Metrics.Definition (MetricDefinition (..), RatioMetric (..))
 import Kansoku.Metrics.Query.Validate
 import Kansoku.Metrics.Registry (BuiltinMetric (..), builtinMetrics)
@@ -11,6 +12,15 @@ import Test.Hspec
 
 spec :: Spec
 spec = describe "Kansoku.Metrics.Query.Validate" $ do
+  it "normalizes bounded offsets in the selected calendar unit" $ do
+    forM_ [(RetentionDay, 365), (RetentionWeek, 52), (RetentionMonth, 12)] $ \(period, bound) -> do
+      validatePeriodOffsets period [bound, 1, 1] `shouldBe` Right [1, bound]
+      forM_ [0, -1, bound + 1, maxBound] $ \n ->
+        validatePeriodOffsets period [n] `shouldSatisfy` either ((== "invalid_retention_days") . limitCode) (const False)
+    validatePeriodOffsets RetentionWeek [1 .. 32] `shouldBe` Right [1 .. 32]
+    validatePeriodOffsets RetentionWeek [1 .. 33] `shouldSatisfy` either ((== "too_many_retention_days") . limitCode) (const False)
+    validatePeriodOffsets RetentionMonth [12, 11 .. 1] `shouldBe` Right [1 .. 12]
+
   it "bounds raw contained-event lists, trims, deduplicates and accepts undeclared names" $ do
     validateSessionContainsEvents Nothing `shouldBe` Right []
     validateSessionContainsEvents (Just [" client_error ", "client_error", "not_declared"]) `shouldBe` Right (map expectSqlName ["client_error", "not_declared"])

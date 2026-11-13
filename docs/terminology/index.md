@@ -89,7 +89,7 @@ See [capabilities](../capabilities/index.md) for what can be adopted, [guides](.
 | TERM-46 | [lifecycle](lifecycle.md) | The classification of daily activity into new, returning, resurrecting and dormant populations using retained matching history. |
 | TERM-47 | [retention cohort](retention-cohort.md) | The starting population whose later matching activity is measured at requested return offsets. |
 | TERM-48 | [retained-history lifetime](retained-history-lifetime.md) | The available retained matching history used for first-activity analytics. |
-| TERM-49 | [retention offset](retention-offset.md) | A number of days after a retention cohort’s start at which return activity is evaluated. |
+| TERM-49 | [retention offset](retention-offset.md) | A number of UTC calendar periods after a retention cohort’s start at which return activity is evaluated. |
 
 ## Reusable segments and metrics
 

@@ -18,7 +18,7 @@ from clickhouse_migrations_acceptance import verify as verify_clickhouse_migrati
 from ingest_acceptance import verify_ingest
 from json_storage_acceptance import verify_json_storage
 from acceptance_fixture_isolation import verify_fixture_isolation
-from activity_acceptance import verify_activity
+from activity_acceptance import verify_activity, verify_calendar_retention
 from funnel_acceptance import verify_funnels
 from traits_acceptance import verify_traits
 from user_selection_acceptance import verify_user_selection
@@ -300,7 +300,8 @@ def main():
                                 hurl(['ingest.hurl', 'perimeter/perimeter.hurl'], env, 'hurl-stateful', variables)
                                 verify_ingest(base, credentials['client_token'], env)
                                 verify_json_storage(base, credentials['json_write'], credentials['json_other_write'], env)
-                                live = dict(settings, KANSOKU_SERVER_URL=base, KANSOKU_API_KEY=credentials['client_token'], KANSOKU_ANALYSES_SERVICE_TOKEN=credentials['enrichment_service'])
+                                retention_source = verify_calendar_retention(base, credentials['enrichment_write'], credentials['enrichment_service'])
+                                live = dict(settings, KANSOKU_RETENTION_SERVICE_TOKEN=credentials['enrichment_service'], KANSOKU_RETENTION_SOURCE=retention_source, KANSOKU_SERVER_URL=base, KANSOKU_API_KEY=credentials['client_token'], KANSOKU_ANALYSES_SERVICE_TOKEN=credentials['enrichment_service'])
                                 hspec([binary('kansoku-client:test:kansoku-client-test')], env=live, log=ROOT / 'client-tests.log')
                             verify_enrichment(base, credentials['enrichment_write'], credentials['enrichment_service'])
                             verify_session_contains(base, credentials['enrichment_write'], credentials['enrichment_service'], credentials['other_token'])

@@ -3,6 +3,7 @@ id: 70
 slug: measure-retention-by-calendar-period-with-separate-start-and-return-events
 title: "Measure retention by calendar period with separate start and return events"
 kind: exec-plan
+intention: intention_01m7ajwkk7eznv0c1vy2m0zpfz
 created_at: 2026-11-13T05:48:57Z
 provenance:
   created_by:
@@ -31,11 +32,11 @@ Implement [IR-20](docs/improvement-requests/measure-retention-by-week-or-month-w
 
 ## Progress
 
-- [ ] Milestone 1: Core retention computes exact day/week/month cohorts with independent start/return selections; deterministic validation and owned native fixtures prove boundaries, grouping, lifetime, and unchanged daily results.
-- [ ] Milestone 2: Public HTTP and typed-client requests expose the new options with fail-closed validation; an owned producer-to-report workflow proves a weekly signup/document query and a monthly boundary query.
+- [x] Milestone 1 (2026-11-13): Exact day/week/month start/return populations, typed validation and daily wrappers are implemented. `python3 scripts/session-attributes-acceptance.py` executes 82 native examples across ordinary/two-row blocks with zero failures or pending cases, including weekly/monthly boundaries, groups, properties, identity, traits, organizations, the 10000/10001 weekly point boundary and memory exhaustion. The deterministic gate executes 537 core examples, including storage sentinels, with zero failures.
+- [x] Milestone 2 (2026-11-13): The route appends period/startEvent/returnEvent/startFilter/returnFilter, enforces combined budgets before cohort loading, and exports `retentionClient`. `python3 scripts/retention-acceptance.py` passes owned weekly/monthly, lifetime/cumulative, partial-window, side/group, saved-membership, organization, default/bounds, served-contract and daily-compatibility checks, plus one actual typed-client example (zero failures/pending). The deterministic client run passes 23 examples, including parameter omission and repeated side-filter capture.
 - [ ] Milestone 3: Full acceptance covers the IR-20 matrix, complete-result/resource limits, and compatibility; generated contract, guide, capability, terminology, and durable ADR context describe the verified behavior.
 
-Creation handoff: implementation has not begun. The working tree already contains the untracked IR-20 source and edits to `docs/improvement-requests/index.md` and `docs/improvement-requests/log.md`. Concurrent saved-analysis implementation and documentation edits also appeared during research, including changes to `docs/guides/query-metrics.md`; preserve and reconcile that work rather than overwriting it. This is a standalone plan with no parent MasterPlan or active Intention ID.
+Implementation handoff (2026-11-13): Milestones 1 and 2 are verified. Calendar contract, guide, capability, terminology and ADR updates are written; Milestone 3 remains open until `just check` and full packaged `just acceptance` finish. The build, formatting and deterministic portions of `just check` have passed; generated/profile/telemetry checks are running. The packaged gate owns a separate stack and includes the retention fixture before its full live client run. No release or deployment is authorized. Preserve concurrent work, including the untracked Plan 71. This standalone plan uses Intention `intention_01m7ajwkk7eznv0c1vy2m0zpfz` created with `mina ci --json`.
 
 
 ## Surprises & Discoveries
