@@ -84,6 +84,7 @@ test-suite kansoku-client-test
     kansoku-client,
     process,
     relay-pagination,
+    relay-pagination-servant,
     servant,
     servant-client,
     stm,

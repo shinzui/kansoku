@@ -38,6 +38,7 @@ import Network.HTTP.Types.Header (hAuthorization, hContentType)
 import Network.Wai (Application, Request, pathInfo, queryString, requestHeaders, requestMethod, responseLBS, strictRequestBody)
 import Network.Wai.Handler.Warp qualified as Warp
 import Relay.Pagination qualified as Relay
+import Relay.Pagination.Servant qualified as RelayClient
 import Servant.API (JSON)
 import Servant.Client (mkClientEnv, parseBaseUrl, runClientM)
 import Servant.Client qualified as SC
@@ -375,7 +376,7 @@ spec = describe "Kansoku.Client" $ do
         let ident = created ^. #id
             replacement = Analysis.AnalysisReplace "client replacement" Nothing Analysis.Retention 2 (input ^. #document) (Analysis.Revision 1)
         run (Analysis.getAnalysis analysesClient auth ident) `shouldReturn` Analysis.AnalysisOk created
-        run (Analysis.listAnalyses analysesClient auth (Just Analysis.Funnel) (Relay.PageRequest 100 Relay.Forward Nothing)) >>= \case
+        run (Analysis.listAnalyses analysesClient auth (Just Analysis.Funnel) (RelayClient.forwardPage 100 Nothing)) >>= \case
           PageOk page -> map (view #id . Relay.node) (Relay.edges page) `shouldContain` [ident]
           _ -> expectationFailure "analysis client page failed"
         changed <-
