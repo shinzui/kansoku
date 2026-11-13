@@ -6,6 +6,8 @@
 
 ## 2026-11-12
 
+* **Add**: Propose IR-19 from `mori://shinzui/kansoku-ui/masterplans/7-build-the-insights-library-of-saved-analyses`: an account-scoped saved-analysis resource (name, description, kind of trends, funnel or retention, and an opaque client-versioned JSON document) with CRUD, pages ordered by most recent update, a kind filter and optimistic concurrency, for kansoku-ui's Insights library.
+
 * **Add**: Propose IR-17 and IR-18 from `mori://shinzui/kansoku-ui/masterplans/6-build-the-users-directory-and-user-profile-pages`, modelled on the People screen of an open-source web-analytics product. IR-17 adds a read-only users resource: a directory of identified users with current traits and first and last activity, one user's profile and identity evidence counts, one user's resolved event history with declared properties only, and exact identified and anonymous counts for a range. IR-18 adds a filter dimension selecting one identified user on metric routes (soft dependency on IR-17).
 
 ## 2026-11-09
