@@ -114,12 +114,19 @@ class Harness:
     def audit(self):
         return ['--expect-target', self.env['KANSOKU_CH_MIGRATION_TARGET'], '--actor', 'owned acceptance', '--reason', 'owned clients stopped and server restarted', '--quiescent', '--evidence', str(self.root / 'drain.private')]
 
-    def entry(self, arguments, *, binary=None, success=True, predecessor=None, drain=True):
+    def entry_command(self, arguments, *, binary=None, predecessor=None, drain=True):
         n = self.drain() if drain else self.counter()
         if predecessor is not None:
             n = predecessor
         (self.root / 'drain.private').write_text(json.dumps(dict(session=self.env['KANSOKU_CH_MIGRATION_SESSION'], predecessor=n, server=self.env['KANSOKU_CH_MIGRATION_SERVER_ID'], ledger=self.env['KANSOKU_CH_MIGRATION_LEDGER_ID'], clients_stopped=True, server_restarted=drain or getattr(self,'last_drained_counter',None)==n)))
-        return self.run([binary or self.native, '--predecessor', str(n), *arguments, '--json', *self.audit()], success=success)
+        from drain_evidence_fixture import write_evidence
+        evidence = self.root / ('portable-drain-' + uuid.uuid4().hex + '.private')
+        settings = write_evidence(evidence, self.env, dict(kind='migration-session', id=self.env['KANSOKU_CH_MIGRATION_SESSION'], predecessor=n), 'All fixture-owned submitters joined; owned native process restarted on the same data root; no external schedules exist.')
+        return [binary or self.native, '--predecessor', str(n), '--drain-evidence', str(evidence), *arguments, '--json', *self.audit()], settings
+
+    def entry(self, arguments, *, binary=None, success=True, predecessor=None, drain=True):
+        command, settings = self.entry_command(arguments, binary=binary, predecessor=predecessor, drain=drain)
+        return self.run(command, success=success, env=settings)
 
     def observed_entry(self, arguments, *, expected_sql, binary=None, success=True):
         self.drain()
@@ -145,10 +152,10 @@ class Harness:
 
 
 @contextmanager
-def owned(root, native, upgrade, pg_migrate, admin, *, access_management=False):
+def owned(root, native, upgrade, pg_migrate, admin, *, access_management=False, backups=False):
     controller = {}
     with isolated_postgres(root / 'postgres') as pg:
-        with isolated_clickhouse(directory=root / 'clickhouse', controller=controller, access_management=access_management) as ch:
+        with isolated_clickhouse(directory=root / 'clickhouse', controller=controller, access_management=access_management, backups=backups) as ch:
             env = dict(pg)
             env.update({key: value for key, value in ch.items() if key.startswith(('CLICKHOUSE_', 'KANSOKU_CLICKHOUSE_', 'KANSOKU_OWNED_CLICKHOUSE_'))})
             yield Harness(root, native, upgrade, pg_migrate, admin, env, controller)

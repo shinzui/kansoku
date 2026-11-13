@@ -1,3 +1,4 @@
+from drain_evidence_fixture import run_maintenance
 #!/usr/bin/env python3
 """Public cohort roundtrips against owned PostgreSQL and ClickHouse."""
 import json
@@ -408,7 +409,7 @@ def main(verify=verify_cohorts, *, pass_environment=False, erase_delete_events=F
                 with child([server],native,'cohort-server') as process:
                     wait_for(process,lambda: request(base,'/health/ready')['status']=='ok','server')
                     def erase_user(user):
-                        result=subprocess.run([os.environ.get('KANSOKU_COHORT_ADMIN') or binary('kansoku-server:exe:kansoku-admin'),'erase-user','--account','cohorts','--user',user,'--out',str(ROOT/'erased.json'),'--confirm'] + (['--delete-events'] if erase_delete_events else []),env=native,capture_output=True,text=True,timeout=90)
+                        result=run_maintenance([os.environ.get('KANSOKU_COHORT_ADMIN') or binary('kansoku-server:exe:kansoku-admin'),'erase-user','--account','cohorts','--user',user,'--out',str(ROOT/'erased.json'),'--confirm'] + (['--delete-events'] if erase_delete_events else []),env=native,producer='Owned cohort fixture joins its direct writers and issues no client requests during maintenance',capture_output=True,text=True,timeout=90)
                         (ROOT/'cohort-erasure.log').write_text(result.stdout+result.stderr)
                         result.check_returncode()
                         assert json.loads(result.stdout)['stage']=='complete'

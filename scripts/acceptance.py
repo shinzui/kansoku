@@ -81,7 +81,11 @@ def child(command, env, name):
 
 
 def run(command, env, name, timeout=180, **kwargs):
-    result = execute(command, env=env, timeout=timeout, **kwargs)
+    if len(command) > 1 and command[1] in ('erase-user', 'apply-retention', 'resume-job') and '--confirm' in command:
+        from drain_evidence_fixture import run_maintenance
+        result = run_maintenance(command, env=env, producer='Owned application fixture joins direct native clients and pauses HTTP submitters during maintenance', capture_output=True, text=True, timeout=timeout, **kwargs)
+    else:
+        result = execute(command, env=env, timeout=timeout, **kwargs)
     (ROOT / f'{name}.log').write_text(result.stdout + result.stderr)
     result.check_returncode()
     if name in ('native-recovery', 'native-limits'):

@@ -20,7 +20,7 @@ import Data.Aeson.KeyMap qualified as KM
 import Data.Aeson.Types (parseEither, (.:))
 import Data.ByteString qualified as BS
 import Data.Char (isControl, isHexDigit)
-import Data.List (nub, sort)
+import Data.List (find, isSuffixOf, nub, sort)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Time (UTCTime, diffUTCTime)
@@ -61,7 +61,7 @@ validateDrainEvidence :: UTCTime -> DrainRequirement -> BS.ByteString -> Either 
 validateDrainEvidence now expected bytes = do
   check (BS.length bytes <= 65536) "drain evidence exceeds 64 KiB"
   value <- either (const (Left "invalid drain evidence JSON")) Right (A.eitherDecodeStrict' bytes)
-  expiry <- either (const (Left "invalid drain evidence fields")) Right (parseEither parse value)
+  expiry <- either (Left . validationFailure) Right (parseEither parse value)
   pure (AcceptedDrain value (Text.pack (show (hashWith SHA256 bytes :: Digest SHA256))) expiry)
   where
     parse = A.withObject "drain evidence" $ \o -> do
@@ -72,15 +72,15 @@ validateDrainEvidence now expected bytes = do
       target <- o .: "target"
       unless (validText target && target == requiredTarget expected) (fail "target mismatch")
       servers <- o .: "servers"
-      exact servers (requiredServers expected)
+      exact "server inventory" servers (requiredServers expected)
       ledger <- o .: "ledger"
       unless (ledger == requiredLedger expected) (fail "ledger mismatch")
       databases <- o .: "databases"
-      exact databases (requiredDatabases expected)
+      exact "database coverage" databases (requiredDatabases expected)
       submitters <- o .: "submitters"
-      covers submitters (requiredSubmitters expected)
+      covers "submitter coverage" submitters (requiredSubmitters expected)
       available <- o .: "availablePrincipals"
-      covers available (requiredAvailablePrincipals expected)
+      covers "available principal coverage" available (requiredAvailablePrincipals expected)
       -- An empty trusted inventory must never turn universal coverage vacuous.
       unless (not (null (requiredSubmitters expected)) && not (null (requiredAvailablePrincipals expected))) (fail "missing trusted principals")
       owner <- o .: "owner"
@@ -88,18 +88,18 @@ validateDrainEvidence now expected bytes = do
       started <- o .: "exclusionStartedAt"
       drained <- o .: "drainedAt"
       expires <- o .: "expiresAt"
-      unless (requiredNotBefore expected <= started && started <= drained && drained <= now && now < expires && diffUTCTime expires started <= 86400) (fail "stale exclusion interval")
+      unless (requiredNotBefore expected <= drained && started <= drained && drained <= now && now < expires && diffUTCTime expires started <= 86400) (fail "stale exclusion interval")
       reference <- o .: "procedureReference"
       digest <- o .: "procedureSha256"
       unless (validText reference && Text.length digest == 64 && Text.all isHexDigit digest) (fail "invalid retained proof")
       mapM_ (\key -> do attested <- o .: key; unless attested (fail "incomplete attestation")) ["submittersBlocked", "schedulesPaused", "backgroundChangesSettled", "operatorAttested"]
       pure expires
-    exact actual required = do
+    exact label actual required = do
       inventory actual
-      unless (not (null required) && sort actual == sort required) (fail "inventory mismatch")
-    covers actual required = do
+      unless (not (null required) && sort actual == sort required) (fail (label <> " mismatch"))
+    covers label actual required = do
       inventory actual
-      unless (all (`elem` actual) required) (fail "incomplete coverage")
+      unless (all (`elem` actual) required) (fail ("incomplete " <> label))
     inventory values = unless (not (null values) && length values <= 128 && length (nub values) == length values && all validText values) (fail "invalid inventory")
     check True _ = Right ()
     check False message = Left message
@@ -122,3 +122,10 @@ checkDrainCurrent :: UTCTime -> AcceptedDrain -> Either Text ()
 checkDrainCurrent now evidence
   | now < expiresAt evidence = Right ()
   | otherwise = Left "drain evidence expired while waiting for exclusion; fence retained"
+
+-- Preserve useful fixed refusal reasons without rendering parser diagnostics,
+-- which may contain untrusted timestamp strings or other input data.
+validationFailure :: String -> Text
+validationFailure message = maybe "invalid drain evidence fields" Text.pack (find (`isSuffixOf` message) reasons)
+  where
+    reasons = ["unexpected fields", "unsupported schema", "target mismatch", "server inventory mismatch", "ledger mismatch", "database coverage mismatch", "incomplete submitter coverage", "incomplete available principal coverage", "missing trusted principals", "owner mismatch", "stale exclusion interval", "invalid retained proof", "incomplete attestation", "invalid inventory"]

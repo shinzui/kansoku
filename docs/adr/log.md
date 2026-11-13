@@ -2,6 +2,9 @@
 
 ## 2026-11-13
 
+* **Update**: ADR-22: require owner-bound drain files and fresh predecessor timestamps before native maintenance.
+
+
 * **Update**: ADR-22: retain every migration entry proof atomically with predecessor advancement.
 
 

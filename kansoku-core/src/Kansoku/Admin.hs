@@ -1,7 +1,7 @@
 -- | Administrative command entry point. Preview is the default for mutations.
 module Kansoku.Admin (runAdmin) where
 
-import Control.Exception (fromException)
+import Control.Exception (IOException, fromException)
 import Control.Monad (forM_)
 import Data.Aeson qualified as A
 import Data.Aeson.Key qualified as K
@@ -22,6 +22,7 @@ import Kansoku.Prelude
 import System.Environment (lookupEnv)
 import System.Exit (exitFailure)
 import System.IO (hPutStrLn, stderr)
+import System.IO.Error (ioeGetErrorString, isUserError)
 import Text.Read (readMaybe)
 
 runAdmin :: [String] -> IO ()
@@ -42,7 +43,9 @@ runAdmin (command : args) = do
     Left exception -> do
       case fromException exception of
         Just (ConsistencyError _ reason) -> hPutStrLn stderr (Text.unpack reason)
-        Nothing -> pure ()
+        Nothing -> case fromException exception :: Maybe IOException of
+          Just refusal | isUserError refusal -> hPutStrLn stderr (ioeGetErrorString refusal)
+          _ -> pure ()
       hPutStrLn stderr "administration failed; the replay ledger and any persisted maintenance fence remain authoritative. Inspect job-status/list-jobs and resume unfinished jobs after resolving the failure."
       exitFailure
     Right answer -> LBS.putStrLn (A.encode answer)
@@ -137,7 +140,7 @@ ordinary config connection command options parameters = case command of
     when (result == A.Null) (fail "unknown credential ID")
     if flag "confirm" options then query connection "WITH changed AS (UPDATE kansoku.api_keys SET revoked_at=coalesce(revoked_at,now()) WHERE id=($1->>'id')::uuid RETURNING id,kind,account_id,description,created_at,revoked_at) SELECT to_jsonb(changed) FROM changed" parameters else pure (A.object ["preview" A..= True, "key" A..= result])
   "list-jobs" -> query connection "SELECT coalesce(jsonb_agg(to_jsonb(j)),'[]') FROM (SELECT id,kind,stage,created_at,completed_at,scope->>'account' AS account FROM kansoku.maintenance_jobs ORDER BY revision DESC LIMIT ($1->>'limit')::integer) j" parameters
-  "job-status" -> query connection "SELECT jsonb_build_object('id',id,'kind',kind,'stage',stage,'next_attempt',native_attempt+1,'created_at',created_at,'completed_at',completed_at,'fenced',id=(SELECT active_job FROM kansoku.maintenance_fence)) FROM kansoku.maintenance_jobs WHERE id=($1->>'id')::uuid" parameters
+  "job-status" -> query connection "SELECT jsonb_build_object('id',id,'kind',kind,'stage',stage,'next_attempt',native_attempt+1,'drain_not_before',last_attempt_at,'created_at',created_at,'completed_at',completed_at,'fenced',id=(SELECT active_job FROM kansoku.maintenance_fence)) FROM kansoku.maintenance_jobs WHERE id=($1->>'id')::uuid" parameters
   "list-rejections" -> query connection ("SELECT coalesce(jsonb_agg(to_jsonb(r)),'[]') FROM (SELECT id,account_id,received_at,event_name,schema_version,reason_codes,transport,payload_truncated,original_payload_bytes" <> (if flag "include-payload" options then ",payload" else "") <> " FROM kansoku.ingest_rejections WHERE ($1->>'account' IS NULL OR account_id=$1->>'account') AND ($1->>'event' IS NULL OR event_name=$1->>'event') AND ($1->>'since' IS NULL OR received_at>=($1->>'since')::timestamptz) ORDER BY received_at,id LIMIT ($1->>'limit')::integer) r") parameters
   "purge-rejections" -> do
     let predicate = "($1->>'account' IS NULL OR account_id=$1->>'account') AND received_at<coalesce(($1->>'before')::timestamptz,($1->>'rejection_cutoff')::timestamptz)"
@@ -203,5 +206,5 @@ help =
       "purge-archive --before UTC [--limit N] [--confirm]",
       "list-rejections [--account ID] [--event NAME] [--since UTC] [--limit N] [--include-payload]",
       "purge-rejections [--account ID] [--before UTC] [--limit N] [--confirm]",
-      "Destructive/data-maintenance commands preview without --confirm. Output files are created exclusively with mode 0600."
+      "Data jobs preview unless --prepare or --confirm; unfinished resume requires --drain-evidence FILE. Other destructive commands require --confirm. Output files use exclusive mode 0600."
     ]

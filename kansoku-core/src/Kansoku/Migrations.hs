@@ -44,7 +44,8 @@ kansokuApplicationMigrations = do
   drainAttempts <- sqlMigration "0011-maintenance-drain-attempts" drainAttemptsSql
   drainAudit <- sqlMigration "0012-maintenance-drain-audit" drainAuditSql
   migrationAudit <- sqlMigration "0013-clickhouse-entry-audit" migrationAuditSql
-  migrationComponent "kansoku" (Set.singleton "pgmq") (apiKeys :| [rejections, acceptance, maintenance, cohorts, definitions, administration, replicatedAdministration, replicatedJobs, analyses, drainAttempts, drainAudit, migrationAudit])
+  drainFreshness <- sqlMigration "0014-maintenance-drain-freshness" drainFreshnessSql
+  migrationComponent "kansoku" (Set.singleton "pgmq") (apiKeys :| [rejections, acceptance, maintenance, cohorts, definitions, administration, replicatedAdministration, replicatedJobs, analyses, drainAttempts, drainAudit, migrationAudit, drainFreshness])
 
 apiKeysSql :: ByteString
 apiKeysSql =
@@ -329,4 +330,14 @@ migrationAuditSql =
     created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
     PRIMARY KEY (session_id, entry)
   );
+  """
+
+-- Each predecessor establishes a new lower bound, including rejected attempts.
+drainFreshnessSql :: ByteString
+drainFreshnessSql =
+  """
+  ALTER TABLE kansoku.maintenance_jobs
+    ADD COLUMN last_attempt_at timestamptz NOT NULL DEFAULT clock_timestamp();
+  ALTER TABLE kansoku.clickhouse_migration_sessions
+    ADD COLUMN last_entry_at timestamptz NOT NULL DEFAULT clock_timestamp();
   """

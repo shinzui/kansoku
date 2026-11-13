@@ -66,7 +66,10 @@ def initialize_owned(env, owner, native=None, pg_migrate=None):
             owner['restart']()
             status = json.loads(execute([native,'maintenance','status','--json'],settings))['result']
             (root / 'native-drain.private').write_text(json.dumps(dict(target=settings['KANSOKU_CH_MIGRATION_TARGET'],session=begin['id'],server=settings['KANSOKU_CH_MIGRATION_SERVER_ID'],ledger=settings['KANSOKU_CH_MIGRATION_LEDGER_ID'],predecessor=status['entry'],procedure='all owned submitting clients stopped; same data root server restarted')))
-            return execute([native,'--predecessor',str(status['entry']),*command,'--json','--quiescent',*audit],settings)
+            from drain_evidence_fixture import write_evidence
+            evidence = root / ('portable-native-drain-' + uuid.uuid4().hex + '.private')
+            bound = write_evidence(evidence, settings, dict(kind='migration-session', id=begin['id'], predecessor=status['entry']), 'Setup admits no submitting clients; owned native server restarted on retained data root; no schedules exist.')
+            return execute([native,'--predecessor',str(status['entry']),'--drain-evidence',str(evidence),*command,'--json','--quiescent',*audit],bound)
         up = ['up']
         if not owner.get('initialized'):
             up += ['--initialize-ledger',settings['KANSOKU_CH_MIGRATION_LEDGER_ID']]

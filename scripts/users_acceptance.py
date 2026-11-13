@@ -1,3 +1,4 @@
+from drain_evidence_fixture import run_maintenance
 #!/usr/bin/env python3
 """Public identified-user reads against private, disposable real stores."""
 import json
@@ -337,7 +338,7 @@ def verify_owned_users(base, write_key, token, other_token, *, env, **kwargs):
     assert int(ch("SELECT count() FROM analytics.identity_signal_users WHERE user_id={user:String} AND signal_kind='fingerprint'"))>0
     assert before['identityEvidence']['fingerprint']==0, before
     retention_env=dict(env,KANSOKU_EVENTS_RETENTION_DAYS='90')
-    result=subprocess.run([os.environ.get('KANSOKU_COHORT_ADMIN') or binary('kansoku-server:exe:kansoku-admin'),'apply-retention','--out',str(Path(env['KANSOKU_OWNED_POSTGRES_ROOT']).parent/'users-retention.json'),'--confirm'],env=retention_env,capture_output=True,text=True,timeout=120)
+    result=run_maintenance([os.environ.get('KANSOKU_COHORT_ADMIN') or binary('kansoku-server:exe:kansoku-admin'),'apply-retention','--out',str(Path(env['KANSOKU_OWNED_POSTGRES_ROOT']).parent/'users-retention.json'),'--confirm'],env=retention_env,producer='Owned user fixture has joined direct writers and pauses client requests during maintenance',capture_output=True,text=True,timeout=120)
     assert result.returncode==0,result.stderr
     assert json.loads(result.stdout)['stage']=='complete'
     after=read()

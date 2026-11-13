@@ -33,7 +33,11 @@ def verify_reader(server, admin, env, root, growthbook=None, tokens=None):
         assert result.returncode == 0, f'owned SQL operator command {sequence} failed'
         return result.stdout.strip()
     def cli(*args, settings=None):
-        result = execute([admin, *args], env=settings or env, timeout=120)
+        if args[0] == 'apply-retention' and '--confirm' in args:
+            from drain_evidence_fixture import run_maintenance
+            result = run_maintenance([admin, *args], env=settings or env, producer='Owned reader fixture has joined SQL and external consumer queries before maintenance', capture_output=True, text=True, timeout=120)
+        else:
+            result = execute([admin, *args], env=settings or env, timeout=120)
         (root / 'admin.private').write_text(result.stdout + result.stderr)
         result.check_returncode()
         return result.stdout.strip()

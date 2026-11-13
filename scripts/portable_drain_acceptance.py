@@ -64,6 +64,9 @@ def verify(root, native, pg_migrate, admin):
             assert retained == '0'
             original_digest = hashlib.sha256(receipt.read_bytes()).hexdigest()
             document['owner']['predecessor'] = 1
+            receipt.write_text(json.dumps(document))
+            h.run([native, '--predecessor', '1', '--drain-evidence', str(receipt), 'maintenance', 'reconcile', '--json', *h.audit()], success=False)
+            assert h.counter() == 1
             document['drainedAt'] = datetime.now(timezone.utc).isoformat()
             receipt.write_text(json.dumps(document))
             h.run([native, '--predecessor', '1', '--drain-evidence', str(receipt), 'maintenance', 'reconcile', '--json', *h.audit()])
@@ -129,6 +132,8 @@ def verify(root, native, pg_migrate, admin):
                 assert time.monotonic() < deadline, 'prior INSERT did not start'
                 time.sleep(.05)
             env['CLICKHOUSE_TCP_PORT'] = h.env['CLICKHOUSE_TCP_PORT']
+            job_document['drainedAt'] = datetime.now(timezone.utc).isoformat()
+            receipt.write_text(json.dumps(job_document))
             h.run([admin, 'resume-job', '--id', prepared['job_id'], '--confirm', '--drain-evidence', str(receipt)], env=env, success=False)
             state = h.run(['psql', '-XAt', '-c', "SELECT stage || ':' || native_attempt::text FROM kansoku.maintenance_jobs"]).stdout.strip()
             assert state == 'created:2'
@@ -159,7 +164,10 @@ def verify(root, native, pg_migrate, admin):
         audit = h.run(['psql', '-XAt', '-c', "SELECT observations->0->>'result', evidence_sha256 FROM kansoku.maintenance_drain_attempts WHERE attempt=3"]).stdout.strip().split('|')
         assert audit == ['ObservationUnavailable', hashlib.sha256(receipt.read_bytes()).hexdigest()]
         # Erasure also refuses a denied process read without external evidence.
-        prepared = json.loads(h.run([admin, 'erase-user', '--account', 'portable', '--user', 'absent-subject', '--prepare'], env=env).stdout)
+        refusal = h.run([admin, 'erase-user', '--account', 'portable', '--user', 'absent-subject', '--confirm'], env=env, success=False)
+        assert 'prepared with fence retained' in refusal.stderr
+        latest = json.loads(h.run([admin, 'list-jobs', '--limit', '1'], env=env).stdout)[0]
+        prepared = dict(job_id=latest['id'])
         h.run([admin, 'resume-job', '--id', prepared['job_id'], '--confirm'], env=env, success=False)
         status = json.loads(h.run([admin, 'job-status', '--id', prepared['job_id']], env=env).stdout)
         assert status['next_attempt'] == 2 and status['stage'] == 'created' and status['fenced']

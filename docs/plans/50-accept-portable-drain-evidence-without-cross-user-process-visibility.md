@@ -50,7 +50,7 @@ platform login controller or claim Nagare deployment acceptance by itself.
 ## Progress
 
 - [x] (2026-11-13) M1: A bounded portable evidence contract binds an actual maintenance owner and passes a real producer/consumer drain proof while the migration principal remains usable.
-- [ ] M2: Migration sessions and prepared/resumed data jobs enforce sufficient evidence; unavailable or restricted process observations never imply drain.
+- [x] (2026-11-13) M2: Migration sessions and prepared/resumed data jobs enforce sufficient evidence; unavailable or restricted process observations never imply drain.
 - [ ] M3: Qualified upstream repair behavior and packaged Kansoku acceptance cover denied and own-user process visibility, stale evidence and interrupted requests.
 
 
@@ -82,10 +82,29 @@ proof, preserving all prior entry envelopes and digests. The owned producer/cons
 case checks two retained proofs and injects an audit constraint failure to prove
 counter rollback before native entry.
 
-M2/M3 remain open. Portable input is currently opt-in; legacy paths still use their
-existing drain checks. Complete sufficiency enforcement, denial/own-user process
-acceptance, the upstream repair delivery gate are not yet accepted. No packaged
-or Nagare/shared production release claim follows from M1.
+M2 acceptance: the full locally built migration/coordinator harness passes 20
+cases with zero failures/skips (`.dev/acceptance/ch-migrations-d0436h_b/`). The
+mandatory-evidence administration harness passes seven scenario families
+(`.dev/acceptance/admin-smoke-dk81b30e/`). The two-replica maintenance case passes
+(`.dev/acceptance/runtime-c7822361c95a4fdc9c2bce1d8bda4d8d/`), including held
+writer drain, interrupted mutation recovery, denied process observations and
+retention. Nine focused validator examples pass.
+
+Evidence is mandatory for migration mutation/reconciliation/finish and unfinished
+confirmed data-job resume. An initial data confirmation persists a prepared owner
+and refuses before discovery. Appended migration 0014 retains predecessor-entry
+and attempt timestamps; a matching counter cannot refresh an older drain time.
+Expiration is rechecked before native migration SQL, data-job stages and fence
+completion. Fixed refusal messages identify missing coverage without echoing input.
+
+M3 remains open on upstream delivery:
+`mori://shinzui/clickhouse-migrate/plans/13-accept-explicit-external-drain-authority-when-repair-process-diagnostics-are-unavailable`.
+The upstream plan is committed as `ea74fbc`; no library code or dependency cohort
+was changed. Hackage metadata and upstream tags checked on 2026-11-13 both show
+0.2.0.0 as the latest release. The current repair path still unconditionally reads
+recorded queries from `system.processes`, so external-authority repair with denied
+diagnostics is not accepted. Packaged/source and final deployment gates remain
+open. Continue other ready children without claiming EP-50 Complete.
 
 ## Surprises & Discoveries
 

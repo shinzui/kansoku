@@ -18,7 +18,8 @@ with `nix build .#kansoku-admin`, then use `./result/bin/kansoku-admin --help`.
 `nix run .#kansoku-admin -- --help` selects the same administrative executable.
 
 Exit 0 means success or a requested preview; exit 1 means invalid arguments or an operation/
-output failure. Destructive/data-maintenance commands preview without `--confirm`. Key issuance
+output failure. Data jobs preview unless `--prepare` or `--confirm` is requested; other destructive
+commands preview without `--confirm`. Key issuance
 is an explicit creation command and displays its token once. Mutation journals cannot restore
 deleted payloads. Run commands against the intended database endpoints.
 
@@ -55,9 +56,9 @@ constrains the revocation preview. `kansoku-server issue-key` calls the same iss
 
 ```bash
 kansoku-admin erase-user --account account_123 --user user_42
-kansoku-admin erase-user --account account_123 --user user_42 --confirm
+kansoku-admin erase-user --account account_123 --user user_42 --prepare
 kansoku-admin erase-user --account account_123 --user user_42 --delete-events
-kansoku-admin erase-user --account account_123 --user user_42 --delete-events --confirm
+kansoku-admin erase-user --account account_123 --user user_42 --delete-events --prepare
 ```
 
 Use the standard `--user=VALUE` form for user IDs beginning with `--`.
@@ -75,9 +76,12 @@ equal retries acknowledge the existing logical event without publishing it again
 IDs without a hash conflict. New IDs can establish new observations; this is not a permanent
 user ban or a search for unknown personal text embedded in arbitrary JSON.
 
-Confirmation persists a job and global fence, then waits for admitted reads/inserts/replays,
-including backend work surviving a cancelled caller. A native-write drain exceeding sixty
-seconds fails with the fence retained before discovery or mutation.
+Preparation persists a job and global fence without discovery or native mutation.
+An initial `--confirm` without prepared-owner evidence retains that resumable job and
+refuses with instructions to establish external drain. Resume requires an owner-bound
+`--drain-evidence` file before discovery or mutation; an empty process list is never
+sufficient. Drain earlier native work, including work surviving a cancelled caller,
+and retain the procedure proof.
 Ingest and metric routes return retryable 503 `maintenance_unavailable`, preserving ingest CORS.
 Operational routes and the schema catalog remain available; readiness may report the paused
 pipeline. The global window is intentional for the initial single-tenant deployment.
@@ -86,7 +90,7 @@ pipeline. The global window is intentional for the initial single-tenant deploym
 kansoku-admin list-jobs --limit 20
 kansoku-admin job-status --id JOB_UUID
 kansoku-admin resume-job --id JOB_UUID
-kansoku-admin resume-job --id JOB_UUID --confirm
+kansoku-admin resume-job --id JOB_UUID --confirm --drain-evidence /secure/current-drain.json
 ```
 
 Unconfirmed resume returns status. Failed/interrupted jobs keep the fence: resolve the dependency
@@ -103,7 +107,7 @@ user digest. The final JSON response reports completion and the receipt path.
 
 ```bash
 KANSOKU_EVENTS_RETENTION_DAYS=90 kansoku-admin apply-retention
-KANSOKU_EVENTS_RETENTION_DAYS=90 kansoku-admin apply-retention --confirm
+KANSOKU_EVENTS_RETENTION_DAYS=90 kansoku-admin apply-retention --prepare
 ```
 
 This applies a UTC snapshot cutoff at command time minus the configured days. Zero/unset means
@@ -224,9 +228,9 @@ configuration independently of the envelope. The three inventory variables are
 JSON string arrays. Native server UUIDs are checked against the evidence inventory
 before discovery. A failed resumed attempt consumes its counter, so inspect the
 new next attempt before producing fresh evidence. Accepted evidence is retained
-on the job. The envelope format is documented in the migration runbook. Legacy
-resume remains available; full sufficiency and restricted-process acceptance are
-still open under ExecPlan 50.
+on the job. The envelope format is documented in the migration runbook. Evidence is mandatory for every unfinished confirmed resume. `drain_not_before`
+in job status is the timestamp of the prior attempt; the new drain must follow it.
+A missing file is refused before opening ClickHouse, with the fence retained.
 
 Portable attempts retain each accepted envelope and exact input-file digest in
 `kansoku.maintenance_drain_attempts`. Supplementary process observations are recorded

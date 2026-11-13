@@ -20,6 +20,9 @@ spec = describe "Kansoku.Admin.DrainEvidence" $ do
       Right evidence -> do
         checkDrainCurrent (addUTCTime 59 now) evidence `shouldBe` Right ()
         checkDrainCurrent (addUTCTime 60 now) evidence `shouldSatisfy` isLeft
+  it "identifies missing coverage without echoing untrusted input" $ do
+    (() <$ validate (requirement {requiredSubmitters = ["missing-writer"]}) document) `shouldBe` Left "incomplete submitter coverage"
+    (() <$ validate requirement (set "drainedAt" (A.String "secret-untrusted-value"))) `shouldBe` Left "invalid drain evidence fields"
   it "rejects a stale predecessor and a different owner kind" $ do
     validate (requirement {requiredOwner = MigrationSession "session" 4}) document `shouldSatisfy` isLeft
     validate (requirement {requiredOwner = DataJob "session" 3}) document `shouldSatisfy` isLeft
@@ -34,7 +37,7 @@ spec = describe "Kansoku.Admin.DrainEvidence" $ do
   it "rejects expired, future and pre-fence exclusion" $ do
     validate requirement (set "expiresAt" (A.toJSON now)) `shouldSatisfy` isLeft
     validate requirement (set "drainedAt" (A.toJSON (addUTCTime 1 now))) `shouldSatisfy` isLeft
-    validate requirement (set "exclusionStartedAt" (A.toJSON (addUTCTime (-1) now))) `shouldSatisfy` isLeft
+    validate requirement (set "drainedAt" (A.toJSON (addUTCTime (-1) now))) `shouldSatisfy` isLeft
   it "requires explicit attestation for schedules and background changes" $ do
     validate requirement (set "schedulesPaused" (A.Bool False)) `shouldSatisfy` isLeft
     validate requirement (set "backgroundChangesSettled" (A.Bool False)) `shouldSatisfy` isLeft

@@ -102,11 +102,10 @@ must verify the actual adopted release, capabilities and evidence.
 The toolkit owner is `mori://shinzui/clickhouse-migrate`. Repair still queries recorded
 query IDs in `system.processes`; its source states that absence is diagnostic only.
 Upstream behavior needed by this plan belongs there. Kansoku must not patch a vendored
-copy or erase a failed observation into a successful drain result. The currently
-configured source cohort is recorded only in `cabal.project`: exact `==0.1.0.1`
-constraints plus a `source-repository-package` pinned to commit `00afa9fa`. No Nix
-file repeats that pin. This planning change chooses no new dependency version or
-compatibility workaround.
+copy or erase a failed observation into a successful drain result. At planning time, `cabal.project` selected a 0.1.0.1 source cohort at commit
+`00afa9fa`. The current working tree instead selects Hackage 0.2.0.0 across all four
+packages. Hackage metadata and upstream tags were checked on 2026-11-13; no newer
+release was available. This initiative has not changed that dependency selection.
 
 
 ## Decomposition Strategy
@@ -129,7 +128,7 @@ privilege inventory and platform-specific instructions.
 | # | Title | Path | Hard Deps | Soft Deps | Status |
 |---|-------|------|-----------|-----------|--------|
 | 50 | Accept portable drain evidence without cross-user process visibility | [ExecPlan](../plans/50-accept-portable-drain-evidence-without-cross-user-process-visibility.md) | None | None | In Progress |
-| 51 | Establish consistent maintenance backups and restored-server identity recovery | [ExecPlan](../plans/51-establish-consistent-maintenance-backups-and-restored-server-identity-recovery.md) | EP-50 M1: accepted evidence contract and owner binding | EP-52 for early restored-copy roundtrip | Not Started |
+| 51 | Establish consistent maintenance backups and restored-server identity recovery | [ExecPlan](../plans/51-establish-consistent-maintenance-backups-and-restored-server-identity-recovery.md) | EP-50 M1: accepted evidence contract and owner binding | EP-52 for early restored-copy roundtrip | In Progress |
 | 52 | Verify renamed ClickHouse restores without writes | [ExecPlan](../plans/52-verify-renamed-clickhouse-restores-without-writes.md) | None | EP-51 recovery-set manifest | Not Started |
 | 53 | Prove shared-server maintenance across deployment platforms | [ExecPlan](../plans/53-prove-shared-server-maintenance-across-deployment-platforms.md) | EP-50; EP-51; EP-52, all Complete | None | Not Started |
 
@@ -246,15 +245,14 @@ if missing or skipped; live production endpoints are never acceptance fixtures.
 
 ## Progress
 
-EP-50 is In Progress. M1's initial portable contract and owned native
-producer/consumer proof passed on 2026-11-13. M2 adds expiry rechecks, per-attempt
-audits, visible-writer refusal and denied/own-user observations under external
-evidence; migration entry proofs now persist atomically with counter advancement. Full
-sufficiency enforcement and M3 upstream repair/package qualification remain open. EP-51's M1 dependency is now
-satisfied, but default execution remains EP-50 first. EP-52 is independently ready;
-EP-53 remains blocked on all three completed children. All final IR criteria and
-deployment integration gates remain open. Mori discovery works after refreshing
-the agent shell's inherited environment (resolved FRIC-36).
+EP-50 M1/M2 are accepted on 2026-11-13: the full migration harness passes
+20 non-skipped cases, administration passes seven scenario families and two-replica
+maintenance passes. M3 remains open on scoped upstream repair delivery, tracked at
+`mori://shinzui/clickhouse-migrate/plans/13-accept-explicit-external-drain-authority-when-repair-process-diagnostics-are-unavailable`.
+No dependency cohort changed. EP-51 is In Progress on its recovery-set contract,
+using EP-50's accepted owner-bound evidence. EP-52 remains independently ready;
+EP-53 waits for all three completed children. Final packaged/source/deployment gates
+and all IR completion claims remain open.
 
 
 ## Surprises & Discoveries

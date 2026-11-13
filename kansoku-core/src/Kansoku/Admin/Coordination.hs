@@ -93,7 +93,7 @@ withSessionLease settings identity mutation action = withAdministrator settings 
       unless (evidence /= A.Null) (fail "explicit predecessor-quiescence evidence required")
       -- One PostgreSQL statement retains the proof and advances its counter.
       -- An audit failure rolls back the marker before any native action runs.
-      void $ query c "WITH submitted AS (UPDATE kansoku.clickhouse_migration_sessions SET entry=entry+1,pending_entry=$1->>'command',quiescence=$1->'evidence',outcome='submitted' WHERE id=($1->>'id')::uuid RETURNING id,entry,pending_entry,quiescence) INSERT INTO kansoku.clickhouse_migration_entry_audit(session_id,entry,command,evidence) SELECT id,entry,pending_entry,quiescence FROM submitted" (A.object ["id" A..= sessionId identity, "command" A..= entryName, "evidence" A..= evidence])
+      void $ query c "WITH submitted AS (UPDATE kansoku.clickhouse_migration_sessions SET entry=entry+1,last_entry_at=clock_timestamp(),pending_entry=$1->>'command',quiescence=$1->'evidence',outcome='submitted' WHERE id=($1->>'id')::uuid RETURNING id,entry,pending_entry,quiescence) INSERT INTO kansoku.clickhouse_migration_entry_audit(session_id,entry,command,evidence) SELECT id,entry,pending_entry,quiescence FROM submitted" (A.object ["id" A..= sessionId identity, "command" A..= entryName, "evidence" A..= evidence])
   action c
 
 -- Bounded test of the actual retained backend's exclusive session locks. Never

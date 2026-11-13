@@ -4,7 +4,7 @@ title: "Initialize and upgrade ClickHouse"
 description: "Initialize a fresh owned ClickHouse target, retain native identities, coordinate maintenance and recover explicit migration attempts."
 docId: DOC-13
 tags: ["clickhouse", "migrations", "maintenance", "recovery"]
-timestamp: 2026-11-13T18:59:08Z
+timestamp: 2026-11-13T19:42:05Z
 generated:
   by: process:codex
   at: "2026-11-07T20:24:51Z"
@@ -130,7 +130,7 @@ creating a file or supplying `--quiescent` alone does not establish quiescence.
 ```bash
 export DRAIN_EVIDENCE='/secure/path/to/this-entry-drain-record'
 predecessor="$("$CH_MIGRATE" maintenance status --json | jq -r .result.entry)"
-"$CH_MIGRATE" --predecessor "$predecessor" up --json \
+"$CH_MIGRATE" --drain-evidence /secure/current-drain.json --predecessor "$predecessor" up --json \
   --initialize-ledger "$KANSOKU_CH_MIGRATION_LEDGER_ID" \
   --expect-target "$KANSOKU_CH_MIGRATION_TARGET" --actor "$USER" \
   --reason 'reviewed fresh native initialization' --quiescent \
@@ -148,7 +148,7 @@ predecessor counter. Set `DRAIN_EVIDENCE` to that fresh retained record. Then ve
 
 ```bash
 predecessor="$("$CH_MIGRATE" maintenance status --json | jq -r .result.entry)"
-"$CH_MIGRATE" --predecessor "$predecessor" maintenance finish --json \
+"$CH_MIGRATE" --drain-evidence /secure/current-drain.json --predecessor "$predecessor" maintenance finish --json \
   --expect-target "$KANSOKU_CH_MIGRATION_TARGET" --actor "$USER" \
   --reason 'current native history and externally drained predecessors' \
   --quiescent --evidence "$DRAIN_EVIDENCE"
@@ -201,7 +201,7 @@ After recording fresh external drain evidence for this session/counter, run:
 
 ```bash
 predecessor="$("$CH_MIGRATE" maintenance status --json | jq -r .result.entry)"
-"$CH_MIGRATE" --predecessor "$predecessor" up --json \
+"$CH_MIGRATE" --drain-evidence /secure/current-drain.json --predecessor "$predecessor" up --json \
   --expect-target "$KANSOKU_CH_MIGRATION_TARGET" --actor "$USER" \
   --reason 'reviewed native upgrade or clean repeat' --quiescent \
   --evidence "$DRAIN_EVIDENCE"
@@ -238,7 +238,7 @@ resolved history after external drain; `NotObserved` alone is never permission t
 
 ```bash
 predecessor="$("$CH_MIGRATE" maintenance status --json | jq -r .result.entry)"
-"$CH_MIGRATE" --predecessor "$predecessor" maintenance reconcile --json \
+"$CH_MIGRATE" --drain-evidence /secure/current-drain.json --predecessor "$predecessor" maintenance reconcile --json \
   --expect-target "$KANSOKU_CH_MIGRATION_TARGET" --actor "$USER" \
   --reason 'reconcile retained response loss after external drain' \
   --quiescent --evidence "$DRAIN_EVIDENCE" \
@@ -267,7 +267,7 @@ and `QUERY_ID` from those reviewed values, and set `DRAIN_EVIDENCE` to fresh evi
 session/counter. Do not select a different step merely because a prior command failed:
 
 ```bash
-"$CH_MIGRATE" --predecessor "$predecessor" repair accept-step --json \
+"$CH_MIGRATE" --drain-evidence /secure/current-drain.json --predecessor "$predecessor" repair accept-step --json \
   --expect-target "$KANSOKU_CH_MIGRATION_TARGET" \
   --expect-position "$POSITION" --attempt "$ATTEMPT" \
   --step-attempt "$STEP_ATTEMPT" --step "$STEP" --query-id "$QUERY_ID" \
@@ -414,14 +414,15 @@ target remains the rollback procedure.
 image, owned Keeper and two replicas with 4 GiB per replica for the full native query fixtures. Failed fixture evidence is retained under `.dev/acceptance`.
 This local execution is separate from managed endpoint qualification.
 
-## Portable drain envelope (initial implementation)
+## Owner-bound drain envelope
 
 The outer `--drain-evidence FILE` option accepts a version-1 operator attestation
 for `up`, repair, maintenance reconciliation and finish. Put it before the
 subcommand, alongside `--predecessor`. Existing `--quiescent`, audit references
-and target checks remain required. Without this new option the existing dedicated
-procedure remains available; this initial implementation does not yet establish
-the completed shared-server maintenance ceremony.
+and target checks remain required. The envelope is mandatory for every mutating
+entry, reconciliation and finish. Dedicated-server operators produce the same
+envelope after stopping submitters and restarting their owned server. Shared-server
+operators establish app-scoped exclusion and drain without a restart.
 
 Set `KANSOKU_CH_DRAIN_SUBMITTERS` to a JSON array listing every deployment principal
 that can submit Kansoku work, including migration, backup and scheduled-reader
@@ -441,8 +442,8 @@ uses `kind: "data-job"`, `id` and positive `attempt`. The latter shape is accept
 
 The file is limited to 64 KiB; inventory arrays contain at most 128 distinct,
 nonempty entries. Text fields contain at most 1024 characters and no control
-characters. Times are UTC JSON timestamps: exclusion starts after session creation,
-drain follows exclusion, and expiration follows the current time. An exclusion
+characters. Times are UTC JSON timestamps: drain follows exclusion and the persisted predecessor timestamp; expiration follows
+the current time. Continuous exclusion may span several predecessor drains. An exclusion
 interval cannot exceed 24 hours. The procedure digest is 64 hexadecimal characters
 identifying externally retained proof. The envelope is retained in the entry's
 PostgreSQL audit together with the exact file SHA-256. Expiration is rechecked

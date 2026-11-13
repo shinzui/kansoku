@@ -34,7 +34,7 @@ def owned_clickhouse_root(directory):
 
 
 @contextmanager
-def isolated_clickhouse(block_size=65536, directory=None, query_logging=False, access_management=False, controller=None):
+def isolated_clickhouse(block_size=65536, directory=None, query_logging=False, access_management=False, controller=None, backups=False):
     if platform.system() != 'Darwin' or platform.machine() != 'arm64':
         raise RuntimeError('Native execution is unqualified on this platform; Linux qualification is unresolved and required cases cannot skip')
     version = subprocess.check_output(['clickhouse-server', '--version'], text=True)
@@ -47,11 +47,15 @@ def isolated_clickhouse(block_size=65536, directory=None, query_logging=False, a
         config = root / 'config.xml'
         access = '<access_management>1</access_management>' if access_management else ''
         access_storage = f'<access_control_path>{root}/access/</access_control_path>' if access_management else ''
+        backup_storage = ''
+        if backups:
+            (root / 'backups').mkdir(mode=0o700)
+            backup_storage = f'<storage_configuration><disks><kansoku_backups><type>local</type><path>{root}/backups/</path></kansoku_backups></disks></storage_configuration><backups><allowed_disk>kansoku_backups</allowed_disk><allowed_path>{root}/backups/</allowed_path></backups>'
         query_log = '<query_log><database>system</database><table>query_log</table><flush_interval_milliseconds>100</flush_interval_milliseconds></query_log>' if query_logging else ''
         # Match UTC event timestamps and keep calendar-day expiry independent of host DST.
         config.write_text(f'''<clickhouse>
 <timezone>UTC</timezone>
-{query_log}
+{query_log}{backup_storage}
 <path>{root}/data/</path>{access_storage}<tmp_path>{root}/tmp/</tmp_path>
 <tcp_port>{tcp}</tcp_port><http_port>{http}</http_port><listen_host>127.0.0.1</listen_host>
 <logger><level>warning</level><log>{root}/server.log</log><errorlog>{root}/error.log</errorlog></logger>
@@ -102,6 +106,8 @@ def isolated_clickhouse(block_size=65536, directory=None, query_logging=False, a
             try:
                 clean = {key:value for key,value in os.environ.items() if not key.startswith("KANSOKU_CH_MIGRATION_") or key == "KANSOKU_CH_MIGRATION_BINARY"}
                 env = dict(clean, CLICKHOUSE_TCP_PORT=str(tcp), CLICKHOUSE_HTTP_PORT=str(http), KANSOKU_CLICKHOUSE_HOST='127.0.0.1', KANSOKU_CLICKHOUSE_DATABASE='analytics', KANSOKU_CLICKHOUSE_USER='default', KANSOKU_CLICKHOUSE_PASSWORD='', KANSOKU_CLICKHOUSE_SECURE='false', KANSOKU_REQUIRED_INTEGRATION='1', KANSOKU_OWNED_CLICKHOUSE_ROOT=str(root.resolve()))
+                if backups:
+                    env['KANSOKU_OWNED_CLICKHOUSE_BACKUP_ROOT'] = str(root / 'backups')
                 yield env
             finally:
                 _OWNED_STACKS.pop(str(root.resolve()), None)

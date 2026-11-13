@@ -87,11 +87,15 @@ def main():
                    KANSOKU_CH_MIGRATION_LEDGER_ID=str(uuid.uuid4()),
                    KANSOKU_CLICKHOUSE_HOST='127.0.0.1',CLICKHOUSE_TCP_PORT=str(proxy.port),
                    KANSOKU_CLICKHOUSE_USER='app',KANSOKU_CLICKHOUSE_PASSWORD='test-password')
+        def maintenance_command(command):
+            if len(command) > 1 and command[1] in ('erase-user', 'apply-retention', 'resume-job') and '--confirm' in command:
+                return [sys.executable, str(Path(__file__).with_name('drain_evidence_fixture.py')), '--replicated-admin', str(root / 'fixture.private.json'), *command]
+            return command
         sequence = 0
         def run(command, *, success=True, selected=None, input=None, timeout=180):
             nonlocal sequence
             sequence += 1
-            result = execute(command,env=selected or env,input=input,timeout=timeout)
+            result = execute(maintenance_command(command),env=selected or env,input=input,timeout=timeout)
             (root/f'command-{sequence}.private').write_text(result.stdout+result.stderr)
             assert (result.returncode == 0) == success, f'command {sequence}: {result.stderr}; evidence {root}'
             return result.stdout
@@ -99,7 +103,14 @@ def main():
         assert report['serverVersions']==[fixture.get('version', '26.3.60.10002.altinitystable')]*2
         run([pg_migrate,'up'])
         def invoke(command):
-            return json.loads(run([migrate,*command,'--json']))
+            selected = env
+            if '--predecessor' in command:
+                from drain_evidence_fixture import write_evidence
+                n = int(command[command.index('--predecessor') + 1])
+                path = root / ('migration-drain-' + uuid.uuid4().hex + '.private')
+                selected = write_evidence(path, env, dict(kind='migration-session', id=env['KANSOKU_CH_MIGRATION_SESSION'], predecessor=n), 'Setup owns every synchronous submitter and has joined all requests; no runtime or external schedules started.', servers=ids, owned_fixture=fixture)
+                command = ['--drain-evidence', str(path), *command]
+            return json.loads(run([migrate,*command,'--json'], selected=selected))
         begun=invoke(['maintenance','begin','--expect-target',env['KANSOKU_CH_MIGRATION_TARGET'],'--actor','owned runtime proof','--reason','Plan 63 native runtime'])
         env['KANSOKU_CH_MIGRATION_SESSION']=begun['result']['id']
         evidence=['--expect-target',env['KANSOKU_CH_MIGRATION_TARGET'],'--actor','owned runtime proof','--reason','owned synchronous clients completed','--quiescent','--evidence',str(root)]
@@ -191,7 +202,7 @@ def main():
             sequence+=1
             path=root/f'process-{sequence}.private'
             with path.open('w') as log:
-                process=subprocess.Popen(command,env=selected or env,stdin=subprocess.PIPE if input else subprocess.DEVNULL,stdout=log,stderr=log,text=True)
+                process=subprocess.Popen(maintenance_command(command),env=selected or env,stdin=subprocess.PIPE if input else subprocess.DEVNULL,stdout=log,stderr=log,text=True)
                 with (root/'processes.private.jsonl').open('a') as inventory:
                     inventory.write(json.dumps(dict(pid=process.pid,command=command))+'\n')
                 if input:
@@ -308,12 +319,12 @@ def main():
             # Explicit observation permission denial must retain the fence.
             for i in [0,1]:
                 replica(i,'REVOKE SELECT ON system.processes FROM runtime')
-            run(erase('permission-case'),success=False)
-            identifier=fence()
-            assert identifier and stage()=='created'
+            run(erase('permission-case'))
+            assert fence() == ''
+            identifier=pg("SELECT id::text FROM kansoku.maintenance_jobs ORDER BY revision DESC LIMIT 1")
+            assert pg("SELECT observations->0->>'result' FROM kansoku.maintenance_drain_attempts WHERE job_id='"+identifier+"'") == 'ObservationUnavailable'
             for i in [0,1]:
                 replica(i,'GRANT SELECT ON system.processes TO runtime')
-            resume(identifier)
             job_complete(identifier)
             # Retention must retain the same fence through a missing replica,
             # then scrub old fingerprints and rebuild after deliberate resume.

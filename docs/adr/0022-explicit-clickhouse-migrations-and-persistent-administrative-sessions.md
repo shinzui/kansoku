@@ -5,7 +5,7 @@ description: Embed immutable native migration steps, bind administration to reta
 docId: ADR-22
 status: Accepted
 date: 2026-10-16
-timestamp: 2026-11-13T18:59:08Z
+timestamp: 2026-11-13T19:42:05Z
 generated:
   by: process:codex
   at: 2026-10-16T22:55:08Z
@@ -204,10 +204,9 @@ and fence without connecting to ClickHouse; appended PostgreSQL migration 0011
 adds monotonic native-attempt state. Direct and replicated identities retain their
 existing semantics.
 
-This is an incremental implementation under ExecPlan 50. Full job-bound evidence
-consumption, sufficiency enforcement, upstream repair qualification and integrated
-backup/platform acceptance remain open; the initial CLI option does not replace
-the dedicated procedure or establish the completed shared-server guarantee.
+This is an incremental implementation under ExecPlan 50. Job-bound evidence consumption and sufficiency enforcement are implemented.
+Upstream repair qualification and integrated backup/platform acceptance remain
+open; the completed shared-server guarantee is not yet established.
 
 Supplementary process observations are not proof of drain. Portable data jobs
 record visible writes, no visible writes or unavailable observation separately;
@@ -223,3 +222,13 @@ Migration sessions also retain each consumed entry's complete audit document in
 The current session row remains the status view. Counter advancement and audit
 insertion share one PostgreSQL statement: a failed audit write rolls back the
 marker and prevents native entry. Later entries never replace earlier proof rows.
+
+Owner-bound envelopes are mandatory for native migration mutations, reconciliation,
+finish and every unfinished confirmed data-job resume. An initial data confirmation
+retains a prepared scope/fence and refuses rather than discovering or changing data.
+Dedicated-server procedures produce the same envelope after their owned drain/restart
+ceremony; there is no process-list-only fallback. PostgreSQL migration 0014 retains
+predecessor entry/attempt timestamps. A drain must follow the previous attempt even
+when its counter matches; continuous exclusion may begin earlier. Expiration is
+rechecked at native migration SQL callbacks, data-job stages and fence completion.
+Refusal diagnostics use fixed messages and never echo untrusted parser content.

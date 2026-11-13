@@ -151,7 +151,11 @@ def main():
             def counter():
                 return invoke(['maintenance','status','--json'])['result']['entry']
             def entry(args, success=True, executable=None):
-                return invoke(['--predecessor',str(counter()),*args,'--json','--expect-target',env['KANSOKU_CH_MIGRATION_TARGET'],'--actor','owned proof','--reason','owned synchronous clients completed','--quiescent','--evidence',str(root)],success,executable=executable)
+                from drain_evidence_fixture import write_evidence
+                n = counter()
+                evidence_path = root / ('entry-drain-' + uuid.uuid4().hex + '.private')
+                selected = write_evidence(evidence_path, env, dict(kind='migration-session', id=env['KANSOKU_CH_MIGRATION_SESSION'], predecessor=n), 'Owned synchronous clients completed; no submitter processes or schedules remain; fixture controller retains exclusive producer ownership.', servers=[env['KANSOKU_CH_MIGRATION_SERVER_ID']] if direct else ids, owned_fixture=fixture)
+                return invoke(['--predecessor',str(n),'--drain-evidence',str(evidence_path),*args,'--json','--expect-target',env['KANSOKU_CH_MIGRATION_TARGET'],'--actor','owned proof','--reason','owned synchronous clients completed','--quiescent','--evidence',str(root)],success,selected=selected,executable=executable)
             begin()
             # Reordered inventory matches; changed identity refuses before native SQL.
             reordered = dict(env,KANSOKU_CH_MIGRATION_REPLICA_IDS=','.join(reversed(ids)))

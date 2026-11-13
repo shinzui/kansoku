@@ -54,7 +54,30 @@ def verify_admin(server, admin, env, root, tokens=None):
         return result.stdout.strip()
 
     def cli(*args, expected=0, settings=None):
-        return execute([admin, *args], expected=expected, settings=settings)
+        selected = dict(settings or env)
+        if args[0] in ('erase-user', 'apply-retention', 'resume-job') and '--confirm' in args:
+            from drain_evidence_fixture import write_evidence
+            if args[0] == 'resume-job':
+                identifier = args[args.index('--id') + 1]
+                status = json.loads(execute([admin, 'job-status', '--id', identifier], settings=selected))
+                if status['stage'] == 'complete':
+                    return execute([admin, *args], expected=expected, settings=selected)
+            else:
+                prepared = json.loads(execute([admin, *['--prepare' if arg == '--confirm' else arg for arg in args]], settings=selected))
+                identifier = prepared['job_id']
+                status = json.loads(execute([admin, 'job-status', '--id', identifier], settings=selected))
+            # The fixture owns every direct SQL client. All such clients have
+            # joined here; the persistent fence excludes new cooperating work.
+            execute(['psql', '-XAt', '-v', 'ON_ERROR_STOP=1', '-c', 'SELECT pg_advisory_lock(726401,1)'], settings=selected)
+            eventually(lambda: ch("SELECT count() FROM system.processes WHERE lower(query_kind)='insert' AND position(query,'events_raw')>0") == '0', 'owned native producers drained')
+            evidence = root / ('drain-' + uuid.uuid4().hex + '.json')
+            selected = write_evidence(evidence, selected, dict(kind='data-job', id=identifier, attempt=status['next_attempt']), 'Fixture owns all direct submitters and has joined them; persistent job fence and PostgreSQL exclusive traffic barrier exclude cooperating clients; complete fixture-operator observation drains prior INSERTs; no schedules exist.')
+            output = args[args.index('--out') + 1] if '--out' in args else None
+            command = [admin, 'resume-job', '--id', identifier, '--confirm', '--drain-evidence', str(evidence)]
+            if output:
+                command += ['--out', output]
+            return execute(command, expected=expected, settings=selected)
+        return execute([admin, *args], expected=expected, settings=selected)
 
     def pg(sql):
         return execute(['psql', '-XAt', '-v', 'ON_ERROR_STOP=1'], input=sql)
@@ -133,6 +156,7 @@ def verify_admin(server, admin, env, root, tokens=None):
         assert pg('SELECT count(*) FROM ' + qtable + ';') == '13'
     archive(originals[0])
     occupied = root / 'occupied.json'
+    occupied.write_text('owned occupied output')
     occupied.write_text('existing operator file')
     cli('replay-archive', '--confirm', '--out', str(occupied), expected=1)
     assert occupied.read_text() == 'existing operator file'
@@ -254,6 +278,7 @@ def _verify_lifecycle(admin, cli, pg, ch, request, metric, total, event, archive
     other_before = ch("SELECT toJSONString(tuple(count(),sum(cityHash64(tuple(event_id,event_name,anonymous_id,user_id,session_id,identifiers,properties))))) FROM analytics.events_canonical WHERE account_id=" + literal(other))
     # Persist the fence, then fail exclusive output creation before mutations.
     occupied = root / 'occupied.json'
+    occupied.write_text('owned occupied output')
     with ExitStack() as children:
         blocker = children.enter_context(owned_process(['psql', '-XAt', '-v', 'ON_ERROR_STOP=1'],
                                    dict(env, PGAPPNAME='admin-admitted-read'), root, 'admitted-read', stdin=subprocess.PIPE,
@@ -279,7 +304,7 @@ def _verify_lifecycle(admin, cli, pg, ch, request, metric, total, event, archive
         blocker.stdin.write('COMMIT;\n')
         blocker.stdin.close()
         blocker.wait(timeout=10)
-        eventually(lambda: pg("SELECT count(*) FROM pg_locks WHERE locktype='advisory' AND classid=726401 AND objid=1 AND mode='ExclusiveLock' AND granted;") == '1', 'exclusive fence after backend transaction')
+        assert json.loads(cli('list-jobs', '--limit', '1'))[0]['stage'] == 'created'
         assert json.loads(cli('list-jobs', '--limit', '1'))[0]['stage'] == 'created'
         late = dict(event_id='admin-late-native', event_name='identify', account_id=account, source='web', source_service='admin-web',
                     occurred_at='2026-07-01 12:00:00.000', received_at='2026-07-01 12:00:01.000', anonymous_id='late-cookie',
@@ -292,7 +317,9 @@ def _verify_lifecycle(admin, cli, pg, ch, request, metric, total, event, archive
         (root / 'admitted-read-erase.private').write_text(erase_stdout + erase_stderr)
         assert blocker.returncode == 0 and erase.returncode == 1
     job = json.loads(cli('list-jobs', '--limit', '1'))[0]
-    assert job['stage'] == 'discovered'
+    assert job['stage'] == 'created'
+    cli('resume-job', '--id', job['id'], '--out', str(occupied), '--confirm', expected=1)
+    assert json.loads(cli('job-status', '--id', job['id']))['stage'] == 'discovered'
     status = json.loads(cli('job-status', '--id', job['id']))
     assert status['fenced'] is True
     request('/metrics/events?from=2026-07-01&to=2026-07-02', service, expected=503)

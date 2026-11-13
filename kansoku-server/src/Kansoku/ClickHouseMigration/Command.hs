@@ -3,6 +3,7 @@ module Kansoku.ClickHouseMigration.Command (mainWith) where
 import ClickHouseMigrate.CLI
 import ClickHouseMigrate.Error (PlanError)
 import ClickHouseMigrate.Event (quietEvents, redactedDiagnostics)
+import ClickHouseMigrate.Event qualified as Event
 import ClickHouseMigrate.Inspection qualified as I
 import ClickHouseMigrate.Ledger qualified as L
 import ClickHouseMigrate.Plan (MigrationPlan)
@@ -99,7 +100,20 @@ run choose = do
               RepairCommand _ (RepairInput _ _ _ _ _ _ receipts) -> requireReceipts (map L.appendReceiptText receipts)
               _ -> pure ()
             mapM_ (\(_, _, audit) -> checkAuditDrain audit) mutation
-            result <- handleCommand (commandEnvironment (Just (Config.nativeConfig config (firstUse command))) (Just provider) (sessionEvents config plan) redactedDiagnostics AdministrativeCommands) plan command
+            result <-
+              handleCommand
+                ( commandEnvironment
+                    (Just (Config.nativeConfig config (firstUse command)))
+                    (Just provider)
+                    ( \event -> do
+                        if Event.phase event == Event.BeforeSql then mapM_ (\(_, _, audit) -> checkAuditDrain audit) mutation else pure ()
+                        sessionEvents config plan event
+                    )
+                    redactedDiagnostics
+                    AdministrativeCommands
+                )
+                plan
+                command
             -- Emit the native report before coordinator cleanup so a secondary
             -- PostgreSQL failure cannot hide the original primary error/receipt.
             outputSelected (Config.nativeConfig config False) format result
@@ -154,7 +168,7 @@ run choose = do
         verified <- I.verify I.Observe (Config.nativeConfig config False) (I.verifyOptions True) plan
         case verified of
           Left failure -> output format (CommandResult "maintenance-finish" (Left (InspectionFailed failure))) >> exitFailure
-          Right _ -> verifySessions config plan >> finish
+          Right _ -> verifySessions config plan >> checkAuditDrain audit >> finish
       renderMaintenance format "maintenance-finish" (A.object ["complete" A..= True])
   where
     whenNull row = unless (row /= A.Null) (fail "Unknown session identity")
@@ -182,16 +196,16 @@ entry config predecessor evidenceFile command = do
 -- the attestation. The lease subsequently verifies the same session/predecessor
 -- atomically before recording the native entry.
 bindDrain :: Config.Config -> Integer -> Maybe FilePath -> A.Value -> IO A.Value
-bindDrain _ _ Nothing audit = pure audit
+bindDrain _ _ Nothing _ = fail "Owner-bound --drain-evidence FILE required; persist the fence, establish external drain and bind its current predecessor"
 bindDrain config predecessor (Just path) audit = do
   ident <- maybe (fail "KANSOKU_CH_MIGRATION_SESSION required") pure (Config.session config)
   settings <- maybe (fail "PG_CONNECTION_STRING required") pure (Config.postgres config)
   row <- C.sessionStatus settings (C.SessionIdentity ident (T.targetKeyText (Config.target config)) (Config.sessionTarget config) (T.ledgerIdText (Config.ledger config)))
   created <- case row of
-    A.Object fields -> case KM.lookup "created_at" fields of
+    A.Object fields -> case KM.lookup "last_entry_at" fields of
       Just value -> case A.fromJSON value :: A.Result UTCTime of
         A.Success time -> pure time
-        _ -> fail "Invalid persisted session creation time"
+        _ -> fail "Invalid persisted predecessor time"
       _ -> fail "Unknown persisted session"
     _ -> fail "Unknown persisted session"
   raw <- lookupEnv "KANSOKU_CH_DRAIN_SUBMITTERS" >>= maybe (fail "KANSOKU_CH_DRAIN_SUBMITTERS must declare every submitting principal as a JSON array") pure

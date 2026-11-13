@@ -22,6 +22,11 @@ provenance:
       at: 2026-11-04T05:38:58Z
       mode: "update"
       note: "Point coordinator schema work at Kansoku/Migrations.hs after EP-50 steps; correct guide backup claim; add ADR bundle validation"
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-11-13T19:34:33Z
+      mode: "implement"
+      note: "Started recovery-set contract after EP-50 owner-bound native acceptance"
 ---
 
 # Establish consistent maintenance backups and restored-server identity recovery
@@ -49,6 +54,10 @@ backup engine, production restore orchestration or a new automatic failover poli
 - [ ] M2: An owned roundtrip restores all three databases and proves application, coordinator and ledger agreement, including failed/partial backup refusal.
 - [ ] M3: A rebuilt-server restore is explicitly re-bound with retained provenance and recovery state; automatic or wrong-target re-binding fails.
 
+
+M1 implementation started on 2026-11-13 after EP-50 M1/M2 native acceptance.
+Reuse its required evidence, exact file digest and predecessor-time lower bound.
+EP-50 appended coordinator migrations through 0014; any new step follows them.
 
 ## Surprises & Discoveries
 

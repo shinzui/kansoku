@@ -111,7 +111,8 @@ def verify_coordination(root, native, upgrade, pg_migrate, admin, server, owned,
         try:
             h.env['KANSOKU_CH_MIGRATION_ENDPOINT'] = proxy.endpoint
             with (h.root / 'killed-entry.private').open('w') as output:
-                process = subprocess.Popen([upgrade,'--predecessor',str(n),'up','--json',*h.audit()],env=h.env,stdout=output,stderr=output)
+                command, settings = h.entry_command(['up'], binary=upgrade, predecessor=n, drain=False)
+                process = subprocess.Popen(command,env=settings,stdout=output,stderr=output)
             assert proxy.triggered.wait(timeout=40), 'Native mutation did not reach the owned fault boundary'
             current = h.counter()
             # Both processes use real, fully authorized mutation inputs. They
@@ -146,7 +147,8 @@ def verify_coordination(root, native, upgrade, pg_migrate, admin, server, owned,
         process = None
         try:
             with (h.root / 'killed-active-mutation.private').open('w') as output:
-                process = subprocess.Popen([upgrade,*extra,'--predecessor',str(n),'up','--json',*h.audit()],env=h.env,stdout=output,stderr=output)
+                command, settings = h.entry_command([*extra,'up'], binary=upgrade, predecessor=n, drain=False)
+                process = subprocess.Popen(command,env=settings,stdout=output,stderr=output)
             eventually(lambda: h.sql("SELECT count() FROM system.mutations WHERE database='analytics' AND table='__native_survivor' AND NOT is_done").strip() == '1','synchronous native mutation admitted')
             snapshot = json.loads(h.run([upgrade,*extra,'status','--json']).stdout)['result']['report']
             migration = snapshot['migrations'][-1]
@@ -159,7 +161,11 @@ def verify_coordination(root, native, upgrade, pg_migrate, admin, server, owned,
             # Adversarial negative input: a false quiescence assertion cannot
             # override positive evidence of the retained active migration query.
             request = [upgrade,*extra,'--predecessor',str(h.counter()),'repair','accept-step','--json','--expect-target',h.env['KANSOKU_CH_MIGRATION_TARGET'],'--expect-position',snapshot['observation']['position'],'--attempt',migration['attempt'],'--step-attempt',attempt['ownerAttempt'],'--step',attempt['step'],'--query-id',query,'--actor','owned negative proof','--reason','deliberately false external evidence must refuse active query','--quiescent','--evidence','owned adversarial input, not a real drain attestation']
-            result = json.loads(h.run(request,success=False).stdout)
+            from drain_evidence_fixture import write_evidence
+            evidence_path = h.root / 'adversarial-drain.private'
+            settings = write_evidence(evidence_path, h.env, dict(kind='migration-session', id=h.env['KANSOKU_CH_MIGRATION_SESSION'], predecessor=h.counter()), 'Deliberately false external attestation: active recorded query must still block repair.')
+            request[1:1] = ['--drain-evidence', str(evidence_path)]
+            result = json.loads(h.run(request,success=False,env=settings).stdout)
             assert result['error']['primary']['code'] == 'prior-queries-active'
             h.sql('SYSTEM START MERGES analytics.__native_survivor')
             eventually(lambda: h.sql("SELECT count() FROM system.mutations WHERE database='analytics' AND table='__native_survivor' AND is_done").strip() == '1','positive native mutation completion')

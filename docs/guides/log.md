@@ -2,6 +2,9 @@
 
 ## 2026-11-13
 
+* **Update**: DOC-1 and DOC-13: document mandatory prepare/drain/resume and remove legacy process-only authorization.
+
+
 * **Update**: DOC-13: document migration entry proof retention and audit-failure refusal.
 
 
