@@ -112,6 +112,7 @@ import Kansoku.Metrics.Query.Property
   )
 import Kansoku.Metrics.Query.Session (attachSessionAttributes, materializedSessionProjection, sessionProjection)
 import Kansoku.Metrics.Query.Traits qualified as Traits
+import Kansoku.Metrics.Query.UserSelection qualified as UserSelection
 import Kansoku.Metrics.Query.Validate (QueryLimitError (..), SqlName, mkSqlName, renderSqlName, validateAcquisitionConversions, validateDateRange, validateObservationCutoff, validateOffsets, validateSessionContainsEvents, validateSteps)
 import Kansoku.Metrics.Registry (BuiltinMetric (..), activeUsers)
 import Kansoku.Prelude
@@ -139,6 +140,7 @@ data QueryCompileError
   | QueryCompileUnsupportedPropertyGrouping !Text
   | QueryCompileInvalidQuantile
   | QueryCompileInvalidTimeGrain
+  | QueryCompileUserSelection !Text
   | QueryCompileFilterError !Text
   | QueryCompileContainsEvent !QueryLimitError
   | QueryCompileConversionEvents !QueryLimitError
@@ -229,12 +231,13 @@ retainedScope req = req {from = fromGregorian 1970 1 1, to = fromGregorian 2100 
 
 compileAcquisition :: EventRegistry -> AcquisitionMeasure -> Maybe [Text] -> QueryRequest -> Either QueryCompileError CompiledMetric
 compileAcquisition registry measure conversions req = do
+  validateSelection True (req ^. #filters)
   names <- first QueryCompileConversionEvents (validateAcquisitionConversions measure conversions)
   let scope = Filters.filteredEventScope [] (req ^. #filters)
   grouping <- requestedGroupingWith (cohortDimension req "primary_subject" (resolveSessionDimension registry scope)) (req ^. #groupBy) ["channel"]
-  filters <- first QueryCompileFilterError (Filters.compileFiltersWith "metric_filter" (cohortDimension req "primary_subject" (resolveSessionDimension registry scope)) (normalizeCohortFilters (req ^. #filters)))
+  filters <- first QueryCompileFilterError (Filters.compileFiltersWith "metric_filter" (UserSelection.userSelectionDimension True (cohortDimension req "primary_subject" (resolveSessionDimension registry scope))) (normalizeCohortFilters (req ^. #filters)))
   let converting = measure `elem` [AcquisitionConvertedUsers, AcquisitionConversionRate]
-      resolved = measure /= AcquisitionSessions || hasUserTraits req
+      resolved = measure /= AcquisitionSessions || needsResolvedIdentity req
       source = if resolved then rawResolvedSource (retainedScope req) else "analytics.events_canonical"
       aggregate = if measure == AcquisitionUsers then "uniqExactIf(primary_subject,primary_subject!='')" else "count()"
       predicates = [timestampPredicate req] <> ["NOT is_bot" | not (req ^. #includeBots)] <> Filters.predicates filters
@@ -298,7 +301,7 @@ runSessionMetricWithContains pool measure names req =
           pool
           "sessions"
           (compiled ^. #groupLabels)
-          (accountParameter (if hasUserTraits req then retainedScope req else req) <> compiled ^. #filterParameters)
+          (accountParameter (if needsResolvedIdentity req then retainedScope req else req) <> compiled ^. #filterParameters)
           (boundedSQL BucketDimensions (compiled ^. #sql))
 
 runRetention :: (IOE :> es) => QueryPool -> QueryRequest -> [Int] -> Eff es (Either QueryExecutionError MetricResult)
@@ -410,6 +413,7 @@ pathParameters options =
 
 compilePaths :: EventRegistry -> QueryRequest -> PathOptions -> Either QueryCompileError CompiledMetric
 compilePaths registry req options = do
+  validateSelection False (req ^. #filters)
   unless (isNothing (req ^. #groupBy) && isNothing (req ^. #timeGrain)) (Left (QueryCompileFilterError "paths do not support groupBy or timeGrain"))
   let declared = if pathBy options == PathRoute then [EventName "page_view"] else map EventName (pathEvents options)
       scope = filter (\(EventName name) -> name `notElem` pathExclude options) (Filters.filteredEventScope declared (req ^. #filters))
@@ -497,6 +501,7 @@ attributionLimits _ _ = Right ()
 -- filtering would change exposure/assignment denominators and is not implied.
 experimentSelection :: QueryRequest -> Either QueryCompileError ([GroupDimension], Filters.CompiledFilters)
 experimentSelection req = do
+  validateSelection False (req ^. #filters)
   when (req ^. #timeGrain == Just NoTimeBucket) (Left QueryCompileInvalidTimeGrain)
   unless
     (all (\d -> Text.isPrefixOf "user:" d || d == "cohort" || Text.isPrefixOf "cohort:" d) (fromMaybe [] (req ^. #groupBy) <> map WireFilter.dimension (concatMap WireFilter.filterTerms (req ^. #filters))))
@@ -561,6 +566,7 @@ experimentDiagnosticsSQL req experiment grouping predicates =
 
 compileTraitExposures :: QueryRequest -> Maybe SqlName -> Either QueryCompileError CompiledMetric
 compileTraitExposures req experiment = do
+  validateSelection False (req ^. #filters)
   (grouping, predicates) <- experimentSelection req
   let bucket = maybe "''" (bucketExpr . Just) (req ^. #timeGrain)
       sql =
@@ -572,6 +578,7 @@ compileTraitExposures req experiment = do
 
 compileTraitExperimentConversion :: QueryRequest -> Either QueryCompileError CompiledMetric
 compileTraitExperimentConversion req = do
+  validateSelection False (req ^. #filters)
   (grouping, predicates) <- experimentSelection req
   let sql =
         Text.unlines
@@ -745,8 +752,23 @@ nonEmpty value
 decodeUtf8 :: ByteString -> Either Text Text
 decodeUtf8 = first (Text.pack . show) . Text.decodeUtf8'
 
+validateSelection :: Bool -> [MetricFilter] -> Either QueryCompileError ()
+validateSelection supported = first QueryCompileUserSelection . UserSelection.validateUserSelection supported
+
 compileMetric :: EventRegistry -> BuiltinMetric -> QueryRequest -> Either QueryCompileError CompiledMetric
-compileMetric registry metric req = case metric of
+compileMetric registry metric req = do
+  let supported = case metric of
+        Simple def -> def ^. #name `elem` ["events", "page_views", "active_users", "sessions", "revenue", "feature_adoption", "custom"]
+        Ratioed ratio -> ratio ^. #name == "custom"
+      definitions = case metric of
+        Simple def -> [def]
+        Ratioed ratio -> [ratio ^. #numerator, ratio ^. #denominator]
+  defaults <- concat <$> traverse definitionFilters definitions
+  validateSelection supported (req ^. #filters <> defaults)
+  compileMetricUnchecked registry metric req
+
+compileMetricUnchecked :: EventRegistry -> BuiltinMetric -> QueryRequest -> Either QueryCompileError CompiledMetric
+compileMetricUnchecked registry metric req = case metric of
   Simple def | def ^. #name == "sessions" -> compileSessions SessionCount req
   Simple def | def ^. #name == "organizations" -> compileSimpleMetric registry def req {aggregateOrganizations = True}
   Simple def -> compileSimpleMetric registry def req
@@ -818,8 +840,8 @@ buildSimpleSQL registry grouping predicates def req
 queryTraits :: QueryRequest -> [Text]
 queryTraits req = Traits.referencedTraits (fromMaybe [] (req ^. #groupBy) <> map WireFilter.dimension (concatMap WireFilter.filterTerms (req ^. #filters)))
 
-hasUserTraits :: QueryRequest -> Bool
-hasUserTraits req = not (null (queryTraits req)) || not (null (queryOrganizationTraits req)) || aggregateOrganizations req || userOrganization req || not (null (cohorts req))
+needsResolvedIdentity :: QueryRequest -> Bool
+needsResolvedIdentity req = UserSelection.hasUserSelection (req ^. #filters) || not (null (queryTraits req)) || not (null (queryOrganizationTraits req)) || aggregateOrganizations req || userOrganization req || not (null (cohorts req))
 
 resolvedSource :: QueryRequest -> Text
 resolvedSource req =
@@ -910,7 +932,7 @@ simpleAggregateSQL aggregationSQL source grouping predicates def req =
   Text.unlines
     [ "SELECT " <> bucketExpr (effectiveGrain def req) <> " AS bucket, " <> groupProjection grouping <> ",",
       "       " <> aggregationSQL <> " AS value",
-      "FROM " <> eventSessionSource grouping req (if hasUserTraits req && source == "analytics.events_canonical" then resolvedSource req else source),
+      "FROM " <> eventSessionSource grouping req (if needsResolvedIdentity req && source == "analytics.events_canonical" then resolvedSource req else source),
       "WHERE " <> accountPredicate,
       "  AND " <> timestampPredicate req <> eventNameClause "event_name" (validatedEventNames def) <> propertyFilterClause predicates,
       "GROUP BY bucket,sort_group_1,sort_group_2"
@@ -937,6 +959,7 @@ compileSessions measure = compileSessionsWithContains measure Nothing
 
 compileSessionsWithContains :: SessionMeasure -> Maybe [Text] -> QueryRequest -> Either QueryCompileError CompiledMetric
 compileSessionsWithContains measure supplied req = do
+  validateSelection True (req ^. #filters)
   names <- first QueryCompileContainsEvent (validateSessionContainsEvents supplied)
   let days = diffDays (req ^. #to) (req ^. #from)
   unless (days > 0 && days <= maxQueryDays) (Left (QueryCompileFilterError "session calendar requires a positive range of at most 366 days"))
@@ -947,8 +970,8 @@ compileSessionsWithContains measure supplied req = do
     (any (Text.isPrefixOf "prop:") (fromMaybe [] (req ^. #groupBy)))
     (Left (QueryCompileInvalidGroupBy "arbitrary property grouping is unsupported on sessions"))
   grouping <- requestedGroupingWith (cohortDimension req "primary_subject" (resolveSessionDimension defaultRegistry [])) (req ^. #groupBy) []
-  predicates <- first QueryCompileFilterError (Filters.compileFiltersWith "session_filter" (cohortDimension req "primary_subject" (resolveSessionDimension defaultRegistry [])) (normalizeCohortFilters (req ^. #filters)))
-  let sessions = if hasUserTraits req then sessionProjection (rawResolvedSource (retainedScope req)) True else materializedSessionProjection
+  predicates <- first QueryCompileFilterError (Filters.compileFiltersWith "session_filter" (UserSelection.userSelectionDimension True (cohortDimension req "primary_subject" (resolveSessionDimension defaultRegistry []))) (normalizeCohortFilters (req ^. #filters)))
+  let sessions = if needsResolvedIdentity req then sessionProjection (rawResolvedSource (retainedScope req)) True else materializedSessionProjection
       selected =
         "SELECT * FROM ("
           <> Traits.sessionSource (queryTraits req) sessions
@@ -1048,6 +1071,7 @@ extendGroups fields = "toJSONString(arrayConcat(JSONExtract(group_key,'Array(Nul
 
 compileRolling :: EventRegistry -> Integer -> Bool -> QueryRequest -> Either QueryCompileError CompiledMetric
 compileRolling registry width stickiness req = do
+  validateSelection (not stickiness) (req ^. #filters)
   first (QueryCompileFilterError . Text.pack . show) (dailyGrain req)
   let scope = req {from = addDays (negate (width - 1)) (req ^. #from)}
   (grouping, filters, population) <- activityPopulationFor (not stickiness) registry req scope
@@ -1066,6 +1090,7 @@ compileRolling registry width stickiness req = do
 
 compileLifecycle :: EventRegistry -> QueryRequest -> Either QueryCompileError CompiledMetric
 compileLifecycle registry req = do
+  validateSelection False (req ^. #filters)
   first (QueryCompileFilterError . Text.pack . show) (dailyGrain req)
   (grouping, filters, population) <- activityPopulation registry req (historicalScope req)
   let earliest = sqlString (renderDay (addDays (-1) (req ^. #from)))
@@ -1094,6 +1119,7 @@ buildRetentionMetricSQL registry mode cohort req offsets = boundedCompiled (comp
 
 compileRetention :: EventRegistry -> RetentionMode -> CohortMode -> QueryRequest -> [Int] -> Either QueryCompileError CompiledMetric
 compileRetention registry mode cohort req offsets = do
+  validateSelection False (req ^. #filters)
   first (QueryCompileFilterError . Text.pack . show) (dailyGrain req)
   void (first (QueryCompileFilterError . Text.pack . show) (validateOffsets offsets))
   let scope = if cohort == LifetimeCohort then historicalScope req else req
@@ -1135,6 +1161,7 @@ funnelPrefix Just {} = "experiment_funnel_step"
 
 compileFunnel :: EventRegistry -> QueryRequest -> Maybe SqlName -> FunnelOptions -> Int -> [SqlName] -> Either QueryCompileError CompiledMetric
 compileFunnel registry req experiment options window steps = do
+  validateSelection False (req ^. #filters)
   unless (isNothing (req ^. #timeGrain)) (Left (QueryCompileFilterError "timeGrain is unsupported for funnels"))
   when (options ^. #mode == FunnelStrict && any (\f -> not (Text.isPrefixOf "user:" (WireFilter.dimension f) || (aggregateOrganizations req && (Text.isPrefixOf "org:" (WireFilter.dimension f) || WireFilter.dimension f == "organization")) || WireFilter.dimension f == "cohort")) (concatMap WireFilter.filterTerms (req ^. #filters))) (Left (QueryCompileFilterError "strict funnels do not support event filters; interruptions must remain visible"))
   case attributionLimits steps (options ^. #attribution) of
@@ -1228,6 +1255,7 @@ validExposurePredicate = "event_name='experiment_viewed' AND match(CAST(toString
 -- once for the whole requested range.
 buildExperimentExposuresSQL :: QueryRequest -> Maybe SqlName -> Either QueryCompileError Text
 buildExperimentExposuresSQL req experiment = do
+  validateSelection False (req ^. #filters)
   when (req ^. #timeGrain == Just NoTimeBucket) (Left QueryCompileInvalidTimeGrain)
   pure (boundedSQL ExperimentExposureOrder (buildExperimentExposuresSQLAggregate req experiment))
 
@@ -1254,6 +1282,7 @@ buildExperimentExposuresSQLAggregate req experiment =
 -- supplies the zero DateTime64, which correctly fails that comparison.
 buildExperimentConversionSQL :: QueryRequest -> SqlName -> SqlName -> Either QueryCompileError Text
 buildExperimentConversionSQL req experiment conversionEvent = do
+  validateSelection False (req ^. #filters)
   when (req ^. #timeGrain == Just NoTimeBucket) (Left QueryCompileInvalidTimeGrain)
   pure (boundedSQL ExperimentConversionOrder (buildExperimentConversionSQLAggregate req experiment conversionEvent))
 
@@ -1337,6 +1366,7 @@ experimentFilterClause = \case
 -- | Exposure gating precedes the shared chain evaluation.
 buildExperimentFunnelSQL :: QueryRequest -> SqlName -> Int -> [SqlName] -> Either QueryCompileError Text
 buildExperimentFunnelSQL req experiment window steps = do
+  validateSelection False (req ^. #filters)
   when (req ^. #timeGrain == Just NoTimeBucket) (Left QueryCompileInvalidTimeGrain)
   pure (boundedSQL FunnelDimensionsOrder (funnelAggregate req (Just experiment) defaultFunnelOptions window steps [] []))
 
@@ -1373,6 +1403,7 @@ propertyFilterClause = foldMap ("\n  AND " <>)
 
 queryCompileErrorCode :: QueryCompileError -> Text
 queryCompileErrorCode = \case
+  QueryCompileUserSelection _ -> "invalid_metric"
   QueryCompileContainsEvent failure -> limitCode failure
   QueryCompileConversionEvents failure -> limitCode failure
   QueryCompileInvalidQuantile -> "invalid_metric_definition"
@@ -1387,6 +1418,7 @@ queryCompileErrorCode = \case
 
 queryCompileErrorMessage :: QueryCompileError -> Text
 queryCompileErrorMessage = \case
+  QueryCompileUserSelection message -> message
   QueryCompileContainsEvent failure -> limitMessage failure
   QueryCompileConversionEvents failure -> limitMessage failure
   QueryCompileInvalidQuantile -> "percentile requires a finite quantile strictly between zero and one; other aggregations cannot specify quantile"
@@ -1521,7 +1553,7 @@ requestFilters :: QueryRequest -> String -> EventRegistry -> [EventName] -> [Met
 requestFilters = requestFiltersFor False
 
 requestFiltersFor :: Bool -> QueryRequest -> String -> EventRegistry -> [EventName] -> [MetricFilter] -> Either Text Filters.CompiledFilters
-requestFiltersFor sessionSupport req prefix registry scope = Filters.compileFiltersWith prefix (cohortDimension req "canonical_user" ((if sessionSupport then resolveEventSessionDimension else resolveDimension) registry scope)) . normalizeCohortFilters
+requestFiltersFor sessionSupport req prefix registry scope = Filters.compileFiltersWith prefix (UserSelection.userSelectionDimension False (cohortDimension req "canonical_user" ((if sessionSupport then resolveEventSessionDimension else resolveDimension) registry scope))) . normalizeCohortFilters
 
 normalizeCohortFilters :: [MetricFilter] -> [MetricFilter]
 normalizeCohortFilters = map (WireFilter.mapFilterTerms normalize)

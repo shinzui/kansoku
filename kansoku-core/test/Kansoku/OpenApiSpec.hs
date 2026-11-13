@@ -2,6 +2,7 @@
 
 module Kansoku.OpenApiSpec (spec) where
 
+import Control.Monad (forM_)
 import Data.Aeson qualified as Aeson
 import Data.Aeson.Key qualified as Key
 import Data.Aeson.KeyMap qualified as KeyMap
@@ -40,6 +41,11 @@ import Test.Hspec
 
 spec :: Spec
 spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
+  it "publishes identified-user bounds, ownership and unsupported-route contract" $ do
+    forM_ ["events", "page-views", "users", "sessions", "acquisition", "revenue", "feature-adoption", "custom", "conversion", "organizations", "paths", "funnel", "retention", "lifecycle", "stickiness", "experiments"] $ \route -> do
+      let operation = fromMaybe Aeson.Null (valueAt ["paths", "/metrics/" <> route, "get"] documentValue)
+      traverse_ (\phrase -> lookupText ["description"] operation `shouldSatisfy` maybe False (Text.isInfixOf phrase)) ["user_id", "1..20", "anonymous", "invalid_metric", "invalid_group_by"]
+
   it "documents optional contained-event selection only on sessions" $ do
     let operation = fromMaybe Aeson.Null (valueAt ["paths", "/metrics/sessions", "get"] documentValue)
         parameters = fromMaybe [] (valueAt ["parameters"] operation >>= \case Aeson.Array xs -> Just (Foldable.toList xs); _ -> Nothing)

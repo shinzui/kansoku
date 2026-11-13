@@ -7,20 +7,30 @@ import Data.Foldable (traverse_)
 import Data.Text qualified as Text
 import Kansoku.Api qualified as Api
 import Kansoku.Api.Response qualified as Response
+import Kansoku.Auth.Handler (authContextWith)
 import Kansoku.ClickHouse (QueryPool)
 import Kansoku.Event (defaultRegistry, schemaCatalog)
 import Kansoku.Metrics.Handler (metricsServer)
-import Kansoku.Metrics.RoutingSpec (sentinelContext, sentinelIngestServer)
+import Kansoku.Metrics.RoutingSpec (sentinelContext, sentinelIngestServer, sentinelPrincipal)
+import Kansoku.Server (envelopeFormatters)
 import Kansoku.Users.Handler (usersServer)
 import Network.HTTP.Client qualified as HTTP
 import Network.HTTP.Types (status400, status503)
 import Network.Wai (Application)
 import Network.Wai.Handler.Warp qualified as Warp
-import Servant (serveWithContext)
+import Servant (Context (..), serveWithContext)
 import Test.Hspec
 
 spec :: Spec
 spec = describe "Kansoku.Metrics.Handler" $ do
+  it "rejects invalid and unsupported user selection before cohorts, definitions or query checkout" $
+    Warp.testWithApplication (pure authenticatedValidationApplication) $ \port -> do
+      manager <- HTTP.newManager HTTP.defaultManagerSettings
+      traverse_
+        (\(route, extra) -> assertBadRequest manager port ("/metrics/" <> route <> "?from=2026-07-01&to=2026-07-02&filter=user_id:eq:alice&filter=cohort:eq:00000000-0000-0000-0000-000000000001" <> extra) "invalid_metric" "")
+        [("conversion", ""), ("organizations", ""), ("paths", "&start=page_view"), ("funnel", "&steps=a,b"), ("retention", ""), ("lifecycle", ""), ("stickiness", ""), ("experiments", "&experiment=exp"), ("experiments/conversion", "&experiment=exp&event=page_view"), ("experiments/funnel", "&experiment=exp&steps=a,b")]
+      traverse_ (\route -> assertBadRequest manager port ("/metrics/" <> route <> "?from=2026-07-01&to=2026-07-02&filter=user_id:contains:alice&filter=cohort:eq:00000000-0000-0000-0000-000000000001") "invalid_metric" "") ["events", "custom"]
+
   it "rejects malformed contained-event names before cohort loading or query checkout" $
     Warp.testWithApplication (pure validationApplication) $ \port -> do
       manager <- HTTP.newManager HTTP.defaultManagerSettings
@@ -178,7 +188,7 @@ spec = describe "Kansoku.Metrics.Handler" $ do
 assertBadRequest :: HTTP.Manager -> Warp.Port -> String -> Text.Text -> Text.Text -> Expectation
 assertBadRequest manager port path expectedCode messageFragment = do
   request <- HTTP.parseRequest ("http://127.0.0.1:" <> show port <> path)
-  response <- HTTP.httpLbs request manager
+  response <- HTTP.httpLbs request {HTTP.requestHeaders = [("Authorization", "Bearer ksk_s_fixture")]} manager
   HTTP.responseStatus response `shouldBe` status400
   envelope <-
     case eitherDecode (HTTP.responseBody response) of
@@ -201,5 +211,20 @@ validationApplicationWithPool pool =
         Api.users = usersServer (error "users PostgreSQL unused") (error "users ClickHouse unused"),
         Api.cohorts = error "cohort routes are unused in metric handler tests",
         Api.metrics = metricsServer pool,
+        Api.schemas = pure (schemaCatalog defaultRegistry)
+      }
+
+-- Exercise the production authentication/validation boundary with an isolated principal.
+authenticatedValidationApplication :: Application
+authenticatedValidationApplication =
+  serveWithContext
+    Api.kansokuAPI
+    (envelopeFormatters :. authContextWith (const (pure (Right (Just sentinelPrincipal)))))
+    Api.KansokuAPI
+      { Api.ingest = sentinelIngestServer,
+        Api.metricDefinitions = error "definition lookup must not run",
+        Api.users = usersServer (error "users unused") (error "users unused"),
+        Api.cohorts = error "cohort routes unused",
+        Api.metrics = metricsServer (error "query pool must not be forced"),
         Api.schemas = pure (schemaCatalog defaultRegistry)
       }

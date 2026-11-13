@@ -5,7 +5,7 @@ description: Compile account-scoped saved and ad-hoc metric definitions through 
 docId: ADR-20
 status: Accepted
 date: 2026-10-16
-timestamp: 2026-11-06T14:31:34Z
+timestamp: 2026-11-13T02:15:00Z
 generated:
   by: process:codex
   at: 2026-10-16T12:30:07Z
@@ -116,3 +116,11 @@ without a common session filter or group; side predicates stay inside their own 
 Common filters still select both sides. Missing-session guards apply per Boolean term, preserving
 mixed event/session OR alternatives and existing bound operands, types and query/result limits.
 Nested session properties/traits/cohorts remain excluded; definitions retain their wire shape.
+
+## Identified-user populations
+
+Saved simple `user_id` defaults AND with request filters. Common ratio selection affects
+both sides; component selection remains side-local while participating in identity-source
+discovery. Loaded definitions are revalidated, using the same bounded original-ID semantics
+as HTTP and core queries. Count/sum/average/percentile switch to resolved events when only
+an ID predicate requires it. No saved cohort or new wire shape is introduced.

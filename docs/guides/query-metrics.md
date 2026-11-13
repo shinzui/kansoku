@@ -4,7 +4,7 @@ title: "Query metrics"
 description: "Look up metric populations, query bounds, filters, grouping, analytical semantics, cohorts and saved definitions."
 docId: DOC-10
 tags: ["metrics", "queries", "identity", "cohorts"]
-timestamp: 2026-11-13T00:59:03Z
+timestamp: 2026-11-13T02:10:00Z
 generated:
   by: process:codex
   at: "2026-11-06T14:31:34Z"
@@ -15,6 +15,59 @@ generated:
 Kansoku exposes account-scoped analytics at `GET /metrics/*`. Every request requires a service
 token (`ksk_s_…`) in `Authorization: Bearer` or `X-Api-Key`. A write key can ingest but receives
 HTTP 403 on metrics routes.
+
+## Select identified users
+
+Use the filter-only dimension `user_id` with original, case-sensitive opaque IDs:
+
+```text
+filter=user_id:eq:alice
+filter=user_id:neq:alice
+```
+
+```json
+{"dimension":"user_id","op":"in","value":["alice","bob"]}
+{"dimension":"user_id","op":"eq","value":"123"}
+{"dimension":"user_id","op":"eq","value":"user:人|literal"}
+```
+
+`eq` and `neq` require one nonempty string. `in` requires 1..20 nonempty strings,
+counted before deduplication. The existing 1024 UTF-8 bytes per string, eight AND
+filter groups, eight OR alternatives per group and 16384 decoded bytes still apply.
+Use JSON strings (or quoted shorthand) for numeric-looking IDs; IDs containing `|`
+require JSON. Whitespace, prefixes, punctuation and Unicode are preserved exactly.
+`in` selects a combined population; it does not group per user. `groupBy=user_id`
+returns `invalid_group_by`. Governed `user:<trait>` dimensions remain separate.
+
+| Supported route | Selection ownership |
+| --- | --- |
+| events, page-views, revenue, feature-adoption | Resolved event user |
+| users | Resolved event user; calendar, rolling7 and rolling30 |
+| sessions, acquisition | First resolved user of the complete retained session |
+| custom | Resolved event user for every aggregation, saved defaults and ratio components |
+
+All other metric routes, including conversion, organizations, paths, funnel, retention,
+lifecycle, stickiness and experiments, reject `user_id` with `invalid_metric`.
+Invalid operators, empty/nonstring IDs and lists above twenty also return `invalid_metric`;
+malformed filter grammar keeps `invalid_filter`. Existing date, bot, grain, grouping,
+organisation aggregation and result-shape rules remain route-specific.
+
+Only identified subjects match, including `neq`. An anonymous subject with the same ID
+text is excluded. Each comparison independently fails for missing/anonymous subjects,
+so `user_id:eq:alice|event_name:eq:page_view` can still select anonymous page views.
+Current account-scoped identity evidence can stitch pre-login events even when the
+identification occurs outside the query dates. Identity/cohort changes can reclassify
+historical results. An unknown user gives the route's ordinary empty/zero metric,
+rather than a profile 404.
+
+Session selection retains all session events, duration, start date and attribution,
+even if a later event belongs to another user. Saved simple selection ANDs with request
+filters. Common ratio filters select both sides; component filters select their own side.
+
+Selecting one user does not promise a keyed lookup or a scan proportional to that user's
+activity. Count, sum, average and percentile may now pay identity-resolution cost, and
+sessions can require retained-history assembly. Warm connection snapshots may help;
+existing execution/memory deadlines and the 10000-point complete-result cap still apply.
 
 ## Whole-range totals
 

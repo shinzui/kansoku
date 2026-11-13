@@ -15,6 +15,7 @@ import Kansoku.Metrics.Filter qualified as Filter
 import Kansoku.Metrics.Query qualified as Query
 import Kansoku.Metrics.Query.Dimension
 import Kansoku.Metrics.Query.Filter qualified as Compile
+import Kansoku.Metrics.Query.UserSelection qualified as Selection
 import Kansoku.Metrics.Registry (BuiltinMetric (..), events, pageViews)
 import Kansoku.Metrics.RequestValidation (validateMetricRequest)
 import Kansoku.Prelude
@@ -24,6 +25,25 @@ import Web.HttpApiData (toUrlPiece)
 
 spec :: Spec
 spec = describe "Kansoku.Metrics filters" $ do
+  it "validates bounded opaque user IDs and rejects unsupported routes before execution" $ do
+    forM_ ["user_id:eq:alice", "user_id:neq:alice", jsonFilter "user_id" "in" (Aeson.toJSON (replicate 20 ("alice" :: Text)))] $ \raw -> do
+      selected <- validFilter raw
+      Selection.validateUserSelection True [selected] `shouldBe` Right ()
+      Selection.validateUserSelection False [selected] `shouldSatisfy` isLeft
+      Query.buildSQL defaultRegistry (Simple events) request {Query.filters = [selected]} `shouldSatisfy` isRight
+      Query.buildSQL defaultRegistry (Simple events) request {Query.filters = [selected], Query.groupBy = Just ["user_id"]} `shouldSatisfy` isLeft
+    forM_ ["user_id:set", "user_id:contains:alice", "user_id:eq:123", jsonFilter "user_id" "eq" (Aeson.String ""), jsonFilter "user_id" "in" (Aeson.toJSON (replicate 21 ("alice" :: Text)))] $ \raw -> do
+      selected <- validFilter raw
+      Selection.validateUserSelection True [selected] `shouldSatisfy` isLeft
+      either (Just . Query.queryCompileErrorCode) (const Nothing) (Query.buildSQL defaultRegistry (Simple events) request {Query.filters = [selected]}) `shouldBe` Just "invalid_metric"
+      let req = defaultRequest {rawPathInfo = "/metrics/events", queryString = [("filter", Just (Text.encodeUtf8 raw))]}
+      either (Just . fst) (const Nothing) (validateMetricRequest req) `shouldBe` Just "invalid_metric"
+    selected <- validFilter "user_id:eq:alice|event_name:eq:page_view"
+    Selection.hasUserSelection [selected] `shouldBe` True
+    forM_ ["conversion", "organizations", "paths", "funnel", "retention", "lifecycle", "stickiness", "experiments", "experiments/conversion", "experiments/funnel"] $ \route -> do
+      let req = defaultRequest {rawPathInfo = "/metrics/" <> Text.encodeUtf8 route, queryString = [("filter", Just "user_id:eq:alice"), ("filter", Just "cohort:eq:00000000-0000-0000-0000-000000000001")]}
+      either (Just . fst) (const Nothing) (validateMetricRequest req) `shouldBe` Just "invalid_metric"
+
   it "parses session shorthand and guards only its own OR alternatives" $ do
     input <- validFilter "session:country_code:unset|source:eq:service"
     Filter.parseMetricFilter (toUrlPiece input) `shouldBe` Right input

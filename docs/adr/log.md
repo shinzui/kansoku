@@ -2,6 +2,9 @@
 
 ## 2026-11-13
 
+* **Update**: ADR-9, ADR-16 and ADR-20: record bounded explicit identified-user selection, resolved event/session ownership and saved component composition.
+
+
 * **Updated**: ADR-25 records required nullable wire fields and the users-specific Relay page minimum schema overrides.
 
 * **Added**: ADR-25 records identified-user resources and exact-version safe history projection.

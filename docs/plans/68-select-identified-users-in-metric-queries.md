@@ -3,12 +3,19 @@ id: 68
 slug: select-identified-users-in-metric-queries
 title: "Select identified users in metric queries"
 kind: exec-plan
+intention: intention_01m799qcyte1kvc37y7phtjdxd
 created_at: 2026-11-13T00:18:09Z
 provenance:
   created_by:
     model: "gpt-6-astra"
     harness: "codex-cli"
     at: 2026-11-13T00:18:09Z
+  revisions:
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-11-13T01:52:49Z
+      mode: "implement"
+      note: "Implement bounded resolved-user selection within the existing metric contract"
 ---
 
 # Select identified users in metric queries
@@ -26,9 +33,11 @@ The filter works on events, page views, users, sessions, acquisition, revenue, f
 ## Progress
 
 
-- [ ] Milestone 1: Core compilers select resolved identified users with bounded operands, correct event/session ownership, and passing deterministic and native behavior tests.
-- [ ] Milestone 2: Public HTTP and saved/ad-hoc custom metrics satisfy the eight-route contract, reject unsupported uses before execution, and pass an owned-store acceptance workflow.
+- [x] Milestone 1 (2026-11-13): Core compilers select resolved identified users with bounded operands, correct event/session ownership, and passing deterministic and native behavior tests.
+- [x] Milestone 2 (2026-11-13): Public HTTP and saved/ad-hoc custom metrics satisfy the eight-route contract, reject unsupported uses before execution, and pass an owned-store acceptance workflow.
 - [ ] Milestone 3: Query guide and generated OpenAPI publish the contract; packaged acceptance and relevant regression gates pass with recorded evidence.
+
+Acceptance evidence: `just build-with-tests` succeeds; the acquisition acceptance runner passes 50 native cases across block sizes 65536 and 2, including lone-ID stitching, anonymous collisions, same-ID account isolation and complete first-user session ownership. `just deterministic-test` passes 524 core examples, 22 client examples and four production probes. The owned-store identified-user workflow passes all eight routes, opaque IDs, saved simple/side-local ratios, cohort in/out, mixed OR, bounds and a cross-midnight session with identity evidence outside the start-date range. Existing custom metrics acceptance passes unchanged. OpenAPI generation/check/lint, guide validation and strict ADR validation pass. Packaged acceptance is running; milestone 3 remains open until its result is known.
 
 ## Surprises & Discoveries
 
@@ -184,7 +193,7 @@ No schema migration, backfill or durable per-user selection object is required. 
 
 Tests create fresh event/source identifiers and owned databases; replay only deliberately immutable events within a case. Use `OwnedResources` to remove test definitions/cohorts. Never clear ambient stores. Retain failed owned-fixture evidence and rerun with a fresh fixture rather than modifying existing user data. Do not turn missing native prerequisites into passing skips.
 
-On implementation, append one provenance revision with `agents/skills/exec-plan/record-provenance.ts` and verified current runtime identity. Log material friction as it happens and triage it at completion. Commit relevant changes on the current branch with Conventional Commits and `ExecPlan: docs/plans/68-select-identified-users-in-metric-queries.md`. No intention is linked at creation; the intention mentioned by the originating request is consumer context, not an adopted session value.
+On implementation, append one provenance revision with `agents/skills/exec-plan/record-provenance.ts` and verified current runtime identity. Log material friction as it happens and triage it at completion. Commit relevant changes on the current branch with Conventional Commits and `ExecPlan: docs/plans/68-select-identified-users-in-metric-queries.md`. No intention was linked at creation. Implementation uses `intention_01m799qcyte1kvc37y7phtjdxd`, created with `mina ci --json` at the user’s instruction; include its `Intention:` trailer on implementation commits.
 
 ## Interfaces and Dependencies
 

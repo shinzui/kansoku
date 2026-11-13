@@ -300,7 +300,7 @@ spec = describe "Kansoku.Client" $ do
                 [("content-type", "application/json")]
                 "{\"metric\":\"events\",\"points\":[{\"bucket\":null,\"group\":{\"source\":\"web\",\"prop:plan\":null},\"value\":1}]}"
             )
-    input <- either (fail . Text.unpack) pure (Filter.mkMetricFilter "source_service" Filter.FilterEq (Just (Aeson.String "é:|,\"\\")))
+    input <- either (fail . Text.unpack) pure (Filter.mkMetricFilter "user_id" Filter.FilterEq (Just (Aeson.String "é:|,\"\\")))
     secondInput <- either (fail . Text.unpack) pure (Filter.mkMetricFilter "source" Filter.FilterEq (Just (Aeson.String "web")))
     Warp.testWithApplication (pure app) $ \port -> do
       manager <- HTTP.newManager HTTP.defaultManagerSettings

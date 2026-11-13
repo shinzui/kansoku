@@ -1,6 +1,7 @@
 # Bundle Update Log
 
 ## 2026-11-13
+* **Updated**: DOC-10 documents bounded identified-user metric selection, ownership and execution costs.
 * **Updated**: DOC-10 documents identified-user directory, profiles, history, exact counts and read boundaries.
 
 ## 2026-11-08

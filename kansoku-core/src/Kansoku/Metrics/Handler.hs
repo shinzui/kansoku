@@ -103,6 +103,7 @@ metricsServerUsing pg pool =
         invalid message = pure (KansokuBadRequest (badRequest "invalid_metric" message))
         execute definition = case validateCustom defaultRegistry definition >> customRequest definition (queryRequest (principal ^. #accountId) fromDay toDay group grain filters) of
           Left message | any (`Text.isPrefixOf` message) ["at most eight filters", "decoded filters"] -> pure (KansokuBadRequest (badRequest "invalid_filter" message))
+          Left "invalid dimension: user_id" -> pure (KansokuBadRequest (badRequest "invalid_group_by" "user_id is filter-only"))
           Left message -> invalid message
           Right request -> do
             let extras = case definition of
@@ -114,7 +115,7 @@ metricsServerUsing pg pool =
                 withCohorts pg request {Query.filters = Query.filters request <> componentFilters} $ \loaded -> do
                   result <- Query.run defaultRegistry pool (customBuiltin definition) loaded {Query.filters = Query.filters request}
                   pure $ case result of
-                    Left (Query.QueryCompileFailure failure) | Query.queryCompileErrorCode failure /= "invalid_filter" -> Left (Query.QueryLimitFailure (QueryLimitError "invalid_metric" (Query.queryCompileErrorMessage failure)))
+                    Left (Query.QueryCompileFailure failure) | Query.queryCompileErrorCode failure `notElem` ["invalid_filter", "invalid_group_by"] -> Left (Query.QueryLimitFailure (QueryLimitError "invalid_metric" (Query.queryCompileErrorMessage failure)))
                     _ -> fmap (\value -> value & #metric .~ customName definition) result
 
     webMetricHandler :: Text -> MetricsPrincipal -> Day -> Day -> Maybe Text -> Maybe TimeGrain -> [MetricFilter] -> Maybe Bool -> Handler (KansokuResult MetricResult)

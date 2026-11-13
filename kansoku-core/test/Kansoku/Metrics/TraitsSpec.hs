@@ -73,6 +73,32 @@ spec = do
       Query.buildSQL defaultRegistry metric req {Query.groupBy = Just ["user:undeclared"]} `shouldSatisfy` isLeft
 
   describe "Kansoku.Traits native" $ do
+    it "selects only resolved identified users and retains whole sessions with a lone ID filter" $ withClickHouse $ \connection -> do
+      let account = "selected-users"
+          row eid name user stamp = activity account eid name user stamp & #sessionId ?~ SessionId "shared"
+          rows =
+            [ row "prelogin" "page_view" "alice" "2026-07-01 00:00:00 UTC" & #userId .~ Nothing & #anonymousId ?~ AnonymousId "cookie",
+              row "login" "identify" "alice" "2026-07-03 00:00:00 UTC" & #anonymousId ?~ AnonymousId "cookie" & #sessionId .~ Nothing,
+              row "later-user" "page_view" "bob" "2026-07-01 00:01:00 UTC",
+              row "collision" "page_view" "anonymous" "2026-07-01 00:00:00 UTC" & #userId .~ Nothing & #anonymousId ?~ AnonymousId "alice" & #sessionId ?~ SessionId "anonymous",
+              row "foreign" "page_view" "alice" "2026-07-01 00:00:00 UTC" & #accountId ?~ AccountId "selected-other"
+            ]
+      insertEvents connection (rows <> rows)
+      alice <- input "user_id" Filter.FilterEq (Aeson.String "alice")
+      bob <- input "user_id" Filter.FilterNeq (Aeson.String "alice")
+      both <- input "user_id" Filter.FilterIn (Aeson.toJSON (["alice", "bob"] :: [Text]))
+      withPool $ \pool -> do
+        let req = (request account) {Query.to = fromGregorian 2026 7 2, Query.filters = [alice]}
+        pointValues <$> builtin pool "page_views" req `shouldReturn` [1]
+        pointValues <$> builtin pool "page_views" req {Query.filters = [bob]} `shouldReturn` [1]
+        pointValues <$> builtin pool "page_views" req {Query.filters = [both]} `shouldReturn` [2]
+        sum . pointValues <$> metric (Query.runSessionMetric pool SessionCount req) `shouldReturn` 1
+        sum . pointValues <$> metric (Query.runSessionMetric pool SessionAverageDuration req) `shouldReturn` 60
+        sum . pointValues <$> metric (Query.runSessionMetric pool SessionBounceRate req) `shouldReturn` 0
+        sum . pointValues <$> metric (Query.runAcquisition defaultRegistry pool AcquisitionSessions req) `shouldReturn` 1
+        sum . pointValues <$> metric (Query.runAcquisition defaultRegistry pool AcquisitionUsers req) `shouldReturn` 1
+        sum . pointValues <$> metric (Query.runSessionMetric pool SessionCount req {Query.filters = [bob]}) `shouldReturn` 0
+
     it "merges reversed/replayed state with total ties, latest-set precedence and earliest set-once fallback" $ withClickHouse $ \connection -> do
       let account = "trait-order"
           sample eid name version user stamp receive pairs = profile account eid name version user stamp pairs & #receivedAt .~ read receive

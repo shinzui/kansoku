@@ -21,6 +21,7 @@ from acceptance_fixture_isolation import verify_fixture_isolation
 from activity_acceptance import verify_activity
 from funnel_acceptance import verify_funnels
 from traits_acceptance import verify_traits
+from user_selection_acceptance import verify_user_selection
 from cohorts_acceptance import verify_cohorts
 from users_acceptance import verify_users
 from custom_metrics_acceptance import verify_custom_metrics
@@ -302,6 +303,7 @@ def main():
                             verify_activity(base, credentials['enrichment_write'], credentials['enrichment_service'])
                             verify_funnels(base, credentials['enrichment_write'], credentials['enrichment_service'])
                             verify_traits(base, credentials['enrichment_write'], credentials['enrichment_service'])
+                            verify_user_selection(base, credentials['enrichment_write'], credentials['enrichment_service'], credentials['other_token'])
                             verify_cohorts(base, credentials['enrichment_write'], credentials['enrichment_service'], credentials['other_token'])
                             def erase_read_user(user):
                                 output = run([admin, 'erase-user', '--account', 'mp4_enrichment', '--user', user,

@@ -5,7 +5,7 @@ description: Persist first-acceptance schema eligibility for typed current trait
 docId: ADR-16
 status: Accepted
 date: 2026-10-16
-timestamp: 2026-10-16T12:55:33Z
+timestamp: 2026-11-13T02:15:00Z
 generated:
   by: process:codex
   at: 2026-10-16T01:01:59Z
@@ -92,3 +92,19 @@ facts. Trusted business reporting requires service-owned producers. Native, publ
 pinned SDK/helper and lifecycle acceptance pass. The expanded 28-case, 10M-fact cost gate
 also remains below 2× and the shared memory budget. EP-37 must establish the persisted fence
 and coordinate cross-store lifecycle cleanup before exposing these primitives administratively.
+
+## Explicit identified-user selection
+
+Filter-only `user_id` selects original opaque subject IDs after account-scoped identity
+resolution. Event predicates use subject_kind/subject_id, even when organisation aggregation
+replaces canonical_user. Only identified subjects match eq, neq or in: anonymous and empty
+subjects fail each term, including negative comparisons. Guards remain inside each OR term.
+Sessions/acquisition select the first resolved identified owner after complete retained
+assembly, retaining every constituent event. A lone ID filter triggers resolved sources
+and retained identity preparation, including evidence outside selected occurrence dates.
+
+Support is limited to events, page views, users (all windows), sessions, acquisition,
+revenue, feature adoption and custom metrics. Other metric families explicitly reject
+selection. Grouping and cohort definition dimensions remain closed; user:<trait> is separate.
+Identity/cohort changes can reclassify historical answers; absent users yield ordinary
+empty metrics. IDs retain exact case, whitespace, punctuation and any user: prefix.

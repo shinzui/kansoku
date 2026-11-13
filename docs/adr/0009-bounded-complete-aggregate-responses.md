@@ -5,7 +5,7 @@ description: Bound metric inputs and final aggregate cardinality, returning a co
 docId: ADR-9
 status: Accepted
 date: 2026-10-15
-timestamp: 2026-11-08T13:49:15Z
+timestamp: 2026-11-13T02:15:00Z
 generated:
   by: process:codex
   at: 2026-10-15T04:44:00Z
@@ -137,3 +137,12 @@ registry. Shared HTTP/compiler/executor validation enforces the same bound for a
 session measures. The scalar cannot repeat and is unsupported on other metric routes.
 Existing account, date, complete-point and execution/memory bounds remain in force;
 membership scans never truncate retained history to produce a partial answer.
+
+## Bounded identified-user operands
+
+The filter-only `user_id` dimension accepts eq/neq with one nonempty opaque string or
+in with 1..20 raw string entries, before deduplication. Existing per-string and combined
+filter budgets remain. Semantic selection errors and unsupported route use return
+invalid_metric before storage; grouping returns invalid_group_by. Generic malformed
+filter grammar remains invalid_filter. Selection never relaxes native work, date or
+complete-point limits and does not imply a keyed lookup.

@@ -93,6 +93,7 @@ library
     Kansoku.Metrics.Query.Property
     Kansoku.Metrics.Query.Session
     Kansoku.Metrics.Query.Traits
+    Kansoku.Metrics.Query.UserSelection
     Kansoku.Metrics.Query.Validate
     Kansoku.Metrics.Registry
     Kansoku.Metrics.RequestValidation

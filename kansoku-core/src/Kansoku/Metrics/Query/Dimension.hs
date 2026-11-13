@@ -24,7 +24,8 @@ import Kansoku.Metrics.Query.Property
 import Kansoku.Prelude hiding (index)
 
 data GroupDimension
-  = GroupBySessionAttribute !SessionAttribute
+  = FilterByIdentifiedUser !Bool
+  | GroupBySessionAttribute !SessionAttribute
   | GroupByCohort !Text !Text
   | GroupByOrganization
   | GroupByOrganizationTrait !Text !ScalarType
@@ -160,6 +161,7 @@ resolveSessionDimension registry events name = resolveDimension registry events 
 
 dimensionLabel :: GroupDimension -> Text
 dimensionLabel = \case
+  FilterByIdentifiedUser _ -> "user_id"
   GroupBySessionAttribute attribute -> "session:" <> dimensionLabel (sessionAttributeDimension attribute)
   GroupByCohort ident _ -> "cohort:" <> ident
   GroupByOrganization -> "organization"
@@ -196,6 +198,8 @@ dimensionType _ = ScalarString
 
 dimensionExpr :: GroupDimension -> Text
 dimensionExpr = \case
+  FilterByIdentifiedUser False -> "if(subject_kind='user',nullIf(subject_id,''),CAST(NULL,'Nullable(String)'))"
+  FilterByIdentifiedUser True -> "if(startsWith(primary_subject,'user:'),nullIf(substring(primary_subject,6),''),CAST(NULL,'Nullable(String)'))"
   GroupBySessionAttribute attribute -> sessionAttributeColumn attribute
   GroupByCohort _ predicate -> "if(" <> predicate <> ", 'in', 'out')"
   GroupByOrganization -> "nullIf(organization_id, '')"

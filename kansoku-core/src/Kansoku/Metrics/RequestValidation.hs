@@ -7,6 +7,7 @@ import Data.List (nub)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import Kansoku.Metrics.Filter (maxFilterBytes, maxFilters, parseMetricFilter, validateMetricFilters)
+import Kansoku.Metrics.Query.UserSelection qualified as UserSelection
 import Kansoku.Prelude
 import Kansoku.Users.Validation (validateDates, validateDirectory, validateHistory)
 import Network.HTTP.Types.URI (decodePathSegments)
@@ -50,6 +51,9 @@ validateMetricRequest request = case allowedParameters requestPath of
           validateDates lo hi
         ["users", _, "events"] -> validateDates lo hi >> validateHistory filters
         _ -> validateDates lo hi
+    when (take 1 requestPath == ["metrics"]) $ do
+      first ("invalid_metric",) (UserSelection.validateUserSelection (requestPath `elem` [["metrics", route] | route <- UserSelection.supportedUserSelectionRoutes]) filters)
+      when (any (\(key, operand) -> key == "groupBy" && maybe False (elem "user_id" . BS.split 44) operand) query) (Left ("invalid_group_by", "user_id is filter-only"))
     if take 1 requestPath == ["users"] then mapM_ (\f -> void (first ("invalid_filter",) (validateMetricFilters [f]))) filters else void (first ("invalid_filter",) (validateMetricFilters filters))
   where
     requestPath = decodePathSegments (rawPathInfo request)
