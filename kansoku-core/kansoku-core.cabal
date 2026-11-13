@@ -60,6 +60,7 @@ library
     Kansoku.ClickHouse.Consistency
     Kansoku.ClickHouse.EventRow
     Kansoku.ClickHouse.Native
+    Kansoku.ClickHouse.Observer
     Kansoku.ClickHouse.Topology
     Kansoku.Cohort.Handler
     Kansoku.Cohort.Members

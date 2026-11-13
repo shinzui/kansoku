@@ -1,8 +1,12 @@
 module Kansoku.ReplicaTopologySpec (spec) where
 
+import Control.Exception (throwIO, try)
 import Data.Either (isLeft)
 import Data.Text qualified as Text
-import Kansoku.ClickHouse.Consistency (Role (..), roleSettings)
+import Data.Time.Clock
+import Kansoku.ClickHouse.Consistency (Role (..), roleSettings, runtimeValidation)
+import Kansoku.ClickHouse.Native
+import Kansoku.ClickHouse.Observer
 import Kansoku.ClickHouse.Topology
 import Test.Hspec
 
@@ -33,3 +37,16 @@ spec = describe "Replica topology" $ do
     lookup "mutations_sync" (roleSettings (Replicated "fixture" [a, b]) Maintenance) `shouldBe` Just "2"
     lookup "alter_sync" (roleSettings (Replicated "fixture" [a, b]) Maintenance) `shouldBe` Just "2"
     lookup "select_sequential_consistency" (roleSettings (Replicated "fixture" [a, b]) Readback) `shouldBe` Just "1"
+
+  it "distinguishes unchecked, unavailable, mismatch, successful and stale observations" $ do
+    now <- getCurrentTime
+    topologyFailure now Unchecked `shouldBe` Just "clickhouse_topology_unchecked"
+    topologyFailure now (Observed now (Right ())) `shouldBe` Nothing
+    topologyFailure now (Observed now (Left (ConsistencyError StorageUnavailable "private"))) `shouldBe` Just "clickhouse_topology_unavailable"
+    topologyFailure now (Observed now (Left (ConsistencyError ObservedMismatch "private"))) `shouldBe` Just "clickhouse_topology_mismatch"
+    topologyFailure (addUTCTime 21 now) (Observed now (Right ())) `shouldBe` Just "clickhouse_topology_stale"
+  it "preserves positive mismatch evidence but redacts unknown runtime failures as unavailable" $ do
+    mismatch <- try @ConsistencyError (runtimeValidation (throwIO (ConsistencyError ObservedMismatch "safe"))) :: IO (Either ConsistencyError ())
+    mismatch `shouldBe` Left (ConsistencyError ObservedMismatch "safe")
+    unavailable <- try @ConsistencyError (runtimeValidation (fail "secret password")) :: IO (Either ConsistencyError ())
+    unavailable `shouldBe` Left (ConsistencyError StorageUnavailable "runtime topology exchange failed; details redacted")

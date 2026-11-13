@@ -7,6 +7,9 @@ module Kansoku.ClickHouse.Consistency
     directReplicaConnections,
     coordinator,
     withReplicaConnections,
+    withRuntimeReplicaConnections,
+    validateReplica,
+    runtimeValidation,
     Role (..),
     roleSettings,
     initializeRole,
@@ -23,7 +26,7 @@ where
 
 import ClickHaskell (Connection, closeConnection)
 import Control.Concurrent (threadDelay)
-import Control.Exception (SomeException, bracket, fromException, mask, onException, throwIO, try)
+import Control.Exception (bracket, fromException, mask, onException, throwIO)
 import Control.Monad (forM_, unless, when)
 import Data.Aeson qualified as A
 import Data.IORef
@@ -71,19 +74,17 @@ initializeRole :: Topology -> Role -> Connection -> IO ()
 initializeRole topology role connection = withinBudget "native role initialization" $ do
   let settings = roleSettings topology role
   unless (null settings) $ chCommand connection A.Null ("SET " <> Text.intercalate "," [name <> "=" <> value | (name, value) <- settings])
-  case topology of
-    Direct -> pure ()
-    _ -> forM_ settings $ \(name, expected) -> do
-      values <- chJSON connection A.Null ("SELECT toJSONString(value) AS value FROM system.settings WHERE name='" <> name <> "'")
-      unless (values == [A.String (Text.filter (/= '\'') expected)]) (failConsistency ("native role setting refused: " <> Text.unpack name))
+  forM_ settings $ \(name, expected) -> do
+    values <- chJSON connection A.Null ("SELECT toJSONString(value) AS value FROM system.settings WHERE name='" <> name <> "'")
+    unless (values == [A.String (Text.filter (/= '\'') expected)]) (failConsistency ("native role setting refused: " <> Text.unpack name))
 
 withinBudget :: Text -> IO a -> IO a
 withinBudget stage action =
   catchSynchronous
-    (timeout 60_000_000 action >>= maybe (failConsistency "native deadline expired; maintenance fence retained") pure)
+    (timeout 60_000_000 action >>= maybe (failUnavailable "native deadline expired; maintenance fence retained") pure)
     ( \exception -> case fromException exception of
-        Just (ConsistencyError reason) -> failConsistency (Text.unpack (stage <> ": " <> reason))
-        Nothing -> failConsistency (Text.unpack stage <> ": native exchange failed; details redacted; maintenance fence retained")
+        Just (ConsistencyError category reason) -> throwIO (ConsistencyError category (stage <> ": " <> reason))
+        Nothing -> failUnavailable (Text.unpack stage <> ": native exchange failed; details redacted; maintenance fence retained")
     )
 
 identity :: Connection -> IO Text
@@ -106,12 +107,38 @@ validateSchemaTopology topology connection = do
       localTables <- chJSON connection A.Null "SELECT toJSONString(count()) AS value FROM system.tables WHERE database=currentDatabase() AND position(engine,'MergeTree')>0 AND NOT startsWith(engine,'Replicated')"
       unless (localTables == [A.Number 0]) (failConsistency "application MergeTree tables must all be replicated")
 
+-- Runtime observations and pre-insert validation share one bounded policy.
+-- Neither native rejection nor incomplete coverage is a positive mismatch.
+runtimeValidation :: IO a -> IO a
+runtimeValidation action =
+  catchSynchronous
+    (timeout 8_000_000 action >>= maybe (failUnavailable "runtime topology observation deadline expired") pure)
+    ( \exception -> case fromException exception :: Maybe ConsistencyError of
+        Just _ -> throwIO exception
+        Nothing -> failUnavailable "runtime topology exchange failed; details redacted"
+    )
+
+validateReplica :: Topology -> Connection -> IO ()
+validateReplica topology c = do
+  validateSchemaTopology topology c
+  case topology of
+    Direct -> pure ()
+    Replicated cluster ids -> do
+      inventory <- chJSON c A.Null ("SELECT toJSONString(tuple(toUInt64(uniqExact(shard_num)),toUInt64(count()))) AS value FROM system.clusters WHERE cluster='" <> cluster <> "'")
+      unless (inventory == [A.toJSON (1 :: Int, length ids)]) (failConsistency "configured cluster must have one shard and exactly the expected replicas")
+      observed <- chJSON c A.Null ("SELECT toJSONString(toString(serverUUID())) AS value FROM clusterAllReplicas('" <> cluster <> "',system.one) SETTINGS max_result_rows=0,max_result_bytes=0,result_overflow_mode='throw',read_overflow_mode='throw',skip_unavailable_shards=0")
+      unless (sort [s | A.String s <- observed] == ids && length observed == length ids) (failConsistency "configured cluster UUID inventory differs from expected replicas")
+
 withReplicaConnections :: Topology -> IO Connection -> (ReplicaConnections -> IO a) -> IO a
-withReplicaConnections topology open action = bracket acquire release action
+withReplicaConnections = withReplicaConnectionsBudget 35_000_000
+
+withRuntimeReplicaConnections :: Topology -> IO Connection -> (ReplicaConnections -> IO a) -> IO a
+withRuntimeReplicaConnections = withReplicaConnectionsBudget 8_000_000
+
+withReplicaConnectionsBudget :: Int -> Topology -> IO Connection -> (ReplicaConnections -> IO a) -> IO a
+withReplicaConnectionsBudget budget topology open action = bracket acquire release action
   where
-    safeClose c = do
-      _ <- try @SomeException (closeConnection c)
-      pure ()
+    safeClose c = catchSynchronous (closeConnection c) (const (pure ()))
     release set = mapM_ (safeClose . snd) (replicaConnections set)
     acquire = mask $ \restore -> do
       retained <- newIORef []
@@ -121,7 +148,7 @@ withReplicaConnections topology open action = bracket acquire release action
             if sort (map fst connections) == expected
               then pure ()
               else do
-                unless (remaining > (0 :: Int)) (failConsistency ("replica acquisition exhausted; expected=" <> show expected <> "; observed=" <> show (sort (map fst connections))))
+                unless (remaining > (0 :: Int)) (failUnavailable ("replica acquisition exhausted; expected=" <> show expected <> "; observed=" <> show (sort (map fst connections))))
                 -- Register ownership before restoring asynchronous exceptions.
                 connection <- open
                 sid <- restore (identity connection) `onException` closeConnection connection
@@ -135,28 +162,21 @@ withReplicaConnections topology open action = bracket acquire release action
               c <- open
               writeIORef retained [("direct", c)]
               restore (validateSchemaTopology topology c)
-            Replicated cluster ids -> do
+            Replicated _ ids -> do
               attempt ids 64
               cs <- readIORef retained
-              restore $ forM_ cs $ \(_, c) -> do
-                validateSchemaTopology topology c
-                inventory <- chJSON c A.Null ("SELECT toJSONString(tuple(toUInt64(uniqExact(shard_num)),toUInt64(count()))) AS value FROM system.clusters WHERE cluster='" <> cluster <> "'")
-                unless (inventory == [A.toJSON (1 :: Int, length ids)]) (failConsistency "configured cluster must have one shard and exactly the expected replicas")
-                observed <- chJSON c A.Null ("SELECT toJSONString(toString(serverUUID())) AS value FROM clusterAllReplicas('" <> cluster <> "',system.one)")
-                unless (sort [s | A.String s <- observed] == ids && length observed == length ids) (failConsistency "configured cluster UUID inventory differs from expected replicas")
-      let boundedRun = case topology of
-            Direct -> run
-            Replicated _ ids -> do
-              result <- timeout 35_000_000 run
-              case result of
-                Just () -> pure ()
-                Nothing -> readIORef retained >>= \cs -> failConsistency ("replica acquisition deadline expired; expected=" <> show ids <> "; observed=" <> show (sort (map fst cs)))
+              restore $ forM_ cs $ \(_, c) -> validateReplica topology c
+      let boundedRun = do
+            result <- timeout budget run
+            case result of
+              Just () -> pure ()
+              Nothing -> failUnavailable "replica acquisition deadline expired; fence retained"
       catchSynchronous (boundedRun `onException` cleanup) $ \exception ->
         case fromException exception :: Maybe ConsistencyError of
           Just _ -> throwIO exception
           Nothing -> do
             observed <- map fst <$> readIORef retained
-            failConsistency ("native replica acquisition failed; selected=" <> show topology <> "; observed=" <> show (sort observed) <> "; details redacted; fence retained")
+            failUnavailable ("native replica acquisition failed; selected=" <> show topology <> "; observed=" <> show (sort observed) <> "; details redacted; fence retained")
       ReplicaConnections topology . reverse <$> readIORef retained
 
 checkIdentities :: ReplicaConnections -> IO ()

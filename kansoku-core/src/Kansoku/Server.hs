@@ -12,6 +12,8 @@ module Kansoku.Server
     kansokuApp,
     kansokuAppWithChecks,
     newProbeChecks,
+    newPipelineProbeChecks,
+    kansokuAppWithPipelineChecks,
     kansokuServer,
     pgmqReady,
     startServer,
@@ -44,7 +46,7 @@ import Kansoku.Config (Config)
 import Kansoku.Event.Contract (schemaCatalog)
 import Kansoku.Event.Registry (defaultRegistry)
 import Kansoku.Exception (catchSynchronous, trySynchronous)
-import Kansoku.Health (probeApplication)
+import Kansoku.Health (pipelineProbeApplication)
 import Kansoku.Ingest.Handler (ingestServer)
 import Kansoku.Ingest.Service (IngestService, ingestRequestContext, newIngestService)
 import Kansoku.Logging (Log, logError, logInfo, runLogStderr)
@@ -55,6 +57,7 @@ import Kansoku.Observability (PipelineMetrics)
 import Kansoku.Prelude
 import Kansoku.Readiness (ReadyCheckFailure, checkName)
 import Kansoku.Users.Handler (usersServer)
+import Kansoku.Writer.Recovery (BreakerState (..))
 import Network.HTTP.Types (status200, status404, status413, status500, status503, statusCode)
 import Network.HTTP.Types.Header (hContentType)
 import Network.Wai (Application, Middleware, Response, pathInfo, responseLBS)
@@ -78,11 +81,13 @@ import Servant.Health.Check (boolCheck, newFailureTracker, safeCheck, sequenceCh
 import Servant.Server (ErrorFormatter, ErrorFormatters (..), defaultErrorFormatters)
 import Servant.Server.Generic (AsServerT)
 
--- | Runtime checks used to answer GET /health/ready.
+-- | Independent admission dependencies and delivery diagnostics.
 data ReadyProbe = ReadyProbe
   { writerAlive :: !(IO Bool),
     pgmqReachable :: !(IO (Either Text ())),
     clickhouseReachable :: !(IO Bool),
+    topologyReady :: !(IO (Maybe Text)),
+    storageState :: !(IO BreakerState),
     pipelineReady :: !(IO [ReadyCheckFailure])
   }
   deriving stock (Generic)
@@ -102,8 +107,8 @@ kansokuServer pgPool settings analysisLimit service queryPool =
 kansokuApp :: MaintenancePool -> PipelineMetrics -> Config -> ReadyProbe -> Pool.Pool -> QueueName -> QueryPool -> IO Application
 kansokuApp maintenance pipelineMetrics config probe pool queueName queryPool = do
   service <- newIngestService config pipelineMetrics pool queueName
-  (liveCheck, readyCheck) <- newProbeChecks probe
-  pure (appWithGate (maintenanceTraffic maintenance) liveCheck readyCheck pipelineMetrics config pool service queryPool)
+  (liveCheck, readyCheck, pipelineCheck) <- newPipelineProbeChecks probe
+  pure (appWithGate (maintenanceTraffic maintenance) liveCheck readyCheck pipelineCheck pipelineMetrics config pool service queryPool)
 
 maintenanceTraffic :: MaintenancePool -> Middleware
 maintenanceTraffic pool app request respond
@@ -128,11 +133,14 @@ maintenanceTraffic pool app request respond
 -- | Production assembly with independently injectable checks. The conformance kit
 -- uses this same builder; analytics dependencies stay unevaluated for probes.
 kansokuAppWithChecks :: ProbeCheck -> ProbeCheck -> PipelineMetrics -> Config -> Pool.Pool -> IngestService -> QueryPool -> Application
-kansokuAppWithChecks = appWithGate id
+kansokuAppWithChecks live ready = appWithGate id live ready ready
 
-appWithGate :: Middleware -> ProbeCheck -> ProbeCheck -> PipelineMetrics -> Config -> Pool.Pool -> IngestService -> QueryPool -> Application
-appWithGate maintenanceGate liveCheck readyCheck _pipelineMetrics config pool service queryPool =
-  operational liveCheck readyCheck $
+kansokuAppWithPipelineChecks :: ProbeCheck -> ProbeCheck -> ProbeCheck -> PipelineMetrics -> Config -> Pool.Pool -> IngestService -> QueryPool -> Application
+kansokuAppWithPipelineChecks = appWithGate id
+
+appWithGate :: Middleware -> ProbeCheck -> ProbeCheck -> ProbeCheck -> PipelineMetrics -> Config -> Pool.Pool -> IngestService -> QueryPool -> Application
+appWithGate maintenanceGate liveCheck readyCheck pipelineCheck _pipelineMetrics config pool service queryPool =
+  operational liveCheck readyCheck pipelineCheck $
     waiWrapper
       ( internalMetrics
           (config ^. #internalMetricsEnabled)
@@ -157,37 +165,55 @@ appWithGate maintenanceGate liveCheck readyCheck _pipelineMetrics config pool se
       )
 
 -- | Allocate independent failure-onset state once, at application startup.
+-- The shared fleet conformance adapter retains its two-probe interface.
 newProbeChecks :: ReadyProbe -> IO (ProbeCheck, ProbeCheck)
 newProbeChecks probe = do
+  (live, ready, _) <- newPipelineProbeChecks probe
+  pure (live, ready)
+
+newPipelineProbeChecks :: ReadyProbe -> IO (ProbeCheck, ProbeCheck, ProbeCheck)
+newPipelineProbeChecks probe = do
   trackLive <- newFailureTracker
   trackReady <- newFailureTracker
+  trackPipeline <- newFailureTracker
+  let admission = boundedCheck "pgmq_reachable" (isRight <$> (probe ^. #pgmqReachable))
+      topology = withProbeTimeout 750_000 "clickhouse_topology_unavailable" $ safeCheck "clickhouse_topology_unavailable" $ do
+        failed <- probe ^. #topologyReady
+        maybe (pure Healthy) (\name -> Unhealthy name <$> getCurrentTime) failed
+      pipelineOk name = all ((/= name) . checkName) <$> (probe ^. #pipelineReady)
   pure
     ( trackLive (withProbeTimeout 2_000_000 "liveness" (safeCheck "liveness" (getCurrentTime >> pure Healthy))),
-      trackReady (withProbeTimeout 2_000_000 "readiness" (sequenceChecks (namedReadyChecks probe)))
+      trackReady (withProbeTimeout 2_000_000 "readiness" admission),
+      trackPipeline
+        ( withProbeTimeout
+            2_000_000
+            "pipeline"
+            ( sequenceChecks
+                [ boundedCheck "writer_alive" (probe ^. #writerAlive),
+                  admission,
+                  topology,
+                  boundedCheck "writer_storage_parked" ((/= Parked) <$> (probe ^. #storageState)),
+                  boundedCheck "writer_storage_unavailable" ((/= Unavailable) <$> (probe ^. #storageState)),
+                  boundedCheck "clickhouse_query_reachable" (probe ^. #clickhouseReachable),
+                  boundedCheck "queue_depth" (pipelineOk "queue_depth"),
+                  boundedCheck "writer_flush_stale" (pipelineOk "writer_flush_stale")
+                ]
+            )
+        )
     )
-
-namedReadyChecks :: ReadyProbe -> [ProbeCheck]
-namedReadyChecks probe =
-  [ boundedCheck "writer_alive" (probe ^. #writerAlive),
-    boundedCheck "pgmq_reachable" (isRight <$> (probe ^. #pgmqReachable)),
-    boundedCheck "clickhouse_query_reachable" (probe ^. #clickhouseReachable),
-    boundedCheck "queue_depth" (pipelineOk "queue_depth"),
-    boundedCheck "writer_flush_stale" (pipelineOk "writer_flush_stale")
-  ]
-  where
-    pipelineOk name = all ((/= name) . checkName) <$> (probe ^. #pipelineReady)
 
 boundedCheck :: Text -> IO Bool -> ProbeCheck
 boundedCheck name = withProbeTimeout 750_000 name . safeCheck name . boolCheck name
 
-operational :: ProbeCheck -> ProbeCheck -> Middleware
-operational liveCheck readyCheck inner req respond =
+operational :: ProbeCheck -> ProbeCheck -> ProbeCheck -> Middleware
+operational liveCheck readyCheck pipelineCheck inner req respond =
   case pathInfo req of
     ["health", "live"] -> probes req respond
     ["health", "ready"] -> probes req respond
+    ["health", "pipeline"] -> probes req respond
     _ -> inner req respond
   where
-    probes = probeApplication liveCheck readyCheck
+    probes = pipelineProbeApplication liveCheck readyCheck pipelineCheck
 
 -- | Serve the operational Prometheus scrape without adding it to the public
 -- Servant API or OpenAPI document. This middleware sits outside the EP-14
@@ -341,5 +367,5 @@ pgmqReady pool queueName = do
 startServer :: (IOE :> es, Reader Config :> es, Log :> es) => Application -> Eff es ()
 startServer app = do
   port <- asks @Config (^. #serverPort)
-  logInfo ("kansoku-server listening on port " <> Text.pack (show port) <> " (GET /health/live, GET /health/ready, GET /internal/metrics, GET /openapi.json, GET /v1/schemas, POST /v1/events, POST /v1/batch, POST /v1/beacon, GET /metrics/*)")
+  logInfo ("kansoku-server listening on port " <> Text.pack (show port) <> " (GET /health/live, GET /health/ready, GET /health/pipeline, GET /internal/metrics, GET /openapi.json, GET /v1/schemas, POST /v1/events, POST /v1/batch, POST /v1/beacon, GET /metrics/*)")
   liftIO (Warp.run port app)

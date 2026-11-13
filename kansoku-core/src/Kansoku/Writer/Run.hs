@@ -1,6 +1,7 @@
 -- | Runtime wiring for the shibuya pgmq batch writer.
 module Kansoku.Writer.Run
   ( runWriter,
+    newRuntimeRecovery,
   )
 where
 
@@ -19,6 +20,7 @@ import Effectful.Error.Static (runErrorNoCallStack)
 import Hasql.Pool qualified as Pool
 import Kansoku.ClickHouse
   ( ClickHouseConfig,
+    closeWriterConnection,
     insertWriterEvents,
     newWriterConnection,
     openClickHouse,
@@ -27,7 +29,7 @@ import Kansoku.Maintenance (MaintenancePool, rewriteQueuedEvents, withTraffic)
 import Kansoku.Observability (PipelineMetrics, WriterHeartbeat)
 import Kansoku.Prelude
 import Kansoku.Writer.Batch (writerBatchHandler)
-import Kansoku.Writer.Recovery (defaultRecoveryPolicy, gateAdapter, newWriterRecovery, recoverInsert)
+import Kansoku.Writer.Recovery (WriterRecovery, defaultRecoveryPolicy, gateAdapter, newWriterRecovery, recoverInsert)
 import OpenTelemetry.Trace.Core qualified as OTel
 import Pgmq qualified
 import Pgmq.Effectful (QueueName, runPgmqTraced)
@@ -54,10 +56,15 @@ import Shibuya.Core.Types qualified as Shibuya
 import Shibuya.Telemetry.Effect (runTracing)
 import Text.Read (readMaybe)
 
+newRuntimeRecovery :: MaintenancePool -> PipelineMetrics -> ClickHouseConfig -> IO WriterRecovery
+newRuntimeRecovery maintenance metrics config =
+  newWriterRecovery defaultRecoveryPolicy metrics (withTraffic maintenance (\_ -> bracket (openClickHouse config) closeConnection ping))
+
 runWriter ::
   MaintenancePool ->
   PipelineMetrics ->
   WriterHeartbeat ->
+  WriterRecovery ->
   Pool.Pool ->
   OTel.Tracer ->
   ClickHouseConfig ->
@@ -68,9 +75,7 @@ runWriter ::
   Int ->
   IO () ->
   IO ()
-runWriter maintenance metrics heartbeat pool tracer clickHouseConfig queueName visibilityTimeoutSec adapterBatchSize maxBatchSize maxLatencyMs waitForShutdown = do
-  clickHouse <- newWriterConnection clickHouseConfig
-  recovery <- newWriterRecovery defaultRecoveryPolicy metrics (withTraffic maintenance (\_ -> bracket (openClickHouse clickHouseConfig) closeConnection ping))
+runWriter maintenance metrics heartbeat recovery pool tracer clickHouseConfig queueName visibilityTimeoutSec adapterBatchSize maxBatchSize maxLatencyMs waitForShutdown = bracket (newWriterConnection clickHouseConfig) closeWriterConnection $ \clickHouse -> do
   let insertCurrent events = withTraffic maintenance $ \connection -> do
         current <- rewriteQueuedEvents connection events
         unless (null current) (insertWriterEvents clickHouse current)

@@ -106,7 +106,7 @@ curl --fail --silent http://localhost:8080/health/ready | jq .
 ```
 
 Both canonical responses are `{"status":"ok","check":"all","failingSince":null}`
-when healthy. Readiness evaluates five checks: `writer_alive`, `pgmq_reachable`, `clickhouse_query_reachable`, `queue_depth`, and `writer_flush_stale`.
+when healthy. Admission readiness checks PostgreSQL/PGMQ. Storage failures and backlog leave ingestion available; `/health/pipeline` separately checks writer liveness, PGMQ, fresh topology observation, breaker state, native queries and queue/flush thresholds.
 Readiness reports the first failure with a stable `failingSince`.
 
 ## 5. Send an event

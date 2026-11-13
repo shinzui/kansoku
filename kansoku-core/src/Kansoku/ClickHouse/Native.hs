@@ -1,5 +1,5 @@
 -- | Small parameterized native SQL boundary shared by consistency and administration.
-module Kansoku.ClickHouse.Native (chCommand, chJSON, scopeText, ConsistencyError (..), failConsistency) where
+module Kansoku.ClickHouse.Native (chCommand, chJSON, scopeText, ConsistencyError (..), ConsistencyCategory (..), failConsistency, failUnavailable) where
 
 import ClickHaskell (ChString, ClickHaskell, ClientError (..), Column, Connection, Select, ToChType (toChType), addParameter, command, passParameters, select, unsafeMkSelect)
 import ClickHaskell.Protocol (ExceptionPacket (..))
@@ -38,19 +38,24 @@ chJSON connection scope sql = nativeFailure "SELECT" $ boundedNative $ do
   traverse (\(JsonRow bytes) -> either (const (fail "invalid maintenance native result")) pure (A.eitherDecodeStrict' bytes)) rows
 
 boundedNative :: IO a -> IO a
-boundedNative action = timeout 60_000_000 action >>= maybe (failConsistency "native statement deadline expired; maintenance fence retained") pure
+boundedNative action = timeout 60_000_000 action >>= maybe (failUnavailable "native statement deadline expired; maintenance fence retained") pure
 
 -- Only this deliberately redacted diagnostic type is rendered by the admin CLI.
-newtype ConsistencyError = ConsistencyError Text deriving stock (Show)
+data ConsistencyCategory = StorageUnavailable | ObservedMismatch deriving stock (Eq, Show)
+
+data ConsistencyError = ConsistencyError !ConsistencyCategory !Text deriving stock (Eq, Show)
 
 instance Exception ConsistencyError
 
 failConsistency :: String -> IO a
-failConsistency = throwIO . ConsistencyError . Text.pack
+failConsistency = throwIO . ConsistencyError ObservedMismatch . Text.pack
+
+failUnavailable :: String -> IO a
+failUnavailable = throwIO . ConsistencyError StorageUnavailable . Text.pack
 
 nativeFailure :: Text -> IO a -> IO a
 nativeFailure operation action = catchSynchronous action $ \exception ->
   case fromException exception of
-    Just (DatabaseException packet) -> failConsistency (Text.unpack operation <> " rejected by native server (code " <> show (code packet) <> "); details redacted; fence retained")
-    Just (_ :: ClientError) -> failConsistency (Text.unpack operation <> " native protocol or connection failure; fence retained")
+    Just (DatabaseException packet) -> failUnavailable (Text.unpack operation <> " rejected by native server (code " <> show (code packet) <> "); details redacted; fence retained")
+    Just (_ :: ClientError) -> failUnavailable (Text.unpack operation <> " native protocol or connection failure; fence retained")
     Nothing -> throwIO exception

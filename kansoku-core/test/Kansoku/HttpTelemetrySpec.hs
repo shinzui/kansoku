@@ -75,10 +75,10 @@ spec = describe "Kansoku.HttpTelemetry" $ do
     let unused = error "unexpected database access"
         app = kansokuAppWithChecks (pure Healthy) (pure Healthy) unused cfg unused unused unused
         request path = defaultRequest {rawPathInfo = path, pathInfo = pathParts path}
-    mapM_ (\path -> middleware app (request path) (const (pure ResponseReceived))) ["/v1/schemas", "/metrics/events", "/health/ready"]
+    mapM_ (\path -> middleware app (request path) (const (pure ResponseReceived))) ["/v1/schemas", "/metrics/events", "/health/ready", "/health/pipeline"]
     spans <- readIORef exported
     names <- mapM (fmap OTel.hotName . readIORef . OTel.spanHot) spans
-    names `shouldMatchList` ["GET v1/schemas", "GET metrics/events", "GET health/ready"]
+    names `shouldMatchList` ["GET v1/schemas", "GET metrics/events", "GET health/ready", "GET health/pipeline"]
     length <$> readIORef logs `shouldReturn` 2
 
   it "preserves query isolation and unique serving contexts under concurrent requests" $ withCapture $ \middleware exported logs -> do

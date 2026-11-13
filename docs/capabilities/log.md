@@ -3,6 +3,9 @@
 
 ## 2026-11-13
 
+* **Update**: CAP-17 separates admission readiness and pipeline health; durable delivery validates topology before every batch.
+
+
 * **Update**: CAP-8: describe exact calendar retention and verified public/native weekly and monthly behavior.
 
 ## 2026-11-11

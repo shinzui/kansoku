@@ -3,6 +3,9 @@
 
 ## 2026-11-13
 
+* **Update**: TERM-77 and TERM-78 distinguish durable admission readiness from pipeline health.
+
+
 * **Update**: TERM-47 and TERM-49: define calendar cohort labels, period offsets and independent starts/returns.
 
 ## 2026-11-08

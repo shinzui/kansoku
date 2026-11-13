@@ -87,7 +87,7 @@ def fixture(direct=False, cluster_name="fixture"):
     def start(server, mode='server'):
         log = (server['path'] / 'console.log').open('a')
         logs.append(log)
-        process = subprocess.Popen(['container','exec',server['name'],'clickhouse',mode,'--config-file=/fixture/config.xml'],stdout=log,stderr=log)
+        process = subprocess.Popen(['container','exec',server['name'],'/bin/sh','-c',f'echo $$ > /fixture/server.pid; exec clickhouse {mode} --config-file=/fixture/config.xml'],stdout=log,stderr=log)
         servers.append(process)
         server['process'] = process
     def request(index, sql, user='default'):
@@ -148,9 +148,36 @@ def fixture(direct=False, cluster_name="fixture"):
                 query(i,'GRANT SELECT, INSERT, CREATE TABLE, CREATE VIEW, ALTER TABLE, DROP TABLE, DROP VIEW, TRUNCATE, SYSTEM SYNC REPLICA, SYSTEM SYNC DATABASE REPLICA, CLUSTER, REMOTE ON *.* TO app')
         proxy = RoundRobin([r['http'] for r in replicas])
         observations = [request(i,'SELECT toString(serverUUID()) AS id') for i in range(len(replicas))]
-        data = dict(root=str(root), endpoint=proxy.endpoint, replicas=([query(0,'SELECT toString(serverUUID()) AS id'),None] if direct else observations), nativePorts=[r['native'] for r in replicas],cluster=cluster_name)
+        data = dict(root=str(root), endpoint=proxy.endpoint, replicas=([query(0,'SELECT toString(serverUUID()) AS id'),None] if direct else observations), nativePorts=[r['native'] for r in replicas],cluster=cluster_name, engine='apple', containers=[dict(id=r['name'],image=IMAGE,imageReference=IMAGE,nativePort=r['native'],httpPort=r['http'],network=network) for r in replicas])
         (root / 'fixture.private.json').write_text(json.dumps(data,indent=2))
-        yield data, query, request, lambda i: container('exec', replicas[i]['name'], '/bin/sh', '-c', 'kill -KILL $(pidof clickhouse)')
+        class Lifecycle:
+            def __call__(self, index):
+                server = replicas[index]
+                if server['process'].poll() is not None:
+                    raise RuntimeError('Owned replica already stopped')
+                pid = (server['path'] / 'server.pid').read_text().strip()
+                assert pid.isdigit() and int(pid) > 1, 'invalid owned server PID'
+                container('exec', server['name'], 'kill', '-KILL', pid)
+                server['process'].wait(timeout=15)
+
+            def start(self, index):
+                server = replicas[index]
+                assert server['process'].poll() is not None, 'owned replica is still running'
+                start(server)
+                expected = (data['replicas'][0][0]['id'] if direct else json.loads(data['replicas'][index]['body'])['id'])
+                deadline = time.monotonic() + 90
+                while True:
+                    try:
+                        state = query(index, "SELECT toString(serverUUID()) AS id,(SELECT count() FROM system.database_replicas WHERE is_readonly) AS db_readonly,(SELECT count() FROM system.replicas WHERE database='analytics' AND is_readonly) AS table_readonly")[0]
+                        assert state['id'] == expected, 'restored owned replica UUID changed'
+                        if not state['db_readonly'] and not state['table_readonly']:
+                            return
+                    except (OSError, http.client.HTTPException, AssertionError):
+                        pass
+                    if server['process'].poll() is not None or time.monotonic() > deadline:
+                        raise RuntimeError('Owned replica restart did not become writable; evidence '+str(root))
+                    time.sleep(.2)
+        yield data, query, request, Lifecycle()
     finally:
         if proxy:
             proxy.close()
@@ -172,6 +199,49 @@ def fixture(direct=False, cluster_name="fixture"):
         except subprocess.CalledProcessError:
             pass
         print('Apple Container fixture evidence: '+str(root), flush=True)
+
+
+def run_bridge(command, data, query, request, lifecycle, timeout=900):
+    """Run an owned line-RPC consumer with its exact child process group."""
+    process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, start_new_session=True)
+    def terminate():
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+    deadline = threading.Timer(timeout, terminate)
+    deadline.daemon = True
+    deadline.start()
+    try:
+        process.stdin.write(json.dumps(data)+'\n')
+        process.stdin.flush()
+        for line in process.stdout:
+            operation = json.loads(line)
+            op = operation['op']
+            if op == 'query':
+                result = query(0, operation['sql'])
+            elif op == 'replica':
+                result = request(operation['index'], operation['sql'])
+            elif op == 'stop':
+                lifecycle(operation['index'])
+                result = None
+            elif op == 'start':
+                lifecycle.start(operation['index'])
+                result = None
+            else:
+                raise RuntimeError('unknown owned fixture operation: '+op)
+            process.stdin.write(json.dumps(result)+'\n')
+            process.stdin.flush()
+        assert process.wait(timeout=30) == 0, 'owned runtime consumer failed'
+    finally:
+        deadline.cancel()
+        if process.poll() is None:
+            terminate()
+            try:
+                process.wait(timeout=15)
+            except subprocess.TimeoutExpired:
+                os.killpg(process.pid, signal.SIGKILL)
+                process.wait(timeout=10)
 
 
 def main():

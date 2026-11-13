@@ -41,7 +41,7 @@ runAdmin (command : args) = do
   case outcome of
     Left exception -> do
       case fromException exception of
-        Just (ConsistencyError reason) -> hPutStrLn stderr (Text.unpack reason)
+        Just (ConsistencyError _ reason) -> hPutStrLn stderr (Text.unpack reason)
         Nothing -> pure ()
       hPutStrLn stderr "administration failed; the replay ledger and any persisted maintenance fence remain authoritative. Inspect job-status/list-jobs and resume unfinished jobs after resolving the failure."
       exitFailure

@@ -2,6 +2,9 @@
 
 ## 2026-11-13
 
+* **Addition**: FRIC-32 records detour environment friction with mori://shinzui/mori: Mori registry requires an unavailable local PostgreSQL service
+
+
 * **Update**: FRIC-31 accepted: Accept the observed recompilation cost without weakening validation.
 
 

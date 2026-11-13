@@ -13,8 +13,8 @@ import Kansoku.ClickHouse
     metricsQueryLimitsFromConfig,
     newQueryPoolWithLimits,
     queryReachable,
-    validateClickHouseTopology,
   )
+import Kansoku.ClickHouse.Observer
 import Kansoku.Config (loadConfig)
 import Kansoku.Event (AccountId (..))
 import Kansoku.Ingest.Quarantine (runQuarantineCleanup)
@@ -37,7 +37,8 @@ import Kansoku.Readiness
 import Kansoku.Runtime (runApp)
 import Kansoku.Server (ReadyProbe (..), kansokuApp, pgmqReady, startServer)
 import Kansoku.Telemetry (Telemetry (..), makeTelemetry)
-import Kansoku.Writer.Run (runWriter)
+import Kansoku.Writer.Recovery (readBreakerState)
+import Kansoku.Writer.Run (newRuntimeRecovery, runWriter)
 import System.Environment (getArgs)
 import System.Exit (exitFailure)
 import System.IO (hPutStrLn, stderr)
@@ -63,7 +64,6 @@ runServer = do
       hPutStrLn stderr ("configuration error: " <> show err)
       exitFailure
     Right cfg -> do
-      validateClickHouseTopology (clickHouseConfigFromConfig cfg)
       let queueName = eventsQueueName (cfg ^. #eventsQueueName)
       bracket ((,) <$> createPool (cfg ^. #pgConnectionString) <*> newMaintenancePool (cfg ^. #pgConnectionString)) (\(pool, maintenance) -> Pool.release pool >> closeMaintenancePool maintenance) $ \(pool, maintenance) -> do
         provisionQueue pool queueName
@@ -74,11 +74,14 @@ runServer = do
             metrics <- registerPipelineMetrics
             heartbeat <- newWriterHeartbeat
             queueDepth <- newQueueDepthCell
+            observer <- newTopologyObserver
+            recovery <- newRuntimeRecovery maintenance metrics (clickHouseConfigFromConfig cfg)
             withAsync
               ( runWriter
                   maintenance
                   metrics
                   heartbeat
+                  recovery
                   pool
                   tracer
                   (clickHouseConfigFromConfig cfg)
@@ -104,6 +107,10 @@ runServer = do
                                 { writerAlive = isNothing <$> poll writerAsync,
                                   pgmqReachable = pgmqReady pool queueName,
                                   clickhouseReachable = queryReachable queryPool,
+                                  topologyReady = do
+                                    now <- getCurrentTime
+                                    topologyFailure now <$> readTopologyObservation observer,
+                                  storageState = readBreakerState recovery,
                                   pipelineReady = do
                                     queueSample <- readQueueDepth queueDepth
                                     lastFlush <- lastWriterBeat heartbeat
@@ -122,12 +129,13 @@ runServer = do
                                 }
                          in do
                               app <- kansokuApp maintenance metrics cfg probe pool queueName queryPool
-                              race_ (runQuarantineCleanup cfg metrics) $
-                                race_
-                                  (wait writerAsync)
-                                  ( race_
-                                      (wait pollerAsync)
-                                      (runApp cfg (startServer ((telemetry ^. #httpMiddleware) app)))
-                                  )
+                              race_ (runTopologyObserver (clickHouseConfigFromConfig cfg) observer) $
+                                race_ (runQuarantineCleanup cfg metrics) $
+                                  race_
+                                    (wait writerAsync)
+                                    ( race_
+                                        (wait pollerAsync)
+                                        (runApp cfg (startServer ((telemetry ^. #httpMiddleware) app)))
+                                    )
                     )
               )

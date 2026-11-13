@@ -105,10 +105,10 @@ limit for a stated workload, not a promise of arbitrary outage recovery.
 Alert on breaker state 1 or 2 lasting more than two probe intervals, any unexplained archive
 increase, sustained queue growth or oldest age above 60 seconds. Escalate before projected
 remaining disk time falls below recovery time plus the operator response budget; use at least
-50% capacity headroom until repeat measurements justify another value. The default readiness
+50% capacity headroom until repeat measurements justify another value. The default pipeline
 queue threshold is 100000 events and stale-flush threshold 120 seconds; at 200 new events/s,
-100000 queued events represent about 500 seconds of outage. Readiness is a traffic-placement
-signal, not disk protection. Rate limits are per credential per process, so total admitted
+100000 queued events represent about 500 seconds of outage. Admission readiness stays healthy during ClickHouse outages and backlog growth. Pipeline
+health and these thresholds are diagnostic signals; operators must enforce finite disk budgets. Rate limits are per credential per process, so total admitted
 traffic across credentials/processes must fit the measured deployment envelope.
 
 [Operations](operations.md) · [Configuration](configuration.md)

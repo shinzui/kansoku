@@ -49,7 +49,14 @@ def main():
         cases=[args.case] if args.case else ['topology','maintenance','rebuild','writer','readback']
         for case in cases:
             command=[driver,'--case',case]+(['--packaged'] if args.packaged else [])
-            subprocess.run(command,check=True)
+            if sys.platform == 'darwin':
+                from native_clickhouse_fixture import fixture, run_bridge
+                with fixture() as (data, query, request, lifecycle):
+                    for db in ['analytics', 'kansoku_migration_ledger']:
+                        query(0, "CREATE DATABASE " + db + " ON CLUSTER fixture ENGINE=Replicated('/clickhouse/databases/{uuid}', '{shard}', '{replica}')")
+                    run_bridge([sys.executable, __file__, '--owned-bridge', '--case', case] + (['--packaged'] if args.packaged else []), data, query, request, lifecycle, timeout=1800)
+            else:
+                subprocess.run(command,check=True)
         print('Replicated runtime acceptance passed: '+', '.join(cases)+'; 2 replicas verified.')
         return
     fixture = json.loads(sys.stdin.readline())
@@ -62,8 +69,9 @@ def main():
     atexit.register(lambda: (root/'report.private.json').write_text(json.dumps(report,indent=2)))
     (root/'fixture.private.json').write_text(json.dumps(fixture,indent=2))
     report['serverCapacity']=configure_owned_capacity(root)
-    for index in [0,1]:
-        rpc('start',index=index)
+    if fixture.get('engine') not in ('apple', 'nix'):
+        for index in [0,1]:
+            rpc('start',index=index)
     def replica(i, sql):
         return rows(rpc('replica', index=i, sql=sql))
     selected_binaries={key:value for key,value in os.environ.items() if key in ['KANSOKU_SERVER_BINARY','KANSOKU_ADMIN_BINARY','KANSOKU_CH_MIGRATION_BINARY','KANSOKU_PG_MIGRATION_BINARY']}
@@ -87,7 +95,7 @@ def main():
             assert (result.returncode == 0) == success, f'command {sequence}: {result.stderr}; evidence {root}'
             return result.stdout
         report['serverVersions']=[replica(i,'SELECT version() AS version')[0]['version'] for i in [0,1]]
-        assert report['serverVersions']==['26.3.60.10002.altinitystable']*2
+        assert report['serverVersions']==[fixture.get('version', '26.3.60.10002.altinitystable')]*2
         run([pg_migrate,'up'])
         def invoke(command):
             return json.loads(run([migrate,*command,'--json']))
@@ -127,7 +135,7 @@ def main():
                    occurredAt='2026-11-07T12:00:00Z',receivedAt='2026-11-07T12:00:01Z',accountId='runtime-account',
                    userId='runtime-user',context={},schemaVersion=1,properties={'url':'https://example.test/route'})
         payload=json.dumps([event])
-        native('write',selected=dict(env,CLICKHOUSE_TCP_PORT=str(ports[0])),input=payload)
+        native('write',input=payload)
         actual=json.loads(native('readback',selected=dict(env,CLICKHOUSE_TCP_PORT=str(ports[1]))))
         assert 'runtime-roundtrip' in actual,actual
         pooled=json.loads(native('pooled-readback',selected=dict(env,CLICKHOUSE_TCP_PORT=str(ports[1]))))

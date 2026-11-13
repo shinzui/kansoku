@@ -2,6 +2,9 @@
 
 ## 2026-11-13
 
+* **Update**: DOC-9 separates admission and delivery probes; DOC-2 assigns existing thresholds to pipeline health and finite disk budgets.
+
+
 * **Update**: DOC-10: document history host filters, complete host counts, null handling and exact N of M summaries.
 
 

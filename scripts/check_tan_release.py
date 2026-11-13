@@ -22,13 +22,39 @@ def require(condition, reason):
         raise ValueError(reason)
 
 
+COHORT = ['clickhouse-migrate', 'clickhouse-migrate-embed', 'clickhouse-migrate-cli', 'clickhouse-migrate-test-support']
+
+
+def toolkit_identity(candidate):
+    if 'cabalToolkitRelease' in candidate or 'nixToolkitRelease' in candidate:
+        require('cabalToolkitRevision' not in candidate and 'nixToolkitRevision' not in candidate, 'Ambiguous release and commit toolkit identities')
+        version = candidate['cabalToolkitRelease']
+        require(version == candidate['nixToolkitRelease'], 'Dependency releases disagree')
+        require(isinstance(version, str) and re.fullmatch(r'[0-9]+(?:\.[0-9]+){3}', version), 'Four-part toolkit release required')
+        return 'mori://shinzui/clickhouse-migrate/releases/v' + version
+    require(candidate['cabalToolkitRevision'] == candidate['nixToolkitRevision'], 'Dependency pins disagree')
+    require(re.fullmatch(r'[0-9a-f]{40}', candidate['cabalToolkitRevision']) is not None, 'Full toolkit revision required')
+    return candidate['cabalToolkitRevision']
+
+
+def verify_toolkit_source(candidate, cabal, nix):
+    identity = toolkit_identity(candidate)
+    if 'cabalToolkitRelease' not in candidate:
+        for source, label in [(cabal, 'cabal.project'), (nix, 'flake.module.nix')]:
+            require(identity in source, 'Pin absent from committed ' + label)
+        return
+    version = candidate['cabalToolkitRelease']
+    for package in COHORT:
+        require(re.search(r'^\s*' + re.escape(package) + r'\s*==\s*' + re.escape(version) + r'\s*,?\s*$', cabal, re.M), 'Cabal cohort disagrees: ' + package)
+        require(re.search(r'pkg\s*=\s*"' + re.escape(package) + r'";\s*ver\s*=\s*"' + re.escape(version) + r'";', nix), 'Nix cohort disagrees: ' + package)
+
+
 def validate(evidence, report, plan_dir, phase):
     candidate = evidence['candidate']
     revision = candidate['sourceRevision']
     require(re.fullmatch(r'[0-9a-f]{40}', revision) is not None, 'Clean full source revision required')
     require(report['sourceRevision'] == revision, 'Foreign image source revision')
-    require(candidate['cabalToolkitRevision'] == candidate['nixToolkitRevision'], 'Dependency pins disagree')
-    require(re.fullmatch(r'[0-9a-f]{40}', candidate['cabalToolkitRevision']) is not None, 'Full toolkit revision required')
+    toolkit = toolkit_identity(candidate)
     require((report['os'], report['architecture']) == ('linux', 'amd64'), 'Expected Linux amd64')
     if phase == 'published':
         require(isinstance(evidence.get('publication'), dict), 'Publication receipts required')
@@ -56,7 +82,7 @@ def validate(evidence, report, plan_dir, phase):
                 'Prerequisite did not pass: ' + plan)
         for key in ['sourceRevision', 'toolkitRevision', 'serverImage', 'serverPlatform', 'clientPlatform', 'artifactVariant', 'command', 'evidence']:
             require(bool(run[key]), 'Missing prerequisite field: ' + key)
-        require(run['toolkitRevision'] == candidate['cabalToolkitRevision'], 'Prerequisite toolkit mismatch')
+        require(run['toolkitRevision'] == toolkit, 'Prerequisite toolkit mismatch')
     require(set(evidence['gates']) == GATES, 'Incomplete gate set')
     pending = []
     for key, gate in evidence['gates'].items():
@@ -74,7 +100,7 @@ def validate(evidence, report, plan_dir, phase):
         if key == 'managed-endpoint':
             require(gate['status'] != 'resolved', 'Managed endpoint requires explicit owner acceptance')
     for run in evidence['acceptanceRuns']:
-        require(run['sourceRevision'] == revision and run['toolkitRevision'] == candidate['cabalToolkitRevision'], 'Foreign acceptance run')
+        require(run['sourceRevision'] == revision and run['toolkitRevision'] == toolkit, 'Foreign acceptance run')
         require(run['imageId'] == candidate['imageId'], 'Acceptance ran another image')
         require(run['cases'] > 0 and run['failures'] == 0 and run['skips'] == 0, 'Nonpassing acceptance run')
     if evidence['gates']['linux-amd64-image']['status'] == 'resolved':
@@ -94,7 +120,7 @@ def validate(evidence, report, plan_dir, phase):
     artifact = dict(image=image, sourceProject='mori://shinzui/kansoku',
                     sourcePackage='mori://shinzui/kansoku/packages/kansoku-server',
                     sourceRevision=revision, upstreamProject='mori://shinzui/clickhouse-migrate',
-                    upstreamImplementation=candidate['cabalToolkitRevision'],
+                    upstreamImplementation=toolkit,
                     nativePlanSha256=candidate['replicatedNativePlanSha256'],
                     postgresPlanSha256=candidate['postgresPlanSha256'])
     return artifact, sorted(pending)
@@ -108,8 +134,7 @@ def verify_source(evidence):
     require(re.fullmatch(r'[0-9a-f]{40}', revision) is not None, 'Full source revision required')
     def git(*args):
         return subprocess.check_output(['git', *args], cwd=repo, timeout=15).decode()
-    for path, key in [('cabal.project', 'cabalToolkitRevision'), ('flake.module.nix', 'nixToolkitRevision')]:
-        require(candidate[key] in git('show', revision + ':' + path), 'Pin absent from committed ' + path)
+    verify_toolkit_source(candidate, git('show', revision + ':cabal.project'), git('show', revision + ':flake.module.nix'))
     for run in evidence['prerequisites'].values():
         subprocess.run(['git', 'merge-base', '--is-ancestor', run['sourceRevision'], revision], cwd=repo, check=True, timeout=15)
     matrix = json.loads(git('show', revision + ':db/clickhouse/qualification/matrix.json'))

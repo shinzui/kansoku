@@ -5,10 +5,12 @@ module Kansoku.Writer.RecoverySpec (spec) where
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (async, cancel, wait, waitCatch)
 import Control.Concurrent.MVar (newEmptyMVar, putMVar, takeMVar)
+import Control.Exception (throwIO)
 import Data.Either (isLeft)
 import Data.IORef (IORef, atomicModifyIORef', modifyIORef', newIORef, readIORef)
 import Effectful (IOE, liftIO, runEff)
 import Effectful.Concurrent (Concurrent, runConcurrent)
+import Kansoku.ClickHouse.Native (ConsistencyCategory (..), ConsistencyError (..))
 import Kansoku.Observability (PipelineMetrics)
 import Kansoku.Writer.Recovery
 import Shibuya.Adapter (Adapter (..))
@@ -53,6 +55,27 @@ spec metrics = describe "Kansoku.Writer.Recovery" $ do
     readIORef attempts `shouldReturn` [[1, 2], [1, 2], [1, 2]]
     readIORef renewals >>= (`shouldSatisfy` (>= 3))
     readBreakerState recovery `shouldReturn` Closed
+
+  mapM_
+    ( \(category, expected) ->
+        it ("retains typed " <> show category <> " and retries the exact batch after correction") $ do
+          entered <- newEmptyMVar
+          release <- newEmptyMVar
+          attempts <- newIORef ([] :: [[Int]])
+          recovery <- newWriterRecovery fast metrics (putMVar entered () >> takeMVar release)
+          let insert rows = do
+                n <- atomicModifyIORef' attempts (\previous -> (previous <> [rows], length previous))
+                if n == 0 then throwIO (ConsistencyError category "safe observation") else pure ()
+          writer <- async (recoverInsert recovery (pure ()) insert [7, 8])
+          bounded (takeMVar entered)
+          readBreakerState recovery `shouldReturn` expected
+          readIORef attempts `shouldReturn` [[7, 8]]
+          putMVar release ()
+          bounded (wait writer)
+          readIORef attempts `shouldReturn` [[7, 8], [7, 8]]
+          readBreakerState recovery `shouldReturn` Closed
+    )
+    [(StorageUnavailable, Unavailable), (ObservedMismatch, Parked)]
 
   it "wakes a stopped gate without pulling and propagates cancellation from a stalled probe" $ do
     entered <- newEmptyMVar

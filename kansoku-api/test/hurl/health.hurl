@@ -14,6 +14,14 @@ jsonpath "$.status" == "ok"
 jsonpath "$.check" == "all"
 jsonpath "$.failingSince" == null
 
+GET {{base_url}}/health/pipeline
+HTTP 200
+[Asserts]
+header "Content-Type" contains "application/json"
+jsonpath "$.status" == "ok"
+jsonpath "$.check" == "all"
+jsonpath "$.failingSince" == null
+
 GET {{base_url}}/health
 HTTP 404
 [Asserts]

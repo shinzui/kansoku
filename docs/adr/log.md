@@ -2,6 +2,18 @@
 
 ## 2026-11-13
 
+* **Update**: ADR-24 retains commit-based release records and validates released Cabal/Nix cohorts with canonical upstream identity.
+
+
+* **Update**: Use Nix-native fixtures for daily work and retain production-version fixtures for major qualification.
+
+
+* **Update**: Move full topology validation to every writer attempt with independent runtime budgets and retained mismatch recovery.
+
+
+* **Update**: Separate durable admission readiness from pipeline health and supervised storage observation.
+
+
 * **Update**: ADR-25: add canonical host history selection and complete exact host facets; totals share history predicates and retain current-read semantics.
 
 

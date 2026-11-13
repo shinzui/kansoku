@@ -10,6 +10,7 @@ module Kansoku.ClickHouse
     insertQueuedEvents,
     insertWriterEvents,
     newWriterConnection,
+    closeWriterConnection,
     openClickHouse,
     validateClickHouseTopology,
     newQueryPool,
@@ -51,8 +52,8 @@ import ClickHaskell
     setUser,
     unsafeMkSelect,
   )
-import Control.Concurrent.MVar (MVar, modifyMVar, newMVar)
-import Control.Exception (SomeException, bracket, fromException, onException, throwIO, try)
+import Control.Concurrent.MVar (MVar, modifyMVar, modifyMVar_, newMVar)
+import Control.Exception (SomeException, mask, onException, throwIO, try)
 import Data.ByteString.Builder (toLazyByteString)
 import Data.ByteString.Lazy qualified as Lazy
 import Data.Default (def)
@@ -61,19 +62,16 @@ import Data.IORef (IORef, newIORef)
 import Data.Int (Int64)
 import Data.Pool qualified as Pool
 import Data.String (fromString)
-import Kansoku.ClickHouse.Consistency (Role (Writer), initializeRole, replicaConnections, validateSchemaTopology, withConsistentReadbackOn, withReplicaConnections)
+import Kansoku.ClickHouse.Consistency (Role (Writer), initializeRole, replicaConnections, runtimeValidation, validateReplica, validateSchemaTopology, withConsistentReadbackOn, withRuntimeReplicaConnections)
 import Kansoku.ClickHouse.EventRow
-import Kansoku.ClickHouse.Native (ConsistencyError)
 import Kansoku.ClickHouse.Topology qualified as Topology
 import Kansoku.Config qualified as Config
 import Kansoku.Event (AnalyticsEvent)
-import Kansoku.Exception (trySynchronous)
 import Kansoku.Identity.Cache (IdentityCacheState, prepareIdentityCache)
 import Kansoku.Ingest.QueuedEvent (QueuedEvent)
 import Kansoku.Prelude
 import Network.Connection qualified as TLS
 import Network.Socket (SockAddr (..), getPeerName)
-import System.Timeout (timeout)
 
 data ClickHouseConfig = ClickHouseConfig
   { clickHouseHost :: !String,
@@ -130,22 +128,12 @@ openClickHouse config
                 }
       openConnection (overrideInitConnection secureSocket (connectionArgs config))
 
--- Fail startup before admitting traffic if the selected mode cannot describe
--- the installed application schema. Every writer reconnect repeats this check.
+-- | Diagnostic observation only. Writers independently validate their own
+-- physical connection and the complete inventory before every insert.
 validateClickHouseTopology :: ClickHouseConfig -> IO ()
-validateClickHouseTopology cfg = case clickHouseTopology cfg of
-  Topology.Direct -> do
-    -- Preserve ingest availability when a direct server restarts during a
-    -- storage outage. An observed schema mismatch is fatal; unavailable schema
-    -- checks are repeated on physical query/writer acquisition before use.
-    observed <- timeout 750_000 (trySynchronous (bracket (openClickHouse cfg) closeConnection (validateSchemaTopology Topology.Direct)))
-    case observed of
-      Just (Left exception) -> case fromException exception :: Maybe ConsistencyError of
-        Just _ -> throwIO exception
-        Nothing -> pure ()
-      _ -> pure ()
-  topology -> withReplicaConnections topology (openClickHouse cfg) $ \replicas ->
-    mapM_ (initializeRole topology Writer . snd) (replicaConnections replicas)
+validateClickHouseTopology cfg = runtimeValidation $
+  withRuntimeReplicaConnections (clickHouseTopology cfg) (openClickHouse cfg) $ \replicas ->
+    mapM_ (initializeRole (clickHouseTopology cfg) Writer . snd) (replicaConnections replicas)
 
 -- | A dedicated writer cache. Failed operations close the physical connection;
 -- the next queue retry opens a fresh handle.
@@ -154,23 +142,34 @@ data WriterConnection = WriterConnection !ClickHouseConfig !(MVar (Maybe Connect
 newWriterConnection :: ClickHouseConfig -> IO WriterConnection
 newWriterConnection config = WriterConnection config <$> newMVar Nothing
 
+closeWriterConnection :: WriterConnection -> IO ()
+closeWriterConnection (WriterConnection _ cell) = modifyMVar_ cell $ \cached -> do
+  mapM_ closeConnection cached
+  pure Nothing
+
 insertWriterEvents :: WriterConnection -> [QueuedEvent] -> IO ()
 insertWriterEvents (WriterConnection config connectionCell) events = do
   result <-
     modifyMVar connectionCell $ \cachedConnection -> do
-      attempted <- try @SomeException $ do
-        connection <- maybe openWriter pure cachedConnection
-        insertQueuedEvents connection events
-        pure connection
+      attempted <- try @SomeException $ mask $ \restore -> do
+        connection <- runtimeValidation $ do
+          current <- maybe (openClickHouse config) pure cachedConnection
+          restore
+            ( do
+                validateReplica (clickHouseTopology config) current
+                initializeRole (clickHouseTopology config) Writer current
+                case clickHouseTopology config of
+                  Topology.Direct -> pure ()
+                  _ -> withRuntimeReplicaConnections (clickHouseTopology config) (openClickHouse config) $ \replicas ->
+                    mapM_ (initializeRole (clickHouseTopology config) Writer . snd) (replicaConnections replicas)
+                pure current
+            )
+            `onException` closeConnection current
+        restore (insertQueuedEvents connection events >> pure connection) `onException` closeConnection connection
       pure $ case attempted of
         Left exception -> (Nothing, Left exception)
         Right connection -> (Just connection, Right ())
   either throwIO pure result
-  where
-    openWriter = do
-      connection <- openClickHouse config
-      (validateSchemaTopology (clickHouseTopology config) connection >> initializeRole (clickHouseTopology config) Writer connection) `onException` closeConnection connection
-      pure connection
 
 -- | A fixed-size pool of ClickHouse connections for the metrics query path.
 -- The writer never uses this; it owns its own dedicated connection.

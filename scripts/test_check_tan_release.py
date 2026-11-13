@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-from check_tan_release import validate, GATES
+from check_tan_release import validate, GATES, verify_toolkit_source, COHORT
 from check_image_plans import PLAN_FIELDS, SELECTORS, validate_plan
 
 
@@ -53,6 +53,40 @@ class ReleaseValidation(unittest.TestCase):
         self.assertFalse(pending)
         self.assertEqual(artifact['nativePlanSha256'], self.report['replicatedNativePlanSha256'])
         self.assertEqual(len(artifact), 8)
+
+    def released_candidate(self):
+        candidate = self.evidence['candidate']
+        candidate.pop('cabalToolkitRevision')
+        candidate.pop('nixToolkitRevision')
+        candidate.update(cabalToolkitRelease='0.2.0.0', nixToolkitRelease='0.2.0.0')
+        for run in self.evidence['prerequisites'].values():
+            run['toolkitRevision'] = 'mori://shinzui/clickhouse-migrate/releases/v0.2.0.0'
+        return candidate
+
+    def test_released_cohort_and_historical_commit_records(self):
+        historical, _ = self.check()
+        self.assertEqual(historical['upstreamImplementation'], 'f'*40)
+        self.released_candidate()
+        artifact, _ = self.check()
+        self.assertEqual(artifact['upstreamImplementation'], 'mori://shinzui/clickhouse-migrate/releases/v0.2.0.0')
+
+    def test_released_source_requires_all_four_cabal_and_nix_packages(self):
+        candidate = self.released_candidate()
+        cabal = '\n'.join(p+' ==0.2.0.0,' for p in COHORT)
+        nix = '\n'.join('pkg = "'+p+'"; ver = "0.2.0.0";' for p in COHORT)
+        verify_toolkit_source(candidate, cabal, nix)
+        for package in COHORT:
+            for c, n in [(cabal.replace(package+' ==0.2.0.0,',''), nix), (cabal, nix.replace('pkg = "'+package+'";', 'pkg = "foreign";'))]:
+                with self.assertRaises(ValueError):
+                    verify_toolkit_source(candidate, c, n)
+
+    def test_rejects_mixed_releases_and_ambiguous_commit_identity(self):
+        candidate = self.released_candidate()
+        candidate['nixToolkitRelease'] = '0.1.0.0'
+        with self.assertRaises(ValueError): self.check()
+        candidate['nixToolkitRelease'] = '0.2.0.0'
+        candidate['cabalToolkitRevision'] = 'f'*40
+        with self.assertRaises(ValueError): self.check()
 
     def test_foreign_revision(self):
         self.report['sourceRevision'] = '2'*40

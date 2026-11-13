@@ -5,7 +5,7 @@ description: Gate service changes with deterministic checks and required integra
 docId: ADR-10
 status: Accepted
 date: 2026-10-15
-timestamp: 2026-11-08T04:10:25Z
+timestamp: 2026-11-13T16:34:00Z
 generated:
   by: process:codex
   at: 2026-10-16T17:56:53Z
@@ -145,3 +145,13 @@ and independent per-replica observations, and compare finalized targets against
 canonical-source definitions. They do not OPTIMIZE or use raw FINAL to hide physical
 copies. A separate late replay case observes Keeper deduplication identity expiry
 before replaying, and reports physical storage separately from logical correctness.
+
+## Fast native development and production-version qualification
+
+Use the Nix-provided ClickHouse/Keeper for day-to-day direct and replicated runtime
+checks. The owned native fixture records version, platform, roots and exact child PIDs,
+preserves UUIDs/data across restart, and fails on unavailable tools or zero cases.
+Keep the exact production-version Linux Altinity fixture for major qualification, using
+Apple Container on macOS. Never use Docker or Colima for ClickHouse. Native Darwin
+26.8 results and exact Altinity Linux 26.3 results have separate evidence scope; neither
+substitutes for Linux application-image or managed-endpoint behavior.

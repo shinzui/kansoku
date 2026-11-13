@@ -141,5 +141,5 @@ See [capabilities](../capabilities/index.md) for what can be adopted, [guides](.
 | TERM-73 | [explicit-fact deletion](explicit-fact-deletion.md) | The confirmed erasure mode that additionally removes the target account/user’s explicitly attributed event facts. |
 | TERM-74 | [applied retention cutoff](applied-retention-cutoff.md) | The persisted UTC event boundary advanced by a confirmed retention job and enforced by analytical reads and later writes. |
 | TERM-76 | [reader projection](reader-projection.md) | A documented ClickHouse view exposed to trusted SQL consumers with an explicit analytical column contract. |
-| TERM-77 | [readiness](readiness.md) | The operational determination that the process and required pipeline dependencies can currently serve traffic within configured thresholds. |
+| TERM-77 | [readiness](readiness.md) | The operational determination that PostgreSQL and PGMQ can currently admit durable events. |
 | TERM-78 | [liveness](liveness.md) | The operational check that the HTTP process responds independently of dependency health. |

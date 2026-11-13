@@ -1,7 +1,7 @@
 ---
 type: Term
 title: "readiness"
-description: "The operational determination that the process and required pipeline dependencies can currently serve traffic within configured thresholds."
+description: "The operational determination that PostgreSQL and PGMQ can currently admit durable events."
 generated:
   by: process:codex
   at: "2026-10-16T13:15:03Z"
@@ -20,9 +20,9 @@ anchors:
 
 # readiness
 
-The operational determination that the process and required pipeline dependencies can currently serve traffic within configured thresholds.
+The operational determination that PostgreSQL and PGMQ can currently admit durable events.
 
-/health/ready checks writer liveness, PostgreSQL, ClickHouse query reachability, sampled queue depth and flush freshness in order. The first failure determines a 503 with its consecutive failingSince timestamp; recovery resets it. A process can remain live while storage readiness fails.
+/health/ready checks PostgreSQL/PGMQ admission reachability. ClickHouse outages, topology mismatches and backlog leave admission healthy. /health/pipeline separately checks writer liveness, PGMQ, fresh topology observation, breaker, query reachability and queue/flush thresholds. Each endpoint uses its own consecutive failingSince timestamp; recovery resets it. A process can remain live and admit events while pipeline health fails.
 
 Related: [writer breaker](writer-breaker.md), [liveness](liveness.md).
 

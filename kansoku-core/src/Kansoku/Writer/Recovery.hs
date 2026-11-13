@@ -19,9 +19,11 @@ import Control.Concurrent.STM (TVar, atomically, check, newTVarIO, readTVar, rea
 import Control.Exception (Exception, SomeException, fromException, throwIO)
 import Control.Monad (unless, when)
 import Data.Generics.Labels ()
+import Data.Text qualified as Text
 import Effectful (IOE, liftIO, runEff, type (:>))
 import Effectful.Concurrent (Concurrent)
 import Effectful.Concurrent.Async qualified as Async
+import Kansoku.ClickHouse.Native (ConsistencyCategory (..), ConsistencyError (..))
 import Kansoku.Exception (trySynchronous)
 import Kansoku.Logging (logWarn, runLogStderr)
 import Kansoku.Observability (PipelineMetrics)
@@ -127,7 +129,7 @@ recoverInsert recovery renew insert events = attempt
           when (previous /= next) $
             runEff $
               runLogStderr $
-                logWarn (if next == Parked then "writer storage rejected insert; source paused and batch parked" else "writer storage unavailable; source paused")
+                logWarn ((if next == Parked then "writer storage rejected insert; source paused and batch parked" else "writer storage unavailable; source paused") <> safeReason err)
           awaitStorage
 
     awaitStorage = do
@@ -156,7 +158,16 @@ recoverInsert recovery renew insert events = attempt
 -- Server SQL/schema responses park the batch and alert through state 2. They
 -- retry at the probe cadence, rather than consuming queue delivery attempts.
 classify :: SomeException -> BreakerState
-classify err = case fromException err :: Maybe ClientError of
-  Just DatabaseException {} -> Parked
-  Just UnmatchedResult {} -> Parked
-  _ -> Unavailable
+classify err = case fromException err :: Maybe ConsistencyError of
+  Just (ConsistencyError ObservedMismatch _) -> Parked
+  Just (ConsistencyError StorageUnavailable _) -> Unavailable
+  Nothing -> case fromException err :: Maybe ClientError of
+    Just DatabaseException {} -> Parked
+    Just UnmatchedResult {} -> Parked
+    _ -> Unavailable
+
+-- Only explicitly redacted consistency reasons cross this logging boundary.
+safeReason :: SomeException -> Text.Text
+safeReason err = case fromException err of
+  Just (ConsistencyError _ reason) -> ": " <> reason
+  Nothing -> ""

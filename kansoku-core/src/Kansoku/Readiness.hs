@@ -1,5 +1,5 @@
--- | Pure readiness threshold evaluation for the pipeline checks EP-16 adds on
--- top of EP-10's writer-liveness and pgmq-reachability checks.
+-- | Pure queue and flush threshold evaluation for delivery health.
+-- Admission readiness depends only on PostgreSQL/PGMQ reachability.
 module Kansoku.Readiness
   ( ReadyThresholds (..),
     ReadyCheckFailure (..),

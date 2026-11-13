@@ -43,7 +43,7 @@ evidence:
 
 # Durable delivery and recovery
 
-Batch accepted events through the supervised writer, retain an unchanged batch during storage failure and pause further source consumption. Canonical logical reads and distinct event-ID states prevent physical redelivery changing analytical counts and sums. Malformed queued payloads are archived for inspection. Native writer and query connections can require verified TLS (`KANSOKU_CLICKHOUSE_SECURE`) with CA and hostname checks and no plaintext fallback. With the cluster and complete replica-UUID selectors configured, every writer connection checks synchronous quorum insertion across all expected replicas, serial quorum and block deduplication before acknowledging the queue. See [operations](../guides/operations.md).
+Batch accepted events through the supervised writer, retain an unchanged batch during storage failure and pause further source consumption. Canonical logical reads and distinct event-ID states prevent physical redelivery changing analytical counts and sums. Malformed queued payloads are archived for inspection. Native writer and query connections can require verified TLS (`KANSOKU_CLICKHOUSE_SECURE`) with CA and hostname checks and no plaintext fallback. With the cluster and complete replica-UUID selectors configured, every batch revalidates its insertion connection, full UUID inventory, topology and schema before synchronous quorum insertion across all expected replicas, serial quorum and block deduplication before acknowledging the queue. See [operations](../guides/operations.md).
 
 ## Compatibility
 

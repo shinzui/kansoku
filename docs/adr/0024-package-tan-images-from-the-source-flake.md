@@ -5,7 +5,7 @@ description: Build independently pinned TAN images from Kansoku's own package cl
 docId: ADR-24
 status: Accepted
 date: 2026-11-02
-timestamp: 2026-11-08T05:28:00Z
+timestamp: 2026-11-13T16:39:00Z
 originatingPlan: mori://tan/tan-app-infrastructure/plans/42-qualify-kansoku-artifacts-and-the-staging-clickhouse-contract
 generated:
   by: process:codex
@@ -106,3 +106,16 @@ is published and readback verified. Acceptance is target-specific: it does not
 certify provider routing or claim full replicated execution inside the amd64 image.
 TAN still owns independent production inventory, storage/fsync, grants, drain and
 managed migration/event-flow rehearsal. Publication performs no database migration.
+
+## Released migration cohorts
+
+Retain historical commit-based toolkit evidence unchanged. New release candidates may
+record `cabalToolkitRelease` and `nixToolkitRelease` instead of source-commit fields.
+The validator requires the same four-part release in both fields and verifies all four
+migration packages in the committed Cabal constraints and Nix Hackage declarations.
+Mixing commit and release identities is refused. The eight-field deployment mapping
+uses a version-qualified canonical release URI for `upstreamImplementation`, while
+historical records continue to carry their original commit. Retain authoritative
+registry and upstream-tag observations with the candidate; a lagging local registry
+cannot establish release identity. This changes evidence representation without
+rewriting historical owner decisions or transferring them to a new candidate.

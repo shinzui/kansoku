@@ -245,3 +245,8 @@ users-acceptance: build-with-tests
 # Own disposable stores and verify saved analyses, conflicts, pages and quota.
 analyses-acceptance: build-with-tests
     python3 scripts/analyses_acceptance.py
+
+# Fast Nix-native buffering loop; add --production-fixture for major Altinity qualification.
+[positional-arguments]
+ch-buffering-acceptance *args:
+    python3 scripts/clickhouse_buffering_acceptance.py --packaged "$@"

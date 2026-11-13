@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import select
+import sys
 import socket
 import socketserver
 import subprocess
@@ -16,6 +17,24 @@ import urllib.parse
 
 
 def native_ports(fixture, root):
+    if fixture.get('engine') == 'nix':
+        selected = fixture['processes']
+        assert len(selected) == 2 and selected[0]['pid'] != selected[1]['pid']
+        for identity in selected:
+            assert Path(identity['root']).is_relative_to(Path(fixture['root']))
+            assert int((Path(identity['root']) / 'pid').read_text()) == identity['pid']
+            os.kill(identity['pid'], 0)
+        (root / 'containers.private.json').write_text(json.dumps(selected, indent=2))
+        return fixture['nativePorts']
+    if fixture.get('engine') == 'apple':
+        selected = fixture['containers']
+        assert len(selected) == 2 and selected[0]['id'] != selected[1]['id']
+        for observed, identity in zip(fixture['replicas'], selected):
+            assert urllib.parse.urlsplit(observed['endpoint']).port == identity['httpPort']
+            inspected = json.loads(subprocess.check_output(['container', 'inspect', identity['id']], text=True))[0]
+            assert inspected['configuration']['id'] == identity['id'], 'fixture identity changed'
+        (root / 'containers.private.json').write_text(json.dumps(selected, indent=2))
+        return fixture['nativePorts']
     context = os.environ['CLICKHOUSE_MIGRATE_DOCKER_CONTEXT']
     docker = ['docker', '--context', context]
     containers = subprocess.check_output(docker + ['ps', '-q', '--filter', 'label=clickhouse-migrate.fixture=owned'], text=True, timeout=10).split()
@@ -58,6 +77,7 @@ class NativeProxy:
         self.client_hold = threading.Event()
         self.client_seen = threading.Event()
         self.dropped = threading.Event()
+        self.insert_submissions = 0
         self.active = 0
         self.idle = threading.Event()
         self.idle.set()
@@ -79,6 +99,7 @@ class NativeProxy:
             def forward(self):
                 with owner.lock:
                     port = owner.forced_port
+                    owner.forced_port = None
                     if port is None:
                         port = owner.ports[owner.next % len(owner.ports)]
                         owner.next += 1
@@ -102,6 +123,9 @@ class NativeProxy:
                                     return
                                 if source is self.request:
                                     window = tail + data
+                                    marker = b'INSERT INTO events_raw'
+                                    with owner.lock:
+                                        owner.insert_submissions += window.count(marker) - tail.count(marker)
                                     if b'INSERT INTO events_raw' in window:
                                         traced_insert = False
                                     if owner.trace_marker and owner.trace_marker in window and not traced_insert:
@@ -154,6 +178,13 @@ def configure_owned_capacity(root):
     Apply before application migration and restart each server exactly once.
     """
     import xml.etree.ElementTree as ET
+    containers = json.loads((root / 'containers.private.json').read_text())
+    settings = {'max_thread_pool_size': '1024', 'background_schedule_pool_size': '64'}
+    if all('pid' in c for c in containers):
+        return settings
+    if all(c.get('imageReference', '').startswith('docker.io/altinity/') for c in containers) and sys.platform == 'darwin':
+        # Apple fixture applies these before the first full-schema migration.
+        return settings
     docker = ['docker', '--context', os.environ['CLICKHOUSE_MIGRATE_DOCKER_CONTEXT']]
     containers = json.loads((root / 'containers.private.json').read_text())
     settings = {'max_thread_pool_size': '1024', 'background_schedule_pool_size': '64'}

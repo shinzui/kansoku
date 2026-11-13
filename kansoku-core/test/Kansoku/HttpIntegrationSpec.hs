@@ -30,6 +30,7 @@ import Kansoku.Migrations (kansokuMigrationPlan)
 import Kansoku.Postgres (createPool)
 import Kansoku.Prelude
 import Kansoku.Server (ReadyProbe (..), kansokuApp)
+import Kansoku.Writer.Recovery (BreakerState (Closed))
 import Network.HTTP.Client qualified as Http
 import Network.HTTP.Types (status200, status400)
 import Network.HTTP.Types.Header (hAuthorization)
@@ -64,6 +65,8 @@ spec = describe "Kansoku property metrics HTTP integration" $ do
                     { writerAlive = pure True,
                       pgmqReachable = pure (Right ()),
                       clickhouseReachable = pure True,
+                      topologyReady = pure Nothing,
+                      storageState = pure Closed,
                       pipelineReady = pure []
                     }
             app <- kansokuApp maintenance (error "unused ingest metrics") appConfig readyProbe pool (Queue.eventsQueueName "ep17_http_unused") queryPool

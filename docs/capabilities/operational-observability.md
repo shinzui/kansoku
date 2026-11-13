@@ -2,7 +2,7 @@
 type: Capability
 title: "Operational probes and telemetry"
 description: "Expose dependency-aware readiness, liveness, pipeline metrics and bounded correlated request telemetry for operating the service."
-timestamp: 2026-11-11T16:18:51Z
+timestamp: 2026-11-13T16:38:00Z
 generated:
   by: process:codex
   at: "2026-10-16T13:11:11Z"
@@ -17,6 +17,7 @@ packages:
 interface:
   - "GET /health/live"
   - "GET /health/ready"
+  - "GET /health/pipeline"
   - "GET /internal/metrics"
   - "OTLP trace export"
   - "JSON request logs"
@@ -35,7 +36,7 @@ evidence:
 
 # Operational probes and telemetry
 
-Keep process liveness separate from ordered writer, PostgreSQL, ClickHouse, backlog and flush-freshness checks. Export Prometheus queue/writer/admission telemetry, correlated JSON access logs and explicitly configured OpenTelemetry HTTP/writer traces. See [operations](../guides/operations.md).
+Keep process liveness, PostgreSQL/PGMQ admission readiness and pipeline delivery health separate. Pipeline checks writer liveness, PGMQ, fresh asynchronous topology observations, breaker state, native query reachability, backlog and flush freshness. Export Prometheus queue/writer/admission telemetry, correlated JSON access logs and explicitly configured OpenTelemetry HTTP/writer traces. See [operations](../guides/operations.md).
 
 ## Compatibility
 
@@ -43,7 +44,7 @@ Available in the current checkout. No release tags establish a released version,
 
 ## Limits
 
-Operational routes are unauthenticated and need deployment network policy. Backlog readiness uses sampled values. Traces and OTel metric export are opt-in; request bodies, credentials and query values are excluded. Writer batches do not claim parentage to an individual ingest request.
+Operational routes are unauthenticated and need deployment network policy. Backlog pipeline checks use sampled values. ClickHouse outages and mismatches leave admission healthy while PostgreSQL can accept events; move storage/backlog alerts to `/health/pipeline`. Traces and OTel metric export are opt-in; request bodies, credentials and query values are excluded. Writer batches do not claim parentage to an individual ingest request.
 
 ## Evidence
 

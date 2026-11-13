@@ -2,7 +2,7 @@
 type: Architecture Decision Record
 title: Pipeline observability, readiness, and writer recovery
 description: Add OpenTelemetry tracing, Prometheus pipeline metrics, ordered readiness checks, and logical writer-connection recovery for the PGMQ-to-ClickHouse pipeline.
-timestamp: 2026-10-15T19:38:22Z
+timestamp: 2026-11-13T16:34:00Z
 generated:
   by: human:kansoku-maintainers
   at: 2026-07-19T00:00:00Z
@@ -48,12 +48,15 @@ port. It stays outside Servant/OpenAPI, ingest CORS, and body-size handling, and
 with `KANSOKU_INTERNAL_METRICS_ENABLED`.
 
 A supervised poller samples PGMQ metrics once per configured interval and publishes one shared
-sample to both Prometheus and readiness. Readiness never scans the queue directly. `/health/ready`
-evaluates five ordered checks: `writer_alive`, `pgmq_reachable`, `clickhouse_query_reachable`, `queue_depth`, and
-`writer_flush_stale`. The pipeline checks use configurable depth and successful-flush-age
-thresholds. Flush age matters only while a fresh sample shows backlog; startup is the baseline
-until the first successful flush, an empty queue is healthy, and samples older than three poll
-intervals are ignored because the independent PGMQ check owns dependency reachability.
+sample to Prometheus and pipeline health. `/health/ready` evaluates only bounded
+PostgreSQL/PGMQ admission reachability. `/health/pipeline` evaluates writer liveness,
+PGMQ, fresh successful topology observation, breaker state, native query reachability,
+queue depth and successful-flush age. Storage outages and backlog cannot remove a pod
+from ingest service while its durable admission store works. The existing READY depth
+and age variable names remain compatible and control pipeline diagnostics.
+Flush age matters only while a fresh sample shows backlog; startup is the baseline
+until the first successful flush, an empty queue is healthy, and samples older than
+three poll intervals are ignored because the PGMQ check owns dependency reachability.
 
 The batch writer owns a logical `WriterConnection`, not a process-lifetime physical driver
 handle. It lazily opens and caches one ClickHouse connection, clears that cache whenever an
@@ -65,17 +68,18 @@ effective.
 ## Shared probes and query connection lifetime
 
 The operational Servant surface uses released servant-health 0.1.0.0, independently
-of the public analytics API. `/health/live` and `/health/ready` use its fixed
+of the public analytics API. `/health/live`, `/health/ready` and `/health/pipeline` use its fixed
 200/503 JSON contract. Each check has a startup-allocated failure tracker; consecutive
 failures retain their onset until recovery. Liveness reads in-process state only.
-Readiness short-circuits in the five-check order above. Native ClickHouse ping is a
+Admission checks only PGMQ; pipeline short-circuits in the order above. Native ClickHouse ping is a
 query-path dependency check; it does not scan tables. External checks have a 750 ms
 budget including pool wait and disposal, and the complete probe has a 2 second budget.
 The legacy `/health` and `/ready` routes are removed; existing deployments must
-use `/health/live` and `/health/ready`. The two canonical probe paths stay outside
+use `/health/live` and `/health/ready`. The three canonical probe paths stay outside
 customer OpenAPI, auth and ingest middleware, and form the shared access-log
 exclusion inventory. Readiness exposes the first failure through the canonical
-contract; pipeline observations remain available through Prometheus metrics.
+contract. Pipeline has its own failure tracker and the same exact schema. The fleet
+two-probe conformance adapter remains supported.
 
 Query operations let exceptions escape the resource-pool callback, so failed handles
 are physically disposed before errors propagate. A later checkout creates a fresh
@@ -149,7 +153,7 @@ support. Cabal and Nix pins agree.
 ## Consequences
 
 Operators can distinguish a dead writer, an unreachable queue, excessive backlog, and a live but
-stale writer in one readiness response, and can correlate those states with scrape counters and
+stale writer in one pipeline response, and can correlate those states with scrape counters and
 exported spans. Default development requires no exporter or new environment variables.
 
 The queue sample is deliberately eventually consistent. A missing or stale sample disables the
@@ -236,3 +240,17 @@ rows. QueryKind wire codes are corrected to 0/1/2: the original offset labels an
 as secondary, changing native analyzer and query-log behavior. Hackage and upstream tags still
 select 1.1.0 on 2026-10-15. Native same-socket command/ping and benchmark query-log checks cover
 these repairs; the benchmark counts preflight and cache construction, not only the final SELECT.
+
+## Startup-independent storage observation
+
+Server startup performs no ClickHouse exchange. A supervised observer starts Unchecked,
+bounds complete topology checks to eight seconds, waits five seconds between attempts,
+and records the observation time, typed category and safe reason. Results older than
+twenty seconds are stale. Ordinary native failures remain in the retry loop; cancellation
+escapes and releases partial acquisitions. HTTP probes only read the snapshot.
+Unavailable/indeterminate exchange and positively observed mismatch are distinct; the
+writer owns its breaker and independently validates every batch. Neither a successful
+ping nor an observer snapshot authorizes an insert. Runtime mismatch parks valid data
+without archiving or acknowledging it, preserving admission while operators repair the
+target or roll out corrected environment selectors. Query failures remain retryable 503.
+Full write admission and budgets are in [ADR-4](0004-queryable-event-properties-and-identity-resolved-projection.md).

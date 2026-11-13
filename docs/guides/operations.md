@@ -98,7 +98,8 @@ zero-downtime rotation.
 | Route | Success | Meaning |
 | --- | --- | --- |
 | `GET /health/live` | HTTP 200 JSON | Process responsiveness, independent of dependencies. |
-| `GET /health/ready` | HTTP 200 JSON | First failing dependency determines 503. |
+| `GET /health/ready` | HTTP 200 JSON | PostgreSQL/PGMQ can admit durable events. |
+| `GET /health/pipeline` | HTTP 200 JSON | Delivery dependencies and backlog are healthy. |
 | `GET /internal/metrics` | HTTP 200 Prometheus text | Pipeline telemetry, when enabled. |
 | `GET /openapi.json` | HTTP 200 JSON | Current generated public HTTP contract. |
 | `GET /v1/schemas` | HTTP 200 JSON | Current public event schema catalog. |
@@ -109,19 +110,31 @@ Canonical bodies contain exactly `status`, `check`, and `failingSince`: healthy 
 `status: failed`, the first failing check, and the original consecutive failure onset.
 Recovery resets the onset. Dependency failure does not fail liveness.
 
-Readiness checks run in order: `writer_alive`, `pgmq_reachable`,
-`clickhouse_query_reachable`, `queue_depth`, `writer_flush_stale`. External checks
-include pool acquisition and physical cleanup in a 750 ms deadline; the complete
-probe has a 2 second deadline. Query reachability uses native ping without scanning
-analytics tables. Backlog thresholds still use the poller's cached sample.
+Admission readiness checks only `pgmq_reachable`, including bounded pool acquisition.
+ClickHouse failure, topology mismatch and growing backlog leave admission healthy while
+PostgreSQL can accept events. Invalid configuration and queue provisioning still fail startup;
+persistent maintenance fences still reject protected traffic with 503.
 
-The two canonical probe paths are operational contracts, exempt from RFC 9457
-problem bodies and excluded from access logging. They are absent from customer
-OpenAPI and outside ingestion CORS, authentication and body limits. The former
-`/health` and `/ready` endpoints have been removed and return HTTP 404; migrate
-existing probe configurations to `/health/live` and `/health/ready` respectively.
+`/health/pipeline` checks writer liveness, PGMQ, the observer's fresh topology result,
+writer breaker state, native query reachability, queue depth and successful-flush age.
+Each slot has a 750 ms deadline and the complete endpoint has a 2 second deadline.
+It reports `clickhouse_topology_unchecked`, `clickhouse_topology_unavailable`,
+`clickhouse_topology_mismatch` or `clickhouse_topology_stale` when applicable.
+Topology observations run asynchronously even with no events: eight seconds per attempt,
+five seconds between attempts, and a twenty-second freshness limit. HTTP probes read the
+snapshot and never scan the replica inventory. The observer cannot authorize an insert.
+`writer_storage_parked` and `writer_storage_unavailable` expose the writer's separate state.
+`KANSOKU_READY_MAX_QUEUE_DEPTH` and `KANSOKU_READY_MAX_FLUSH_AGE_SEC` retain their names
+for configuration compatibility and now control pipeline diagnostics only.
 
-The reference and operational routes are unauthenticated. Restrict `/health/ready`,
+All three probes use the exact canonical schema with independent failure-onset trackers.
+They stay outside customer OpenAPI, authentication, ingestion CORS and body limits,
+and are excluded from access logging. `/health` and `/ready` return HTTP 404.
+Use `/health/live` for liveness, `/health/ready` for admission, and `/health/pipeline`
+for storage/delivery monitoring. Move ClickHouse and backlog alerts from readiness to
+pipeline health or the corresponding metrics before rolling out the new semantics.
+
+The reference and operational routes are unauthenticated. Restrict `/health/ready`, `/health/pipeline`,
 `/internal/metrics`, and deployment-specific diagnostics with network policy or a reverse proxy.
 
 ## Prometheus metrics
@@ -147,9 +160,9 @@ metrics:
 - `kansoku_ingest_quarantine_failures_total`
 - `kansoku_ingest_quarantine_cleanup_lag_seconds`
 
-Alert on sustained queue growth and oldest-message age, readiness failures, insert-failure or
+Alert on sustained queue growth and oldest-message age, admission and pipeline failures, insert-failure or
 dead-letter increases, and a mismatch between accepted traffic and written-event rate. A drained
-queue resets the backlog-sensitive stale-flush readiness condition, so monotonic counters are
+queue resets the backlog-sensitive stale-flush pipeline condition, so monotonic counters are
 important for historical alerting.
 
 Accepted counts include acknowledged equal retries after commit; newly queued counts include only
@@ -205,7 +218,11 @@ Accepted events already in the queue remain durable.
 
 ### ClickHouse unavailable
 
-Canonical readiness fails `clickhouse_query_reachable`. Interrupted and failed query
+The server starts without any synchronous ClickHouse exchange. `/health/ready` remains
+200 and valid events return 202 after PostgreSQL commit while one or all replicas are
+unavailable. `/health/pipeline` returns 503. Metric queries may return retryable 503;
+explicit deployment migration jobs still require ClickHouse and never run on server startup.
+Interrupted and failed query
 connections close before errors propagate; the next pool checkout opens a fresh connection.
 Pool shutdown closes idle physical connections. Metric queries return retryable HTTP 503.
 The writer retains one unchanged batch and closes the source gate before further adapter pulls.
@@ -215,7 +232,18 @@ bound is `2 * writerBatch + adapterBatch + 3` (11003 at defaults); recovery itse
 one unchanged active batch. Framework buffers and chunks account for the rest.
 A separate physical connection probes storage every five seconds (750 ms deadline); ping permits
 another insert attempt, and only a successful insert reopens consumption. Inserts have a 30-second
-deadline. Failed connections are discarded. Native batch lease renewal uses at least 60 seconds.
+deadline. Each attempt validates the actual insertion connection and, in replicated mode,
+complete UUID coverage, one-shard cardinality, exact cluster UUID inventory, schema and checked
+writer settings within eight seconds, leaving twenty seconds for the all-replica quorum wait.
+A ping is only a retry hint. Cached connections repeat validation before every batch.
+Unavailable observations retain events; observed mismatches park them with a safe log reason
+and submit no event INSERT. Both retry automatically after correction. Never lower quorum
+or switch to direct mode to bypass a mismatch. The endpoint must route fresh connections
+across all configured replicas, and runtime users need SELECT on the inventory and schema
+system tables plus the remote/cluster privileges needed to inspect every replica.
+A target repaired behind the same endpoint recovers in the running process. Environment
+selectors change only through a rollout; retain PostgreSQL queues during that rollout.
+Failed connections are discarded. Native batch lease renewal uses at least 60 seconds.
 
 `kansoku_writer_breaker_state` is 0 while closed, 1 while unavailable, and 2 for a rejected
 SQL/schema insert. State 2 parks the batch and retries at the same cadence; repair the schema
@@ -229,6 +257,11 @@ and eventual storage recovery. Ordinary storage retry renews the held batch with
 more deliveries. A restart redelivers leased messages after visibility expiry; immutable acceptance
 and canonical reads make uncertain committed inserts safe. Allow at least the 35-second total
 writer shutdown deadline before forcibly terminating the process.
+
+Run `just ch-buffering-acceptance` for packaged startup/admission/mismatch/recovery checks
+using the fast Nix-native direct and replicated fixture. Add `--production-fixture` for a
+major change's exact production-version Linux fixture under Apple Container; its evidence
+has a separate platform/version scope. Docker and Colima are not used for ClickHouse.
 
 Run `just outage-acceptance` for the owned packaged-server ten-minute, 200-events/s outage and
 restart proof, or `just outage-smoke` for a short recovery regression. Both require native tools

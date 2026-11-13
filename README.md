@@ -33,7 +33,7 @@ query time, and serves reusable metrics through a typed HTTP API.
 - Explicit ClickHouse migrations through `kansoku-ch-migrate`, with an embedded checksummed
   plan, persistent maintenance sessions, and deliberate recovery after interruption.
 - OpenAPI at `GET /openapi.json`, liveness at `GET /health/live`, readiness at
-  `GET /health/ready`, safe correlated JSON access logs, Prometheus metrics at
+  `GET /health/ready`, delivery health at `GET /health/pipeline`, safe correlated JSON access logs, Prometheus metrics at
   `GET /internal/metrics`, and opt-in OpenTelemetry trace export.
 - A buffered Haskell producer SDK and typed Haskell metrics clients.
 

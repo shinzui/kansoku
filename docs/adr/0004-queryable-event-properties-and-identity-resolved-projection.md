@@ -2,7 +2,7 @@
 type: Architecture Decision Record
 title: Queryable event properties and identity-resolved projection
 description: Store event properties as native ClickHouse JSON and expose them for metric grouping only after registry declaration.
-timestamp: 2026-11-08T04:10:25Z
+timestamp: 2026-11-13T16:34:00Z
 generated:
   by: process:codex
   at: 2026-10-16T17:52:47Z
@@ -177,8 +177,21 @@ physical connection. A reconnect invalidates those barriers. This privileged
 verification path does not place SYSTEM statements in ordinary metrics requests.
 HTTP ingestion acceptance still precedes native writer acknowledgement.
 
-Direct-mode process restart during a native storage outage preserves PostgreSQL
-ingestion availability. A bounded unavailable startup schema observation is
-deferred; every newly acquired query/writer connection must validate the selected
-schema before native use. An observed replicated-schema/direct-mode mismatch is
-fatal. Replicated startup checks complete native inventory and writer settings.
+Startup and HTTP admission are independent of ClickHouse availability in both modes.
+An asynchronous diagnostic observer validates topology even with an empty queue.
+Every insertion attempt validates its actual physical connection, including cached
+handles, and in replicated mode proves complete expected UUID coverage, exact cluster
+inventory, one-shard cardinality, schema compatibility and checked writer settings.
+Acquisition and validation have one eight-second runtime budget inside the existing
+thirty-second attempt, alongside a twenty-second all-replica quorum wait. Administrative
+coverage retains its independent 35-second/64-observation policy. Failed or cancelled
+validation closes partial acquisitions and invalidates the writer handle before retry.
+
+Unavailable exchange, native rejection and expired deadlines are indeterminate and block
+inserts without pretending to observe a topology mismatch. Positive schema/inventory/setting
+mismatches park the batch. Both retain valid PostgreSQL messages and retry after correction;
+startup, liveness and durable ingestion remain available. A schema mismatch is no longer
+a fatal startup error. Query acquisitions still validate schema before native use.
+This does not relax all-replica quorum, persistent maintenance exclusion, immutable
+migrations or finite block deduplication. Same-endpoint target repair can recover in the
+running writer; environment selector correction requires a rollout retaining the queue.
