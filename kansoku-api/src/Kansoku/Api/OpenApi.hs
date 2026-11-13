@@ -277,7 +277,7 @@ kansokuOpenApi =
     & withUnsupportedBodyMedia
     & withRetryAfterHeader
     & withOperationIds
-    & withUserPageProblems
+    & withSelectionPageProblems
 
 authSecuritySchemes :: O.SecurityDefinitions
 authSecuritySchemes =
@@ -544,25 +544,28 @@ nullableUserFields fields named = foldr addNullable named fields
   where
     addNullable field result = result & O.schema . O.properties . at field ?~ O.Inline (mempty & O.type_ ?~ O.OpenApiTypeArray [O.OpenApiString, O.OpenApiNull])
 
--- User selections also fail before Relay parsing, with the shared problem body.
-withUserPageProblems :: O.OpenApi -> O.OpenApi
-withUserPageProblems =
+-- User selections and analysis kinds can fail before Relay parsing, with a problem body.
+withSelectionPageProblems :: O.OpenApi -> O.OpenApi
+withSelectionPageProblems =
   O.paths
     %~ imap
       ( \path item ->
-          if path `elem` ["/users", "/users/{userId}/events"]
+          if path `elem` ["/users", "/users/{userId}/events", "/analyses"]
             then
               item
                 & O.get
                 . _Just
                 %~ ( \operation -> case operation ^. at 400 of
-                       Just (O.Inline response) -> pageBounds operation & at 400 ?~ O.Inline (response & O.content . at "application/problem+json" ?~ (mempty & O.schema ?~ problemSchema))
-                       _ -> pageBounds operation
+                       Just (O.Inline response) -> bounds path operation & at 400 ?~ O.Inline (response & O.content . at "application/problem+json" ?~ (mempty & O.schema ?~ problemSchema))
+                       _ -> bounds path operation
                    )
             else item
       )
   where
     (_, problemSchema) = runDeclare (O.declareSchemaRef (Proxy @ProblemDetails)) mempty
+
+    bounds "/analyses" operation = operation
+    bounds _ operation = pageBounds operation
 
     pageBounds operation = operation & O.parameters %~ map bound
     bound (O.Inline parameter)

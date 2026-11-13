@@ -142,7 +142,7 @@ spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
                   else
                     if isRelayPage path method && Key.toText key == "400"
                       then do
-                        KeyMap.keys (objectAt ["content"] response) `shouldMatchList` (["application/json", "application/json;charset=utf-8"] <> ["application/problem+json" | "/users" `Text.isPrefixOf` path])
+                        KeyMap.keys (objectAt ["content"] response) `shouldMatchList` (["application/json", "application/json;charset=utf-8"] <> ["application/problem+json" | "/users" `Text.isPrefixOf` path || path == "/analyses"])
                         lookupText ["content", "application/json", "schema", "$ref"] response `shouldBe` Just "#/components/schemas/RelayPageError"
                       else do
                         let contents = objectAt ["content"] response

@@ -1352,7 +1352,7 @@
   "paths": {
     "/analyses": {
       "get": {
-        "description": "Current-read pages ordered by updatedAt descending, id ascending. Default 20, maximum 100. Both directions keep canonical order. Cursors preserve microseconds, survive deletion/replacement of their source row, and must be reused with the same kind filter. No cross-request snapshot; refresh from the first page after edits.",
+        "description": "Current-read pages ordered by updatedAt descending, id ascending. Default 20, maximum 100. Both directions keep canonical order. Cursors preserve microseconds, survive deletion/replacement of their source row, and must be reused with the same kind filter. No cross-request snapshot; refresh from the first page after edits. Invalid kind returns a 400 problem document; invalid pagination uses the existing Relay JSON error.",
         "operationId": "getAnalyses",
         "parameters": [
           {
@@ -1438,6 +1438,11 @@
               "application/json;charset=utf-8": {
                 "schema": {
                   "$ref": "#/components/schemas/RelayPageError"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             },

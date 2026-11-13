@@ -183,6 +183,9 @@ def verify_analyses(base, write_key, token, other_token, **_):
         assert 'kind' in api(expected=400, kind='unknown')['detail']
         contract = json.load(urllib.request.urlopen(base + '/openapi.json', timeout=10))
         assert '409' in contract['paths']['/analyses/{id}']['put']['responses']
+        errors = contract['paths']['/analyses']['get']['responses']['400']['content']
+        assert errors['application/problem+json']['schema']['$ref'].endswith('/ProblemDetails')
+        assert errors['application/json']['schema']['$ref'].endswith('/RelayPageError')
         if 'env' in _:
             from pathlib import Path
             from test_support import binary, hspec
