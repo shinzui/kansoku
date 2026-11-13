@@ -3,7 +3,9 @@ module Kansoku.Users.Validation where
 import Control.Monad (forM_)
 import Data.Aeson qualified as A
 import Data.Aeson.KeyMap qualified as KM
+import Data.Char (isSpace)
 import Data.Foldable (toList)
+import Data.List (nub)
 import Data.Text qualified as T
 import Data.Time (Day)
 import Data.UUID qualified as UUID
@@ -36,21 +38,48 @@ validateDirectory lo hi search order filters = do
 
 validateHistory :: [F.MetricFilter] -> Either Text ()
 validateHistory filters = do
-  unless (length filters <= 1 && all atomic filters) (Left "history accepts one event-name predicate")
+  unless (all atomic filters) (Left "OR filters are not supported")
+  unless (length filters <= 2 && length (nub (map F.dimension filters)) == length filters) (Left "history accepts at most one event_name and one host term")
   mapM_ check filters
   where
-    check f = do
-      unless (F.dimension f == "event_name" && F.op f `elem` [F.FilterEq, F.FilterIn]) (Left "history requires event_name eq/in")
-      let names = case F.value f of Just (A.String value) -> [A.String value]; Just (A.Array values) -> toList values; _ -> []
-      unless (length names >= 1 && length names <= 100) (Left "event names require 1..100 values")
-      mapM_
-        ( \case
-            A.String value -> case mkSqlName value of
-              Left _ -> Left "invalid event name"
-              Right _ -> Right ()
-            _ -> Left "event names must be strings"
-        )
-        names
+    check f = case F.dimension f of
+      "event_name" -> validateEventName f
+      "host" -> validateHost f
+      _ -> Left "history requires event_name or host eq/in"
+
+validateEventName :: F.MetricFilter -> Either Text ()
+validateEventName f = do
+  unless (F.op f `elem` [F.FilterEq, F.FilterIn]) (Left "history requires event_name eq/in")
+  let names = case F.value f of Just (A.String value) -> [A.String value]; Just (A.Array values) -> toList values; _ -> []
+  unless (length names >= 1 && length names <= 100) (Left "event names require 1..100 values")
+  mapM_
+    ( \case
+        A.String value -> case mkSqlName value of
+          Left _ -> Left "invalid event name"
+          Right _ -> Right ()
+        _ -> Left "event names must be strings"
+    )
+    names
+
+validateHost :: F.MetricFilter -> Either Text ()
+validateHost f = do
+  unless (F.op f `elem` [F.FilterEq, F.FilterIn]) (Left "host requires eq/in")
+  values <- case (F.op f, F.value f) of
+    (F.FilterEq, Just value@(A.String _)) -> Right [value]
+    (F.FilterIn, Just (A.Array values)) -> Right (toList values)
+    _ -> Left "host requires a string for eq or an array of strings for in"
+  unless (length values >= 1 && length values <= 100) (Left "hosts require 1..100 values")
+  forM_ values $ \case
+    A.String value
+      | T.length value >= 1 && T.length value <= 253 && value == T.toLower value && not (T.isSuffixOf "." value) && not (T.any (\c -> isSpace c || c `elem` ("/:?#@" :: String)) value) -> Right ()
+    _ -> Left "host values must be canonical lowercase hostnames without scheme, port, path or trailing dot"
+
+validateHostFacet :: [F.MetricFilter] -> Either Text ()
+validateHostFacet filters = do
+  unless (all atomic filters) (Left "OR filters are not supported")
+  when (any ((== "host") . F.dimension) filters) (Left "hosts does not accept a host filter")
+  unless (length filters <= 1 && all ((== "event_name") . F.dimension) filters) (Left "hosts accepts one event_name eq/in term")
+  mapM_ validateEventName filters
 
 -- A one-term OR group is still outside the users grammar.
 atomic :: F.MetricFilter -> Bool

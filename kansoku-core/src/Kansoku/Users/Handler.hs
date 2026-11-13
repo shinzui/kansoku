@@ -35,15 +35,25 @@ usersServer pg pool =
           result <- liftIO (trySynchronous (countRows pool (p ^. #accountId) lo hi (fromMaybe False bots)))
           pure (either (const (KansokuUnavailable unavailableProblem)) KansokuOk result)
         _ -> pure (KansokuBadRequest (badRequest "invalid_users_query" "activity counts require paired dates spanning 1..366 days")),
-      events = \(MetricsPrincipal p) ident lo hi bots filters page -> case History.historyBoundary page of
+      events = \(MetricsPrincipal p) ident lo hi bots filters page -> case (validateDates lo hi >> validateHistory filters, History.historyBoundary page) of
         _ | R.pageSize page < 1 -> pure (PageBad (RelayPageError "invalid_page_size" "page size must be in 1..100" False Nothing))
-        Left _ -> pure (PageBad (RelayPageError "invalid_cursor" "cursor does not match history order" False Nothing))
-        Right boundary -> do
+        (Left message, _) -> pure (PageBad (RelayPageError "invalid_users_query" message False Nothing))
+        (_, Left _) -> pure (PageBad (RelayPageError "invalid_cursor" "cursor does not match history order" False Nothing))
+        (Right (), Right boundary) -> do
           result <- liftIO (trySynchronous (History.history pool (p ^. #accountId) ident lo hi (fromMaybe False bots) filters page boundary))
           pure $ case result of
             Left _ -> PageUnavailable unavailableProblem
             Right Nothing -> PageMissing (notFound "user_not_found" "user does not exist in this account")
             Right (Just rows) -> PageOk (R.mkConnection History.historySort page rows),
+      hosts = \(MetricsPrincipal p) ident lo hi bots filters -> case validateDates lo hi >> validateHostFacet filters of
+        Left message -> pure (KansokuBadRequest (badRequest "invalid_users_query" message))
+        Right () -> do
+          result <- liftIO (trySynchronous (History.hosts pool (p ^. #accountId) ident lo hi (fromMaybe False bots) filters))
+          pure $ case result of
+            Left _ -> KansokuUnavailable unavailableProblem
+            Right Nothing -> KansokuNotFound (notFound "user_not_found" "user does not exist in this account")
+            Right (Just History.HostsTooLarge) -> KansokuBadRequest (badRequest "user_hosts_too_large" "user hosts exceed 1000 entries; narrow the selection")
+            Right (Just (History.HostsFound value)) -> KansokuOk value,
       getProfile = \(MetricsPrincipal p) ident -> do
         result <- liftIO (trySynchronous (Profile.profile pool (p ^. #accountId) ident))
         pure $ case result of

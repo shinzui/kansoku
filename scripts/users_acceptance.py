@@ -100,12 +100,21 @@ def verify_users(base, write_key, token, other_token, erase_user=None, **kwargs)
         row.update(userId=person,anonymousId=prefix+'cookie',sourceService=prefix,schemaVersion=version,properties=props,identifiers={'device':prefix+'DEVICE','email_hmac':prefix+'EMAIL'},context={'private':prefix+'CONTEXT'})
         if name=='group': row['organizationId']=prefix+('oldorg' if eid=='group1' else 'org')
         observed.append(row)
+    for eid,url in [('app1','https://app.example/a'),('app2','https://app.example.:443/b'),('app3','https://APP.example./b'),('docs','https://docs.example/'),('server',None)]:
+        row=event(prefix+eid,prefix+eid,timestamp='2026-07-02T04:00:00Z')
+        row.update(userId=person,anonymousId=prefix+'cookie',sourceService=prefix,url=url,properties={'url':url} if url else {})
+        if url is None: row.update(source='service',eventName='server_observed')
+        if eid=='app2': row.update(eventName='session_start',properties={'sessionId':prefix+eid})
+        observed.append(row)
     for i in range(0,len(observed),2): send(base,write_key,observed[i:i+2])
     for i in range(0,len(observed),2): send(base,write_key,observed[i:i+2])
+    history_bot=event(prefix+'historybot',prefix+'historybot',timestamp='2026-07-01T06:00:00Z')
+    history_bot.update(userId=person,anonymousId='',sourceService=prefix)
+    send(base,write_key,[history_bot],agent='Googlebot/2.1 (+http://www.google.com/bot.html)')
     def profile_ready():
         value=api(profile_path)
         org=value['organization'] or {}
-        return (value['traits'].get('plan',{}).get('value')=='pro' and value['retainedEventCount']==11
+        return (value['traits'].get('plan',{}).get('value')=='pro' and value['retainedEventCount']==17
                 and org.get('organizationId')==prefix+'org' and org.get('traits')=={'plan':'business','seats':10}
                 and value['identityEvidence']['device']==1 and value['identityEvidence']['email_hmac']==1)
     eventually(profile_ready)
@@ -120,7 +129,7 @@ def verify_users(base, write_key, token, other_token, erase_user=None, **kwargs)
     assert profile['organization']['traits']=={'plan':'business','seats':10}
     assert set(profile['identityEvidence'])=={'cookie','device','fingerprint','email_hmac','email_sha256'}
     assert profile['identityEvidence']['device']==profile['identityEvidence']['email_hmac']==1
-    assert profile['retainedEventCount']==11,profile
+    assert profile['retainedEventCount']==17,profile
     summary=api(search=person)['edges'][0]['node']
     assert summary['traits']=={key:trait['value'] for key,trait in profile['traits'].items()}
     for sentinel in ['DEVICE','EMAIL','SECRET','CONTEXT']:
@@ -146,7 +155,7 @@ def verify_users(base, write_key, token, other_token, erase_user=None, **kwargs)
         assert len(api(search=prefix,filter=[filt('cohort','neq',cohort['id'])])['edges'])==3
     finally: api('/cohorts/'+cohort['id'],method='DELETE')
     all_events=api(profile_path+'/events')['edges']
-    assert len(all_events)==11 and len({e['node']['eventId'] for e in all_events})==11
+    assert len(all_events)==16 and len({e['node']['eventId'] for e in all_events})==16
     assert prefix+'pre' in {e['node']['eventId'] for e in all_events}
     for edge in all_events:
         assert 'eventReceivedAt' not in edge['node']
@@ -173,6 +182,53 @@ def verify_users(base, write_key, token, other_token, erase_user=None, **kwargs)
     assert not api(profile_path+'/events',filter=[filt('event_name','eq','unknown_valid')])['edges']
     for invalid in [filt('event_name','contains','feature'),filt('user:plan','eq','pro')]:
         api(profile_path+'/events',filter=[invalid],expected=400)
+    host_filter=[filt('host','eq','app.example')]
+    app_events=api(profile_path+'/events',filter=host_filter)['edges']
+    assert {e['node']['eventId'] for e in app_events}=={prefix+'app1',prefix+'app2',prefix+'app3'}, [(e['node']['eventId'],e['node']['host'],e['node']['eventName']) for e in all_events]
+    assert all(e['node']['host']=='app.example' for e in app_events)
+    combined=api(profile_path+'/events',filter=[filt('host','in',['app.example','docs.example']),filt('event_name','eq','page_view')])['edges']
+    assert {e['node']['eventId'] for e in combined}=={prefix+'app1',prefix+'app3',prefix+'docs'}
+    def history_pages(params, backward=False):
+        collected=[]; cursor=None
+        while True:
+            paging={'last' if backward else 'first':1}
+            if cursor: paging['before' if backward else 'after']=cursor
+            page=api(profile_path+'/events',**params,**paging)
+            collected=page['edges']+collected if backward else collected+page['edges']
+            if not page['pageInfo']['hasPreviousPage' if backward else 'hasNextPage']: return collected
+            cursor=page['pageInfo']['startCursor' if backward else 'endCursor']
+    assert history_pages({'filter':host_filter})==app_events
+    assert history_pages({'filter':host_filter},backward=True)==app_events
+    combined_selection={'filter':[filt('host','in',['app.example','docs.example']),filt('event_name','eq','page_view')]}
+    assert history_pages(combined_selection)==combined
+    assert history_pages(combined_selection,backward=True)==combined
+    for invalid in [[filt('host','eq',v)] for v in ['', 'App.Example', 'app.example.', 'app.example:443', 'https://app.example']] + [
+        [filt('host','neq','app.example')], [filt('host','contains','app')], [filt('host','unset')],
+        [filt('host','in',['app.example']*101)], host_filter+host_filter, [json.dumps({'or':[{'dimension':'host','op':'eq','value':'app.example'}]})]]:
+        problem=api(profile_path+'/events',filter=invalid,expected=400)
+        assert problem['code']=='invalid_users_query',problem
+    hosts_path=profile_path+'/hosts'
+    facet=api(hosts_path)['hosts']
+    assert [(h['host'],h['eventCount']) for h in facet]==[('shop.example',11),('app.example',3),('docs.example',1),(None,1)],facet
+    assert next(h for h in facet if h['host']=='app.example')['lastOccurredAt']=='2026-07-02T04:00:00.000Z'
+    metric_hosts=api('/metrics/events',groupBy='host',timeGrain='none',filter=[filt('user_id','eq',person)],**{'from':'2026-07-01','to':'2026-07-05'})['points']
+    assert next(p['value'] for p in metric_hosts if p['group'].get('host')=='app.example')==3,metric_hosts
+    assert api(hosts_path,filter=[filt('event_name','eq','unknown_valid')])=={'hosts':[]}
+    for path,credential in [(hosts_path,other_token),('/users/'+prefix+'absent/hosts',token)]:
+        assert api(path,credential=credential,expected=404)['code']=='user_not_found'
+    assert api(hosts_path,filter=host_filter,expected=400)['code']=='invalid_users_query'
+    for args in [{'first':1},{'from':'2026-07-01'},{'includeBots':['true','false']},{'wat':1}]: api(hosts_path,expected=400,**args)
+    for selection in [{}, {'filter':[filt('event_name','eq','feature_used')]}, {'from':'2026-07-01','to':'2026-07-02'}, {'includeBots':'true'}, {'filter':[filt('event_name','eq','page_view')],'from':'2026-07-02','to':'2026-07-03','includeBots':'true'}]:
+        entries=api(hosts_path,**selection)['hosts']
+        assert sum(h['eventCount'] for h in entries)==len(history_pages(selection)),(selection,entries)
+        for entry in entries:
+            if entry['host'] is not None:
+                host_selection=dict(selection,filter=selection.get('filter',[])+[filt('host','eq',entry['host'])])
+                assert len(history_pages(host_selection))==entry['eventCount'],(selection,entry)
+    assert sum(h['eventCount'] for h in api(hosts_path,includeBots='true')['hosts'])==profile['retainedEventCount']
+    assert sum(h['eventCount'] for h in api(hosts_path,includeBots='true')['hosts'])==17
+    # A date selection with no events preserves user existence.
+    assert api(hosts_path,**{'from':'1900-01-01','to':'1900-01-02'})=={'hosts':[]}
     # Behavioural membership sees the complete lookback beyond selected dates.
     behavioural=api('/cohorts',body={'name':prefix+'behaviour','kind':'behavioural','conditions':[{'did':'feature_used','atLeast':3,'withinDays':30,'filters':[{'dimension':'prop:feature','op':'eq','value':prefix}]}]},method='POST')
     try:
@@ -220,7 +276,7 @@ def verify_users(base, write_key, token, other_token, erase_user=None, **kwargs)
     eventually(lambda: len(api(profile_path+'/events',filter=[filt('event_name','eq','alias')])['edges'])==1)
     alias_page=api(profile_path+'/events',filter=[filt('event_name','eq','alias')])
     assert alias_page['edges'][0]['node']['properties']=={} and prefix+'ALIAS_SECRET' not in json.dumps(alias_page)
-    previous_total=api(profile_path)['retainedEventCount']
+    previous_total=api(profile_path)['retainedEventCount']-1
     saved=api(profile_path+'/events',first=1)
     arrival=event(prefix+'arrival',prefix,name='feature_used',timestamp='2026-07-05T00:00:00Z')
     arrival.update(userId=person,anonymousId=prefix+'cookie',properties={'feature':prefix},sourceService=prefix)
@@ -233,11 +289,12 @@ def verify_users(base, write_key, token, other_token, erase_user=None, **kwargs)
         erase_user(person)
         api(profile_path,expected=404)
         api(profile_path+'/events',expected=404)
+        api(profile_path+'/hosts',expected=404)
         assert not api(search=person)['edges']
         # Replay the erased source IDs; the administrative tombstones fence them.
         send(base,write_key,rows+observed[:1])
         api(profile_path,expected=404)
-    print('Users HTTP acceptance: directory, profile, safe resolved history, split counts, bidirectional pagination and erasure passed.',flush=True)
+    print('Users HTTP acceptance: directory, profile, safe resolved history, exact host facets and totals, split counts, bidirectional pagination and erasure passed.',flush=True)
 
     return prefix
 
@@ -288,7 +345,31 @@ def verify_owned_users(base, write_key, token, other_token, *, env, **kwargs):
     assert after['firstActivityAt']==after['lastActivityAt']==fresh
     read('/users/'+prefix+'C',expected=404)
     assert len(read(path+'/events')['edges'])==1
+    assert read(path+'/hosts')['hosts'][0]['eventCount']==1
     print('Users lifecycle: physical expired fingerprint excluded before cleanup; applied retention refreshes extrema/counts/traits/evidence and removes empty users.',flush=True)
+    # The complete facet accepts exactly 1000 entries and rejects the extra null bucket.
+    many_path='/users/'+prefix+'manyhosts'
+    many=[]
+    for i in range(1000):
+        row=event(prefix+'host'+str(i),prefix+'host'+str(i),timestamp=fresh)
+        url='https://h%04d.example/' % i
+        row.update(userId=prefix+'manyhosts',anonymousId='',url=url,properties={'url':url})
+        many.append(row)
+    for i in range(0,len(many),100): send(base,write_key,many[i:i+100])
+    def many_ready():
+        try: return read(many_path)['retainedEventCount']==1000
+        except AssertionError: return False
+    eventually(many_ready)
+    entries=read(many_path+'/hosts')['hosts']
+    assert len(entries)==1000 and all(h['eventCount']==1 for h in entries)
+    assert [h['host'] for h in entries]==sorted(h['host'] for h in entries)
+    overflow=event(prefix+'hostoverflow',prefix+'hostoverflow',name='server_observed',timestamp=fresh)
+    overflow.update(userId=prefix+'manyhosts',anonymousId='',source='service',url=None,properties={})
+    send(base,write_key,[overflow])
+    eventually(lambda: read(many_path)['retainedEventCount']==1001)
+    problem=read(many_path+'/hosts',expected=400)
+    assert problem['code']=='user_hosts_too_large' and 'hosts' not in problem,problem
+    print('Users host facet: exactly 1000 entries succeeds, 1001 including null fails without partial output.',flush=True)
     # A second owned server forces actual query-budget exhaustion on all routes.
     from isolated_clickhouse import free_port
     limited=dict(env,KANSOKU_SERVER_PORT=str(free_port()),KANSOKU_METRICS_MAX_MEMORY_BYTES='1')
@@ -301,18 +382,18 @@ def verify_owned_users(base, write_key, token, other_token, *, env, **kwargs):
                 try: return urllib.request.urlopen(limited_base+'/health/live',timeout=2).status==200
                 except (OSError,urllib.error.URLError): return False
             eventually(live)
-            for resource in ['/users',path,path+'/events','/users/activity-counts?from=2026-11-01&to=2026-11-20']:
+            for resource in ['/users',path,path+'/events',path+'/hosts','/users/activity-counts?from=2026-11-01&to=2026-11-20']:
                 req=urllib.request.Request(limited_base+resource,headers={'Authorization':'Bearer '+token})
                 try: response=urllib.request.urlopen(req,timeout=40)
                 except urllib.error.HTTPError as error: response=error
                 body=json.load(response)
                 assert response.code==503 and response.headers['Content-Type'].startswith('application/problem+json'),(resource,response.code,body)
-                assert body['code']=='clickhouse_unavailable' and not ({'edges','points','identified','traits'} & set(body)),body
+                assert body['code']=='clickhouse_unavailable' and not ({'edges','points','identified','traits','hosts'} & set(body)),body
         finally:
             process.terminate()
             try: process.wait(timeout=10)
             except subprocess.TimeoutExpired: process.kill(); process.wait()
-    print('Users resource limits: all four routes return complete 503 problems under actual native memory exhaustion.',flush=True)
+    print('Users resource limits: all five routes return complete 503 problems under actual native memory exhaustion.',flush=True)
 
 
 

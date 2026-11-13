@@ -26,6 +26,7 @@ import Kansoku.Metrics.Api qualified as Metrics
 import Kansoku.Metrics.RoutingSpec (sentinelContext, sentinelKansokuServer)
 import Kansoku.Prelude
 import Kansoku.Server (internalMetrics, waiWrapper)
+import Kansoku.Users.Types qualified as Users
 import Network.HTTP.Client qualified as HTTP
 import Network.HTTP.Types
   ( Status,
@@ -124,6 +125,19 @@ spec = describe "Kansoku.Api.OpenApi.kansokuOpenApi" $ do
     valueAt ["components", "schemas", "UserEvent", "properties", "host", "type"] documentValue
       `shouldBe` Just (Aeson.toJSON (["string", "null"] :: [Text]))
     lookupTextArray ["components", "schemas", "UserProfile", "required"] documentValue `shouldSatisfy` maybe False (elem "organization")
+
+  it "publishes the complete host facet and required nullable host" $ do
+    let operation = fromMaybe Aeson.Null (valueAt ["paths", "/users/{userId}/hosts", "get"] documentValue)
+    operationParameterNames operation `shouldMatchList` ["userId", "from", "to", "includeBots", "filter"]
+    lookupTextArray ["components", "schemas", "UserHost", "required"] documentValue `shouldBe` Just ["host", "eventCount", "lastOccurredAt"]
+    valueAt ["components", "schemas", "UserHost", "properties", "host", "type"] documentValue
+      `shouldBe` Just (Aeson.toJSON (["string", "null"] :: [Text]))
+    forM_ ["1000", "user_hosts_too_large", "null-host", "Sum of selected entries"] $ \phrase ->
+      lookupText ["description"] operation `shouldSatisfy` maybe False (Text.isInfixOf phrase)
+    let value = Users.UserHosts [Users.UserHost Nothing 2 "2026-07-02T00:00:00.000Z"]
+    validateToJSON value `shouldBe` []
+    Aeson.fromJSON (Aeson.toJSON value) `shouldBe` Aeson.Success value
+    valueAt ["host"] (Aeson.toJSON (Users.UserHost Nothing 2 "2026-07-02T00:00:00.000Z")) `shouldBe` Just Aeson.Null
 
   it "documents exactly the analytics and cohort paths with stable operation IDs" $ do
     documentedPaths `shouldBe` expectedServedPaths
@@ -307,6 +321,7 @@ expectedServedPaths =
       "/users/activity-counts",
       "/users/{userId}",
       "/users/{userId}/events",
+      "/users/{userId}/hosts",
       "/v1/batch",
       "/v1/beacon",
       "/v1/events",
@@ -358,6 +373,7 @@ expectedOperationIds =
     ("/users/activity-counts", "get", "getUsersActivityCounts"),
     ("/users/{userId}", "get", "getUsersUserId"),
     ("/users/{userId}/events", "get", "getUsersUserIdEvents"),
+    ("/users/{userId}/hosts", "get", "getUsersUserIdHosts"),
     ("/v1/batch", "post", "postV1Batch"),
     ("/v1/beacon", "post", "postV1Beacon"),
     ("/v1/events", "post", "postV1Events"),

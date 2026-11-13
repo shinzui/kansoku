@@ -74,3 +74,27 @@ instance FromJSON UserEvent where
       <*> o Data.Aeson..: "isPageView"
       <*> o Data.Aeson..: "properties"
       <*> pure ""
+
+data UserHost = UserHost
+  { host :: !(Maybe Text),
+    eventCount :: !Integer,
+    lastOccurredAt :: !Text
+  }
+  deriving stock (Generic, Eq, Show)
+
+instance ToJSON UserHost where
+  toJSON UserHost {host, eventCount, lastOccurredAt} =
+    Data.Aeson.object ["host" Data.Aeson..= host, "eventCount" Data.Aeson..= eventCount, "lastOccurredAt" Data.Aeson..= lastOccurredAt]
+
+instance FromJSON UserHost where
+  parseJSON = Data.Aeson.withObject "user host" $ \o ->
+    UserHost <$> o Data.Aeson..: "host" <*> o Data.Aeson..: "eventCount" <*> o Data.Aeson..: "lastOccurredAt"
+
+newtype UserHosts = UserHosts {hosts :: [UserHost]}
+  deriving stock (Generic, Eq, Show)
+
+instance ToJSON UserHosts where
+  toJSON UserHosts {hosts} = Data.Aeson.object ["hosts" Data.Aeson..= hosts]
+
+instance FromJSON UserHosts where
+  parseJSON = Data.Aeson.withObject "user hosts" $ \o -> UserHosts <$> o Data.Aeson..: "hosts"

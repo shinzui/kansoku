@@ -14,6 +14,7 @@ module Kansoku.Metrics.Query.Dimension
     dimensionExpr,
     dimensionErrorMessage,
     groupProjection,
+    canonicalDomain,
   )
 where
 
@@ -227,7 +228,11 @@ dimensionExpr = \case
   GroupByProperty property -> propertyTypedExpr property
 
 canonicalDomain :: Text -> Text
-canonicalDomain column = "nullIf(replaceRegexpOne(lowerUTF8(domain(coalesce(" <> column <> ", ''))), '[.]+$', ''), '')"
+-- ClickHouse domain() rejects trailing-dot authorities, so strip their dots before
+-- parsing. Anchor to the authority to preserve path/query text and port boundaries.
+canonicalDomain column = "nullIf(replaceRegexpOne(lowerUTF8(domain(" <> normalized <> ")), '[.]+$', ''), '')"
+  where
+    normalized = "replaceRegexpOne(coalesce(" <> column <> ", ''), '^([^/?#]*//[^/?#]*?)[.]+(:[0-9]+)?([/?#]|$)', '\\\\1\\\\2\\\\3')"
 
 -- The sort columns keep their scalar types; JSON is only the native transport.
 groupProjection :: [GroupDimension] -> Text

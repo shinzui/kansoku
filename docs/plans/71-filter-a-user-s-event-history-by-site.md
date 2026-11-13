@@ -10,6 +10,12 @@ provenance:
     model: "claude-opus-5-5"
     harness: "claude-code"
     at: 2026-11-13T14:05:41Z
+  revisions:
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-11-13T14:50:45Z
+      mode: "implement"
+      note: "Implement canonical host history filters, exact host facets, and public acceptance coverage"
 ---
 
 # Filter a user's event history by site
@@ -66,12 +72,17 @@ first.
 ## Progress
 
 
-- [ ] Milestone 1: `GET /users/{userId}/events` accepts one `host` eq/in term alongside one
+- [x] Milestone 1 (2026-11-13): `GET /users/{userId}/events` accepts one `host` eq/in term alongside one
   `event_name` term; pages, both cursor directions and node `host` agree; invalid host terms
-  return 400 `invalid_users_query`; unit tests and the users acceptance workflow pass.
-- [ ] Milestone 2: `GET /users/{userId}/hosts` returns a complete, exactly counted host list
+  return 400 `invalid_users_query`; unit tests and `just users-acceptance` pass. Native
+  evidence: `.dev/acceptance/cohort-b603v6fh`, including trailing dots and ports, AND selection
+  and both filtered cursor directions.
+- [x] Milestone 2 (2026-11-13): `GET /users/{userId}/hosts` returns a complete, exactly counted host list
   under the history selection, with `user_not_found` 404 and a bounded-result error; the
-  regenerated OpenAPI document is committed and OpenAPI tests pass.
+  regenerated OpenAPI document and schema tests pass. Native acceptance proves exactly
+  1000 entries succeeds, 1001 (including null) returns `user_hosts_too_large` without output,
+  and query-memory exhaustion returns 503 on all five user routes. Code and generated
+  OpenAPI are committed at this milestone boundary.
 - [ ] Milestone 3: Endpoint Descriptions, `docs/guides/query-metrics.md` and ADR-25 publish the
   contract; `just check` passes and the users acceptance workflow proves the counted-total
   invariant end to end.
@@ -80,7 +91,22 @@ first.
 ## Surprises & Discoveries
 
 
-(None yet.)
+The shared MetricFilter parser rejects malformed operands (including 101-value arrays)
+before users-specific validation. History and hosts parse failures therefore use
+`invalid_users_query` in request middleware too; direct handler calls independently validate
+selection before accessing a database.
+
+ClickHouse 26.8.28.14's `domain()` returns an empty string for a trailing-dot authority,
+so the original canonical-domain expression did not satisfy its stated contract. The native
+fixture returned `host:null` for `https://APP.example./b`, and a direct `clickhouse-local`
+query confirmed it. `canonicalDomain` now removes trailing dots from the URL authority
+before parsing, preserving ports and path/query text. The shared query expression (including
+metric host grouping) is corrected; stored URLs and enrichment classifications are unchanged.
+The HTTP fixture covers both a trailing-dot host and a trailing dot before a port.
+
+The existing users acceptance harness owns qualified macOS-native ClickHouse and PostgreSQL
+processes, rather than containers. This execution retains that native coverage boundary;
+no Linux or container behavior is claimed.
 
 
 ## Decision Log
@@ -118,6 +144,14 @@ first.
   breaking the contract.
   Date: 2026-11-13
 
+- Decision: Normalize authority trailing dots before calling ClickHouse `domain()` in the
+  shared canonical-domain helper, rather than removing them only after parsing.
+  Rationale: Native acceptance proves the existing expression loses such hosts entirely.
+  Correcting the shared helper is required to meet the existing canonical-host acceptance
+  criterion and keeps history, filters, facets and metric grouping consistent. It changes
+  query-time extraction only, without rewriting URLs or stored enrichment.
+  Date: 2026-11-13
+
 - Decision: Bound `in` to 1..100 values (counted before deduplication) and each value to
   1..253 characters, mirroring the event-name bound of 1..100 names.
   Rationale: Symmetry with the existing history term; 253 is the DNS maximum host length.
@@ -136,8 +170,8 @@ first.
 Kansoku is a Haskell analytics service. Events are stored in ClickHouse; HTTP routes are Servant
 records. The pieces this plan touches:
 
-The route types live in `kansoku-api/src/Kansoku/Users/Api.hs`. The record `Users` has four
-fields: `activityCounts`, `events` (the history route
+The route types live in `kansoku-api/src/Kansoku/Users/Api.hs`. The record `Users` now has five
+fields: `activityCounts`, `hosts` (the counted history facet), `events` (the history route
 `GET /users/{userId}/events`), `getProfile` (`GET /users/{userId}`) and `directory`
 (`GET /users`). Each field carries a `Description "..."` string that becomes the operation
 description in the generated OpenAPI document `docs/api/openapi.json`. Wire types such as
@@ -149,22 +183,24 @@ pins details of the users operations.
 The handlers live in `kansoku-core/src/Kansoku/Users/Handler.hs` (`usersServer`). The `events`
 handler decodes the Relay cursor with `History.historyBoundary`, then calls `History.history`.
 `kansoku-core/src/Kansoku/Users/History.hs` builds the history SQL: it discovers the account's
-retained date bounds (`retainedBounds` in `kansoku-core/src/Kansoku/Users/Query.hs`), opens an
+retained date bounds (`retainedBounds` in `kansoku-core/src/Kansoku/Users/Query.hs`), shares its
+source and selection scope with the hosts facet through `withHistoryScope`, opens an
 identity-prepared query connection, checks that the user exists (any retained resolved fact
 with `subject_kind='user'` and that `subject_id`), compiles request filters with
 `QF.compileMetricFilters E.defaultRegistry [] filters` from
 `kansoku-core/src/Kansoku/Metrics/Query/Filter.hs`, and selects rows ordered by occurrence,
-receipt and event ID descending with `LIMIT pageSize+1`. The node's `host` is projected inline
-as `nullIf(replaceRegexpOne(lowerUTF8(domain(url)),'[.]+$',''),'')`.
+receipt and event ID descending with `LIMIT pageSize+1`. The node's `host` uses `canonicalDomain "url"`.
 
 A "filter term" is a JSON object `{"dimension":..., "op":..., "value":...}` parsed by
 `Kansoku.Metrics.Filter` (`MetricFilter`); the request repeats `filter=` once per term and terms
 are ANDed. The filter compiler already understands the dimension `host`: `resolveDimension` in
 `kansoku-core/src/Kansoku/Metrics/Query/Dimension.hs` maps it to `GroupByHost`, whose SQL
 expression is `canonicalDomain "url"`, defined there as
-`nullIf(replaceRegexpOne(lowerUTF8(domain(coalesce(url, ''))), '[.]+$', ''), '')`. This is the
-same canonical host as the history node projection (lowercased, port and trailing dots removed,
-empty becomes null). `canonicalDomain` is not currently exported from that module. `eq` compiles
+`nullIf(replaceRegexpOne(lowerUTF8(domain(normalized-url)), '[.]+$', ''), '')`, where the
+URL authority loses trailing dots before parsing. This is the same canonical host as the
+history node projection (lowercased, port and trailing dots removed,
+empty becomes null). `canonicalDomain` is now exported from that module and reused by history
+and the facet. `eq` compiles
 to `coalesce((expr = {p}), false)` and `in` to `coalesce(expr IN (...), false)`, so a null host
 never matches.
 
@@ -172,16 +208,16 @@ Request validation happens before the handler. `kansoku-core/src/Kansoku/Metrics
 whitelists query parameters per path in `allowedParameters` (the history path is
 `["users", _, "events"]`) and, for that path, runs `validateDates lo hi >> validateHistory filters`
 and maps a `Left message` to a 400 problem with code `invalid_users_query`. `validateHistory` in
-`kansoku-core/src/Kansoku/Users/Validation.hs` currently allows at most one term and requires it
-to be `event_name` with `eq`/`in` and 1..100 valid names; this is the blocker for a host term.
+`kansoku-core/src/Kansoku/Users/Validation.hs` allows one `event_name` and one canonical
+`host` eq/in term; `validateHostFacet` permits only the event-name selection.
 Its unit tests are in `kansoku-core/test/Kansoku/Users/HandlerSpec.hs` (the `Users request bounds`
 spec).
 
 The public behaviour is proven by `scripts/users_acceptance.py` (run with `just users-acceptance`),
-which owns disposable ClickHouse/PostgreSQL stores, ingests fixture events with the helper
+which owns disposable native ClickHouse/PostgreSQL stores, ingests fixture events with the helper
 `event()` from `scripts/enrichment_acceptance.py` (every fixture event defaults to
-`url='https://shop.example/entry'`, so fixtures currently share one host), and asserts history
-pages, both cursor directions and filter errors. Per `AGENTS.md`, local container execution uses
+`url='https://shop.example/entry'`; history fixtures override it for multiple hosts and missing
+URLs), and asserts history pages, both cursor directions, exact facet totals and filter errors. Per `AGENTS.md`, local container execution uses
 Apple Container (`container`), never Colima. The consumer-facing guide section
 "Identified users, profiles and history" is in `docs/guides/query-metrics.md`.
 
@@ -337,7 +373,7 @@ just openapi-check
 just openapi-lint
 ```
 
-Run the public acceptance workflow (owns disposable stores through Apple Container; never Colima):
+Run the public acceptance workflow (owns disposable native stores; any local container work must use Apple Container, never Colima):
 
 ```bash
 just users-acceptance
@@ -425,3 +461,8 @@ single definition of a canonical host for history nodes, the history host filter
 The downstream consumer is `mori://shinzui/kansoku-ui`, which consumes the contract published in
 `docs/api/openapi.json`; it can begin its UI plan against the contract above before this plan is
 implemented, and integrate once Milestone 2's OpenAPI document is committed.
+
+
+Revision note (2026-11-13): Native acceptance required correcting the shared host extraction
+for trailing-dot URL authorities, and the acceptance instructions now describe the harness's
+actual native-store coverage. Scope and public acceptance remain unchanged.

@@ -435,6 +435,7 @@ sentinelUsers =
     { Users.activityCounts = \_ _ _ _ -> pure (Response.KansokuOk (Users.UserActivityCounts 0 0)),
       Users.directory = \_ _ _ _ _ _ _ _ -> pure (Cohort.PageOk (Relay.Connection [] (Relay.PageInfo False False Nothing Nothing))),
       Users.getProfile = \_ ident -> pure (Response.KansokuOk (Users.UserProfile ident Map.empty Nothing Nothing 0 Map.empty 0 Nothing)),
+      Users.hosts = \_ _ _ _ _ _ -> pure (Response.KansokuOk (Users.UserHosts [])),
       Users.events = \_ _ _ _ _ _ _ -> pure (Cohort.PageOk (Relay.Connection [] (Relay.PageInfo False False Nothing Nothing)))
     }
 

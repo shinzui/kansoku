@@ -503,6 +503,16 @@ instance O.ToSchema UserSummary where
     named <- O.genericDeclareNamedSchema O.defaultSchemaOptions proxy
     pure (nullableUserFields ["firstActivityAt", "lastActivityAt"] named & O.schema . O.required .~ ["userId", "traits", "firstActivityAt", "lastActivityAt"])
 
+instance O.ToSchema UserHosts where
+  declareNamedSchema proxy = do
+    named <- O.genericDeclareNamedSchema O.defaultSchemaOptions proxy
+    pure (named & O.schema . O.properties . ix "hosts" %~ (\case O.Inline schema -> O.Inline (schema & O.maxItems ?~ 1000); reference -> reference))
+
+instance O.ToSchema UserHost where
+  declareNamedSchema proxy = do
+    named <- O.genericDeclareNamedSchema O.defaultSchemaOptions proxy
+    pure (nullableUserFields ["host"] named & O.schema . O.required .~ ["host", "eventCount", "lastOccurredAt"])
+
 instance O.ToSchema UserActivityCounts
 
 instance O.ToSchema A.Value where

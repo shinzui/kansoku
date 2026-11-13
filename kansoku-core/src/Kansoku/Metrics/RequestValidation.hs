@@ -9,7 +9,7 @@ import Data.Text.Encoding qualified as Text
 import Kansoku.Metrics.Filter (maxFilterBytes, maxFilters, parseMetricFilter, validateMetricFilters)
 import Kansoku.Metrics.Query.UserSelection qualified as UserSelection
 import Kansoku.Prelude
-import Kansoku.Users.Validation (validateDates, validateDirectory, validateHistory)
+import Kansoku.Users.Validation (validateDates, validateDirectory, validateHistory, validateHostFacet)
 import Network.HTTP.Types.URI (decodePathSegments)
 import Network.Wai (Request, queryString, rawPathInfo)
 
@@ -33,7 +33,7 @@ validateMetricRequest request = case allowedParameters requestPath of
     let rawFilters = [operand | (name, operand) <- query, name `elem` map Text.encodeUtf8 filterNames]
     unless (length rawFilters <= (if take 1 requestPath == ["users"] then 9 else maxFilters)) (Left ("invalid_filter", "at most eight filters are supported"))
     unless (sum (map (maybe 0 BS.length) rawFilters) <= maxFilterBytes) (Left ("invalid_filter", "decoded filters are limited to 16384 UTF-8 bytes"))
-    filters <- first ("invalid_filter",) $ traverse parseOne rawFilters
+    filters <- first (filterErrorCode,) $ traverse parseOne rawFilters
     when (take 1 requestPath == ["users"]) $ do
       let scalar name = case [operand | (key, Just operand) <- query, key == name] of
             [] -> Right Nothing
@@ -51,6 +51,7 @@ validateMetricRequest request = case allowedParameters requestPath of
           unless (isJust lo && isJust hi) (Left "activity counts require from and to")
           validateDates lo hi
         ["users", _, "events"] -> validateDates lo hi >> validateHistory filters
+        ["users", _, "hosts"] -> validateDates lo hi >> validateHostFacet filters
         _ -> validateDates lo hi
     when (take 1 requestPath == ["metrics"]) $ do
       sharedFilters <- first ("invalid_filter",) $ traverse parseOne [operand | ("filter", operand) <- query]
@@ -58,6 +59,9 @@ validateMetricRequest request = case allowedParameters requestPath of
       when (any (\(key, operand) -> key == "groupBy" && maybe False (elem "user_id" . BS.split 44) operand) query) (Left ("invalid_group_by", "user_id is filter-only"))
     if take 1 requestPath == ["users"] then mapM_ (\f -> void (first ("invalid_filter",) (validateMetricFilters [f]))) filters else void (first ("invalid_filter",) (validateMetricFilters filters))
   where
+    filterErrorCode = case requestPath of
+      ["users", _, route] | route `elem` ["events", "hosts"] -> "invalid_users_query"
+      _ -> "invalid_filter"
     requestPath = decodePathSegments (rawPathInfo request)
     query = queryString request
     parseOne Nothing = Left "filter requires a JSON object"
@@ -68,6 +72,7 @@ allowedParameters = \case
   ["users"] -> Just ["from", "to", "search", "order", "includeBots", "filter", "first", "after", "last", "before"]
   ["users", "activity-counts"] -> Just ["from", "to", "includeBots"]
   ["users", _] -> Just []
+  ["users", _, "hosts"] -> Just ["from", "to", "includeBots", "filter"]
   ["users", _, "events"] -> Just ["from", "to", "includeBots", "filter", "first", "after", "last", "before"]
   ["metrics", "custom"] -> Just ["from", "to", "groupBy", "timeGrain", "filter", "metric", "events", "aggregation", "property", "quantile", "denominatorEvents", "denominatorAggregation"]
   ["metrics", "acquisition"] -> Just ["from", "to", "groupBy", "timeGrain", "filter", "measure", "conversionEvents", "includeBots"]

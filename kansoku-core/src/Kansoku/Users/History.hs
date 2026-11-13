@@ -1,5 +1,6 @@
 module Kansoku.Users.History where
 
+import ClickHaskell (Connection)
 import Data.Aeson qualified as A
 import Data.Aeson.Key qualified as Key
 import Data.Aeson.KeyMap qualified as KM
@@ -11,6 +12,7 @@ import Kansoku.ClickHouse (QueryPool, withIdentityQueryConnection)
 import Kansoku.Event (AccountId (..), EventName (..))
 import Kansoku.Event.Registry qualified as E
 import Kansoku.Metrics.Filter qualified as F
+import Kansoku.Metrics.Query.Dimension (canonicalDomain)
 import Kansoku.Metrics.Query.Filter qualified as QF
 import Kansoku.Prelude
 import Kansoku.Users.Query
@@ -48,7 +50,34 @@ historyBoundary R.PageRequest {cursor} = traverse decode cursor
         keys -> Left (R.KeyCountMismatch 3 (length keys))
 
 history :: QueryPool -> AccountId -> Text -> Maybe Day -> Maybe Day -> Bool -> [F.MetricFilter] -> R.PageRequest -> Maybe (Text, Text, Text) -> IO (Maybe [UserEvent])
-history pool account ident selectedFrom selectedTo bots filters page boundary = bounded pool $ do
+history pool account ident selectedFrom selectedTo bots filters page boundary =
+  withHistoryScope pool account ident selectedFrom selectedTo bots filters $ \conn params selection -> do
+    let cmp = if R.direction page == R.Forward then "<" else ">"
+        ordering = if R.direction page == R.Forward then " DESC" else " ASC"
+        cursorWhere = ["tuple(" <> stamp "occurred_at" <> "," <> stamp "received_at" <> ",event_id)" <> cmp <> "tuple({cursor_occ:String},{cursor_rec:String},{cursor_id:String})" | isJust boundary]
+        sql = "SELECT toJSONString(tuple(event_id,event_name," <> stamp "occurred_at" <> "," <> stamp "received_at" <> ",source,source_service,session_id," <> canonicalDomain "url" <> ",nullIf(path(url),''),toBool(event_name='page_view'),schema_version,properties)) AS json FROM " <> source <> " WHERE " <> selection <> T.concat (map (" AND " <>) cursorWhere) <> " ORDER BY occurred_at" <> ordering <> ",received_at" <> ordering <> ",event_id" <> ordering <> " LIMIT {users_limit:UInt64}"
+        bound = params <> [("users_limit", T.pack (show (R.pageSize page + 1)))] <> maybe [] (\(a, b, c) -> [("cursor_occ", a), ("cursor_rec", b), ("cursor_id", c)]) boundary
+    rows <- fetch conn bound sql :: IO [(Text, Text, Text, Text, Text, Text, Text, Maybe Text, Maybe Text, Bool, Int, Text)]
+    traverse
+      ( \(eid, name, at, received, src, service, session, h, p, pv, version, raw) -> do
+          properties <- either (const (fail "invalid private property projection")) pure (A.eitherDecodeStrict' (T.encodeUtf8 raw))
+          pure (UserEvent eid name at src service session h p pv (safeProperties E.defaultRegistry name version properties) received)
+      )
+      rows
+
+data HostsResult = HostsTooLarge | HostsFound UserHosts
+
+hosts :: QueryPool -> AccountId -> Text -> Maybe Day -> Maybe Day -> Bool -> [F.MetricFilter] -> IO (Maybe HostsResult)
+hosts pool account ident selectedFrom selectedTo bots filters =
+  withHistoryScope pool account ident selectedFrom selectedTo bots filters $ \conn params selection -> do
+    let sql = "SELECT toJSONString(tuple(h,count()," <> stamp "max(occurred_at)" <> ")) AS json FROM (SELECT " <> canonicalDomain "url" <> " AS h,occurred_at FROM " <> source <> " WHERE " <> selection <> ") GROUP BY h ORDER BY isNull(h),count() DESC,h ASC LIMIT 1001"
+    rows <- fetch conn params sql :: IO [(Maybe Text, Integer, Text)]
+    pure $ if length rows > 1000 then HostsTooLarge else HostsFound (UserHosts [UserHost h count at | (h, count, at) <- rows])
+
+-- Existence is checked before selection: empty selections still describe an existing user.
+-- History pages and host counts use this same retained source and complete predicate.
+withHistoryScope :: QueryPool -> AccountId -> Text -> Maybe Day -> Maybe Day -> Bool -> [F.MetricFilter] -> (Connection -> [(String, Text)] -> Text -> IO a) -> IO (Maybe a)
+withHistoryScope pool account ident selectedFrom selectedTo bots filters run = bounded pool $ do
   bounds <- retainedBounds pool account
   case bounds of
     Nothing -> pure Nothing
@@ -60,16 +89,7 @@ history pool account ident selectedFrom selectedTo bots filters page boundary = 
         then pure Nothing
         else do
           compiled <- either (const (fail "invalid history filter")) pure (QF.compileMetricFilters E.defaultRegistry [] filters)
-          let cmp = if R.direction page == R.Forward then "<" else ">"
-              ordering = if R.direction page == R.Forward then " DESC" else " ASC"
-              conditions = QF.predicates compiled <> ["NOT is_bot" | not bots] <> ["occurred_at>=toDateTime64({selected_from:String},3,'UTC')" | isJust selectedFrom] <> ["occurred_at<toDateTime64({selected_to:String},3,'UTC')" | isJust selectedTo] <> ["tuple(" <> stamp "occurred_at" <> "," <> stamp "received_at" <> ",event_id)" <> cmp <> "tuple({cursor_occ:String},{cursor_rec:String},{cursor_id:String})" | isJust boundary]
-              sql = "SELECT toJSONString(tuple(event_id,event_name," <> stamp "occurred_at" <> "," <> stamp "received_at" <> ",source,source_service,session_id,nullIf(replaceRegexpOne(lowerUTF8(domain(url)),'[.]+$',''),''),nullIf(path(url),''),toBool(event_name='page_view'),schema_version,properties)) AS json FROM " <> source <> " WHERE " <> userWhere <> T.concat (map (" AND " <>) conditions) <> " ORDER BY occurred_at" <> ordering <> ",received_at" <> ordering <> ",event_id" <> ordering <> " LIMIT {users_limit:UInt64}"
-              bound = params <> QF.parameters compiled <> [("users_limit", T.pack (show (R.pageSize page + 1)))] <> maybe [] (\d -> [("selected_from", T.pack (show d))]) selectedFrom <> maybe [] (\d -> [("selected_to", T.pack (show d))]) selectedTo <> maybe [] (\(a, b, c) -> [("cursor_occ", a), ("cursor_rec", b), ("cursor_id", c)]) boundary
-          rows <- fetch conn bound sql :: IO [(Text, Text, Text, Text, Text, Text, Text, Maybe Text, Maybe Text, Bool, Int, Text)]
-          traverse
-            ( \(eid, name, at, received, src, service, session, h, p, pv, version, raw) -> do
-                properties <- either (const (fail "invalid private property projection")) pure (A.eitherDecodeStrict' (T.encodeUtf8 raw))
-                pure (UserEvent eid name at src service session h p pv (safeProperties E.defaultRegistry name version properties) received)
-            )
-            rows
-            >>= pure . Just
+          let conditions = QF.predicates compiled <> ["NOT is_bot" | not bots] <> ["occurred_at>=toDateTime64({selected_from:String},3,'UTC')" | isJust selectedFrom] <> ["occurred_at<toDateTime64({selected_to:String},3,'UTC')" | isJust selectedTo]
+              selection = userWhere <> T.concat (map (" AND " <>) conditions)
+              bound = params <> QF.parameters compiled <> maybe [] (\d -> [("selected_from", T.pack (show d))]) selectedFrom <> maybe [] (\d -> [("selected_to", T.pack (show d))]) selectedTo
+          Just <$> run conn bound selection

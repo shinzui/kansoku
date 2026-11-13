@@ -1197,6 +1197,43 @@
         ],
         "type": "object"
       },
+      "UserHost": {
+        "properties": {
+          "eventCount": {
+            "type": "integer"
+          },
+          "host": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lastOccurredAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "host",
+          "eventCount",
+          "lastOccurredAt"
+        ],
+        "type": "object"
+      },
+      "UserHosts": {
+        "properties": {
+          "hosts": {
+            "items": {
+              "$ref": "#/components/schemas/UserHost"
+            },
+            "maxItems": 1000,
+            "type": "array"
+          }
+        },
+        "required": [
+          "hosts"
+        ],
+        "type": "object"
+      },
       "UserId": {
         "type": "string"
       },
@@ -9386,7 +9423,7 @@
     },
     "/users/{userId}/events": {
       "get": {
-        "description": "Resolved retained history including pre-login and identity events. Paired optional UTC dates [from,to), 1..366 days; includeBots defaults false. One event_name eq/in filter, 1..100 names of 1..128 characters. Occurrence/receipt/event ID descending. Exact-version declared scalar properties only, excluding identifiers, alias payloads and context. Identity/group properties require governed catalogs. Relay page size 1..100, default 20; both directions, current reads without snapshot. Unknown/foreign/erased user: user_not_found 404. Nonpagination errors use problem+json; Relay pagination errors use JSON.",
+        "description": "Resolved retained history including pre-login and identity events. Paired optional UTC dates [from,to), 1..366 days; includeBots defaults false. At most one event_name eq/in term (1..100 names of 1..128 characters) and one host eq/in term (1..100 canonical lowercase hosts of 1..253 characters without scheme, port, path, whitespace or trailing dot), ANDed. Host matches node host; null hosts never match a host term. Occurrence/receipt/event ID descending. Exact-version declared scalar properties only, excluding identifiers, alias payloads and context. Identity/group properties require governed catalogs. Relay page size 1..100, default 20; both directions, current reads without snapshot. Unknown/foreign/erased user: user_not_found 404. Nonpagination errors use problem+json; Relay pagination errors use JSON.",
         "operationId": "getUsersUserIdEvents",
         "parameters": [
           {
@@ -9582,6 +9619,206 @@
               }
             },
             "description": "Payload too large"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Storage or credential store unavailable"
+          }
+        },
+        "security": [
+          {
+            "serviceToken": []
+          }
+        ],
+        "tags": [
+          "ingestion",
+          "metrics",
+          "schemas"
+        ]
+      }
+    },
+    "/users/{userId}/hosts": {
+      "get": {
+        "description": "Complete exact host counts for resolved retained history, including identity and pre-login events. Optional paired UTC dates [from,to), 1..366 days; includeBots defaults false. At most one event_name eq/in filter (1..100 names of 1..128 characters); host filters rejected. Same selection as history. Non-null hosts ordered by eventCount descending then host ascending; one null-host entry last, zero counts omitted. Sum of selected entries equals filtered history size for the same parameters on settled data; current reads without cross-request snapshot. At most 1000 entries including null, otherwise user_hosts_too_large 400 without partial output. Unknown/foreign/erased user: user_not_found 404; query failure/deadline: clickhouse_unavailable 503.",
+        "operationId": "getUsersUserIdHosts",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "userId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "includeBots",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "filter",
+            "schema": {
+              "items": {
+                "description": "A URL-decoded JSON term or {or:[term,...]} (1..8 non-nested terms), or shorthand dimension:op:value terms separated by | for OR. Repeat filter for AND (at most 8 groups, 16384 total decoded bytes). Literal | in values requires JSON. Operators: eq, neq, in, contains, gt, lt, set, unset; set/unset omit value.",
+                "type": "string"
+              },
+              "type": "array"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserHosts"
+                }
+              },
+              "application/json;charset=utf-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserHosts"
+                }
+              }
+            },
+            "description": "User hosts"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Malformed request or `filter` or `includeBots` or `to` or `from`"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Missing, malformed, unknown, or revoked credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer authentication challenge",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A valid credential lacks metrics-read permission"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "`userId` or Not found"
+          },
+          "405": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Method not allowed"
+          },
+          "406": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not acceptable"
+          },
+          "413": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Payload too large"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Rate limited",
+            "headers": {
+              "Retry-After": {
+                "description": "Positive whole seconds before retrying",
+                "required": true,
+                "schema": {
+                  "maximum": 9223372036854775807,
+                  "minimum": -9223372036854775808,
+                  "type": "integer"
+                }
+              }
+            }
           },
           "500": {
             "content": {
