@@ -1,6 +1,6 @@
 cabal-version: 3.0
 name: kansoku-server
-version: 0.1.0.0
+version: 0.2.0.0
 synopsis: Kansoku HTTP server executable.
 description:
   The servant/warp HTTP server executable for Kansoku analytics.
