@@ -1,5 +1,9 @@
 # Bundle Update Log
 
+## 2026-11-13
+
+* **Update**: Accept IR-17 for implementation and link targetPlan to docs/plans/67-read-identified-users-profiles-and-event-history.md; implementation has not started.
+
 ## 2026-11-12
 
 * **Add**: Propose IR-17 and IR-18 from `mori://shinzui/kansoku-ui/masterplans/6-build-the-users-directory-and-user-profile-pages`, modelled on the People screen of an open-source web-analytics product. IR-17 adds a read-only users resource: a directory of identified users with current traits and first and last activity, one user's profile and identity evidence counts, one user's resolved event history with declared properties only, and exact identified and anonymous counts for a range. IR-18 adds a filter dimension selecting one identified user on metric routes (soft dependency on IR-17).
