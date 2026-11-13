@@ -22,6 +22,7 @@ from activity_acceptance import verify_activity
 from funnel_acceptance import verify_funnels
 from traits_acceptance import verify_traits
 from cohorts_acceptance import verify_cohorts
+from users_acceptance import verify_users
 from custom_metrics_acceptance import verify_custom_metrics
 from admin_acceptance import verify_admin
 from beacon_acceptance import verify_beacon_browser
@@ -302,6 +303,11 @@ def main():
                             verify_funnels(base, credentials['enrichment_write'], credentials['enrichment_service'])
                             verify_traits(base, credentials['enrichment_write'], credentials['enrichment_service'])
                             verify_cohorts(base, credentials['enrichment_write'], credentials['enrichment_service'], credentials['other_token'])
+                            def erase_read_user(user):
+                                output = run([admin, 'erase-user', '--account', 'mp4_enrichment', '--user', user,
+                                              '--out', str(ROOT / ('users-erase-' + name + '.json')), '--confirm', '--delete-events'], env, 'users-erasure-' + name, timeout=90)
+                                assert json.loads(output)['stage'] == 'complete'
+                            verify_users(base, credentials['enrichment_write'], credentials['enrichment_service'], credentials['other_token'], erase_user=erase_read_user)
                             if not mode:
                                 verify_fixture_isolation(base, credentials['enrichment_write'], credentials['enrichment_service'], credentials['other_token'], env=env)
                             if sdk:

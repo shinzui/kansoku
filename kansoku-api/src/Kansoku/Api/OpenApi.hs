@@ -8,6 +8,7 @@ module Kansoku.Api.OpenApi
   )
 where
 
+import Data.Aeson qualified as A
 import Data.Char (toLower, toUpper)
 import Data.OpenApi qualified as O
 import Data.OpenApi.Declare (runDeclare)
@@ -39,6 +40,7 @@ import Kansoku.Metrics.Definition
 import Kansoku.Metrics.Filter (FilterOp, MetricFilter)
 import Kansoku.Metrics.Limits (maxMetricPoints)
 import Kansoku.Prelude
+import Kansoku.Users.Types
 import Relay.Pagination.Servant.OpenApi ()
 import Servant.API (type (:>))
 import Servant.API.Experimental.Auth (AuthProtect)
@@ -273,6 +275,7 @@ kansokuOpenApi =
     & withUnsupportedBodyMedia
     & withRetryAfterHeader
     & withOperationIds
+    & withUserPageProblems
 
 authSecuritySchemes :: O.SecurityDefinitions
 authSecuritySchemes =
@@ -489,3 +492,72 @@ instance O.ToSchema CustomDefinition where
     simple <- O.declareSchemaRef (Proxy @MetricDefinition)
     ratio <- O.declareSchemaRef (Proxy @RatioMetric)
     pure (O.NamedSchema (Just "CustomDefinition") (mempty & O.oneOf ?~ [simple, ratio]))
+
+instance O.ToSchema UserSummary where
+  declareNamedSchema proxy = do
+    named <- O.genericDeclareNamedSchema O.defaultSchemaOptions proxy
+    pure (nullableUserFields ["firstActivityAt", "lastActivityAt"] named & O.schema . O.required .~ ["userId", "traits", "firstActivityAt", "lastActivityAt"])
+
+instance O.ToSchema UserActivityCounts
+
+instance O.ToSchema A.Value where
+  declareNamedSchema _ = pure (O.NamedSchema Nothing mempty)
+
+instance O.ToSchema TraitObservation
+
+instance O.ToSchema UserOrganization
+
+instance O.ToSchema UserProfile where
+  declareNamedSchema proxy = do
+    named <- O.genericDeclareNamedSchema O.defaultSchemaOptions proxy
+    org <- O.declareSchemaRef (Proxy @UserOrganization)
+    let nullableOrg = mempty & O.oneOf ?~ [org, O.Inline (mempty & O.type_ ?~ O.OpenApiTypeSingle O.OpenApiNull)]
+    pure
+      ( nullableUserFields ["firstActivityAt", "lastActivityAt"] named
+          & O.schema
+          . O.properties
+          . at "organization"
+          ?~ O.Inline nullableOrg
+          & O.schema
+          . O.required
+          .~ ["userId", "traits", "firstActivityAt", "lastActivityAt", "retainedEventCount", "identityEvidence", "resolvedAnonymousCount", "organization"]
+      )
+
+instance O.ToSchema UserEvent where
+  declareNamedSchema proxy = do
+    named <- O.genericDeclareNamedSchema O.defaultSchemaOptions proxy
+    pure
+      ( nullableUserFields ["host", "path"] named
+          & O.schema
+          . O.properties
+          . at "eventReceivedAt"
+          .~ Nothing
+          & O.schema
+          . O.required
+          .~ ["eventId", "eventName", "occurredAt", "source", "sourceService", "sessionId", "host", "path", "isPageView", "properties"]
+      )
+
+nullableUserFields :: [Text] -> O.NamedSchema -> O.NamedSchema
+nullableUserFields fields named = foldr addNullable named fields
+  where
+    addNullable field result = result & O.schema . O.properties . at field ?~ O.Inline (mempty & O.type_ ?~ O.OpenApiTypeArray [O.OpenApiString, O.OpenApiNull])
+
+-- User selections also fail before Relay parsing, with the shared problem body.
+withUserPageProblems :: O.OpenApi -> O.OpenApi
+withUserPageProblems =
+  O.paths
+    %~ imap
+      ( \path item ->
+          if path `elem` ["/users", "/users/{userId}/events"]
+            then
+              item
+                & O.get
+                . _Just
+                %~ ( \operation -> case operation ^. at 400 of
+                       Just (O.Inline response) -> operation & at 400 ?~ O.Inline (response & O.content . at "application/problem+json" ?~ (mempty & O.schema ?~ problemSchema))
+                       _ -> operation
+                   )
+            else item
+      )
+  where
+    (_, problemSchema) = runDeclare (O.declareSchemaRef (Proxy @ProblemDetails)) mempty

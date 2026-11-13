@@ -22,6 +22,7 @@ where
 import Data.Aeson qualified as Aeson
 import Data.ByteString.Lazy qualified as BSL
 import Data.Foldable (traverse_)
+import Data.Map.Strict qualified as Map
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Time (Day, fromGregorian)
@@ -56,6 +57,8 @@ import Kansoku.Metrics.Definition qualified as Definition
 import Kansoku.Metrics.DefinitionApi qualified as Definition
 import Kansoku.Metrics.Filter (MetricFilter)
 import Kansoku.Server (envelopeFormatters)
+import Kansoku.Users.Api qualified as Users
+import Kansoku.Users.Types qualified as Users
 import Network.HTTP.Client qualified as HTTP
 import Network.HTTP.Types
   ( hContentType,
@@ -330,6 +333,7 @@ sentinelKansokuServer =
     { Api.ingest = sentinelIngestServer,
       Api.metrics = sentinelMetricsServer,
       Api.metricDefinitions = sentinelDefinitions,
+      Api.users = sentinelUsers,
       Api.cohorts = sentinelCohorts,
       Api.schemas = pure (schemaCatalog defaultRegistry)
     }
@@ -421,3 +425,12 @@ sentinelDefinitions =
   where
     definition = Definition.CustomSimple (Definition.MetricDefinition "sample" Nothing ["payment_completed"] Definition.Count Nothing Nothing [] [] Nothing)
     sample def = Definition.SavedMetric UUID.nil def (read "2026-07-01 00:00:00 UTC") (read "2026-07-01 00:00:00 UTC")
+
+sentinelUsers :: Users.Users (AsServerT Handler)
+sentinelUsers =
+  Users.Users
+    { Users.activityCounts = \_ _ _ _ -> pure (Response.KansokuOk (Users.UserActivityCounts 0 0)),
+      Users.directory = \_ _ _ _ _ _ _ _ -> pure (Cohort.PageOk (Relay.Connection [] (Relay.PageInfo False False Nothing Nothing))),
+      Users.getProfile = \_ ident -> pure (Response.KansokuOk (Users.UserProfile ident Map.empty Nothing Nothing 0 Map.empty 0 Nothing)),
+      Users.events = \_ _ _ _ _ _ _ -> pure (Cohort.PageOk (Relay.Connection [] (Relay.PageInfo False False Nothing Nothing)))
+    }

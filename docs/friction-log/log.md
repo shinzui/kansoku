@@ -1,5 +1,11 @@
 # Bundle Update Log
 
+## 2026-11-13
+
+* **Update**: FRIC-23 accepted: Accept the existing-pattern workaround for this plan; no dependency changes require registry access.
+
+* **Addition**: FRIC-23 records detour environment friction with mori://shinzui/mori: Mori registry unavailable during users implementation
+
 ## 2026-11-08
 * **Update**: FRIC-22 accepted: Accepted the manual preservation workaround for this implementation; changing the external OKF CLI is outside plan 66.
 * **Addition**: FRIC-22 records detour tooling friction with mori://shinzui/okf: OKF log add rewrites historical guide log prose

@@ -4,7 +4,7 @@ title: "Query metrics"
 description: "Look up metric populations, query bounds, filters, grouping, analytical semantics, cohorts and saved definitions."
 docId: DOC-10
 tags: ["metrics", "queries", "identity", "cohorts"]
-timestamp: 2026-11-08T13:49:15Z
+timestamp: 2026-11-13T00:59:03Z
 generated:
   by: process:codex
   at: "2026-11-06T14:31:34Z"
@@ -1116,3 +1116,78 @@ its buckets/groups. Separate date-window queries select their own first sessions
 overlap. Rates must not be summed or averaged across buckets; use `timeGrain=none` for an
 exact whole-range rate. All measures retain the 10,000-point complete-or-error bound and
 native resource limits; no sessions or conversions are truncated before final grouping.
+
+
+## Identified users, profiles and history
+
+All `/users` reads require a metrics-read service token. Identity and traits are analytical
+inference, never authentication or authorization. The principal supplies the account.
+
+`GET /users` returns a Relay connection of identified subjects, including users with only
+identity/profile events. Optional paired `from`/`to` select users with activity in the UTC
+half-open range `[from,to)` spanning 1..366 days. First/last activity always cover all retained
+history. Activity excludes identify, identify_once, alias and group; `includeBots=false` is
+the default. Without dates, users with no qualifying activity remain with null extrema.
+`search` is a literal case-insensitive user-ID substring of 1..256 Unicode code points;
+percent and underscore have no wildcard meaning. `order=lastActivity` (default) or
+`firstActivity` sorts the chosen timestamp descending, null last, then userId ascending.
+Traits are current governed scalar values; missing names are omitted.
+
+Repeat `filter` for AND: at most eight `user:` trait terms and one `cohort` eq/neq UUID term.
+Use the existing typed eq/neq/in/contains/gt/lt/set/unset grammar. OR and other dimensions
+are rejected. Cohort behavioural windows anchor to explicit `to` or one captured next UTC
+midnight; missing/foreign definitions return `cohort_not_found`. Filters share the 16384-byte
+decoded budget. Examples:
+
+```bash
+curl -H "Authorization: Bearer $KANSOKU_SERVICE_TOKEN" \
+  "$KANSOKU_URL/users?first=20&search=alice&order=lastActivity"
+curl -H "Authorization: Bearer $KANSOKU_SERVICE_TOKEN" \
+  "$KANSOKU_URL/users/activity-counts?from=2026-07-01&to=2026-07-03"
+```
+
+`GET /users/activity-counts` requires paired dates and accepts only `includeBots` in addition.
+It returns JSON integer `identified` and `anonymous` exact distinct activity counts. Their
+sum equals the ungrouped `/metrics/users?timeGrain=none` result with identical dates/bots;
+adding daily distinct counts is incorrect. Empty subjects are excluded.
+
+`GET /users/{userId}` treats the captured ID literally, including colons. It returns current
+traits as `{value,observedAt,operation}` with `set` or `set_once` provenance, default nonbot
+activity extrema, all-kind/all-bot `retainedEventCount`, five evidence counts, original
+`resolvedAnonymousCount`, and nullable `{organizationId,traits}` current explicit membership.
+A set always wins over set-once; latest set/earliest set-once uses occurrence milliseconds,
+receipt milliseconds and event ID. Legacy ineligible writes do not establish provenance.
+Evidence keys cookie/device/fingerprint/email_hmac/email_sha256 include zeros and count
+distinct bindings, including conflicted evidence; they never include identifier values.
+Fingerprint validity expires 180 days after occurrence even before physical TTL cleanup.
+Resolved anonymous counts include only original anonymous events currently stitched to this
+user. Profile queries share a connection and overall deadline, with eventual cross-table
+consistency rather than an atomic snapshot.
+
+`GET /users/{userId}/events` returns resolved history including identity/profile events and
+stitched pre-login events. Optional paired dates and `includeBots` have the same bounds and
+default; at most one `filter` selects event_name by eq or in, with 1..100 raw names of
+1..128 characters from `[a-z0-9_.:-]`, bounded before deduplication. Unknown valid names return
+empty pages. Nodes expose eventId, eventName, occurredAt, source, sourceService, sessionId,
+nullable host/path, isPageView and properties. Host/path use existing enrichment expressions;
+page-view status describes canonical page_view facts. Ordering is occurrence, receipt and
+event ID descending. Properties contain only present typed declared scalars at the exact
+stored schema version. Unknown versions, PTAny, nulls, incompatible/nonfinite values,
+arrays/objects, identifier properties, alias payloads and context are omitted. Identity and
+group event properties additionally require their governed trait catalogs.
+
+Both collections accept `first`/`after` or `last`/`before`, default 20, minimum 1, maximum 100.
+Cursors carry complete keys, including directory null markers, and reject incompatible
+orders. Keep all selection parameters unchanged while walking. These are current reads,
+without a cross-request snapshot: arrivals, identity/trait changes and retention can move
+rows; refresh and deduplicate after concurrent changes. Newer arrivals are visible on
+refresh, not through a continuation below a saved history key.
+
+Unknown, foreign-account and erased users return indistinguishable `user_not_found` 404s.
+Retention changes extrema, counts, evidence and traits; no retained resolved facts means no
+user. Administrative `erase-user --delete-events` removes explicit facts; default identity
+unlinking retains explicit facts and can retain the profile. Erased source-ID replay cannot
+resurrect deleted facts. Unknown/repeated scalar parameters,
+invalid ranges/search/sort/filter combinations and exhausted resources return complete
+errors. Errors use `application/problem+json`, except Relay pagination 400 wire errors use
+JSON. Expensive retained-history reads can return retryable 503 rather than truncated input.

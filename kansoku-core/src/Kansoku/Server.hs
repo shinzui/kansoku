@@ -52,6 +52,7 @@ import Kansoku.Metrics.Handler (metricsServerWithCohorts)
 import Kansoku.Observability (PipelineMetrics)
 import Kansoku.Prelude
 import Kansoku.Readiness (ReadyCheckFailure, checkName)
+import Kansoku.Users.Handler (usersServer)
 import Network.HTTP.Types (status200, status404, status413, status500, status503, statusCode)
 import Network.HTTP.Types.Header (hContentType)
 import Network.Wai (Application, Middleware, Response, pathInfo, responseLBS)
@@ -90,6 +91,7 @@ kansokuServer pgPool settings service queryPool =
     { ingest = ingestServer service,
       metrics = metricsServerWithCohorts pgPool queryPool,
       metricDefinitions = definitionsServer pgPool,
+      users = usersServer pgPool queryPool,
       cohorts = cohortsServer settings pgPool queryPool,
       schemas = pure (schemaCatalog defaultRegistry)
     }
@@ -114,6 +116,7 @@ maintenanceTraffic pool app request respond
     protected = case pathInfo request of
       "v1" : name : _ -> name `elem` ["events", "batch", "beacon"]
       "metrics" : _ : _ -> True
+      "users" : _ -> True
       "cohorts" : _ -> True
       "metric-definitions" : _ -> True
       _ -> False

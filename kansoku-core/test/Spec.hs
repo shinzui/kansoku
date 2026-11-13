@@ -55,6 +55,8 @@ import Kansoku.QuerySpec qualified
 import Kansoku.ReadinessSpec qualified
 import Kansoku.ReplicaTopologySpec qualified
 import Kansoku.RequestLogSpec qualified
+import Kansoku.Users.HandlerSpec qualified
+import Kansoku.Users.QuerySpec qualified
 import Kansoku.Writer.BatchSpec qualified
 import Kansoku.Writer.LifecycleSpec qualified
 import Kansoku.Writer.OutageSpec qualified
@@ -88,6 +90,8 @@ normalTests = hspec $ do
   metrics <- runIO registerPipelineMetrics
   Kansoku.Auth.HandlerSpec.spec
   Kansoku.Auth.TokenSpec.spec
+  Kansoku.Users.QuerySpec.spec
+  Kansoku.Users.HandlerSpec.spec
   Kansoku.Cohort.QuerySpec.spec
   Kansoku.ConfigSpec.spec
   Kansoku.ReplicaTopologySpec.spec

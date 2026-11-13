@@ -49,6 +49,8 @@ library
     Kansoku.Metrics.Filter
     Kansoku.Metrics.Limits
     Kansoku.Prelude
+    Kansoku.Users.Api
+    Kansoku.Users.Types
 
   build-depends:
     aeson >=2.2.1,

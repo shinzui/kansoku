@@ -12,6 +12,7 @@ import Kansoku.Ingest.Api (IngestRoutes)
 import Kansoku.Metrics.Api (MetricsRoutes)
 import Kansoku.Metrics.DefinitionApi (MetricDefinitions)
 import Kansoku.Prelude
+import Kansoku.Users.Api (Users)
 import Servant.API (Description, Get, JSON, NamedRoutes, type (:>))
 import Servant.API.Generic (type (:-))
 
@@ -20,6 +21,7 @@ data KansokuAPI mode = KansokuAPI
   { ingest :: mode :- NamedRoutes IngestRoutes,
     metrics :: mode :- NamedRoutes MetricsRoutes,
     metricDefinitions :: mode :- NamedRoutes MetricDefinitions,
+    users :: mode :- NamedRoutes Users,
     cohorts :: mode :- NamedRoutes Cohorts,
     schemas :: mode :- SchemaAPI
   }

@@ -8,6 +8,7 @@ import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import Kansoku.Metrics.Filter (maxFilterBytes, maxFilters, parseMetricFilter, validateMetricFilters)
 import Kansoku.Prelude
+import Kansoku.Users.Validation (validateDates, validateDirectory, validateHistory)
 import Network.HTTP.Types.URI (decodePathSegments)
 import Network.Wai (Request, queryString, rawPathInfo)
 
@@ -28,10 +29,28 @@ validateMetricRequest request = case allowedParameters requestPath of
     let exclusions = [operand | ("exclude", operand) <- query]
     unless (requestPath == ["metrics", "paths"] || length (nub exclusions) <= 20 && all (maybe False (not . BS.null)) exclusions) (Left ("invalid_funnel_exclusion", "at most 20 distinct nonempty exclusions are supported"))
     let rawFilters = [operand | ("filter", operand) <- query]
-    unless (length rawFilters <= maxFilters) (Left ("invalid_filter", "at most eight filters are supported"))
+    unless (length rawFilters <= (if take 1 requestPath == ["users"] then 9 else maxFilters)) (Left ("invalid_filter", "at most eight filters are supported"))
     unless (sum (map (maybe 0 BS.length) rawFilters) <= maxFilterBytes) (Left ("invalid_filter", "decoded filters are limited to 16384 UTF-8 bytes"))
     filters <- first ("invalid_filter",) $ traverse parseOne rawFilters
-    void (first ("invalid_filter",) (validateMetricFilters filters))
+    when (take 1 requestPath == ["users"]) $ do
+      let scalar name = case [operand | (key, Just operand) <- query, key == name] of
+            [] -> Right Nothing
+            raw : _ -> Just <$> first (const ("invalid_users_query", "query value must be UTF-8")) (Text.decodeUtf8' raw)
+          date name = do
+            value <- scalar name
+            traverse (\raw -> case reads (Text.unpack raw) of [(d, "")] -> Right d; _ -> Left ("invalid_users_query", "dates must be YYYY-MM-DD")) value
+      lo <- date "from"
+      hi <- date "to"
+      search <- scalar "search"
+      order <- scalar "order"
+      first ("invalid_users_query",) $ case requestPath of
+        ["users"] -> validateDirectory lo hi search order filters
+        ["users", "activity-counts"] -> do
+          unless (isJust lo && isJust hi) (Left "activity counts require from and to")
+          validateDates lo hi
+        ["users", _, "events"] -> validateDates lo hi >> validateHistory filters
+        _ -> validateDates lo hi
+    if take 1 requestPath == ["users"] then mapM_ (\f -> void (first ("invalid_filter",) (validateMetricFilters [f]))) filters else void (first ("invalid_filter",) (validateMetricFilters filters))
   where
     requestPath = decodePathSegments (rawPathInfo request)
     query = queryString request
@@ -40,6 +59,10 @@ validateMetricRequest request = case allowedParameters requestPath of
 
 allowedParameters :: [Text] -> Maybe [Text]
 allowedParameters = \case
+  ["users"] -> Just ["from", "to", "search", "order", "includeBots", "filter", "first", "after", "last", "before"]
+  ["users", "activity-counts"] -> Just ["from", "to", "includeBots"]
+  ["users", _] -> Just []
+  ["users", _, "events"] -> Just ["from", "to", "includeBots", "filter", "first", "after", "last", "before"]
   ["metrics", "custom"] -> Just ["from", "to", "groupBy", "timeGrain", "filter", "metric", "events", "aggregation", "property", "quantile", "denominatorEvents", "denominatorAggregation"]
   ["metrics", "acquisition"] -> Just ["from", "to", "groupBy", "timeGrain", "filter", "measure", "conversionEvents", "includeBots"]
   ["metrics", "users"] -> Just ["from", "to", "groupBy", "timeGrain", "filter", "window", "includeBots", "aggregate", "attribution"]

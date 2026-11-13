@@ -339,7 +339,7 @@ def verify_organization_conditions(base, write_key, token, other_token, api, pre
     print('Organization cohort conditions: exact members/pages, numeric/OR/null filters, complements, current traits/replay, account isolation, metrics and session bounds passed.', flush=True)
 
 
-def main(verify=verify_cohorts, *, pass_environment=False):
+def main(verify=verify_cohorts, *, pass_environment=False, erase_delete_events=False):
     from contextlib import contextmanager
     import time
     import signal
@@ -407,7 +407,7 @@ def main(verify=verify_cohorts, *, pass_environment=False):
                 with child([server],native,'cohort-server') as process:
                     wait_for(process,lambda: request(base,'/health/ready')['status']=='ok','server')
                     def erase_user(user):
-                        result=subprocess.run([os.environ.get('KANSOKU_COHORT_ADMIN') or binary('kansoku-server:exe:kansoku-admin'),'erase-user','--account','cohorts','--user',user,'--out',str(ROOT/'erased.json'),'--confirm'],env=native,capture_output=True,text=True,timeout=90)
+                        result=subprocess.run([os.environ.get('KANSOKU_COHORT_ADMIN') or binary('kansoku-server:exe:kansoku-admin'),'erase-user','--account','cohorts','--user',user,'--out',str(ROOT/'erased.json'),'--confirm'] + (['--delete-events'] if erase_delete_events else []),env=native,capture_output=True,text=True,timeout=90)
                         (ROOT/'cohort-erasure.log').write_text(result.stdout+result.stderr)
                         result.check_returncode()
                         assert json.loads(result.stdout)['stage']=='complete'

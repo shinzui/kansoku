@@ -237,3 +237,7 @@ ch-runtime-replicated:
     set -euo pipefail
     clickhouse-migrate-embed-build --input kansoku-server migrations/clickhouse/manifest.json --input kansoku-server migrations/clickhouse-replicated/manifest.json -- build kansoku-server:exe:kansoku-server kansoku-server:exe:kansoku-admin kansoku-server:exe:kansoku-migrate kansoku-server:exe:kansoku-ch-migrate kansoku-server:test:clickhouse-replicated-runtime -fnative-migration-tests
     python3 scripts/clickhouse_replicated_runtime_acceptance.py
+
+# Own disposable stores and verify identified user reads and lifecycle.
+users-acceptance: build-with-tests
+    python3 scripts/users_acceptance.py

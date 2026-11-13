@@ -10,6 +10,12 @@ provenance:
     model: "gpt-6-astra"
     harness: "codex-cli"
     at: 2026-11-12T23:45:07Z
+  revisions:
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-11-13T00:32:25Z
+      mode: "implement"
+      note: "Implement authenticated users resource and verify public owned-store acceptance."
 ---
 
 # Read identified users, profiles, and event history
@@ -25,12 +31,18 @@ A service-token consumer will be able to display an account's identified-user di
 ## Progress
 
 
-- [ ] Milestone 1: Authenticated directory and exact activity counts work through public HTTP, with shared identity semantics and bounded bidirectional pagination.
-- [ ] Milestone 2: Profiles expose correct trait provenance, evidence counts, linked anonymous counts, and current organisation without leaking identifiers.
-- [ ] Milestone 3: Resolved event history pages deterministically and exposes only approved per-version scalar properties.
+- [x] Milestone 1 (2026-11-13): Authenticated directory and exact counts pass owned real HTTP acceptance, including stitched activity, both orders/directions, nullable extrema, literal search, typed filters, static/behavioural cohorts and bot/count parity. Evidence: `nix develop --no-write-lock-file -c python3 scripts/users_acceptance.py`, private run `.dev/acceptance/cohort-1w5b3kjz`.
+- [x] Milestone 2 (2026-11-13): Profiles pass eligible set/set-once, equal occurrence/receipt event-ID tie, replay, legacy exclusion, evidence/anonymous counts, organisation moves, actual deletion and physical pre-TTL fingerprint expiry checks in the same owned run.
+- [x] Milestone 3 (2026-11-13): History passes stitched uniqueness, complete tied-key forward/backward walks, name filters, schema-version and alias/privacy projection, and newer-arrival continuation/refresh checks. Pure exact-version/type/privacy tests also pass in the deterministic suite.
 - [ ] Milestone 4: Full public acceptance, served OpenAPI, query guide, and durable architecture documentation agree on all five request criteria.
 
+Current validation: the final local build and deterministic suite pass (520 core examples, 22 client examples, four probe checks), as do generated OpenAPI/contract freshness, OpenAPI lint, formatting and strict ADR/guide/friction validation. The focused run `.dev/acceptance/cohort-8f6vr6a8` additionally compares served/committed OpenAPI, applies actual retention and forces native memory exhaustion on all four routes; each returns a complete 503 problem without partial data. Cohort regression passed in `.dev/acceptance/cohort-fkfm2951`. Aggregate packaged acceptance is running with the local checkout of `mori://shinzui/kansoku-ts` as its required SDK prerequisite; its package build remains in progress.
+
 ## Surprises & Discoveries
+
+2026-11-13: The administrative erase command defaults to identity unlinking and deliberately retains explicit user facts. The users lifecycle proof must invoke `erase-user --delete-events` to prove disappearance; changing existing unlinking semantics is outside this resource plan. The owned cohort helper now accepts an opt-in deletion flag, preserving its existing default. The initial HTTP run verified identity unlinking removes evidence/traits while explicit retained events still establish a profile.
+
+2026-11-13: Relay accepts a zero page size; users handlers explicitly reject it to enforce the required minimum of one. ClickHouse comparison expressions serialize as integers unless cast to Bool; history existence/page-view projections explicitly cast them before JSON decoding.
 
 
 ## Decision Log

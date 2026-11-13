@@ -1,5 +1,8 @@
 # Bundle Update Log
 
+## 2026-11-13
+* **Updated**: DOC-10 documents identified-user directory, profiles, history, exact counts and read boundaries.
+
 ## 2026-11-08
 * **Update**: DOC-10: document contained-event session selection, validation and the two-request error percentage.
 * **Update**: DOC-13: Document 0026 fenced session reconstruction, all-replica barriers and explicit recovery

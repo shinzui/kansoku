@@ -11,6 +11,7 @@ import Kansoku.ClickHouse (QueryPool)
 import Kansoku.Event (defaultRegistry, schemaCatalog)
 import Kansoku.Metrics.Handler (metricsServer)
 import Kansoku.Metrics.RoutingSpec (sentinelContext, sentinelIngestServer)
+import Kansoku.Users.Handler (usersServer)
 import Network.HTTP.Client qualified as HTTP
 import Network.HTTP.Types (status400, status503)
 import Network.Wai (Application)
@@ -197,6 +198,7 @@ validationApplicationWithPool pool =
     Api.KansokuAPI
       { Api.ingest = sentinelIngestServer,
         Api.metricDefinitions = error "definition routes unused in metric handler tests",
+        Api.users = usersServer (error "users PostgreSQL unused") (error "users ClickHouse unused"),
         Api.cohorts = error "cohort routes are unused in metric handler tests",
         Api.metrics = metricsServer pool,
         Api.schemas = pure (schemaCatalog defaultRegistry)
