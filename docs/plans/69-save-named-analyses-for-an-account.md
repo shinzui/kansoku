@@ -10,6 +10,12 @@ provenance:
     model: "gpt-6-astra"
     harness: "codex-cli"
     at: 2026-11-13T00:56:28Z
+  revisions:
+    - model: "gpt-6-astra"
+      harness: "codex-cli"
+      at: 2026-11-13T01:03:04Z
+      mode: "update"
+      note: "Correct Mori availability after refreshing stale inherited shell environment"
 ---
 
 # Save named analyses for an account
@@ -60,7 +66,7 @@ The following consulted ADRs constrain this work. [ADR-3](../adr/0003-api-key-au
 
 At creation, the working tree already contains substantial staged and unstaged identified-user work, including modifications to API assembly, OpenAPI and acceptance scripts. Preserve it; merge new resource registration into the current files. No implementation was performed while authoring this plan.
 
-Mori discovery was attempted with `mori registry list` and `mori registry search rel8`; both failed because its local PostgreSQL socket refused connections. No dependency source or release claim is inferred from that failure. This plan uses repository-owned integration patterns and proposes no dependency version changes. Before writing any unfamiliar dependency API, restore registry access and use `mori registry search`, `show --full`, and `docs` to locate the relevant source. Never search `/nix/store` or the filesystem root.
+Mori is available. Initial discovery failed because this agent inherited an obsolete PostgreSQL connection setting and the Home Manager `__HM_ZSH_SESS_VARS_SOURCED` guard prevented a fresh login shell from refreshing it. Running `env -u __HM_ZSH_SESS_VARS_SOURCED /bin/zsh -lc 'mori registry list; mori registry search relay-pagination'` successfully refreshed the environment and located `mori://shinzui/relay-pagination`. This was a stale agent environment, not a Mori service outage. Before writing any unfamiliar dependency API, use `mori registry search`, `show --full`, and `docs` to locate the relevant source. No dependency version changes are proposed. Never search `/nix/store` or the filesystem root.
 
 
 ## Plan of Work
@@ -168,3 +174,5 @@ The public surface is POST/GET `/analyses` and GET/PUT/DELETE `/analyses/{id}`. 
 `Kansoku.Analysis.Validation` returns a validated envelope plus its exact encoded document bytes. `Kansoku.Analysis.Store` accepts an explicit AccountId for every operation, a configured limit for create, and an expected revision for replace/delete. It returns distinct domain outcomes rather than forcing handlers to guess conflict versus missing from a zero-row mutation. `Kansoku.Analysis.Handler` maps these to the public wire types. Database connection cleanup, locking and cancellation are store responsibilities.
 
 Reuse existing Aeson, UUID, time, Hasql, PostgreSQL and Relay dependencies. No ClickHouse document storage, new service, background worker, schema interpretation, or consumer-specific dependency is introduced. The request file is the complete upstream acceptance source; no external consumer repository is needed to implement or validate this plan.
+
+Revision note (2026-11-13): Corrected Mori availability after successful discovery with refreshed shell environment; the implementation scope is unchanged.
