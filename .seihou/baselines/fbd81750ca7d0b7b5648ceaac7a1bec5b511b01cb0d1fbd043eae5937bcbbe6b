@@ -2,7 +2,6 @@
 .agents/
 .seihou/manifest.json.tmp
 CLAUDE.local.md
-.envrc
 dist
 dist-*
 cabal-dev
@@ -17,5 +16,10 @@ result-*
 .mina/
 .envrc.local
 db/
-clickhouse/
+
+# Python acceptance helpers
+__pycache__/
+
+# Private executable acceptance processes, credentials and diagnostics
+.dev/acceptance/
 .codex/
