@@ -2,6 +2,9 @@
 
 ## 2026-11-13
 
+* **Update**: DOC-13: document explicit restored namespaces, SELECT-only readonly=2 role, embedded schema expectations and constrained operational TTL verification.
+
+
 * **Update**: DOC-13: map verified Nagare v0.20.0 maintenance and backup receipts into the portable three-store contract; live integration remains open.
 
 

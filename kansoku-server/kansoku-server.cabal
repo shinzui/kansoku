@@ -18,6 +18,7 @@ extra-source-files:
   migrations/clickhouse/native-assertions/*.sql
   migrations/clickhouse/original/*.sql
   migrations/clickhouse/original/migrate.sh
+  migrations/clickhouse/schema-expectation.json
   migrations/clickhouse/steps/**/*.sql
   test/fixtures/*.json
 
@@ -90,6 +91,9 @@ executable kansoku-ch-migrate
     Kansoku.ClickHouseMigration.Rebind
     Kansoku.ClickHouseMigration.Recovery
     Kansoku.ClickHouseMigration.RecoveryGate
+    Kansoku.ClickHouseMigration.Restored
+    Kansoku.ClickHouseMigration.Schema
+    Kansoku.ClickHouseMigration.SchemaExpectation
     Kansoku.ClickHouseMigrations
     Kansoku.ClickHouseReplicatedMigrations
 
@@ -107,6 +111,7 @@ executable kansoku-ch-migrate
     http-types,
     kansoku-core,
     optparse-applicative,
+    template-haskell,
     text,
     time,
 
@@ -130,6 +135,9 @@ executable kansoku-ch-migrate-upgrade-proof
     Kansoku.ClickHouseMigration.Rebind
     Kansoku.ClickHouseMigration.Recovery
     Kansoku.ClickHouseMigration.RecoveryGate
+    Kansoku.ClickHouseMigration.Restored
+    Kansoku.ClickHouseMigration.Schema
+    Kansoku.ClickHouseMigration.SchemaExpectation
     Kansoku.ClickHouseMigration.UpgradeProof
     Kansoku.ClickHouseMigrations
     Kansoku.ClickHouseReplicatedMigrations
@@ -148,6 +156,7 @@ executable kansoku-ch-migrate-upgrade-proof
     http-types,
     kansoku-core,
     optparse-applicative,
+    template-haskell,
     text,
     time,
 
@@ -253,5 +262,31 @@ test-suite clickhouse-recovery-contract
     bytestring,
     clickhouse-migrate ==0.2.0.0,
     crypton,
+    text,
+    time,
+
+test-suite clickhouse-schema-contract
+  import: common
+  type: exitcode-stdio-1.0
+  hs-source-dirs:
+    test
+    src
+
+  main-is: ClickHouseSchemaContract.hs
+  other-modules:
+    Kansoku.ClickHouseMigration.Recovery
+    Kansoku.ClickHouseMigration.Schema
+    Kansoku.ClickHouseMigration.SchemaExpectation
+    Kansoku.ClickHouseMigrations
+
+  build-depends:
+    aeson,
+    base >=4.21 && <5,
+    bytestring,
+    clickhouse-migrate ==0.2.0.0,
+    clickhouse-migrate-embed ==0.2.0.0,
+    crypton,
+    kansoku-core,
+    template-haskell,
     text,
     time,

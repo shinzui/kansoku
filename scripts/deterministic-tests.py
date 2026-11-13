@@ -41,3 +41,4 @@ with socket.socket() as unavailable:
     print(recovery.stdout + recovery.stderr, end='', flush=True)
     recovery.check_returncode()
     assert re.search(r'[1-9]\d* recovery contract cases passed; 0 failures, 0 skipped', recovery.stdout), 'Missing nonzero recovery contract acceptance'
+    probes([binary('kansoku-server:test:clickhouse-schema-contract')], env=env)

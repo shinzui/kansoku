@@ -2,6 +2,9 @@
 
 ## 2026-11-13
 
+* **Update**: ADR-22: separate read-only restored-schema verification from history checks and mutation/adoption authority; bind qualified expectations and retained policy.
+
+
 * **Update**: ADR-22: retain explicit direct-server recovery audits and compare-and-set adoption without clearing receipts or fences.
 
 

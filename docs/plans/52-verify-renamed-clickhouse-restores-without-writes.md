@@ -22,6 +22,11 @@ provenance:
       at: 2026-11-04T05:38:58Z
       mode: "update"
       note: "Name kansoku-ch-migrate and parser isolation for verify-restored; note pinned commit versus local checkout; add ADR bundle validation"
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-11-13T20:45:23Z
+      mode: "implement"
+      note: "Start isolated read-only restored namespace proof after recovery-set and rebuilt-server acceptance"
 ---
 
 # Verify renamed ClickHouse restores without writes
@@ -42,13 +47,46 @@ This delivers IR-2 AC-4 independently of any deployment platform.
 
 ## Progress
 
-- [ ] M1: A separate restored-copy inspection path accepts explicit scratch mappings and safely reads the expected original ledger under a read-only identity.
-- [ ] M2: Release-bound schema expectations and structural comparison detect actual schema drift without executing or rewriting migration steps.
-- [ ] M3: Packaged verification passes on a matching renamed restore, fails on adversarial drift, and proves zero writes and no effect on live databases.
+- [x] M1 (2026-11-13): The isolated `verify-restored` boundary reads a real renamed backup ledger through public toolkit Observe APIs, with separate SELECT-only credentials and no live configuration/PostgreSQL connection. `.dev/acceptance/restored-inspection-vigoair8/` passes correct mapping and refuses foreign target/ledger/server, live/equal names and invalid identifiers. Every captured request was SELECT; a temporary-table write was independently denied. Schema remains explicitly incomplete and the command returns nonzero until M2.
+- [x] M2 (2026-11-13): Owned native derivation embeds 45 objects/284 columns with compiled-plan and qualified-artifact identity. Twenty-three schema contracts and eleven native restore families pass, including structural namespace/principal/UUID mapping, actual operated TTL plus retained policy, and adversarial unchanged-ledger drift. Archive qualification rejects a mismatched artifact and runs with source inputs withheld.
+- [x] M3 (2026-11-13): Packaged CLI acceptance `.dev/acceptance/ch-migrations-fd8nkrau/` passes all 33 required cases, zero failures/skips, including ten current-restore families and the compatible older-prefix refusal. Embedding `.dev/acceptance/ch-embedding-x7l2obtk/` and ten-package source reconstruction `.dev/acceptance/ch-sdist-9xwhykl2/` pass; `just check` passes. All captured verifier requests are SELECT; independent temporary-write denial and live metadata/data checks pass.
 
+The M2/M3 implementation is now in `Restored.hs`, `Schema.hs` and
+`SchemaExpectation.hs` under `kansoku-server/src/Kansoku/ClickHouseMigration/`.
+The generated artifact is
+`kansoku-server/migrations/clickhouse/schema-expectation.json`; its producer is
+`scripts/generate_clickhouse_schema_expectation.py`. Twenty-three deterministic
+schema contracts pass. The owned fixture at
+`.dev/acceptance/restored-inspection-5axhpxyb/` passes ten current-restore families
+and one older-prefix family, including actual applied retention, independently
+denied temporary writes and complete SELECT-only request capture. The subsequent
+packaged, source-archive and final repository gates all passed.
 
 ## Surprises & Discoveries
 
+FRIC-38 records that the public toolkit's read-only transport sets synchronous
+query settings: ClickHouse `readonly=1` rejects its first probe. `readonly=2`
+permits these per-query settings while still prohibiting writes, with independent
+SELECT-only grants and full request capture. This is an exact verifier role
+requirement, not permission to grant mutation capabilities.
+
+The qualified native metadata exposes 45 application objects and 284 columns.
+An initial owned derivation is retained privately at
+`.dev/acceptance/restored-schema-research-k27jngng/schema.private.json`. Native
+EXPLAIN AST distinguishes table identifiers from literal strings, but omits some
+security/storage details; comparison must retain full definitions and metadata
+rather than treating the AST dump alone as a complete schema contract.
+
+The qualified native representation omits the default DELETE token from a DELETE
+TTL, and `engine_full` includes keys, settings and TTL in addition to the engine.
+Normalize that supported TTL in both full definitions and engine metadata, with
+its exact condition and trusted millisecond cutoff retained; a literal comparison
+of engine metadata alone incorrectly rejects a supported operated restore.
+
+Source-archive helpers still assumed package version 0.1.0.0 even though the
+working tree is 0.2.0.0. They now discover current workspace package versions;
+source qualification also asserts embedded schema digest/current plan agreement
+with inputs withheld and a deliberately mismatched artifact.
 
 ## Decision Log
 
@@ -59,9 +97,30 @@ live mutation surface and still leave immutable embedded SQL pointing at analyti
 On 2026-11-03, report ledger agreement and schema agreement separately. Native
 history proves recorded execution; it does not prove no later manual schema drift.
 
+On 2026-11-13, embed expectations derived from the owned native plan rather than
+load a runtime schema file. Map only parsed relation positions and explicit
+definer bindings, preserving literals and unrelated identifiers; constrain
+physical UUID removal to the CREATE header. Use separately supplied trusted
+policy and cross-check the restored relation. Initially qualify the direct Atomic
+shape on 26.8.28.14; unsupported versions/shapes refuse a full pass. Final platform
+qualification remains EP-53's responsibility.
+
 
 ## Outcomes & Retrospective
 
+Delivered explicit, coordinator-free restored-copy inspection with independent
+ledger/schema results, embedded release expectations and trusted operational
+policy checks. Qualified renamed fresh and operated backups pass; unchanged-ledger
+type/default/engine/key/reference/view/extra-object drift fails. Older compatible
+history does not become a full current pass. The packaged and source-built
+executables retain their expectation fingerprint without runtime source inputs.
+
+FRIC-38 is resolved: readonly=2 plus exact SELECT grants supports the public
+transport's settings while independently denying writes. The guide retains that
+observed requirement, and ADR-22 records the separate inspection authority,
+structural mapping and constrained retention boundary. Current qualification is
+the direct Atomic shape on the recorded 26.8.28.14 artifact; this does not claim
+new engine/platform certification or close the final Nagare integration gate.
 
 ## Context and Orientation
 
@@ -94,8 +153,10 @@ Inspection must honor all three without pretending to be a restore/adoption comm
 
 The toolkit source owner is `mori://shinzui/clickhouse-migrate`. Discover its public
 inspection/target/ledger APIs through Mori before designing an adapter, reading the
-commit `00afa9fa` that `cabal.project` pins for 0.1.0.1; on 2026-11-03 the local Mori
-checkout was at the 0.1.0.0 release and did not contain that commit. If a public
+released 0.2.0.0 cohort currently selected in `cabal.project` and `flake.module.nix`.
+Registry metadata and upstream tags were checked on 2026-11-13; the local Mori
+source now contains that release. The 0.1.0.1 pin described when this plan was
+drafted is historical. If a public
 read-only API cannot inspect a restored namespace and original target safely, track
 upstream support there. Do not import private internals, disable identity checks or
 copy a second ledger implementation into Kansoku.

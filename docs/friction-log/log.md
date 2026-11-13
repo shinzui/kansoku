@@ -2,6 +2,12 @@
 
 ## 2026-11-13
 
+* **Update**: FRIC-38 resolved: Owned renamed current and prefix restores and all schema drift cases pass under the constrained role.
+
+
+* **Addition**: FRIC-38 records detour interface friction with mori://shinzui/clickhouse-migrate/packages/clickhouse-migrate: Read-only native inspection requires settings-compatible credentials
+
+
 * **Addition**: FRIC-37 records detour interface friction with mori://KovalevDima/ClickHaskell/packages/ClickHaskell: Rejected native process observation invalidates the maintenance exchange
 
 

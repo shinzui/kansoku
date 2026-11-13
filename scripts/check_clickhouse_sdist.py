@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Build the production CLI from workspace and published migration archives."""
 import json
+import hashlib
 import os
 import re
 from pathlib import Path
@@ -21,11 +22,11 @@ def main():
     workspace = root / 'workspace'
     workspace.mkdir()
     print('Private source archive evidence: ' + str(root), flush=True)
-    def run(args, cwd=repo, env=None):
+    def run(args, cwd=repo, env=None, success=True):
         result = subprocess.run(args,cwd=cwd,env=env,text=True,capture_output=True,timeout=900)
         with (root / 'commands.private').open('a') as output:
             output.write(result.stdout + result.stderr)
-        result.check_returncode()
+        assert (result.returncode==0)==success, 'Unexpected source archive command outcome; private log retained'
         return result.stdout.strip()
     run(['cabal','sdist','all','--output-directory',str(archives)])
     packages = []
@@ -37,17 +38,34 @@ def main():
     released = [name + '-' + migration_version for name in ['clickhouse-migrate', 'clickhouse-migrate-embed', 'clickhouse-migrate-cli', 'clickhouse-migrate-test-support']]
     run(['cabal','get','--pristine','--destdir',str(workspace),*released])
     packages.extend(workspace / name for name in released)
-    required = {'kansoku-api-0.1.0.0', 'kansoku-core-0.1.0.0', 'kansoku-server-0.1.0.0', 'kansoku-client-0.1.0.0', 'ClickHaskell-1.1.0', 'hs-opentelemetry-instrumentation-servant-0.3.0.0'}
+    required = {'ClickHaskell-1.1.0', 'hs-opentelemetry-instrumentation-servant-0.3.0.0'}
+    for name in ('kansoku-api','kansoku-core','kansoku-server','kansoku-client'):
+        version=re.search(r'(?m)^version:\s*([0-9.]+)',(repo/name/(name+'.cabal')).read_text()).group(1)
+        required.add(name+'-'+version)
     required |= set(released)
     assert {path.name for path in packages} == required, 'Extract every workspace, pinned source-repository and published migration package'
     server = next(path for path in packages if path.name.startswith('kansoku-server-'))
     settings = (repo / 'cabal.project').read_text().split('index-state:',1)[1].split('source-repository-package',1)[0]
     (workspace / 'cabal.project').write_text('packages:\n' + ''.join('  '+str(path)+'\n' for path in packages) + '\nindex-state:' + settings)
-    run(['clickhouse-migrate-embed-build','--input',str(server),'migrations/clickhouse/manifest.json','--input',str(server),'migrations/clickhouse-replicated/manifest.json','--','build','kansoku-server:exe:kansoku-ch-migrate'],workspace)
+    build=['clickhouse-migrate-embed-build','--input',str(server),'migrations/clickhouse/manifest.json','--input',str(server),'migrations/clickhouse-replicated/manifest.json','--','build','kansoku-server:exe:kansoku-ch-migrate']
+    run(build,workspace)
     binary = run(['cabal','list-bin','kansoku-server:exe:kansoku-ch-migrate'],workspace)
+    expectation=server/'migrations/clickhouse/schema-expectation.json'
+    expected_bytes=expectation.read_bytes()
+    expected=json.loads(run([binary,'restored-expectations','--json'],root))['result']
+    assert expected['expectationSha256']==hashlib.sha256(expected_bytes).hexdigest()
+    assert expected['planSha256']==json.loads(expected_bytes)['planSha256']
+    invalid=json.loads(expected_bytes)
+    invalid['planSha256']='0'*64
+    expectation.write_text(json.dumps(invalid))
+    run(build,workspace)
+    run([binary,'restored-expectations','--json'],root,success=False)
+    expectation.write_bytes(expected_bytes)
+    run(build,workspace)
     (server / 'migrations').rename(root / 'withheld-migration-inputs')
     offline = {key:value for key,value in os.environ.items() if not key.startswith(('PG','CLICKHOUSE','KANSOKU_'))}
     document = json.loads(run([binary,'plan','--json'],root,offline))
+    assert json.loads(run([binary,'restored-expectations','--json'],root,offline))['result']==expected
     migrations = document['result']['components'][0]['migrations']
     assert len(migrations) == 26 and sum(len(item['steps']) for item in migrations[:25]) == 257 and len(migrations[-1]['steps']) == 7
     offline.update(KANSOKU_CH_MIGRATION_CLUSTER='fixture',KANSOKU_CH_MIGRATION_REPLICA_IDS='11111111-1111-4111-8111-111111111111,22222222-2222-4222-8222-222222222222')

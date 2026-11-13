@@ -29,6 +29,7 @@ import Kansoku.ClickHouseMigration.Config qualified as Config
 import Kansoku.ClickHouseMigration.Coordinator (sessionEvents, verifySessions, withCoordinator)
 import Kansoku.ClickHouseMigration.Rebind qualified as Rebind
 import Kansoku.ClickHouseMigration.RecoveryGate qualified as Backup
+import Kansoku.ClickHouseMigration.Restored qualified as Restored
 import Kansoku.Exception (trySynchronous)
 import Options.Applicative qualified as O
 import System.Environment (getArgs, lookupEnv)
@@ -36,13 +37,16 @@ import System.Exit (ExitCode (..), exitFailure, exitWith)
 import System.IO (stderr)
 import System.IO.Error (ioeGetErrorString, isUserError)
 
-data ApplicationCommand = Native !Invocation | Begin !OutputFormat !T.TargetKey !AuditInput | Finish !OutputFormat !T.TargetKey !AuditInput | SessionStatus !OutputFormat | RecoveryContext !OutputFormat | RecoveryObservation !OutputFormat | RebindServer !OutputFormat !T.TargetKey !Text !Text !FilePath !FilePath !AuditInput | Reconcile !OutputFormat !T.TargetKey !AuditInput ![L.AppendReceipt]
+data ApplicationCommand = Native !Invocation | Begin !OutputFormat !T.TargetKey !AuditInput | Finish !OutputFormat !T.TargetKey !AuditInput | SessionStatus !OutputFormat | RecoveryContext !OutputFormat | RecoveryObservation !OutputFormat | RebindServer !OutputFormat !T.TargetKey !Text !Text !FilePath !FilePath !AuditInput | RestoredCopy !OutputFormat !Restored.Options | RestoredExpectations !OutputFormat | Reconcile !OutputFormat !T.TargetKey !AuditInput ![L.AppendReceipt]
 
 -- The toolkit parser remains authoritative for its command syntax. The outer
 -- option binds quiescence to a specific persisted application session entry.
 parser :: O.Parser (Maybe Integer, Maybe FilePath, Maybe FilePath, ApplicationCommand)
-parser = (,,,) <$> optional (O.option O.auto (O.long "predecessor" <> O.metavar "ENTRY" <> O.help "Quiescence evidence applies to this exact session entry counter")) <*> optional (O.strOption (O.long "drain-evidence" <> O.metavar "FILE" <> O.help "Bounded portable operator drain attestation")) <*> optional (O.strOption (O.long "recovery-set" <> O.metavar "FILE" <> O.help "Complete pre-change recovery-set manifest")) <*> (Native <$> commandParser <|> maintenance)
+parser = (,,,) <$> optional (O.option O.auto (O.long "predecessor" <> O.metavar "ENTRY" <> O.help "Quiescence evidence applies to this exact session entry counter")) <*> optional (O.strOption (O.long "drain-evidence" <> O.metavar "FILE" <> O.help "Bounded portable operator drain attestation")) <*> optional (O.strOption (O.long "recovery-set" <> O.metavar "FILE" <> O.help "Complete pre-change recovery-set manifest")) <*> (Native <$> commandParser <|> maintenance <|> restored)
   where
+    restored =
+      O.hsubparser (O.command "verify-restored" (O.info (RestoredCopy <$> format <*> (Restored.Options <$> value "endpoint" <*> value "server" <*> value "original-target" <*> value "original-ledger" <*> value "application-database" <*> value "ledger-database" <*> value "expect-plan-sha256" <*> value "expected-definer" <*> optional (O.strOption (O.long "expected-policy" <> O.metavar "FILE"))) <**> O.helper) (O.progDesc "Inspect explicit scratch namespaces read-only; never authorize live mutation")))
+        <|> O.hsubparser (O.command "restored-expectations" (O.info (RestoredExpectations <$> format <**> O.helper) (O.progDesc "Show offline release-bound restored-schema expectations")))
     maintenance = O.hsubparser (O.command "maintenance" (O.info commands (O.progDesc "Persist or finish a fenced administrative session")))
     receipts = many (O.option (O.eitherReader (either (const (Left "Invalid append receipt")) Right . L.parseAppendReceipt . Text.pack)) (O.long "pending-append" <> O.metavar "RECEIPT"))
     quietAudit = O.flag' () (O.long "quiescent" <> O.help "Submitting clients stopped and every predecessor request drained") *> audit True
@@ -79,16 +83,29 @@ mainWith choose = do
 run :: (T.TargetTopology -> [String] -> ([String], Either PlanError MigrationPlan)) -> IO ()
 run choose = do
   rawArgs <- getArgs
-  topology <- Config.loadTopology True
-  let (args, compiled) = choose topology rawArgs
+  inspectionTopology <- T.DirectServer <$> either (const (fail "Invalid internal inspection topology")) pure (T.serverId "00000000-0000-0000-0000-000000000000")
+  -- Parse the actual command before choosing its configuration boundary. An
+  -- actor/reason merely containing a command name must never change topology.
+  let (args, _) = choose inspectionTopology rawArgs
   parsed <- case O.execParserPure O.defaultPrefs (O.info (parser <**> O.helper) (O.fullDesc <> O.progDesc "Kansoku compiled ClickHouse migrations and persistent maintenance sessions; legacy import is unsupported")) args of
     O.Success value -> pure value
     O.Failure failure -> case O.renderFailure failure "kansoku-ch-migrate" of
       (message, ExitSuccess) -> putStrLn message >> exitWith ExitSuccess
       _ -> Text.hPutStrLn stderr "Invalid migration arguments; use --help" >> exitFailure
     _ -> exitWith ExitSuccess
+  topology <- case parsed of
+    (_, _, _, RestoredCopy {}) -> pure inspectionTopology
+    (_, _, _, RestoredExpectations {}) -> pure inspectionTopology
+    _ -> Config.loadTopology True
+  let (selectedArgs, compiled) = choose topology rawArgs
+  unless (selectedArgs == args) (fail "Topology-dependent migration argument rewriting is unsupported")
   plan <- either (const (fail "Invalid compiled migration plan")) pure compiled
   case parsed of
+    (_, _, recoveryFile, RestoredCopy format options) -> do
+      (report, passed) <- Restored.inspect options plan recoveryFile
+      renderMaintenance format "verify-restored" report
+      unless passed exitFailure
+    (_, _, _, RestoredExpectations format) -> Restored.expectations plan >>= renderMaintenance format "restored-expectations"
     (_, _, _, Native (Invocation _ AdoptCommand {})) -> Text.hPutStrLn stderr "Legacy import is unsupported; create a fresh owned stack." >> exitFailure
     (_, _, _, Native invocation@(Invocation _ PlanCommand)) -> execute plan Nothing Nothing invocation
     (predecessor, evidenceFile, recoveryFile, Native invocation@(Invocation format command)) -> do

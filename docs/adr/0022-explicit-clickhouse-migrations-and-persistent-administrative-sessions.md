@@ -5,7 +5,7 @@ description: Embed immutable native migration steps, bind administration to reta
 docId: ADR-22
 status: Accepted
 date: 2026-10-16
-timestamp: 2026-11-13T20:38:02Z
+timestamp: 2026-11-13T21:42:19Z
 generated:
   by: process:codex
   at: 2026-10-16T22:55:08Z
@@ -266,3 +266,32 @@ inspection grants no adoption authority. Unresolved native work still requires
 existing explicit repair with exact receipts and fresh drain. Rebuilt replicated
 inventory adoption is refused pending separate qualification; integrated platform
 acceptance also remains open.
+
+## Read-only restored-schema inspection
+
+Keep restored-copy inspection separate from live mutation configuration. Explicit
+scratch application/ledger names, endpoint/server UUID, original target/ledger,
+compiled plan and expected definer are required. Separate credentials and the
+public toolkit's Observe API read complete native history without a coordinator
+or session. Neither live database name is accepted. A scratch result grants no
+migration or adoption authority; a compatible older prefix is not a full pass.
+
+Generate versioned schema expectations from the actual immutable plan on an owned
+qualified artifact, embed them in the executable and bind their digest to that
+compiled plan and derivation artifact. Compare installed definitions, columns,
+defaults/codecs, engine and keys, materialized-view targets and public references;
+report unknown extra objects. Map only structural database references and explicit
+reviewed definer bindings. Preserve literals and unrelated names. Physical restore
+UUIDs do not define logical schema identity. Unsupported representation or missing
+visibility refuses full verification.
+
+Retained operational policy is an independent input, never inferred from observed
+TTL text. Constrain the supported applied-retention expression and its cutoff,
+including its canonical implicit DELETE form, and cross-check the restored policy
+relation at native millisecond precision. Ledger agreement and schema agreement
+are separate results. Current qualification covers the direct Atomic shape on the
+recorded 26.8.28.14 artifact; other shapes require their own reviewed expectations.
+The SELECT-only verifier uses readonly=2 because public transport observation sets
+synchronous query settings. Fixture capture proves no attempted writes and its
+grants independently prohibit temporary-table creation. Inspection never creates
+runtime identity-cache tables or changes deployment grants.

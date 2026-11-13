@@ -13,6 +13,7 @@ def main():
     repo = Path(__file__).resolve().parents[1]
     project = (repo / 'cabal.project').read_text()
     migration_version = re.search(r'(?m)^\s*clickhouse-migrate ==([0-9.]+),', project).group(1)
+    package_version = re.search(r'(?m)^version:\s*([0-9.]+)', (repo/'kansoku-server/kansoku-server.cabal').read_text()).group(1)
     os.umask(0o077)
     parent = repo / '.dev/acceptance'
     parent.mkdir(parents=True, exist_ok=True)
@@ -25,10 +26,10 @@ def main():
         result.check_returncode()
         return result.stdout.strip()
     run(['cabal', 'sdist', 'kansoku-server', '--output-directory', str(root)])
-    archive = root / 'kansoku-server-0.1.0.0.tar.gz'
+    archive = root / ('kansoku-server-'+package_version+'.tar.gz')
     with tarfile.open(archive) as source:
         source.extractall(root, filter='data')
-    package = root / 'kansoku-server-0.1.0.0'
+    package = root / ('kansoku-server-'+package_version)
     (package / 'proof').mkdir()
     (package / 'proof/Main.hs').write_text('''module Main where
 import Kansoku.ClickHouseMigrations qualified as M
@@ -49,7 +50,9 @@ executable embedding-proof
   other-modules: Kansoku.ClickHouseMigrations Kansoku.ClickHouseReplicatedMigrations
   build-depends: base >=4.21 && <4.22, bytestring, text, clickhouse-migrate ==MIGRATION_VERSION, clickhouse-migrate-embed ==MIGRATION_VERSION
 '''.replace('MIGRATION_VERSION', migration_version))
-    (package / 'cabal.project').write_text('packages: .\n' + project[project.index('index-state:'):])
+    # The isolated consumer needs only the released migration cohort; unrelated
+    # workspace source repositories are exercised by the full archive proof.
+    (package / 'cabal.project').write_text('packages: .\n' + project[project.index('index-state:'):].split('source-repository-package',1)[0])
     build = ['clickhouse-migrate-embed-build', '--input', '.', 'migrations/clickhouse/manifest.json', '--input', '.', 'migrations/clickhouse-replicated/manifest.json', '--', 'build', 'all']
     run(build, package)
     binary = run(['cabal', 'list-bin', 'embedding-proof'], package)

@@ -4,7 +4,7 @@ title: "Initialize and upgrade ClickHouse"
 description: "Initialize a fresh owned ClickHouse target, retain native identities, coordinate maintenance and recover explicit migration attempts."
 docId: DOC-13
 tags: ["clickhouse", "migrations", "maintenance", "recovery"]
-timestamp: 2026-11-13T20:51:43Z
+timestamp: 2026-11-13T21:42:19Z
 generated:
   by: process:codex
   at: "2026-11-07T20:24:51Z"
@@ -270,6 +270,85 @@ resupply its exact bytes, but still needs fresh owner-bound drain. Another owner
 changed plan needs a new set. A proven-empty native installation records a separate
 fresh-empty exception; initialization flags cannot exempt a populated target.
 Changing the configured UUID does not authorize recovery; use explicit adoption below.
+
+## Verify a renamed restored copy read-only
+
+`verify-restored` uses a separate inspection connection and explicit scratch
+names. It needs neither PostgreSQL nor a maintenance session and never authorizes
+migration or rebuilt-server adoption. Both live names (`analytics` and
+`kansoku_migration_ledger`), equal names and invalid identifiers are refused.
+Keep the original logical target/ledger IDs; the observed server UUID and physical
+scratch databases identify the copy being inspected.
+
+The embedded version-1 schema expectation was derived by applying the actual
+immutable plan to the qualified native `26.8.28.14` artifact. It covers 45 objects
+and 284 columns and records the derivation artifact's digest. This initially
+qualifies the direct Atomic-database shape; other engines/versions require their
+own reviewed expectations and are refused. Remote version/UUID observations do
+not attest remote executable bytes. Existing exact toolkit qualification remains
+in force.
+
+Give a dedicated verifier SELECT on both restored databases and on
+`system.databases`, `system.tables`, `system.columns`, `system.storage_policies`,
+`system.disks` and `system.users`. Set `readonly=2`: it forbids writes while allowing
+the public toolkit's bounded synchronous query settings. Mode 1 rejects its
+`async_insert` setting before inspection. Do not grant CREATE, INSERT, ALTER, DROP,
+temporary-table, access-management, query-kill or cross-user process visibility.
+The fixture independently denies temporary-table creation and captures every
+verifier request; all are SELECT statements. The expected view definer must exist;
+this check does not change or certify its deployment-specific grants.
+
+Load only the separate credentials; there is no fallback to live mutation credentials:
+
+```bash
+export KANSOKU_CH_RESTORE_USER=restored_verifier
+export KANSOKU_CH_RESTORE_PASSWORD='...'
+"$CH_MIGRATE" restored-expectations --json > /secure/schema-expectations.json
+plan_sha="$(jq -r .result.planSha256 /secure/schema-expectations.json)"
+"$CH_MIGRATE" verify-restored --json \
+  --endpoint "$RESTORED_ENDPOINT" --server "$OBSERVED_SERVER_UUID" \
+  --original-target "$KANSOKU_CH_MIGRATION_TARGET" \
+  --original-ledger "$KANSOKU_CH_MIGRATION_LEDGER_ID" \
+  --application-database analytics_restore_rehearsal \
+  --ledger-database kansoku_migration_ledger_restore_rehearsal \
+  --expect-plan-sha256 "$plan_sha" --expected-definer "$REVIEWED_DEFINER" \
+  --expected-policy /secure/restored-point-policy.json > /secure/restore-report.json
+```
+
+The expected-policy file is the retained PostgreSQL retention-policy
+object from the recovery point, including `days`, `revision` and `cutoff`; use
+that point's evidence rather than current live policy or observed TTL text. Even
+an unused policy needs explicit revision-zero/null-cutoff expectations. Instead
+of `--expected-policy`, a global `--recovery-set FILE` may supply the retained
+policy from a manifest with the same original target, ledger and compiled plan.
+That use supplies inspection expectations and does not authenticate a restore.
+
+Exit zero requires a compatible, current, resolved ledger and matching schema.
+The JSON reports `ledger.compatible/current/unresolved`, `schema.status`,
+`schema.matches` and mismatch labels, together with observed mappings, plan and
+expectation digests. A compatible older prefix reports `current=false` and exits
+nonzero. Missing/extra objects, changed columns/defaults/codecs, engine/key/TTL
+changes, foreign references, unavailable metadata or unsupported syntax cannot
+produce a full pass. Data literals and unrelated identifiers are preserved while
+only structural relation positions map scratch names. Physical restore UUIDs are
+not logical schema identity.
+
+Supported retention changes are constrained to the application's exact DELETE TTL
+expression and the retained cutoff at native millisecond precision, with the
+restored retention-policy relation cross-checked. The qualified metadata may omit
+its default `DELETE` keyword; that equivalent representation is accepted. A
+matching ledger alone never excuses schema drift. Session-local temporary identity
+caches are not durable application schema and are neither created nor exercised
+by inspection. Every result remains `mode=scratch-inspection` and
+`authorizedForMutation=false`.
+
+When appending migrations, derive new expectations on an owned target with
+`scripts/generate_clickhouse_schema_expectation.py`; review the resulting
+`kansoku-server/migrations/clickhouse/schema-expectation.json`. The deterministic
+schema contract and archive gates bind it to the compiled plan. Source-archive
+qualification verifies its embedded digest with migration inputs withheld and
+rejects a deliberately mismatched plan fingerprint. Never generate expectations
+by accepting the current live schema or rewriting applied SQL.
 
 ## Nagare receipt mapping
 

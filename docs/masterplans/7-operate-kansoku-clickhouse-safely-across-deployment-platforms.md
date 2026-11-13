@@ -128,8 +128,8 @@ privilege inventory and platform-specific instructions.
 | # | Title | Path | Hard Deps | Soft Deps | Status |
 |---|-------|------|-----------|-----------|--------|
 | 50 | Accept portable drain evidence without cross-user process visibility | [ExecPlan](../plans/50-accept-portable-drain-evidence-without-cross-user-process-visibility.md) | None | None | In Progress |
-| 51 | Establish consistent maintenance backups and restored-server identity recovery | [ExecPlan](../plans/51-establish-consistent-maintenance-backups-and-restored-server-identity-recovery.md) | EP-50 M1: accepted evidence contract and owner binding | EP-52 for early restored-copy roundtrip | In Progress |
-| 52 | Verify renamed ClickHouse restores without writes | [ExecPlan](../plans/52-verify-renamed-clickhouse-restores-without-writes.md) | None | EP-51 recovery-set manifest | Not Started |
+| 51 | Establish consistent maintenance backups and restored-server identity recovery | [ExecPlan](../plans/51-establish-consistent-maintenance-backups-and-restored-server-identity-recovery.md) | EP-50 M1: accepted evidence contract and owner binding | EP-52 for early restored-copy roundtrip | Complete |
+| 52 | Verify renamed ClickHouse restores without writes | [ExecPlan](../plans/52-verify-renamed-clickhouse-restores-without-writes.md) | None | EP-51 recovery-set manifest | Complete |
 | 53 | Prove shared-server maintenance across deployment platforms | [ExecPlan](../plans/53-prove-shared-server-maintenance-across-deployment-platforms.md) | EP-50; EP-51; EP-52, all Complete | None | Not Started |
 
 Status values are Not Started, In Progress, Complete, and Cancelled. A whole-child
@@ -249,10 +249,11 @@ EP-50 M1/M2 are accepted on 2026-11-13: the full migration harness passes
 20 non-skipped cases, administration passes seven scenario families and two-replica
 maintenance passes. M3 remains open on scoped upstream repair delivery, tracked at
 `mori://shinzui/clickhouse-migrate/plans/13-accept-explicit-external-drain-authority-when-repair-process-diagnostics-are-unavailable`.
-No dependency cohort changed. EP-51 M1/M2 are accepted: complete manifests gate
-pending SQL and actual three-store restores agree. Its direct-server adoption
-also passes clean and interrupted-receipt recovery; full packaged qualification
-remains before child completion. EP-52 remains independently ready;
+No dependency cohort changed. EP-51 is Complete: the packaged 22-case harness
+proves complete recovery sets and clean/interrupted direct rebuilt-server adoption.
+EP-52 is also Complete: 33 packaged native cases, 23 schema contracts, embedding and
+ten-package source reconstruction pass, together with `just check`. Its read-only
+verifier detects actual drift and distinguishes a compatible older prefix.
 EP-53 waits for all three completed children. Final packaged/source/deployment gates
 and all IR completion claims remain open.
 

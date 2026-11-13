@@ -385,6 +385,9 @@ def verify(root, native, upgrade, pg_migrate, admin, server):
     from clickhouse_recovery_acceptance import verify as verify_recovery
     cases += verify_recovery(root / 'recovery', native, upgrade, pg_migrate, admin)
     cases += verify_recovery(root / 'recovery-interrupted', native, upgrade, pg_migrate, admin, interrupted=True)
+    from clickhouse_restored_acceptance import verify_namespace, verify_prefix
+    cases += verify_namespace(root / 'restored-current', native, upgrade, pg_migrate, admin)
+    cases += verify_prefix(root / 'restored-prefix', native, upgrade, pg_migrate, admin)
     print(f'ClickHouse migrations: {cases} cases, 0 failures, 0 skipped', flush=True)
     return cases
 
