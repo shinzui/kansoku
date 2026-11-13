@@ -35,14 +35,6 @@
                   inherit pkg ver sha256;
                 }
                 { }));
-            # Exact locally qualified source candidate; no Hackage publication implied.
-            # mori://shinzui/clickhouse-migrate
-            clickhouseMigrateSrc = pkgs.fetchFromGitHub {
-              owner = "shinzui";
-              repo = "clickhouse-migrate";
-              rev = "0e75c4cc1303423ba561370ee5795aa0cf2455b7";
-              sha256 = "05f08nbqj5cq3yq0nxh10hssfgnp7bf03j8f8jc7xx33430rr6nk";
-            };
             hasqlMigrationSrc = pkgs.fetchFromGitHub {
               owner = "shinzui";
               repo = "hasql-migration";
@@ -177,6 +169,8 @@
                 { }));
             thread-utils-finalizers = threadUtilsPackage "thread-utils-finalizers" "/thread-utils-finalizers";
             thread-utils-context = threadUtilsPackage "thread-utils-context" "/thread-utils-context";
+            # Released mori://iand675/hs-opentelemetry/packages/hs-opentelemetry-instrumentation-wai.
+            # nixpkgs has 0.1.1.0; select Hackage 1.0 for the API 1.0 cohort.
             hs-opentelemetry-instrumentation-wai = callHackageNoCheck "hs-opentelemetry-instrumentation-wai" "1.0.0.0" "1b81alw81mrr8l0z82jcqrv20bxfp7ld818x38296cpmc69kvxc0";
             hs-opentelemetry-instrumentation-servant = pkgs.haskell.lib.compose.overrideCabal
               (old: {
@@ -213,11 +207,36 @@
             servant-health = callHackageNoCheck "servant-health" "0.1.0.0" "1g24jnnijpap99vkmmqmkinlw18pg0hd23arrijgss430y63iv4x";
             servant-openapi-hs = callHackageNoCheck "servant-openapi-hs" "5.1.0" "19mvvlzfk7ffh5gbmqhpy587rjjd0xcgydbkcy1b48wxx061h8im";
 
-            # Keep the four-package cohort at the same immutable 0.1.1.0 source.
-            clickhouse-migrate = self.callCabal2nix "clickhouse-migrate" (clickhouseMigrateSrc + "/clickhouse-migrate") { };
-            clickhouse-migrate-embed = self.callCabal2nix "clickhouse-migrate-embed" (clickhouseMigrateSrc + "/clickhouse-migrate-embed") { };
-            clickhouse-migrate-cli = self.callCabal2nix "clickhouse-migrate-cli" (clickhouseMigrateSrc + "/clickhouse-migrate-cli") { };
-            clickhouse-migrate-test-support = self.callCabal2nix "clickhouse-migrate-test-support" (clickhouseMigrateSrc + "/clickhouse-migrate-test-support") { };
+            # Released mori://shinzui/clickhouse-migrate cohort; archives match v0.2.0.0.
+            # Keep upstream dependency bounds and deterministic checks enabled.
+            clickhouse-migrate = self.callHackageDirect
+              {
+                pkg = "clickhouse-migrate";
+                ver = "0.2.0.0";
+                sha256 = "10jqx67785i317b2051p1xljzhmyxvxg80q4nsg5pn4ara49cn0l";
+              }
+              { };
+            clickhouse-migrate-embed = self.callHackageDirect
+              {
+                pkg = "clickhouse-migrate-embed";
+                ver = "0.2.0.0";
+                sha256 = "0xwd0jj9ndqwlavq8ikmhfd2kh4ri3lqkfr8gywjnnr3b8h5js8x";
+              }
+              { };
+            clickhouse-migrate-cli = self.callHackageDirect
+              {
+                pkg = "clickhouse-migrate-cli";
+                ver = "0.2.0.0";
+                sha256 = "0z4qcyppfxl4jby3x8d1jyrp4kf0qnispvmds0r4lp4axjq12n4v";
+              }
+              { };
+            clickhouse-migrate-test-support = self.callHackageDirect
+              {
+                pkg = "clickhouse-migrate-test-support";
+                ver = "0.2.0.0";
+                sha256 = "1wgj8brwdlh5di92yb4qfa0yxz7cix8wb637hwbiiv4hs1ld9lxc";
+              }
+              { };
 
             pg-migrate = callHackageNoCheck "pg-migrate" "1.1.0.0" "103y2bddn50pvrjnlhnfcqznlfihp68bpm72xg8s9xv2x8kv3s2b";
             pg-migrate-cli = callHackageNoCheck "pg-migrate-cli" "1.1.0.0" "1mc2scspfr1p872lxxl8pcpgf3gm2kp2xhjfwad9xv2wcnz1dj6w";

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the real production CLI from extracted workspace source archives only."""
+"""Build the production CLI from workspace and published migration archives."""
 import json
 import os
 import re
@@ -34,9 +34,12 @@ def main():
             top = source.getmembers()[0].name.split('/')[0]
             source.extractall(workspace,filter='data')
             packages.append(workspace / top)
+    released = [name + '-' + migration_version for name in ['clickhouse-migrate', 'clickhouse-migrate-embed', 'clickhouse-migrate-cli', 'clickhouse-migrate-test-support']]
+    run(['cabal','get','--pristine','--destdir',str(workspace),*released])
+    packages.extend(workspace / name for name in released)
     required = {'kansoku-api-0.1.0.0', 'kansoku-core-0.1.0.0', 'kansoku-server-0.1.0.0', 'kansoku-client-0.1.0.0', 'ClickHaskell-1.1.0', 'hs-opentelemetry-instrumentation-servant-0.3.0.0'}
-    required |= {name + '-' + migration_version for name in ['clickhouse-migrate', 'clickhouse-migrate-embed', 'clickhouse-migrate-cli', 'clickhouse-migrate-test-support']}
-    assert {path.name for path in packages} == required, 'Archive every workspace and pinned source-repository package'
+    required |= set(released)
+    assert {path.name for path in packages} == required, 'Extract every workspace, pinned source-repository and published migration package'
     server = next(path for path in packages if path.name.startswith('kansoku-server-'))
     settings = (repo / 'cabal.project').read_text().split('index-state:',1)[1].split('source-repository-package',1)[0]
     (workspace / 'cabal.project').write_text('packages:\n' + ''.join('  '+str(path)+'\n' for path in packages) + '\nindex-state:' + settings)

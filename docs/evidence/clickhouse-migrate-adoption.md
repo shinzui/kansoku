@@ -5,7 +5,56 @@ External consumer reference: [Kansoku Plan 49](mori://shinzui/kansoku/plans/49-a
 Implementation source checkpoint: `11d3f63` on the existing `master` branch.
 Qualified local aggregate validation is complete. No deployment or persistent user-data operation is recorded.
 
-## Source upgrade on 2026-11-07
+## Hackage release adoption on 2026-11-12
+
+All four packages from [mori://shinzui/clickhouse-migrate](mori://shinzui/clickhouse-migrate)
+now use the published `0.2.0.0` cohort in Cabal and Nix. The Git source override
+has been removed. Cabal's index-state advances to `2026-11-09T04:23:15Z`, after
+the complete cohort was uploaded. Nix uses independently hashed Hackage archives
+with upstream dependency bounds and deterministic checks enabled.
+
+The authoritative Hackage version endpoints and upstream `v0.2.0.0` tag were
+verified. The tag object is `3975904ecb3926749d0077e7ce0053823a01b7a7`, pointing
+to `87f6f129242ef6f37011685ed33b7776cbd4d9b4`. Every published archive file
+matches that tag byte-for-byte. Compared with the previous `0.1.1.0` source pin,
+the release changes package versions, internal dependency bounds, changelogs and
+documentation; the implementation is identical. The source-archive proof now
+extracts the four pristine Hackage packages alongside the six workspace/pinned
+source archives.
+
+| Package | Published archive SHA-256 |
+| --- | --- |
+| clickhouse-migrate | 1c0eb282ac85f4b862ce5e6c6518a084fdfcdbe9300c2eaf443236fa01ce4bec |
+| clickhouse-migrate-embed | 428265ae4632e327ffc3f784873659b9dce4e1e4faa23afff2e9a9fbb85fb3e8 |
+| clickhouse-migrate-cli | bd618053e8d8eff2eebc9d13622960bb3778e32d86bdb200223499fabe67953a |
+| clickhouse-migrate-test-support | 4c7e1b08a7e0b80a6fbb02e8d7216558a785f1695a46eb0026081f946540cb0c |
+
+The Nix production and upgrade-proof builds pass. Comparing the new packaged
+CLI with the previous compiled CLI preserves every offline JSON field for both
+histories: direct has 26 migrations / 264 steps, replicated has 26 / 261.
+The private before/after plans are retained under
+`.dev/acceptance/clickhouse-migrate-hackage-0.2.0.0-1iqb5pwt`.
+
+The complete Cabal workspace build with tests enabled passes, as do the
+deterministic core/client/probe suites (524 / 22 / 4 cases). The actual
+Nix-packaged CLI/coordinator suite passes all 18 cases with zero failures or
+skips at `.dev/acceptance/ch-migrations-50ekm89x`. Both direct and replicated
+source-conversion checks pass; formatting is clean.
+
+The Hackage test-support package passes the four native component cases:
+26 migrations / 264 steps, assertion cleanup, wrong-target/version refusal and
+zero-SQL repeat after restart. The topology configuration suite passes all 13
+cases. The source-archive proof passes at `.dev/acceptance/ch-sdist-tos3vgcb`:
+all ten extracted workspace/pinned/published packages build the production CLI,
+and both offline plans pass with migration inputs withheld.
+
+The independent embedding proof passes at `.dev/acceptance/ch-embedding-pej7xc3u`:
+the extracted server archive compiles against the published libraries, both
+direct and replicated SQL edits with preserved timestamps trigger the expected
+checksum changes, and the compiled executable still runs with source inputs
+withheld. Validation logs are retained with the private before/after plans above.
+
+## Historical source upgrade on 2026-11-07
 
 All four packages from [mori://shinzui/clickhouse-migrate](mori://shinzui/clickhouse-migrate)
 now use the `0.1.1.0` source candidate at immutable upstream revision
