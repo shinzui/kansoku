@@ -2,6 +2,9 @@
 
 ## 2026-11-13
 
+* **Update**: DOC-10: document history host filters, complete host counts, null handling and exact N of M summaries.
+
+
 * **Update**: DOC-10: document calendar retention, independent side selections, shared budgets, group matching and Haskell argument compatibility.
 
 * **Update**: DOC-10: distinguish the 5 MiB analysis transport bound from the 32 KiB compact document bound and configurable ingest limit.

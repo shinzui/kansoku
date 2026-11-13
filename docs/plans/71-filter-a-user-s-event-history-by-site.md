@@ -83,9 +83,12 @@ first.
   1000 entries succeeds, 1001 (including null) returns `user_hosts_too_large` without output,
   and query-memory exhaustion returns 503 on all five user routes. Code and generated
   OpenAPI are committed at this milestone boundary.
-- [ ] Milestone 3: Endpoint Descriptions, `docs/guides/query-metrics.md` and ADR-25 publish the
-  contract; `just check` passes and the users acceptance workflow proves the counted-total
-  invariant end to end.
+- [x] Milestone 3 (2026-11-13): Endpoint Descriptions, `docs/guides/query-metrics.md` and ADR-25 publish the
+  contract; final `just check` and `just adr-check` pass. The users acceptance workflow
+  proves counted totals for all sites, each non-null site, event-name/date/bot selections
+  and profile retainedEventCount (17 including a dedicated bot). Final deterministic
+  evidence: 545 core examples and 23 client examples, zero failures; OpenAPI freshness
+  and lint, profiles, telemetry lifecycle checks and 12 release-script tests pass.
 
 
 ## Surprises & Discoveries
@@ -161,7 +164,26 @@ no Linux or container behavior is claimed.
 ## Outcomes & Retrospective
 
 
-(To be filled during and after implementation.)
+Implemented and committed the complete API capability. History now accepts canonical host
+selection alongside event-name selection, and `/users/{userId}/hosts` supplies complete exact
+counts and last-occurrence timestamps from the same retained-user scope. Null hosts,
+empty selections, unknown/foreign/erased users and complete-result/resource failures retain
+the documented behavior. OpenAPI, the query guide and ADR-25 publish the consumer contract.
+
+`just users-acceptance` passed on 2026-11-13 with owned native evidence in
+`.dev/acceptance/cohort-b603v6fh`. The fixture verifies canonical trailing-dot/port extraction
+in history and metric grouping, both cursor directions under combined filters, exact totals
+under all required selections, retained-count agreement including bots, the exact 1000/1001
+entry boundary, erasure/retention and complete 503 failures for all five user routes. Final
+`just check` passed: 545 core examples, 23 client examples, generated artifacts, formatting,
+OpenAPI lint, governed documentation, telemetry lifecycle checks and 12 release-script tests.
+`just adr-check` passed after distilling the shared host-normalization correction and facet
+semantics into ADR-25.
+
+FRIC-31 in `docs/friction-log/` is accepted: the required validation sequence incurs repeated
+Cabal configuration/rebuild work; optimizing the shared build tooling remains outside this
+feature. There are no remaining plan milestones. The site-picker UI in
+`mori://shinzui/kansoku-ui` remains separately scoped consumer work.
 
 
 ## Context and Orientation

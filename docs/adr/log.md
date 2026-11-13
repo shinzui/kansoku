@@ -2,6 +2,9 @@
 
 ## 2026-11-13
 
+* **Update**: ADR-25: add canonical host history selection and complete exact host facets; totals share history predicates and retain current-read semantics.
+
+
 * **Update**: ADR-9 and ADR-14: define period-specific retention bounds, independent start/return activity, aligned cohorts and full-period maturity.
 
 * **Update**: ADR-26: preserve the analysis transport bound independently of the configured ingest body limit.

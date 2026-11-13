@@ -5,7 +5,7 @@ description: Serve current identified-user resources from retained resolved fact
 docId: ADR-25
 status: Accepted
 date: 2026-11-13
-timestamp: 2026-11-13T01:12:31Z
+timestamp: 2026-11-13T14:55:39Z
 generated:
   by: process:codex
   at: 2026-11-13T00:59:03Z
@@ -25,9 +25,9 @@ owns saved selection and current-read pagination.
 
 ## Decision
 
-Expose service-token `/users`, `/users/activity-counts`, `/users/{userId}` and
-`/users/{userId}/events` under principal-derived account scope and the administrative
-maintenance fence. Existence requires retained resolved user facts; a static cohort ID
+Expose service-token `/users`, `/users/activity-counts`, `/users/{userId}`,
+`/users/{userId}/events` and `/users/{userId}/hosts` under principal-derived account scope
+and the administrative maintenance fence. Existence requires retained resolved user facts; a static cohort ID
 alone does not establish a user. Whole-retained-history queries discover actual canonical
 date bounds and prepare evidence on their physical query connection. Date selection never
 clips directory activity extrema. Identity/profile-only users have null extrema.
@@ -54,6 +54,27 @@ organisation-trait names. Private raw property extraction stays inside bounded q
 handling and is never returned or included in exception text. Session ID is an explicit
 public envelope field, not permission to expose other identifiers or context.
 
+History accepts at most one event_name eq/in term and one host eq/in term, ANDed. Host values must
+be canonical lowercase domains of 1..253 characters without scheme, port, path, whitespace
+or trailing dot; in accepts 1..100 raw values before deduplication. Null hosts never match.
+One canonical-domain expression supplies node projection, filtering and facet grouping.
+ClickHouse's `domain()` rejects trailing-dot authorities, so the helper strips authority
+trailing dots before parsing, preserving ports and path/query text. This corrects query-time
+metric host grouping too; it does not rewrite URLs or recompute stored enrichment.
+The hosts facet shares history's retained source, existence check, date predicates, bot
+policy and event-name selection; it rejects host filters. Each entry has a required nullable
+host, exact eventCount and lastOccurredAt. Non-null entries sort by count descending then
+host ascending, with null last. Zero-count entries are omitted. Exactly 1000 entries including
+null succeed; a 1001st witness returns user_hosts_too_large 400 without partial output,
+following [ADR-9](0009-bounded-complete-aggregate-responses.md). Native failure or deadline
+remains clickhouse_unavailable 503.
+
+Totals come from summing selected facet entries, including null for all sites, rather than
+adding a counting scan and totalCount to every shared Relay page. Counts equal the paged
+history size for identical selection on settled data; neither endpoint promises a shared
+snapshot across requests. An existing user with an empty selection returns an empty facet;
+existence is checked against retained resolved facts before selection.
+
 ## Alternatives considered
 
 Raw user-ID reads lose pre-login stitching. Fixed history cutoffs silently lose extrema.
@@ -64,6 +85,10 @@ otherwise optional non-null strings, while these wire objects always include nul
 extrema, host/path and organisation. The shared Relay schema allows zero, while users
 require at least one. Tests pin both the nullable required fields and page minimum, and
 public acceptance compares served and committed OpenAPI before exercising the routes.
+
+Using `/metrics/events?groupBy=host` as a history facet was rejected: metrics require paired
+dates spanning at most 366 days, do not offer history's bot selection, and return an empty
+result for unknown users. They cannot supply exact totals for the full history contract.
 
 No additional persistent projection or migration is required. Administrative identity
 unlinking intentionally retains explicit user facts and therefore can retain a profile;

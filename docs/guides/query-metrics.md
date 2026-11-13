@@ -4,7 +4,7 @@ title: "Query metrics"
 description: "Look up metric populations, query bounds, filters, grouping, analytical semantics, cohorts and saved definitions."
 docId: DOC-10
 tags: ["metrics", "queries", "identity", "cohorts"]
-timestamp: 2026-11-13T14:03:22Z
+timestamp: 2026-11-13T14:55:39Z
 generated:
   by: process:codex
   at: "2026-11-06T14:31:34Z"
@@ -1291,15 +1291,52 @@ consistency rather than an atomic snapshot.
 
 `GET /users/{userId}/events` returns resolved history including identity/profile events and
 stitched pre-login events. Optional paired dates and `includeBots` have the same bounds and
-default; at most one `filter` selects event_name by eq or in, with 1..100 raw names of
-1..128 characters from `[a-z0-9_.:-]`, bounded before deduplication. Unknown valid names return
-empty pages. Nodes expose eventId, eventName, occurredAt, source, sourceService, sessionId,
+default. Repeat `filter` to AND at most one `event_name` eq/in term and one `host` eq/in
+term. Event names allow 1..100 raw names of 1..128 characters from `[a-z0-9_.:-]`, bounded
+before deduplication. Unknown valid names return empty pages. Host eq takes one JSON string;
+host in takes 1..100 strings counted before deduplication. Each host must already be canonical:
+1..253 characters, lowercase, no trailing dot, whitespace, scheme, port, path or any of
+`/:?#@`. For example use `app.example`, not `https://App.Example.:443/`. Matching uses the
+node host (URL domain lowercased with port and trailing dots removed). Null-host events
+never match a host term. Duplicate dimensions, other operators and OR groups are rejected
+with 400 `invalid_users_query`. Nodes expose eventId, eventName, occurredAt, source, sourceService, sessionId,
 nullable host/path, isPageView and properties. Host/path use existing enrichment expressions;
 page-view status describes canonical page_view facts. Ordering is occurrence, receipt and
 event ID descending. Properties contain only present typed declared scalars at the exact
 stored schema version. Unknown versions, PTAny, nulls, incompatible/nonfinite values,
 arrays/objects, identifier properties, alias payloads and context are omitted. Identity and
 group event properties additionally require their governed trait catalogs.
+
+`GET /users/{userId}/hosts` returns `{"hosts":[{"host":"app.example","eventCount":3,
+"lastOccurredAt":"2026-07-02T04:00:00.000Z"},...]}` for exactly the history population.
+It accepts the same optional paired dates, `includeBots` (default false), and at most one
+`event_name` eq/in filter. A host filter is rejected: use the full facet to populate the
+site picker. Non-null hosts sort by eventCount descending then host ascending. Events without
+a host form one `host:null` entry, always last; zero-count entries are absent. An existing
+user with no matching events returns `{"hosts":[]}`; unknown, foreign and erased users return
+404 `user_not_found`. The complete result allows at most 1000 entries including null;
+400 `user_hosts_too_large` returns no partial list. Query failure or deadline returns
+503 `clickhouse_unavailable`.
+
+For a site picker and "N of M", request the facet with the same dates, bots and event-name
+selection as history. For example, if counts are app.example=3, docs.example=1 and null=2,
+all sites contain M=6 events. Selecting app.example gives M=3; selecting app.example and
+docs.example gives M=4 with a host in filter. N is the number of history edges loaded so far.
+For "All sites", sum every entry, including null. Relay pages do not carry a total count.
+The facet and history share selection predicates; counts are exact on settled data, with no
+snapshot across requests when events or identity change. `/metrics/events?groupBy=host` is not
+a replacement: it requires a bounded date range, has no history bot option, and does not
+share the user's not-found contract.
+
+```bash
+curl -H "Authorization: Bearer $KANSOKU_SERVICE_TOKEN" --get \
+  "$KANSOKU_URL/users/alice/hosts" \
+  --data-urlencode 'filter={"dimension":"event_name","op":"eq","value":"page_view"}'
+curl -H "Authorization: Bearer $KANSOKU_SERVICE_TOKEN" --get \
+  "$KANSOKU_URL/users/alice/events" \
+  --data-urlencode 'filter={"dimension":"event_name","op":"eq","value":"page_view"}' \
+  --data-urlencode 'filter={"dimension":"host","op":"in","value":["app.example","docs.example"]}'
+```
 
 Both collections accept `first`/`after` or `last`/`before`, default 20, minimum 1, maximum 100.
 Cursors carry complete keys, including directory null markers, and reject incompatible

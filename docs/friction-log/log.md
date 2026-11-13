@@ -2,6 +2,12 @@
 
 ## 2026-11-13
 
+* **Update**: FRIC-31 accepted: Accept the observed recompilation cost without weakening validation.
+
+
+* **Addition**: FRIC-31 records slowdown tooling friction with mori://shinzui/kansoku: OpenAPI generation followed by the full gate rebuilds dependent components
+
+
 * **Update**: FRIC-29 accepted: Accept the required gate recompilation cost.
 
 
