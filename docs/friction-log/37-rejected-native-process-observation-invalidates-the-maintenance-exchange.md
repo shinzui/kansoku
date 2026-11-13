@@ -6,13 +6,18 @@ generated:
   by: "codex-cli/gpt-6.1-sol"
   at: "2026-11-13T18:47:00Z"
 frictionId: FRIC-37
-status: logged
+status: "accepted"
 impact: detour
 kind: interface
 origin: "mori://shinzui/kansoku"
 affects: "mori://KovalevDima/ClickHaskell/packages/ClickHaskell"
 plan: "docs/plans/50-accept-portable-drain-evidence-without-cross-user-process-visibility.md"
 workaround: "Open and close dedicated native connections for supplementary process observations; keep maintenance connections separate."
+resolution: "Retain dedicated short-lived native diagnostic connections and keep maintenance exchanges separate after denied process observations; no upstream driver fix is claimed."
+amended:
+  - by: "codex-cli/gpt-6.1-sol"
+    at: "2026-11-13T23:01:39Z"
+    change: "Accept the isolated diagnostic-connection workaround qualified by owned maintenance tests."
 ---
 # Rejected native process observation invalidates the maintenance exchange
 

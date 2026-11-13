@@ -184,6 +184,79 @@ def verify(root, native, pg_migrate, admin):
     return 2
 
 
+def verify_repair(root, native, upgrade, pg_migrate, admin):
+    from clickhouse_migrations_acceptance import FaultProxy, repair_arguments
+    for visible in (False, True):
+        with owned(root / ('own-user' if visible else 'denied'), native, upgrade, pg_migrate, admin, access_management=True) as h:
+            h.begin()
+            h.up(first=True)
+            h.sql('CREATE USER scoped_migrator IDENTIFIED WITH no_password')
+            h.sql('GRANT SELECT, INSERT, ALTER, CREATE TABLE, DROP TABLE, CREATE VIEW, DROP VIEW ON analytics.* TO scoped_migrator')
+            h.sql('GRANT SELECT, INSERT ON kansoku_migration_ledger.* TO scoped_migrator')
+            for table in ['databases','tables','columns','storage_policies','disks']:
+                h.sql('GRANT SELECT ON system.' + table + ' TO scoped_migrator')
+            if visible:
+                h.sql('GRANT SELECT ON system.processes TO scoped_migrator')
+            h.sql('CREATE USER other_app IDENTIFIED WITH no_password')
+            h.sql('GRANT SELECT ON system.one TO other_app')
+            h.sql('GRANT SELECT ON system.numbers TO other_app')
+            sentinel = subprocess.Popen(['clickhouse-client','--host','127.0.0.1','--port',h.env['CLICKHOUSE_TCP_PORT'],'--user','other_app','--query','SELECT sleep(1) FROM system.numbers LIMIT 1000 SETTINGS max_block_size=1'],env=h.env,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+            pid = (h.root / 'clickhouse/pid').read_text()
+            try:
+                # The fixture admits no runtime or scheduled submitters. Each
+                # CLI is synchronous and joined before the next entry. The
+                # operator retains exclusive submission rights for this app;
+                # unrelated other_app remains admitted throughout.
+                h.controller['drain'] = lambda: None
+                h.controller['drain_procedure'] = 'Owned app has no runtime or scheduled submitters. All prior CLI processes joined; the operator exclusively controls default and scoped_migrator credentials. App-scoped background changes are settled by the backup producer. Unrelated other_app remains admitted; no server restart.'
+                h.controller['submitters'] = ['default','scoped_migrator']
+                h.env['KANSOKU_CLICKHOUSE_USER'] = 'scoped_migrator'
+                h.env['KANSOKU_CLICKHOUSE_PASSWORD'] = ''
+                h.drain()
+                proxy = FaultProxy(h.endpoint)
+                proxy.match = b'INSERT INTO analytics.__native_upgrade_probe VALUES'
+                try:
+                    h.env['KANSOKU_CH_MIGRATION_ENDPOINT'] = proxy.endpoint
+                    h.up(binary=upgrade, success=False, drain=False)
+                    assert proxy.triggered.is_set()
+                finally:
+                    proxy.close()
+                    h.env['KANSOKU_CH_MIGRATION_ENDPOINT'] = h.endpoint
+                args = repair_arguments(h,'accept-step',True)
+                expected = 'no-visible-recorded-queries' if visible else 'unavailable'
+                # An audit write failure must block authorization and SQL.
+                before = json.loads(h.run([upgrade,'status','--guarded','--json']).stdout)['result']['report']['observation']['position']
+                h.run(['psql','-XAt','-v','ON_ERROR_STOP=1','-c',"ALTER TABLE kansoku.clickhouse_repair_observations ADD CONSTRAINT owned_reject_observation CHECK (false)"])
+                h.observed_entry(args,binary=upgrade,success=False,expected_sql=0)
+                after = json.loads(h.run([upgrade,'status','--guarded','--json']).stdout)['result']['report']['observation']['position']
+                assert before == after
+                h.run(['psql','-XAt','-v','ON_ERROR_STOP=1','-c','ALTER TABLE kansoku.clickhouse_repair_observations DROP CONSTRAINT owned_reject_observation'])
+                h.observed_entry(args,binary=upgrade,expected_sql=0)
+                rows = h.run(['psql','-XAt','-c',"SELECT observation->>'state' FROM kansoku.clickhouse_repair_observations ORDER BY id"]).stdout.strip().splitlines()
+                assert rows == [expected]
+                observed_count = h.run(['psql','-XAt','-c',"SELECT observation->'activeCount' FROM kansoku.clickhouse_repair_observations"]).stdout.strip()
+                assert observed_count == ('0' if visible else 'null')
+                status = json.loads(h.run([native,'maintenance','status','--json']).stdout)['result']
+                assert status['repair_observation']['entry'] == status['entry']
+                assert status['repair_observation']['observation'] == dict(state=expected, activeCount=0 if visible else None)
+                count = h.counter()
+                h.observed_entry(args,binary=upgrade,success=False,expected_sql=0)
+                assert h.counter() == count + 1
+                assert h.run(['psql','-XAt','-c','SELECT count(*) FROM kansoku.clickhouse_repair_observations']).stdout.strip() == '1'
+                h.observed_entry(repair_arguments(h,'resume'),binary=upgrade,expected_sql=1)
+                h.finish(binary=upgrade)
+                assert h.run(['psql','-XAt','-c','SELECT count(*)=2 AND count(DISTINCT entry)=2 FROM kansoku.clickhouse_repair_observations']).stdout.strip() == 't'
+                assert h.sql('SELECT count() FROM analytics.__native_upgrade_probe').strip() == '1'
+                assert (h.root / 'clickhouse/pid').read_text() == pid
+                assert sentinel.poll() is None
+                h.run(['clickhouse-client','--host','127.0.0.1','--port',h.env['CLICKHOUSE_TCP_PORT'],'--user','other_app','--query','SELECT 1 FROM system.one'])
+            finally:
+                if sentinel.poll() is None:
+                    sentinel.terminate()
+                sentinel.communicate(timeout=10)
+    return 2
+
+
 if __name__ == '__main__':
     parent = Path('.dev/acceptance')
     parent.mkdir(parents=True, exist_ok=True)

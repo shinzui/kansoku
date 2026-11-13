@@ -4,7 +4,7 @@ title: "Initialize and upgrade ClickHouse"
 description: "Initialize a fresh owned ClickHouse target, retain native identities, coordinate maintenance and recover explicit migration attempts."
 docId: DOC-13
 tags: ["clickhouse", "migrations", "maintenance", "recovery"]
-timestamp: 2026-11-13T21:42:19Z
+timestamp: 2026-11-13T23:03:51Z
 generated:
   by: process:codex
   at: "2026-11-07T20:24:51Z"
@@ -25,9 +25,14 @@ The [matrix](../../db/clickhouse/qualification/matrix.json) and
 The released upstream `0.2.0.0` cohort also qualifies exact Altinity
 `26.3.60.10001.altinitystable` and `26.3.60.10002.altinitystable` on owned Linux arm64
 servers. Upstream records passing Nix and extracted-source qualification for these
-artifacts. All four packages use the Hackage `0.2.0.0` cohort selected in
+artifacts. All four packages use the delivered, source-qualified upstream revision
+`f4bc4e6d32decfaaf1a19e1033a22f3e28fc167c` from
+`mori://shinzui/clickhouse-migrate`, selected consistently in
 `cabal.project` and `flake.module.nix`, verified against registry metadata and the
-upstream release tag on 2026-11-13. Kansoku supports explicit direct or replicated selectors as described below. These checks do not
+upstream tags on 2026-11-13. Hackage 0.2.0.0 remains the latest published release;
+the selected source snapshot adds the explicit repair observer API. Its complete
+41-group extracted-source matrix passed on all three exact server candidates.
+Kansoku supports explicit direct or replicated selectors as described below. These checks do not
 qualify managed-cloud/proxy topology or the Linux amd64 application image. The
 staging initiative at
 `mori://tan/tan-app-infrastructure/plans/42-qualify-kansoku-artifacts-and-the-staging-clickhouse-contract`
@@ -692,3 +697,27 @@ Each consumed migration entry retains its audit document in
 exact input-file digest when supplied. Advancing an entry cannot overwrite a
 previous entry's evidence. Audit-write failure prevents native entry and leaves
 the previous counter and persistent fence authoritative.
+
+
+## Retained repair process observations
+
+After validating and retaining the current drain envelope and recovery set,
+Kansoku selects the upstream per-call external-drain repair API. The application
+retains the toolkit's process observation under the exact consumed session entry
+before native recovery authorization. PostgreSQL migration
+`0017-clickhouse-repair-observations` creates this append-only diagnostic audit.
+A failed audit write aborts repair while preserving the fence and native position.
+
+`maintenance status --json` includes `repair_observation`, containing its `entry`,
+`recordedAt` and `observation`. The states are `no-recorded-queries`,
+`no-visible-recorded-queries`, `active-recorded-queries` and `unavailable`.
+An unavailable observation has `activeCount: null`; observed states have a count.
+The field is null before the first retained observation. Its entry can precede the
+current session counter when a later request fails before observation.
+
+A complete access-denied response from the optional native process diagnostic can
+be retained as unavailable. The retained external drain still supplies authority;
+a visible recorded query blocks repair, and transport, identity, receipt, history
+and lease failures remain fatal. The same owner, fresh predecessor, qualified
+server/ledger and exact receipt requirements apply on every repair invocation.
+The migration principal needs no cross-user process visibility for this path.

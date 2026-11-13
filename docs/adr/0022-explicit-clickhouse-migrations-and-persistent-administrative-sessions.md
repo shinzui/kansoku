@@ -5,7 +5,7 @@ description: Embed immutable native migration steps, bind administration to reta
 docId: ADR-22
 status: Accepted
 date: 2026-10-16
-timestamp: 2026-11-13T21:42:19Z
+timestamp: 2026-11-13T23:03:51Z
 generated:
   by: process:codex
   at: 2026-10-16T22:55:08Z
@@ -295,3 +295,25 @@ The SELECT-only verifier uses readonly=2 because public transport observation se
 synchronous query settings. Fixture capture proves no attempted writes and its
 grants independently prohibit temporary-table creation. Inspection never creates
 runtime identity-cache tables or changes deployment grants.
+
+
+## Repair observation retention (2026-11-13)
+
+After initial Hackage 0.2.0.0 integration, select the delivered immutable upstream
+source `f4bc4e6d32decfaaf1a19e1033a22f3e28fc167c` across all four packages in Cabal
+and Nix. Its package version remains 0.2.0.0; its new API is distinguished by the
+source revision. Authoritative registry/tag checks still show 0.2.0.0 as the
+latest published release. All 41 extracted-source matrix groups pass across the
+three exact server candidates. Package/source and deployment acceptance remain
+independent application gates. The upstream work is tracked at
+`mori://shinzui/clickhouse-migrate/plans/13-accept-explicit-external-drain-authority-when-repair-process-diagnostics-are-unavailable`.
+
+Select the explicit per-call external-drain API from
+`mori://shinzui/clickhouse-migrate` only after validating and retaining the
+application's current proof. Its required typed observer persists each diagnostic
+through the retained PostgreSQL lease, referencing the exact entry audit. A failed
+observation insert aborts before native recovery authorization. Store unavailable
+counts as null and report the latest observation with its entry through maintenance
+status. Keep the immutable proof and diagnostic rows separate; observations supply
+no standing authority. Preserve visible-query refusal and every existing native
+identity, history, receipt and exclusion guard.

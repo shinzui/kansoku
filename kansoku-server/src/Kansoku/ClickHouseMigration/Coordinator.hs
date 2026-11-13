@@ -20,7 +20,7 @@ identity config = do
   session <- maybe (fail "KANSOKU_CH_MIGRATION_SESSION is required") pure (Config.session config)
   pure (C.SessionIdentity session (T.targetKeyText (Config.target config)) (Config.sessionTarget config) (T.ledgerIdText (Config.ledger config)))
 
-withCoordinator :: Config.Config -> Maybe (Integer, Text, Value) -> (E.ExclusiveAccess -> IO () -> (Bool -> [Text] -> IO ()) -> ([Text] -> IO ()) -> IO a) -> IO a
+withCoordinator :: Config.Config -> Maybe (Integer, Text, Value) -> (E.ExclusiveAccess -> IO () -> (Bool -> [Text] -> IO ()) -> ([Text] -> IO ()) -> (Value -> IO ()) -> IO a) -> IO a
 withCoordinator config mutation action = do
   settings <- maybe (fail "PG_CONNECTION_STRING is required for administrative coordination") pure (Config.postgres config)
   session <- identity config
@@ -37,7 +37,10 @@ withCoordinator config mutation action = do
           live <- readIORef flag
           if live then C.leaseAlive connection else pure False
     provider <- either (const (fail "Invalid coordinator configuration")) pure (E.externallySerialized "kansoku-postgresql-administrator" "single tenant; persistent session fence and externally attested predecessor drain" 3000000 acquire release alive)
-    action provider (C.finishSession connection session) (C.recordNativeOutcome connection session) (C.requireReceipts connection session)
+    let observe document = case mutation of
+          Just (predecessor, _, _) -> C.recordRepairObservation connection session (predecessor + 1) document
+          Nothing -> fail "repair observations require a consumed native entry"
+    action provider (C.finishSession connection session) (C.recordNativeOutcome connection session) (C.requireReceipts connection session) observe
 
 -- The authored INSERT assertion is also the read-only final check. Extract its
 -- SELECT from the compiled plan so the SQL cannot drift from the native step.

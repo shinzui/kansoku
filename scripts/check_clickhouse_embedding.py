@@ -52,7 +52,12 @@ executable embedding-proof
 '''.replace('MIGRATION_VERSION', migration_version))
     # The isolated consumer needs only the released migration cohort; unrelated
     # workspace source repositories are exercised by the full archive proof.
-    (package / 'cabal.project').write_text('packages: .\n' + project[project.index('index-state:'):].split('source-repository-package',1)[0])
+    # Retain the selected immutable upstream toolkit cohort, while excluding
+    # unrelated source repositories from this deliberately minimal consumer.
+    toolkit_sources = ['source-repository-package' + block for block in project.split('source-repository-package')[1:]
+                       if 'location: https://github.com/shinzui/clickhouse-migrate.git' in block]
+    assert len(toolkit_sources) <= 1
+    (package / 'cabal.project').write_text('packages: .\n' + project[project.index('index-state:'):].split('source-repository-package',1)[0] + ''.join(toolkit_sources))
     build = ['clickhouse-migrate-embed-build', '--input', '.', 'migrations/clickhouse/manifest.json', '--input', '.', 'migrations/clickhouse-replicated/manifest.json', '--', 'build', 'all']
     run(build, package)
     binary = run(['cabal', 'list-bin', 'embedding-proof'], package)

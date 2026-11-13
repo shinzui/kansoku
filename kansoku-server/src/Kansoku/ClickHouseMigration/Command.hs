@@ -7,6 +7,7 @@ import ClickHouseMigrate.Event qualified as Event
 import ClickHouseMigrate.Inspection qualified as I
 import ClickHouseMigrate.Ledger qualified as L
 import ClickHouseMigrate.Plan (MigrationPlan)
+import ClickHouseMigrate.Repair qualified as Repair
 import ClickHouseMigrate.Report qualified as R
 import ClickHouseMigrate.Target qualified as T
 import Control.Applicative (many, optional, some, (<**>), (<|>))
@@ -122,7 +123,7 @@ run choose = do
           let mutation = case (rawMutation, prepared) of
                 (Just (n, name, audit), Just recovery) -> Just (n, name, Backup.auditEvidence recovery audit)
                 _ -> rawMutation
-          withCoordinator config mutation $ \provider _ record requireReceipts -> do
+          withCoordinator config mutation $ \provider _ record requireReceipts observe -> do
             case command of UpCommand (UpInput _ _ (Just _) _) -> Config.ensureFreshInitialization config; _ -> pure ()
             case command of
               RepairCommand _ (RepairInput _ _ _ _ _ _ receipts) -> requireReceipts (map L.appendReceiptText receipts)
@@ -131,8 +132,13 @@ run choose = do
               (Just (n, _, _), Just recovery) -> Backup.accept config plan n recovery
               _ -> pure ()
             mapM_ (\(_, _, audit) -> checkAuditDrain audit) mutation
+            let handler = case command of
+                  RepairCommand {} -> handleCommandWithExternalDrain $ \observation -> do
+                    mapM_ (\(_, _, audit) -> checkAuditDrain audit) mutation
+                    observe (repairObservation observation)
+                  _ -> handleCommand
             result <-
-              handleCommand
+              handler
                 ( commandEnvironment
                     (Just (Config.nativeConfig config (firstUse command)))
                     (Just provider)
@@ -156,7 +162,7 @@ run choose = do
       match config expected
       n <- requirePredecessor predecessor
       audit <- auditValue input >>= bindDrain config n evidenceFile
-      withCoordinator config (Just (n, "maintenance-reconcile", audit)) $ \provider _ record requireReceipts -> do
+      withCoordinator config (Just (n, "maintenance-reconcile", audit)) $ \provider _ record requireReceipts _ -> do
         requireReceipts (map L.appendReceiptText receipts)
         checkAuditDrain audit
         classifications <- forM receipts $ \receipt -> do
@@ -207,7 +213,7 @@ run choose = do
       match config expected
       n <- requirePredecessor predecessor
       audit <- auditValue input >>= bindDrain config n evidenceFile
-      withCoordinator config (Just (n, "maintenance-finish", audit)) $ \_ finish _ requireReceipts -> do
+      withCoordinator config (Just (n, "maintenance-finish", audit)) $ \_ finish _ requireReceipts _ -> do
         requireReceipts []
         checkAuditDrain audit
         verified <- I.verify I.Observe (Config.nativeConfig config False) (I.verifyOptions True) plan
@@ -227,6 +233,17 @@ run choose = do
         Just settings -> do
           outputSelected settings format result
           unless (successful result) exitFailure
+
+-- Keep diagnostic absence distinct from external authority; retain no SQL.
+repairObservation :: Repair.RepairObservation -> A.Value
+repairObservation observation = case observation of
+  Repair.NoRecordedQueries -> report "no-recorded-queries" (Just 0)
+  Repair.NoVisibleRecordedQueries -> report "no-visible-recorded-queries" (Just 0)
+  Repair.ProcessObservationUnavailable -> report "unavailable" Nothing
+  Repair.RecordedQueriesActive queries -> report "active-recorded-queries" (Just (length queries))
+  where
+    report :: Text -> Maybe Int -> A.Value
+    report state count = A.object ["state" A..= state, "activeCount" A..= count]
 
 entry :: Config.Config -> Maybe Integer -> Maybe FilePath -> Command -> IO (Integer, Text, A.Value)
 entry config predecessor evidenceFile command = do

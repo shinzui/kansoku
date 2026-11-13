@@ -47,7 +47,8 @@ kansokuApplicationMigrations = do
   drainFreshness <- sqlMigration "0014-maintenance-drain-freshness" drainFreshnessSql
   recoverySets <- sqlMigration "0015-maintenance-recovery-sets" recoverySetsSql
   rebindings <- sqlMigration "0016-clickhouse-server-rebindings" rebindingsSql
-  migrationComponent "kansoku" (Set.singleton "pgmq") (apiKeys :| [rejections, acceptance, maintenance, cohorts, definitions, administration, replicatedAdministration, replicatedJobs, analyses, drainAttempts, drainAudit, migrationAudit, drainFreshness, recoverySets, rebindings])
+  processObservations <- sqlMigration "0017-clickhouse-repair-observations" processObservationsSql
+  migrationComponent "kansoku" (Set.singleton "pgmq") (apiKeys :| [rejections, acceptance, maintenance, cohorts, definitions, administration, replicatedAdministration, replicatedJobs, analyses, drainAttempts, drainAudit, migrationAudit, drainFreshness, recoverySets, rebindings, processObservations])
 
 apiKeysSql :: ByteString
 apiKeysSql =
@@ -375,4 +376,19 @@ rebindingsSql =
     old_state jsonb NOT NULL,
     accepted_at timestamptz NOT NULL DEFAULT clock_timestamp()
   );
+  """
+
+-- Optional process diagnostics stay separate from retained external authority.
+processObservationsSql :: ByteString
+processObservationsSql =
+  """
+  CREATE TABLE kansoku.clickhouse_repair_observations (
+    id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    session_id uuid NOT NULL,
+    entry bigint NOT NULL,
+    observation jsonb NOT NULL CHECK (jsonb_typeof(observation)='object'),
+    recorded_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    FOREIGN KEY (session_id,entry) REFERENCES kansoku.clickhouse_migration_entry_audit(session_id,entry)
+  );
+  CREATE INDEX clickhouse_repair_observations_session ON kansoku.clickhouse_repair_observations(session_id,id DESC);
   """

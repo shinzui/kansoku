@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the production CLI from workspace and published migration archives."""
+"""Build the production CLI from workspace and the selected upstream migration archives."""
 import json
 import hashlib
 import os
@@ -36,14 +36,19 @@ def main():
             source.extractall(workspace,filter='data')
             packages.append(workspace / top)
     released = [name + '-' + migration_version for name in ['clickhouse-migrate', 'clickhouse-migrate-embed', 'clickhouse-migrate-cli', 'clickhouse-migrate-test-support']]
-    run(['cabal','get','--pristine','--destdir',str(workspace),*released])
-    packages.extend(workspace / name for name in released)
+    # Source-repository packages are already emitted by sdist all. Otherwise
+    # extract the exact registry cohort. Never mix the two sources partially.
+    selected = set(released) & {path.name for path in packages}
+    assert not selected or selected == set(released), 'Migration cohort source must be complete'
+    if not selected:
+        run(['cabal','get','--pristine','--destdir',str(workspace),*released])
+        packages.extend(workspace / name for name in released)
     required = {'ClickHaskell-1.1.0', 'hs-opentelemetry-instrumentation-servant-0.3.0.0'}
     for name in ('kansoku-api','kansoku-core','kansoku-server','kansoku-client'):
         version=re.search(r'(?m)^version:\s*([0-9.]+)',(repo/name/(name+'.cabal')).read_text()).group(1)
         required.add(name+'-'+version)
     required |= set(released)
-    assert {path.name for path in packages} == required, 'Extract every workspace, pinned source-repository and published migration package'
+    assert {path.name for path in packages} == required, 'Extract every workspace and the complete selected upstream migration cohort'
     server = next(path for path in packages if path.name.startswith('kansoku-server-'))
     settings = (repo / 'cabal.project').read_text().split('index-state:',1)[1].split('source-repository-package',1)[0]
     (workspace / 'cabal.project').write_text('packages:\n' + ''.join('  '+str(path)+'\n' for path in packages) + '\nindex-state:' + settings)

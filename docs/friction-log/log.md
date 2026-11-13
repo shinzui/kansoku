@@ -2,6 +2,9 @@
 
 ## 2026-11-13
 
+* **Update**: FRIC-37 accepted: Accept the isolated diagnostic-connection workaround qualified by owned maintenance tests.
+
+
 * **Update**: FRIC-38 resolved: Owned renamed current and prefix restores and all schema drift cases pass under the constrained role.
 
 

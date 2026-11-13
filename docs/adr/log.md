@@ -2,6 +2,12 @@
 
 ## 2026-11-13
 
+* **Update**: Qualify external-drain repair with atomic owner-bound diagnostic persistence and immutable source selection.
+
+
+* **Update**: Record repair observation persistence under the retained lease before native authorization.
+
+
 * **Update**: ADR-22: separate read-only restored-schema verification from history checks and mutation/adoption authority; bind qualified expectations and retained policy.
 
 

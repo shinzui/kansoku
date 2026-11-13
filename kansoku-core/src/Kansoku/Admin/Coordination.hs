@@ -15,6 +15,7 @@ module Kansoku.Admin.Coordination
     newRecoveryId,
     withRebindLease,
     recordNativeOutcome,
+    recordRepairObservation,
     requireReceipts,
   )
 where
@@ -124,13 +125,27 @@ finishSession c identity = do
 sessionStatus :: Text -> SessionIdentity -> IO A.Value
 sessionStatus settings identity = withPostgres settings $ \c -> do
   pgScript c "SET statement_timeout='3s'"
-  query c ("SELECT to_jsonb(s) FROM kansoku.clickhouse_migration_sessions s WHERE (s.id=nullif($1->>'id','')::uuid OR ($1->>'id'='' AND s.completed_at IS NULL)) AND " <> identityPredicate) (parameters identity)
+  query c ("SELECT to_jsonb(s)||jsonb_build_object('repair_observation',(SELECT jsonb_build_object('entry',o.entry,'observation',o.observation,'recordedAt',o.recorded_at) FROM kansoku.clickhouse_repair_observations o WHERE o.session_id=s.id ORDER BY o.id DESC LIMIT 1)) FROM kansoku.clickhouse_migration_sessions s WHERE (s.id=nullif($1->>'id','')::uuid OR ($1->>'id'='' AND s.completed_at IS NULL)) AND " <> identityPredicate) (parameters identity)
 
 -- Preserve exact receipt strings before releasing exclusion or reporting success.
 -- Process loss before this update still leaves the pre-submission marker.
 recordNativeOutcome :: PQ.Connection -> SessionIdentity -> Bool -> [Text] -> IO ()
 recordNativeOutcome c identity success receipts = do
   void $ query c "UPDATE kansoku.clickhouse_migration_sessions SET outcome=CASE WHEN ($1->>'success')::boolean THEN 'acknowledged' ELSE 'failed' END,pending_receipts=CASE WHEN ($1->>'success')::boolean THEN '[]'::jsonb ELSE pending_receipts||($1->'receipts') END WHERE id=($1->>'id')::uuid AND completed_at IS NULL" (A.object ["id" A..= sessionId identity, "success" A..= success, "receipts" A..= receipts])
+
+-- Persist each typed diagnostic under the exact consumed entry and live lease.
+-- Failure propagates to the toolkit before recovery authorization can be written.
+recordRepairObservation :: PQ.Connection -> SessionIdentity -> Integer -> A.Value -> IO ()
+recordRepairObservation c identity entry observation = do
+  alive <- leaseAlive c
+  unless alive (fail "administrative lease lost")
+  let payload = case parameters identity of
+        A.Object base -> case A.object ["entry" A..= entry, "observation" A..= observation] of
+          A.Object extra -> A.Object (extra <> base)
+          _ -> error "invalid observation payload"
+        _ -> error "invalid identity payload"
+  retained <- query c ("INSERT INTO kansoku.clickhouse_repair_observations(session_id,entry,observation) SELECT s.id,s.entry,$1->'observation' FROM kansoku.clickhouse_migration_sessions s JOIN kansoku.maintenance_fence f ON f.active_migration_session=s.id WHERE s.id=($1->>'id')::uuid AND s.entry=($1->>'entry')::bigint AND s.completed_at IS NULL AND " <> identityPredicate <> " RETURNING to_jsonb(id)") payload
+  when (retained == A.Null) (fail "repair observation owner or entry changed; fence retained")
 
 requireReceipts :: PQ.Connection -> SessionIdentity -> [Text] -> IO ()
 requireReceipts c identity supplied = do

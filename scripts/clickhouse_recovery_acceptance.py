@@ -72,7 +72,12 @@ def verify(root, native, upgrade, pg_migrate, admin, interrupted=False):
                 missing = h.run(command,env=settings,success=False)
                 assert '--recovery-set FILE required' in missing.stderr and h.counter() == predecessor
 
-            point = dict(session=json.loads(h.run([native,'maintenance','status','--json']).stdout)['result'], policy=json.loads(pg('SELECT to_jsonb(p) FROM kansoku.retention_policy p')), accepted=pg('SELECT row_to_json(a) FROM kansoku.accepted_events a ORDER BY account_id,event_id'), queue=pg('SELECT message::text FROM pgmq.q_recovery_queue ORDER BY msg_id'), dispositions=pg('SELECT row_to_json(d) FROM kansoku.event_dispositions d ORDER BY account_id,event_id'), raw=h.sql('SELECT event_id,account_id,user_id,properties FROM analytics.events_raw ORDER BY event_id'), canonical=h.sql('SELECT event_id,account_id FROM analytics.events_canonical ORDER BY event_id'))
+            session_status = json.loads(h.run([native,'maintenance','status','--json']).stdout)['result']
+            session_status.pop('repair_observation')
+            stored_session = json.loads(pg('SELECT to_jsonb(s) FROM kansoku.clickhouse_migration_sessions s WHERE completed_at IS NULL'))
+            assert session_status == stored_session
+            observation_query = "SELECT coalesce(jsonb_agg(to_jsonb(o) ORDER BY id),'[]'::jsonb) FROM kansoku.clickhouse_repair_observations o"
+            point = dict(session=stored_session, repair_observations=pg(observation_query), policy=json.loads(pg('SELECT to_jsonb(p) FROM kansoku.retention_policy p')), accepted=pg('SELECT row_to_json(a) FROM kansoku.accepted_events a ORDER BY account_id,event_id'), queue=pg('SELECT message::text FROM pgmq.q_recovery_queue ORDER BY msg_id'), dispositions=pg('SELECT row_to_json(d) FROM kansoku.event_dispositions d ORDER BY account_id,event_id'), raw=h.sql('SELECT event_id,account_id,user_id,properties FROM analytics.events_raw ORDER BY event_id'), canonical=h.sql('SELECT event_id,account_id FROM analytics.events_canonical ORDER BY event_id'))
             def ledger(database):
                 names = h.sql("SELECT name FROM system.tables WHERE database='" + database + "' ORDER BY name").strip().splitlines()
                 return {name:h.sql('SELECT * FROM `' + database + '`.`' + name.replace('`','``') + '` ORDER BY tuple(*) FORMAT JSONEachRow') for name in names}
@@ -128,6 +133,7 @@ def verify(root, native, upgrade, pg_migrate, admin, interrupted=False):
             h.run(['pg_restore','--dbname=recovery_restored','--no-owner','--exit-on-error',str(dump)],env=restored)
             h.sql("RESTORE DATABASE analytics AS recovery_analytics, DATABASE kansoku_migration_ledger AS recovery_ledger FROM Disk('kansoku_backups','point.zip')")
             assert json.loads(pg('SELECT to_jsonb(s) FROM kansoku.clickhouse_migration_sessions s WHERE completed_at IS NULL',restored)) == point['session']
+            assert pg(observation_query,restored) == point['repair_observations']
             assert json.loads(pg('SELECT to_jsonb(p) FROM kansoku.retention_policy p',restored)) == point['policy']
             assert pg('SELECT row_to_json(a) FROM kansoku.accepted_events a ORDER BY account_id,event_id',restored) == point['accepted']
             assert pg('SELECT message::text FROM pgmq.q_recovery_queue ORDER BY msg_id',restored) == point['queue']
@@ -170,6 +176,10 @@ def verify(root, native, upgrade, pg_migrate, admin, interrupted=False):
                 replay = json.loads(rebuilt.run(rebind,env=rebuilt_settings).stdout)['result']
                 assert rebound == replay
                 status = json.loads(rebuilt.run([upgrade,'maintenance','status','--json']).stdout)['result']
+                retained_observation = status.pop('repair_observation')
+                assert (retained_observation is None) == (json.loads(point['repair_observations']) == [])
+                restored_observations = rebuilt.run(['psql','-XAtc',observation_query]).stdout.strip()
+                assert json.loads(restored_observations) == json.loads(point['repair_observations'])
                 expected_session = dict(point['session'],server_id=new_server)
                 assert status == expected_session
                 assert rebuilt.sql('SELECT event_id,account_id,user_id,properties FROM analytics.events_raw ORDER BY event_id') == point['raw']

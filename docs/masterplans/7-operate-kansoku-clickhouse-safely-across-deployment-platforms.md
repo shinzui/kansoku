@@ -99,13 +99,20 @@ quiescence. This is evidence to start integration, not proof that a deployed Nag
 instance or the Kansoku ceremony satisfies this plan. Nagare-specific acceptance
 must verify the actual adopted release, capabilities and evidence.
 
-The toolkit owner is `mori://shinzui/clickhouse-migrate`. Repair still queries recorded
-query IDs in `system.processes`; its source states that absence is diagnostic only.
-Upstream behavior needed by this plan belongs there. Kansoku must not patch a vendored
-copy or erase a failed observation into a successful drain result. At planning time, `cabal.project` selected a 0.1.0.1 source cohort at commit
-`00afa9fa`. The current working tree instead selects Hackage 0.2.0.0 across all four
-packages. Hackage metadata and upstream tags were checked on 2026-11-13; no newer
-release was available. This initiative has not changed that dependency selection.
+The toolkit owner is `mori://shinzui/clickhouse-migrate`. Its strict repair API
+continues requiring process diagnostics. The delivered source revision
+`f4bc4e6d32decfaaf1a19e1033a22f3e28fc167c` adds an explicit external-drain policy
+with a required typed observer while preserving active-query refusal and all
+ordinary guards. Its 41-group extracted-source qualification passes on all three
+exact server candidates. Kansoku selects that complete four-package source cohort
+in Cabal and Nix; its 35 packaged and four SDK cases, normal checks and
+source/embedding reconstruction pass. There is no vendored/local
+library patch or observation-to-drain conversion. Authoritative Hackage metadata
+and upstream tags checked on 2026-11-13 still identify 0.2.0.0 as the latest
+published release. The selected snapshot retains that numeric package version;
+its immutable revision distinguishes the new API. The original 0.1.0.1 planning
+pin and initial Hackage 0.2.0.0 integration are historical selections.
+
 
 
 ## Decomposition Strategy
@@ -127,7 +134,7 @@ privilege inventory and platform-specific instructions.
 
 | # | Title | Path | Hard Deps | Soft Deps | Status |
 |---|-------|------|-----------|-----------|--------|
-| 50 | Accept portable drain evidence without cross-user process visibility | [ExecPlan](../plans/50-accept-portable-drain-evidence-without-cross-user-process-visibility.md) | None | None | In Progress |
+| 50 | Accept portable drain evidence without cross-user process visibility | [ExecPlan](../plans/50-accept-portable-drain-evidence-without-cross-user-process-visibility.md) | None | None | Complete |
 | 51 | Establish consistent maintenance backups and restored-server identity recovery | [ExecPlan](../plans/51-establish-consistent-maintenance-backups-and-restored-server-identity-recovery.md) | EP-50 M1: accepted evidence contract and owner binding | EP-52 for early restored-copy roundtrip | Complete |
 | 52 | Verify renamed ClickHouse restores without writes | [ExecPlan](../plans/52-verify-renamed-clickhouse-restores-without-writes.md) | None | EP-51 recovery-set manifest | Complete |
 | 53 | Prove shared-server maintenance across deployment platforms | [ExecPlan](../plans/53-prove-shared-server-maintenance-across-deployment-platforms.md) | EP-50; EP-51; EP-52, all Complete | None | Not Started |
@@ -245,17 +252,20 @@ if missing or skipped; live production endpoints are never acceptance fixtures.
 
 ## Progress
 
-EP-50 M1/M2 are accepted on 2026-11-13: the full migration harness passes
-20 non-skipped cases, administration passes seven scenario families and two-replica
-maintenance passes. M3 remains open on scoped upstream repair delivery, tracked at
-`mori://shinzui/clickhouse-migrate/plans/13-accept-explicit-external-drain-authority-when-repair-process-diagnostics-are-unavailable`.
-No dependency cohort changed. EP-51 is Complete: the packaged 22-case harness
-proves complete recovery sets and clean/interrupted direct rebuilt-server adoption.
-EP-52 is also Complete: 33 packaged native cases, 23 schema contracts, embedding and
-ten-package source reconstruction pass, together with `just check`. Its read-only
-verifier detects actual drift and distinguishes a compatible older prefix.
-EP-53 waits for all three completed children. Final packaged/source/deployment gates
-and all IR completion claims remain open.
+EP-50, EP-51 and EP-52 are Complete on 2026-11-13. EP-50 delivers owner-bound
+portable drain, fresh-entry enforcement and separately retained repair observations.
+Its upstream prerequisite is delivered and all 41 extracted-source server groups
+pass; Kansoku adopts that exact complete source cohort. The final 35-case packaged
+harness, four SDK cases, normal checks and embedding/ten-package source reconstruction
+pass, including denied/own-user repair, audit-write refusal, clean/interrupted
+whole-store restore/re-bind and renamed read-only verification. Earlier administration
+and two-replica maintenance evidence remains recorded in EP-50.
+
+EP-53 is now eligible and owns the integrated generic shared-server ceremony,
+exact privilege inventory and actual owned Nagare proof. Final platform acceptance
+and IR closure remain open. Toolkit/component success does not substitute for those
+integrated gates.
+
 
 
 ## Surprises & Discoveries

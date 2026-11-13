@@ -2,6 +2,12 @@
 
 ## 2026-11-13
 
+* **Update**: Record the exact delivered repair source cohort and qualified per-entry diagnostic audit.
+
+
+* **Update**: Document per-entry repair process observations, null unavailable counts, status diagnosis and audit-write refusal.
+
+
 * **Update**: DOC-13: document explicit restored namespaces, SELECT-only readonly=2 role, embedded schema expectations and constrained operational TTL verification.
 
 

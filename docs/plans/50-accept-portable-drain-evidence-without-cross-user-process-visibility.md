@@ -51,7 +51,7 @@ platform login controller or claim Nagare deployment acceptance by itself.
 
 - [x] (2026-11-13) M1: A bounded portable evidence contract binds an actual maintenance owner and passes a real producer/consumer drain proof while the migration principal remains usable.
 - [x] (2026-11-13) M2: Migration sessions and prepared/resumed data jobs enforce sufficient evidence; unavailable or restricted process observations never imply drain.
-- [ ] M3: Qualified upstream repair behavior and packaged Kansoku acceptance cover denied and own-user process visibility, stale evidence and interrupted requests.
+- [x] M3 (2026-11-13): Delivered upstream source is qualified across all 41 exact-server groups and adopted consistently. All 35 packaged Kansoku cases, four SDK component cases, normal checks and embedding/ten-package source reconstruction pass, covering denied/own-user diagnostics, stale evidence, interrupted requests and audit-write refusal.
 
 
 M1 evidence: eight focused validator examples pass. The locally built CLI/native
@@ -90,19 +90,27 @@ mandatory-evidence administration harness passes seven scenario families
 writer drain, interrupted mutation recovery, denied process observations and
 retention. Nine focused validator examples pass.
 
-M3 upstream implementation has started in
+M3 upstream work is implemented and source-qualified in
 `mori://shinzui/clickhouse-migrate/plans/13-accept-explicit-external-drain-authority-when-repair-process-diagnostics-are-unavailable`.
-Its first real scoped-role producer/consumer passes on 26.8.28.14: the unchanged
-strict API refuses a denied process read; the explicit opt-in CLI retry and SDK
-resume succeed with separately reported unavailable diagnostics; stale positions,
-observer failure and cancellation remain blocking. Further native/source
-qualification and real upstream delivery remain open. Kansoku still selects the
-released 0.2.0.0 cohort and does not consume an unpublished local library patch. The upstream source implementation is committed as `f4bc4e6` in
-`mori://shinzui/clickhouse-migrate`, with strict-default SDK/CLI compatibility,
-six real scoped repair flows, interrupted-receipt and active-work tests. Its
-full exact-server and extracted-source qualification is running; Apple Container
-replaces the old Docker-specific Linux fixture. This is an upstream checkpoint,
-not delivered dependency selection or completed M3.
+The implementation commit `f4bc4e6d32decfaaf1a19e1033a22f3e28fc167c` is delivered
+on upstream master (qualification record commit `d213746`). All 41 required groups
+pass from seven extracted source archives on the three exact server candidates,
+including both replicated Linux fixtures under Apple Container. All 110
+Haskell/Python/Cabal source files match the implementation commit. Strict API and
+JSON v1 defaults, six scoped repair flows, observer failure/cancellation, exact
+interrupted receipts and visible-work refusal pass.
+
+Kansoku now explicitly selects this immutable delivered source revision for all
+four toolkit packages in Cabal and Nix. Hackage and upstream tags were checked
+before selecting it: 0.2.0.0 remains the latest published package release; the new
+API belongs to the selected source snapshot. No vendored/local library patch or
+new Hackage release is claimed. Application callback persistence, append-only
+PostgreSQL migration 0017, status diagnostics and packaged denied/own-user repair
+cases are qualified. The full packaged harness passes 35 cases with zero
+failures/skips in `.dev/acceptance/ch-migrations-u1abgd_n/`. Four SDK cases pass;
+`just check`, preserved-time embedding reconstruction
+(`.dev/acceptance/ch-embedding-h9karn_o/`) and ten-package source reconstruction
+(`.dev/acceptance/ch-sdist-6ll0afwg/`) pass on the same selected cohort.
 
 Evidence is mandatory for migration mutation/reconciliation/finish and unfinished
 confirmed data-job resume. An initial data confirmation persists a prepared owner
@@ -111,20 +119,16 @@ and attempt timestamps; a matching counter cannot refresh an older drain time.
 Expiration is rechecked before native migration SQL, data-job stages and fence
 completion. Fixed refusal messages identify missing coverage without echoing input.
 
-M3 remains open on upstream delivery:
-`mori://shinzui/clickhouse-migrate/plans/13-accept-explicit-external-drain-authority-when-repair-process-diagnostics-are-unavailable`.
-The upstream plan is committed as `ea74fbc`; no library code or dependency cohort
-was changed. Hackage metadata and upstream tags checked on 2026-11-13 both show
-0.2.0.0 as the latest release. The current repair path still unconditionally reads
-recorded queries from `system.processes`, so external-authority repair with denied
-diagnostics is not accepted. Packaged/source and final deployment gates remain
-open. Continue other ready children without claiming EP-50 Complete.
+M3 is accepted. Final integrated shared-server and Nagare deployment acceptance
+belong to EP-53 and remain open; these component and packaged proofs do not
+substitute for that ceremony.
 
 ## Surprises & Discoveries
 
-The working tree now selects toolkit 0.2.0.0 from Hackage and supports replicated
-runtime/job topology. The original 0.1.0.1 source-pin context below is historical;
-no dependency version was changed by this implementation. Evidence binds the full
+At initial implementation the working tree selected toolkit 0.2.0.0 from Hackage
+and supported replicated runtime/job topology. M3 later selected the exact
+delivered upstream source revision above; its package version remains 0.2.0.0.
+The original 0.1.0.1 source-pin context below is historical. Evidence binds the full
 server inventory. PostgreSQL migrations through 0010 already exist, so the new
 attempt columns are appended in 0011 rather than changing any earlier SQL.
 
@@ -134,6 +138,12 @@ shell with the initialization flag cleared successfully performs discovery.
 
 
 ## Decision Log
+
+On 2026-11-13, adopt the qualified delivered upstream source revision for the
+complete toolkit cohort, preserving its strict default and CLI JSON v1. Choose
+external authority only after application proof/recovery-set validation, and require
+per-entry diagnostic persistence before recovery authorization. Audit failure blocks
+native work; diagnostics never replace or overwrite the retained external proof.
 
 On 2026-11-03, keep platform control outside Kansoku and bind its retained evidence
 at the administrative boundary. A PostgreSQL fence controls cooperating callers;
@@ -145,6 +155,28 @@ executes; that ordering cannot accept evidence naming the job in advance.
 
 
 ## Outcomes & Retrospective
+
+Complete on 2026-11-13. Portable bounded evidence binds exact target inventory,
+ledger, owner and fresh session predecessor or data-job attempt. Missing or stale
+authority refuses before native work. Accepted proof retention and entry advancement
+are atomic. Native repair records typed diagnostics under that consumed entry before
+recovery authorization; unavailable counts remain null. Observation-audit failure,
+visible recorded work, stale native positions and conflicting/omitted receipts remain
+blocking. Earlier proof and diagnostic rows are preserved.
+
+The exact delivered upstream source and all four package selections are recorded
+above. The 35-case packaged suite covers the new scoped repairs, complete recovery
+sets, clean/interrupted rebuilt-server adoption and read-only renamed inspection.
+Four public SDK cases, normal checks and source/embedding gates pass. Restore tests
+compare the persistent session and diagnostic audit separately from enriched status
+JSON, preserving complete stored-state equality after restore and re-bind. Generic
+integrated availability/privilege proof and actual Nagare acceptance remain EP-53.
+
+[FRIC-36](../friction-log/36-mori-dependency-discovery-unavailable-during-portable-drain-implementation.md)
+is resolved by refreshing the agent login environment; no PostgreSQL outage was
+established. [FRIC-37](../friction-log/37-rejected-native-process-observation-invalidates-the-maintenance-exchange.md)
+is accepted with dedicated short-lived diagnostic connections; no upstream native
+driver fix is claimed.
 
 
 ## Context and Orientation
