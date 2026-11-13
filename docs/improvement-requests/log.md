@@ -2,7 +2,13 @@
 
 ## 2026-11-13
 
+* **Update**: Link IR-20 to ExecPlan 70 for calendar-period retention with separate start and return events; implementation has not started.
+
+
 * **Update**: Complete IR-19: plan 69 delivers saved analyses with revision safety, quotas, filtered pages, typed clients and documented contracts; full packaged acceptance passes.
+
+
+* **Add**: Propose IR-20 from `mori://shinzui/kansoku-ui/plans/36-analyse-retention-by-daily-weekly-or-monthly-cohorts-with-start-and-return-events`: weekly and monthly retention cohorts with offsets in that unit, and a start event and return event each with its own filters beside the shared filters, for kansoku-ui's cohort analysis.
 
 * **Update**: Complete IR-18: plan 68 delivers identified-user metric selection; focused eight-route HTTP, native, compiler/client and documentation checks pass.
 
