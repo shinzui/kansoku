@@ -2,6 +2,12 @@
 
 ## 2026-11-13
 
+* **Update**: FRIC-26 accepted: Accept the observed gate cost without weakening validation or expanding this saved-analysis feature into build-tool changes.
+
+
+* **Addition**: FRIC-26 records slowdown tooling friction with mori://shinzui/kansoku: Required validation commands rebuild unchanged Cabal components
+
+
 * **Update**: FRIC-25 accepted: Local compilation progressed with remote builders disabled; retain the observation without claiming an upstream Nix defect.
 
 
