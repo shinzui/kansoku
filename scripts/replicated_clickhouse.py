@@ -64,6 +64,7 @@ class NativeProxy:
         self.ports = ports
         self.next = 0
         self.forced_port = None
+        self.writer_port = None
         self.held_port = None
         self.trace_marker = None
         self.trace_ports = []
@@ -99,7 +100,6 @@ class NativeProxy:
             def forward(self):
                 with owner.lock:
                     port = owner.forced_port
-                    owner.forced_port = None
                     if port is None:
                         port = owner.ports[owner.next % len(owner.ports)]
                         owner.next += 1
@@ -109,6 +109,7 @@ class NativeProxy:
                         holding = False
                         tail = b''
                         traced_insert = False
+                        first_query = True
                         while not owner.closed:
                             ready, _, _ = select.select([self.request, upstream], [], [], .1)
                             for source in ready:
@@ -123,6 +124,14 @@ class NativeProxy:
                                     return
                                 if source is self.request:
                                     window = tail + data
+                                    # Inventory/observer connections begin with identity;
+                                    # the writer begins with its local schema check.
+                                    schema = b'FROM system.databases' in window
+                                    identity = b'SELECT toJSONString(toString(serverUUID()))' in window
+                                    if first_query and (schema or identity):
+                                        first_query = False
+                                        if schema and owner.writer_port is not None and port != owner.writer_port:
+                                            return
                                     marker = b'INSERT INTO events_raw'
                                     with owner.lock:
                                         owner.insert_submissions += window.count(marker) - tail.count(marker)

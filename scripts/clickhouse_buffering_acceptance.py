@@ -181,7 +181,8 @@ class Case:
                         path = Path(data['root']) / ('r'+str(index+1)) / 'config.xml'
                         originals[index] = path.read_text()
                         # Preserve two expected local UUIDs but make cluster cardinality unsafe.
-                        path.write_text(originals[index].replace('</shard>', '<replica><host>127.0.0.1</host><port>9000</port></replica></shard>'))
+                        owned_replica = originals[index].split('<replica>', 1)[1].split('</replica>', 1)[0]
+                        path.write_text(originals[index].replace('</shard>', '<replica>' + owned_replica + '</replica></shard>'))
                         query(index, 'SYSTEM RELOAD CONFIG')
                 if mismatch and not warm:
                     if self.scenario == 'mismatch-target':
@@ -218,7 +219,8 @@ class Case:
                             eventually(lambda: http(base, '/health/pipeline')[1]['check'] == 'clickhouse_topology_mismatch', 'empty queue mismatch observation', 25)
                         submissions_before = proxy.insert_submissions
                         self.event(base, key)
-                        assert int(self.pg("SELECT count(*) FROM pgmq.q_buffer_events")) >= 1
+                        first_id = self.report['accepted'][-1]
+                        assert self.pg("SELECT count(*) FROM pgmq.q_buffer_events WHERE message->'event'->>'eventId'='" + first_id + "'") == '1'
                         self.report['startupToPersistedEventSeconds'] = time.monotonic() - launched
                         if not warm and not mismatch:
                             assert self.report['startupToPersistedEventSeconds'] < 10
@@ -246,12 +248,16 @@ class Case:
                             return values.get('kansoku_queue_length', 0) >= 3 and values.get('kansoku_queue_oldest_message_age_seconds', 0) >= 5 and values.get('kansoku_writer_breaker_state', 0) >= 1
                         eventually(sampled_failure, 'queue depth, oldest age and open breaker metrics', 25)
                         self.report['metrics'] = metrics
+                        assert proxy.insert_submissions == submissions_before, 'unsafe or unavailable storage submitted an event INSERT'
+                        self.report['outageInsertSubmissions'] = 0
                         if mismatch:
-                            assert proxy.insert_submissions == submissions_before, 'unsafe topology submitted an event INSERT'
                             self.report['unsafeInsertSubmissions'] = 0
                             for index in range(len(ids)):
                                 actual = query(index, 'SELECT event_id FROM analytics.events_raw ORDER BY event_id')
                                 assert [row['event_id'] for row in actual] == sorted(self.report.get('warmAccepted', [])), actual
+                        retained_ids = self.pg("SELECT message->'event'->>'eventId' FROM pgmq.q_buffer_events ORDER BY 1").splitlines()
+                        assert retained_ids == sorted(set(self.report['accepted']) - set(self.report.get('warmAccepted', [])))
+                        self.report['retainedQueueIds'] = retained_ids
                         restored = time.monotonic()
                         for index in stopped:
                             lifecycle.start(index)
@@ -306,6 +312,9 @@ class Case:
             assert [row['event_id'] for row in physical] == expected and all(row['n'] == 1 for row in physical), physical
             self.report.setdefault('replicaResults', []).append(dict(id=ids[index], physical=physical, canonical=expected))
         assert self.pg("SELECT count(*) FROM pgmq.a_buffer_events") == '0'
+        ledger_ids = self.pg("SELECT event_id FROM kansoku.accepted_events WHERE account_id='buffer-account' ORDER BY event_id").splitlines()
+        assert ledger_ids == sorted(self.report['accepted'])
+        self.report['acceptanceLedgerIds'] = ledger_ids
         eventually(lambda: http(base, '/health/pipeline')[0] == 200, 'pipeline recovery', 30)
         self.health(base, pipeline=200)
         assert process.poll() is None
@@ -313,6 +322,8 @@ class Case:
 
 def public_report(report):
     summary = {key:value for key,value in report.items() if key not in ['binaries','serverPid','replicaIds','metrics','observations']}
+    if report.get('packaged') and 'applicationImageId' not in report and report.get('binaries'):
+        summary['packageOutputs'] = sorted({str(Path(path).parent.parent) for path in report['binaries'].values()})
     summary['healthObservations'] = []
     for observation in report['observations']:
         value = dict(ready=observation['ready'][0], pipeline=observation['pipeline'][0], check=observation['pipeline'][1]['check'])

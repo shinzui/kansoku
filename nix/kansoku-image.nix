@@ -67,9 +67,9 @@ in
       image_id = machine.succeed(f"docker image inspect --format '{{{{.Id}}}}' {image}").strip()
       print("Kansoku image configuration: " + image_id)
       plan = json.loads(machine.succeed(run(supplied, "kansoku-ch-migrate", "plan", "--json")))
-      assert plan["status"] == "ok" and len(plan["result"]["schedule"]) == 25
+      assert plan["status"] == "ok" and len(plan["result"]["schedule"]) == 26
       migrations = plan["result"]["components"][0]["migrations"]
-      assert len(migrations) == 25 and sum(len(m["steps"]) for m in migrations) == 257
+      assert len(migrations) == 26 and sum(len(m["steps"]) for m in migrations) == 264
       replicated = {**supplied,
           "KANSOKU_CH_MIGRATION_CLUSTER": "fixture",
           "KANSOKU_CH_MIGRATION_REPLICA_IDS": "11111111-1111-4111-8111-111111111111,22222222-2222-4222-8222-222222222222"}
@@ -79,12 +79,12 @@ in
       assert replicated_plan["status"] == "ok"
       assert replicated_plan["result"]["components"][0]["name"] == "kansoku_replicated"
       migrations = replicated_plan["result"]["components"][0]["migrations"]
-      assert len(migrations) == 25 and sum(len(m["steps"]) for m in migrations) == 254
+      assert len(migrations) == 26 and sum(len(m["steps"]) for m in migrations) == 261
       postgres = json.loads(machine.succeed(run(supplied, "kansoku-migrate", "plan", "--json")))
       assert postgres["ok"] is True
       components = {c["name"]: c for c in postgres["data"]["components"]}
       assert set(components) == {"pgmq", "kansoku"}
-      assert [m["id"] for m in components["kansoku"]["migrations"]][-2:] == ["kansoku/0008-clickhouse-replicated-administration", "kansoku/0009-clickhouse-replicated-jobs"]
+      assert [m["id"] for m in components["kansoku"]["migrations"]][-3:] == ["kansoku/0008-clickhouse-replicated-administration", "kansoku/0009-clickhouse-replicated-jobs", "kansoku/0010-saved-analyses"]
       mapped = environment(supplied)
       for key, origin in {
           "PG_CONNECTION_STRING": "DATABASE_URL",

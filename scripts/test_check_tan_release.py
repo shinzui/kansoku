@@ -48,6 +48,16 @@ class ReleaseValidation(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'migration/step count'):
                 validate_plan(name,json.dumps(doc))
 
+    def test_saved_analyses_postgres_suffix_and_historical_plan(self):
+        doc = json.loads((self.plans/'postgres.json').read_bytes())
+        validate_plan('postgres.json', json.dumps(doc))
+        migrations = doc['data']['components'][1]['migrations']
+        migrations.append(dict(id='kansoku/0010-saved-analyses'))
+        validate_plan('postgres.json', json.dumps(doc))
+        migrations[-1]['id'] = 'foreign/0010'
+        with self.assertRaisesRegex(ValueError, 'suffix'):
+            validate_plan('postgres.json', json.dumps(doc))
+
     def test_valid_mapping(self):
         artifact, pending = self.check()
         self.assertFalse(pending)

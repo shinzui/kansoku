@@ -1,0 +1,1585 @@
+[
+  {
+    "status": "passed",
+    "case": "startup-one",
+    "topology": "replicated",
+    "packaged": true,
+    "platform": "Darwin arm64 Nix client and ClickHouse stores",
+    "image": "nix-clickhouse-qualified-26.8.28.14-aarch64-darwin",
+    "version": "26.8.28.14",
+    "skipped": 0,
+    "accepted": [
+      "buffer-e76ecfcaf49842d38bfbebd8e23b6a9e",
+      "buffer-d31099386c7242ce8889a56b08e409cb",
+      "buffer-83b12dfbf7f64a1eabde60899efc0921",
+      "buffer-5bd5a06afa3f40cd8ad025e1f566f9e5"
+    ],
+    "sourceRevision": "d6330c9dfaf0fb523c93cff20b6f02582ef3a060",
+    "sourceState": "working-tree",
+    "startupToPersistedEventSeconds": 0.2502001660177484,
+    "failureMetrics": {
+      "kansoku_writer_breaker_state": 1.0,
+      "kansoku_queue_oldest_message_age_seconds": 5.0,
+      "kansoku_queue_length": 3.0
+    },
+    "outageInsertSubmissions": 0,
+    "retainedQueueIds": [
+      "buffer-5bd5a06afa3f40cd8ad025e1f566f9e5",
+      "buffer-83b12dfbf7f64a1eabde60899efc0921",
+      "buffer-d31099386c7242ce8889a56b08e409cb",
+      "buffer-e76ecfcaf49842d38bfbebd8e23b6a9e"
+    ],
+    "firstRecoveredWriteSeconds": 1.8569495000410825,
+    "drainSeconds": 3.341274084057659,
+    "replicaResults": [
+      {
+        "id": "2817817b-f7ab-4da8-bb5e-d7260a31f1d6",
+        "physical": [
+          {
+            "event_id": "buffer-5bd5a06afa3f40cd8ad025e1f566f9e5",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-83b12dfbf7f64a1eabde60899efc0921",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-d31099386c7242ce8889a56b08e409cb",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-e76ecfcaf49842d38bfbebd8e23b6a9e",
+            "n": 1
+          }
+        ],
+        "canonical": [
+          "buffer-5bd5a06afa3f40cd8ad025e1f566f9e5",
+          "buffer-83b12dfbf7f64a1eabde60899efc0921",
+          "buffer-d31099386c7242ce8889a56b08e409cb",
+          "buffer-e76ecfcaf49842d38bfbebd8e23b6a9e"
+        ]
+      },
+      {
+        "id": "1bd10b53-9f9c-4341-88dd-e3d6538d6175",
+        "physical": [
+          {
+            "event_id": "buffer-5bd5a06afa3f40cd8ad025e1f566f9e5",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-83b12dfbf7f64a1eabde60899efc0921",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-d31099386c7242ce8889a56b08e409cb",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-e76ecfcaf49842d38bfbebd8e23b6a9e",
+            "n": 1
+          }
+        ],
+        "canonical": [
+          "buffer-5bd5a06afa3f40cd8ad025e1f566f9e5",
+          "buffer-83b12dfbf7f64a1eabde60899efc0921",
+          "buffer-d31099386c7242ce8889a56b08e409cb",
+          "buffer-e76ecfcaf49842d38bfbebd8e23b6a9e"
+        ]
+      }
+    ],
+    "acceptanceLedgerIds": [
+      "buffer-5bd5a06afa3f40cd8ad025e1f566f9e5",
+      "buffer-83b12dfbf7f64a1eabde60899efc0921",
+      "buffer-d31099386c7242ce8889a56b08e409cb",
+      "buffer-e76ecfcaf49842d38bfbebd8e23b6a9e"
+    ],
+    "sameServerPid": true,
+    "packageOutputs": [
+      "/nix/store/drvlbl8hziafifhamxpadza254jk16c2-kansoku-server-0.2.0.0"
+    ],
+    "healthObservations": [
+      {
+        "ready": 200,
+        "pipeline": 503,
+        "check": "clickhouse_topology_unavailable"
+      },
+      {
+        "ready": 200,
+        "pipeline": 200,
+        "check": "all"
+      }
+    ]
+  },
+  {
+    "status": "passed",
+    "case": "startup-all",
+    "topology": "replicated",
+    "packaged": true,
+    "platform": "Darwin arm64 Nix client and ClickHouse stores",
+    "image": "nix-clickhouse-qualified-26.8.28.14-aarch64-darwin",
+    "version": "26.8.28.14",
+    "skipped": 0,
+    "accepted": [
+      "buffer-c7d1465b5b7d414b8eb1476cd0d3b361",
+      "buffer-a7176063800a43828152638f98d32401",
+      "buffer-d2c322b0c0394b558b17e080819d48ff",
+      "buffer-6e8e5677b9ec4c48819b6d4f481f59fa"
+    ],
+    "sourceRevision": "d6330c9dfaf0fb523c93cff20b6f02582ef3a060",
+    "sourceState": "working-tree",
+    "startupToPersistedEventSeconds": 0.2401973750675097,
+    "failureMetrics": {
+      "kansoku_writer_breaker_state": 1.0,
+      "kansoku_queue_oldest_message_age_seconds": 5.0,
+      "kansoku_queue_length": 3.0
+    },
+    "outageInsertSubmissions": 0,
+    "retainedQueueIds": [
+      "buffer-6e8e5677b9ec4c48819b6d4f481f59fa",
+      "buffer-a7176063800a43828152638f98d32401",
+      "buffer-c7d1465b5b7d414b8eb1476cd0d3b361",
+      "buffer-d2c322b0c0394b558b17e080819d48ff"
+    ],
+    "firstRecoveredWriteSeconds": 5.8444443750195205,
+    "drainSeconds": 7.196172207943164,
+    "replicaResults": [
+      {
+        "id": "f7425078-bb85-4f30-bef3-6f0d7d6b5811",
+        "physical": [
+          {
+            "event_id": "buffer-6e8e5677b9ec4c48819b6d4f481f59fa",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-a7176063800a43828152638f98d32401",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-c7d1465b5b7d414b8eb1476cd0d3b361",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-d2c322b0c0394b558b17e080819d48ff",
+            "n": 1
+          }
+        ],
+        "canonical": [
+          "buffer-6e8e5677b9ec4c48819b6d4f481f59fa",
+          "buffer-a7176063800a43828152638f98d32401",
+          "buffer-c7d1465b5b7d414b8eb1476cd0d3b361",
+          "buffer-d2c322b0c0394b558b17e080819d48ff"
+        ]
+      },
+      {
+        "id": "f23a7c27-c8c3-4900-acc1-1e0fc933629e",
+        "physical": [
+          {
+            "event_id": "buffer-6e8e5677b9ec4c48819b6d4f481f59fa",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-a7176063800a43828152638f98d32401",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-c7d1465b5b7d414b8eb1476cd0d3b361",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-d2c322b0c0394b558b17e080819d48ff",
+            "n": 1
+          }
+        ],
+        "canonical": [
+          "buffer-6e8e5677b9ec4c48819b6d4f481f59fa",
+          "buffer-a7176063800a43828152638f98d32401",
+          "buffer-c7d1465b5b7d414b8eb1476cd0d3b361",
+          "buffer-d2c322b0c0394b558b17e080819d48ff"
+        ]
+      }
+    ],
+    "acceptanceLedgerIds": [
+      "buffer-6e8e5677b9ec4c48819b6d4f481f59fa",
+      "buffer-a7176063800a43828152638f98d32401",
+      "buffer-c7d1465b5b7d414b8eb1476cd0d3b361",
+      "buffer-d2c322b0c0394b558b17e080819d48ff"
+    ],
+    "sameServerPid": true,
+    "packageOutputs": [
+      "/nix/store/drvlbl8hziafifhamxpadza254jk16c2-kansoku-server-0.2.0.0"
+    ],
+    "healthObservations": [
+      {
+        "ready": 200,
+        "pipeline": 503,
+        "check": "clickhouse_topology_unavailable"
+      },
+      {
+        "ready": 200,
+        "pipeline": 200,
+        "check": "all"
+      }
+    ]
+  },
+  {
+    "status": "passed",
+    "case": "startup-all",
+    "topology": "direct",
+    "packaged": true,
+    "platform": "Darwin arm64 Nix client and ClickHouse stores",
+    "image": "nix-clickhouse-qualified-26.8.28.14-aarch64-darwin",
+    "version": "26.8.28.14",
+    "skipped": 0,
+    "accepted": [
+      "buffer-8f306e3c9cc5458dbfec7597ffd7771b",
+      "buffer-1fbca368422b465594c590f587f5a9b0",
+      "buffer-5b8fb33cf8e848c6843e9ea7abbb99ca",
+      "buffer-b6c3ef3c17b740f291097c8383f355a0"
+    ],
+    "sourceRevision": "d6330c9dfaf0fb523c93cff20b6f02582ef3a060",
+    "sourceState": "working-tree",
+    "startupToPersistedEventSeconds": 0.24940095806960016,
+    "failureMetrics": {
+      "kansoku_writer_breaker_state": 1.0,
+      "kansoku_queue_oldest_message_age_seconds": 5.0,
+      "kansoku_queue_length": 3.0
+    },
+    "outageInsertSubmissions": 0,
+    "retainedQueueIds": [
+      "buffer-1fbca368422b465594c590f587f5a9b0",
+      "buffer-5b8fb33cf8e848c6843e9ea7abbb99ca",
+      "buffer-8f306e3c9cc5458dbfec7597ffd7771b",
+      "buffer-b6c3ef3c17b740f291097c8383f355a0"
+    ],
+    "firstRecoveredWriteSeconds": 0.692271624924615,
+    "drainSeconds": 0.9777229588944465,
+    "replicaResults": [
+      {
+        "id": "25f3c54e-f437-4169-8001-2ed14b02fa4a",
+        "physical": [
+          {
+            "event_id": "buffer-1fbca368422b465594c590f587f5a9b0",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-5b8fb33cf8e848c6843e9ea7abbb99ca",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-8f306e3c9cc5458dbfec7597ffd7771b",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-b6c3ef3c17b740f291097c8383f355a0",
+            "n": 1
+          }
+        ],
+        "canonical": [
+          "buffer-1fbca368422b465594c590f587f5a9b0",
+          "buffer-5b8fb33cf8e848c6843e9ea7abbb99ca",
+          "buffer-8f306e3c9cc5458dbfec7597ffd7771b",
+          "buffer-b6c3ef3c17b740f291097c8383f355a0"
+        ]
+      }
+    ],
+    "acceptanceLedgerIds": [
+      "buffer-1fbca368422b465594c590f587f5a9b0",
+      "buffer-5b8fb33cf8e848c6843e9ea7abbb99ca",
+      "buffer-8f306e3c9cc5458dbfec7597ffd7771b",
+      "buffer-b6c3ef3c17b740f291097c8383f355a0"
+    ],
+    "sameServerPid": true,
+    "packageOutputs": [
+      "/nix/store/drvlbl8hziafifhamxpadza254jk16c2-kansoku-server-0.2.0.0"
+    ],
+    "healthObservations": [
+      {
+        "ready": 200,
+        "pipeline": 503,
+        "check": "clickhouse_topology_unavailable"
+      },
+      {
+        "ready": 200,
+        "pipeline": 200,
+        "check": "all"
+      }
+    ]
+  },
+  {
+    "status": "passed",
+    "case": "startup-stall",
+    "topology": "replicated",
+    "packaged": true,
+    "platform": "Darwin arm64 Nix client and ClickHouse stores",
+    "image": "nix-clickhouse-qualified-26.8.28.14-aarch64-darwin",
+    "version": "26.8.28.14",
+    "skipped": 0,
+    "accepted": [
+      "buffer-be3b86748aa3411fbcacd04234cbd303",
+      "buffer-2e23c94ebabe468fba1ae9ff8c5563a5",
+      "buffer-6a63f291f2214a9f86a1ff4b5bc4230a",
+      "buffer-c3f6ebb65eb34d70b2e2644fc3757ae4"
+    ],
+    "sourceRevision": "d6330c9dfaf0fb523c93cff20b6f02582ef3a060",
+    "sourceState": "working-tree",
+    "startupToPersistedEventSeconds": 0.24535020790062845,
+    "failureMetrics": {
+      "kansoku_writer_breaker_state": 1.0,
+      "kansoku_queue_oldest_message_age_seconds": 9.0,
+      "kansoku_queue_length": 4.0
+    },
+    "outageInsertSubmissions": 0,
+    "retainedQueueIds": [
+      "buffer-2e23c94ebabe468fba1ae9ff8c5563a5",
+      "buffer-6a63f291f2214a9f86a1ff4b5bc4230a",
+      "buffer-be3b86748aa3411fbcacd04234cbd303",
+      "buffer-c3f6ebb65eb34d70b2e2644fc3757ae4"
+    ],
+    "firstRecoveredWriteSeconds": 5.119659541989677,
+    "drainSeconds": 6.6028545829467475,
+    "replicaResults": [
+      {
+        "id": "28832740-ac40-4001-a090-aa9383251c0f",
+        "physical": [
+          {
+            "event_id": "buffer-2e23c94ebabe468fba1ae9ff8c5563a5",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-6a63f291f2214a9f86a1ff4b5bc4230a",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-be3b86748aa3411fbcacd04234cbd303",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-c3f6ebb65eb34d70b2e2644fc3757ae4",
+            "n": 1
+          }
+        ],
+        "canonical": [
+          "buffer-2e23c94ebabe468fba1ae9ff8c5563a5",
+          "buffer-6a63f291f2214a9f86a1ff4b5bc4230a",
+          "buffer-be3b86748aa3411fbcacd04234cbd303",
+          "buffer-c3f6ebb65eb34d70b2e2644fc3757ae4"
+        ]
+      },
+      {
+        "id": "7df08801-85bc-41dc-91de-cc2705c9c94f",
+        "physical": [
+          {
+            "event_id": "buffer-2e23c94ebabe468fba1ae9ff8c5563a5",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-6a63f291f2214a9f86a1ff4b5bc4230a",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-be3b86748aa3411fbcacd04234cbd303",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-c3f6ebb65eb34d70b2e2644fc3757ae4",
+            "n": 1
+          }
+        ],
+        "canonical": [
+          "buffer-2e23c94ebabe468fba1ae9ff8c5563a5",
+          "buffer-6a63f291f2214a9f86a1ff4b5bc4230a",
+          "buffer-be3b86748aa3411fbcacd04234cbd303",
+          "buffer-c3f6ebb65eb34d70b2e2644fc3757ae4"
+        ]
+      }
+    ],
+    "acceptanceLedgerIds": [
+      "buffer-2e23c94ebabe468fba1ae9ff8c5563a5",
+      "buffer-6a63f291f2214a9f86a1ff4b5bc4230a",
+      "buffer-be3b86748aa3411fbcacd04234cbd303",
+      "buffer-c3f6ebb65eb34d70b2e2644fc3757ae4"
+    ],
+    "sameServerPid": true,
+    "packageOutputs": [
+      "/nix/store/drvlbl8hziafifhamxpadza254jk16c2-kansoku-server-0.2.0.0"
+    ],
+    "healthObservations": [
+      {
+        "ready": 200,
+        "pipeline": 503,
+        "check": "clickhouse_topology_unchecked"
+      },
+      {
+        "ready": 200,
+        "pipeline": 200,
+        "check": "all"
+      }
+    ]
+  },
+  {
+    "status": "passed",
+    "case": "startup-stall",
+    "topology": "direct",
+    "packaged": true,
+    "platform": "Darwin arm64 Nix client and ClickHouse stores",
+    "image": "nix-clickhouse-qualified-26.8.28.14-aarch64-darwin",
+    "version": "26.8.28.14",
+    "skipped": 0,
+    "accepted": [
+      "buffer-2c95c4bc711644049796e7a10287325d",
+      "buffer-93f577e207e74465b6e1caa995e5c903",
+      "buffer-0d3039ca2015422ab61ec87fcd6d06d3",
+      "buffer-da089a53f7fb4ca1b2d3ffc1f0b15676"
+    ],
+    "sourceRevision": "d6330c9dfaf0fb523c93cff20b6f02582ef3a060",
+    "sourceState": "working-tree",
+    "startupToPersistedEventSeconds": 0.13695241697132587,
+    "failureMetrics": {
+      "kansoku_writer_breaker_state": 1.0,
+      "kansoku_queue_oldest_message_age_seconds": 9.0,
+      "kansoku_queue_length": 4.0
+    },
+    "outageInsertSubmissions": 0,
+    "retainedQueueIds": [
+      "buffer-0d3039ca2015422ab61ec87fcd6d06d3",
+      "buffer-2c95c4bc711644049796e7a10287325d",
+      "buffer-93f577e207e74465b6e1caa995e5c903",
+      "buffer-da089a53f7fb4ca1b2d3ffc1f0b15676"
+    ],
+    "firstRecoveredWriteSeconds": 4.993521000025794,
+    "drainSeconds": 5.252513625076972,
+    "replicaResults": [
+      {
+        "id": "ecd7a836-c94b-47c5-b3d1-2080424c41e5",
+        "physical": [
+          {
+            "event_id": "buffer-0d3039ca2015422ab61ec87fcd6d06d3",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-2c95c4bc711644049796e7a10287325d",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-93f577e207e74465b6e1caa995e5c903",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-da089a53f7fb4ca1b2d3ffc1f0b15676",
+            "n": 1
+          }
+        ],
+        "canonical": [
+          "buffer-0d3039ca2015422ab61ec87fcd6d06d3",
+          "buffer-2c95c4bc711644049796e7a10287325d",
+          "buffer-93f577e207e74465b6e1caa995e5c903",
+          "buffer-da089a53f7fb4ca1b2d3ffc1f0b15676"
+        ]
+      }
+    ],
+    "acceptanceLedgerIds": [
+      "buffer-0d3039ca2015422ab61ec87fcd6d06d3",
+      "buffer-2c95c4bc711644049796e7a10287325d",
+      "buffer-93f577e207e74465b6e1caa995e5c903",
+      "buffer-da089a53f7fb4ca1b2d3ffc1f0b15676"
+    ],
+    "sameServerPid": true,
+    "packageOutputs": [
+      "/nix/store/drvlbl8hziafifhamxpadza254jk16c2-kansoku-server-0.2.0.0"
+    ],
+    "healthObservations": [
+      {
+        "ready": 200,
+        "pipeline": 503,
+        "check": "clickhouse_topology_unchecked"
+      },
+      {
+        "ready": 200,
+        "pipeline": 200,
+        "check": "all"
+      }
+    ]
+  },
+  {
+    "status": "passed",
+    "case": "admission-one",
+    "topology": "replicated",
+    "packaged": true,
+    "platform": "Darwin arm64 Nix client and ClickHouse stores",
+    "image": "nix-clickhouse-qualified-26.8.28.14-aarch64-darwin",
+    "version": "26.8.28.14",
+    "skipped": 0,
+    "accepted": [
+      "buffer-76774b9ea77e4b85859638ec2d846ed8",
+      "buffer-b855812d3f7e4b9fb68540d23bf2fe37",
+      "buffer-8bb7491fce6d465480ac662371ab7cd4",
+      "buffer-a085f1291a11493390dd1960c1801e0c"
+    ],
+    "sourceRevision": "d6330c9dfaf0fb523c93cff20b6f02582ef3a060",
+    "sourceState": "working-tree",
+    "startupToPersistedEventSeconds": 0.13516229204833508,
+    "failureMetrics": {
+      "kansoku_writer_breaker_state": 1.0,
+      "kansoku_queue_oldest_message_age_seconds": 5.0,
+      "kansoku_queue_length": 3.0
+    },
+    "outageInsertSubmissions": 0,
+    "retainedQueueIds": [
+      "buffer-76774b9ea77e4b85859638ec2d846ed8",
+      "buffer-8bb7491fce6d465480ac662371ab7cd4",
+      "buffer-a085f1291a11493390dd1960c1801e0c",
+      "buffer-b855812d3f7e4b9fb68540d23bf2fe37"
+    ],
+    "firstRecoveredWriteSeconds": 1.5807669159257784,
+    "drainSeconds": 2.686242499970831,
+    "replicaResults": [
+      {
+        "id": "8e937e90-8aa6-429c-b08b-758aa94650a8",
+        "physical": [
+          {
+            "event_id": "buffer-76774b9ea77e4b85859638ec2d846ed8",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-8bb7491fce6d465480ac662371ab7cd4",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-a085f1291a11493390dd1960c1801e0c",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-b855812d3f7e4b9fb68540d23bf2fe37",
+            "n": 1
+          }
+        ],
+        "canonical": [
+          "buffer-76774b9ea77e4b85859638ec2d846ed8",
+          "buffer-8bb7491fce6d465480ac662371ab7cd4",
+          "buffer-a085f1291a11493390dd1960c1801e0c",
+          "buffer-b855812d3f7e4b9fb68540d23bf2fe37"
+        ]
+      },
+      {
+        "id": "09a4505f-c8c2-47e9-94cf-6f809dbbd671",
+        "physical": [
+          {
+            "event_id": "buffer-76774b9ea77e4b85859638ec2d846ed8",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-8bb7491fce6d465480ac662371ab7cd4",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-a085f1291a11493390dd1960c1801e0c",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-b855812d3f7e4b9fb68540d23bf2fe37",
+            "n": 1
+          }
+        ],
+        "canonical": [
+          "buffer-76774b9ea77e4b85859638ec2d846ed8",
+          "buffer-8bb7491fce6d465480ac662371ab7cd4",
+          "buffer-a085f1291a11493390dd1960c1801e0c",
+          "buffer-b855812d3f7e4b9fb68540d23bf2fe37"
+        ]
+      }
+    ],
+    "acceptanceLedgerIds": [
+      "buffer-76774b9ea77e4b85859638ec2d846ed8",
+      "buffer-8bb7491fce6d465480ac662371ab7cd4",
+      "buffer-a085f1291a11493390dd1960c1801e0c",
+      "buffer-b855812d3f7e4b9fb68540d23bf2fe37"
+    ],
+    "sameServerPid": true,
+    "maintenanceIngestStatus": 503,
+    "postgresReadyStatus": 503,
+    "packageOutputs": [
+      "/nix/store/drvlbl8hziafifhamxpadza254jk16c2-kansoku-server-0.2.0.0"
+    ],
+    "healthObservations": [
+      {
+        "ready": 200,
+        "pipeline": 503,
+        "check": "clickhouse_topology_unavailable"
+      },
+      {
+        "ready": 200,
+        "pipeline": 200,
+        "check": "all"
+      }
+    ]
+  },
+  {
+    "status": "passed",
+    "case": "admission-all",
+    "topology": "replicated",
+    "packaged": true,
+    "platform": "Darwin arm64 Nix client and ClickHouse stores",
+    "image": "nix-clickhouse-qualified-26.8.28.14-aarch64-darwin",
+    "version": "26.8.28.14",
+    "skipped": 0,
+    "accepted": [
+      "buffer-9d0bdde1731749dcbf5b1062ffb2ae5e",
+      "buffer-317faf3a5f8f4e6397b00ce1e601a816",
+      "buffer-338ff4d56f1a4b40b6b62313760168b3",
+      "buffer-a77e62e31eb4484cbe850cf1d982d442"
+    ],
+    "sourceRevision": "d6330c9dfaf0fb523c93cff20b6f02582ef3a060",
+    "sourceState": "working-tree",
+    "startupToPersistedEventSeconds": 0.13253954204265028,
+    "failureMetrics": {
+      "kansoku_writer_breaker_state": 1.0,
+      "kansoku_queue_oldest_message_age_seconds": 5.0,
+      "kansoku_queue_length": 3.0
+    },
+    "outageInsertSubmissions": 0,
+    "retainedQueueIds": [
+      "buffer-317faf3a5f8f4e6397b00ce1e601a816",
+      "buffer-338ff4d56f1a4b40b6b62313760168b3",
+      "buffer-9d0bdde1731749dcbf5b1062ffb2ae5e",
+      "buffer-a77e62e31eb4484cbe850cf1d982d442"
+    ],
+    "firstRecoveredWriteSeconds": 0.9223176250234246,
+    "drainSeconds": 2.2658911669859663,
+    "replicaResults": [
+      {
+        "id": "daf21ffb-1072-4060-929d-69ba19f557af",
+        "physical": [
+          {
+            "event_id": "buffer-317faf3a5f8f4e6397b00ce1e601a816",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-338ff4d56f1a4b40b6b62313760168b3",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-9d0bdde1731749dcbf5b1062ffb2ae5e",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-a77e62e31eb4484cbe850cf1d982d442",
+            "n": 1
+          }
+        ],
+        "canonical": [
+          "buffer-317faf3a5f8f4e6397b00ce1e601a816",
+          "buffer-338ff4d56f1a4b40b6b62313760168b3",
+          "buffer-9d0bdde1731749dcbf5b1062ffb2ae5e",
+          "buffer-a77e62e31eb4484cbe850cf1d982d442"
+        ]
+      },
+      {
+        "id": "0ffdfc2b-7b51-4319-950a-0a390a148d28",
+        "physical": [
+          {
+            "event_id": "buffer-317faf3a5f8f4e6397b00ce1e601a816",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-338ff4d56f1a4b40b6b62313760168b3",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-9d0bdde1731749dcbf5b1062ffb2ae5e",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-a77e62e31eb4484cbe850cf1d982d442",
+            "n": 1
+          }
+        ],
+        "canonical": [
+          "buffer-317faf3a5f8f4e6397b00ce1e601a816",
+          "buffer-338ff4d56f1a4b40b6b62313760168b3",
+          "buffer-9d0bdde1731749dcbf5b1062ffb2ae5e",
+          "buffer-a77e62e31eb4484cbe850cf1d982d442"
+        ]
+      }
+    ],
+    "acceptanceLedgerIds": [
+      "buffer-317faf3a5f8f4e6397b00ce1e601a816",
+      "buffer-338ff4d56f1a4b40b6b62313760168b3",
+      "buffer-9d0bdde1731749dcbf5b1062ffb2ae5e",
+      "buffer-a77e62e31eb4484cbe850cf1d982d442"
+    ],
+    "sameServerPid": true,
+    "maintenanceIngestStatus": 503,
+    "postgresReadyStatus": 503,
+    "packageOutputs": [
+      "/nix/store/drvlbl8hziafifhamxpadza254jk16c2-kansoku-server-0.2.0.0"
+    ],
+    "healthObservations": [
+      {
+        "ready": 200,
+        "pipeline": 503,
+        "check": "clickhouse_topology_unavailable"
+      },
+      {
+        "ready": 200,
+        "pipeline": 200,
+        "check": "all"
+      }
+    ]
+  },
+  {
+    "status": "passed",
+    "case": "admission-all",
+    "topology": "direct",
+    "packaged": true,
+    "platform": "Darwin arm64 Nix client and ClickHouse stores",
+    "image": "nix-clickhouse-qualified-26.8.28.14-aarch64-darwin",
+    "version": "26.8.28.14",
+    "skipped": 0,
+    "accepted": [
+      "buffer-23db23cdb60844d2b06984da1d5eb416",
+      "buffer-c2b99e5d34ef4c94980887aba0d452ab",
+      "buffer-c64c14087b7d43948774c5aa5e70228b",
+      "buffer-1a9d3a6df9eb42829d0b776ef6a29d4d"
+    ],
+    "sourceRevision": "d6330c9dfaf0fb523c93cff20b6f02582ef3a060",
+    "sourceState": "working-tree",
+    "startupToPersistedEventSeconds": 0.14155404106713831,
+    "failureMetrics": {
+      "kansoku_writer_breaker_state": 1.0,
+      "kansoku_queue_oldest_message_age_seconds": 5.0,
+      "kansoku_queue_length": 3.0
+    },
+    "outageInsertSubmissions": 0,
+    "retainedQueueIds": [
+      "buffer-1a9d3a6df9eb42829d0b776ef6a29d4d",
+      "buffer-23db23cdb60844d2b06984da1d5eb416",
+      "buffer-c2b99e5d34ef4c94980887aba0d452ab",
+      "buffer-c64c14087b7d43948774c5aa5e70228b"
+    ],
+    "firstRecoveredWriteSeconds": 0.7656949999509379,
+    "drainSeconds": 1.0300460419384763,
+    "replicaResults": [
+      {
+        "id": "ec8918e8-7d54-4ace-b6a3-42aa283b198b",
+        "physical": [
+          {
+            "event_id": "buffer-1a9d3a6df9eb42829d0b776ef6a29d4d",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-23db23cdb60844d2b06984da1d5eb416",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-c2b99e5d34ef4c94980887aba0d452ab",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-c64c14087b7d43948774c5aa5e70228b",
+            "n": 1
+          }
+        ],
+        "canonical": [
+          "buffer-1a9d3a6df9eb42829d0b776ef6a29d4d",
+          "buffer-23db23cdb60844d2b06984da1d5eb416",
+          "buffer-c2b99e5d34ef4c94980887aba0d452ab",
+          "buffer-c64c14087b7d43948774c5aa5e70228b"
+        ]
+      }
+    ],
+    "acceptanceLedgerIds": [
+      "buffer-1a9d3a6df9eb42829d0b776ef6a29d4d",
+      "buffer-23db23cdb60844d2b06984da1d5eb416",
+      "buffer-c2b99e5d34ef4c94980887aba0d452ab",
+      "buffer-c64c14087b7d43948774c5aa5e70228b"
+    ],
+    "sameServerPid": true,
+    "maintenanceIngestStatus": 503,
+    "postgresReadyStatus": 503,
+    "packageOutputs": [
+      "/nix/store/drvlbl8hziafifhamxpadza254jk16c2-kansoku-server-0.2.0.0"
+    ],
+    "healthObservations": [
+      {
+        "ready": 200,
+        "pipeline": 503,
+        "check": "clickhouse_topology_unavailable"
+      },
+      {
+        "ready": 200,
+        "pipeline": 200,
+        "check": "all"
+      }
+    ]
+  },
+  {
+    "status": "passed",
+    "case": "recovery-one",
+    "topology": "replicated",
+    "packaged": true,
+    "platform": "Darwin arm64 Nix client and ClickHouse stores",
+    "image": "nix-clickhouse-qualified-26.8.28.14-aarch64-darwin",
+    "version": "26.8.28.14",
+    "skipped": 0,
+    "accepted": [
+      "buffer-8236b1e09a2747fc9ae0fbd25002991f",
+      "buffer-7b90ab91b70541f78b883f5d4e5ca491",
+      "buffer-2442dbf7e660460db3c3e58469325912",
+      "buffer-f78fef0b1dd74ec58483a22284eee617"
+    ],
+    "sourceRevision": "d6330c9dfaf0fb523c93cff20b6f02582ef3a060",
+    "sourceState": "working-tree",
+    "startupToPersistedEventSeconds": 0.12793720897752792,
+    "failureMetrics": {
+      "kansoku_writer_breaker_state": 1.0,
+      "kansoku_queue_oldest_message_age_seconds": 5.0,
+      "kansoku_queue_length": 3.0
+    },
+    "outageInsertSubmissions": 0,
+    "retainedQueueIds": [
+      "buffer-2442dbf7e660460db3c3e58469325912",
+      "buffer-7b90ab91b70541f78b883f5d4e5ca491",
+      "buffer-8236b1e09a2747fc9ae0fbd25002991f",
+      "buffer-f78fef0b1dd74ec58483a22284eee617"
+    ],
+    "firstRecoveredWriteSeconds": 1.3023017919622362,
+    "drainSeconds": 2.5379800000227988,
+    "replicaResults": [
+      {
+        "id": "865c62f0-1d7a-4d2f-9a17-f8895b1ddad8",
+        "physical": [
+          {
+            "event_id": "buffer-2442dbf7e660460db3c3e58469325912",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-7b90ab91b70541f78b883f5d4e5ca491",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-8236b1e09a2747fc9ae0fbd25002991f",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-f78fef0b1dd74ec58483a22284eee617",
+            "n": 1
+          }
+        ],
+        "canonical": [
+          "buffer-2442dbf7e660460db3c3e58469325912",
+          "buffer-7b90ab91b70541f78b883f5d4e5ca491",
+          "buffer-8236b1e09a2747fc9ae0fbd25002991f",
+          "buffer-f78fef0b1dd74ec58483a22284eee617"
+        ]
+      },
+      {
+        "id": "1795899f-fc09-4258-a7fb-2f80ac0c792f",
+        "physical": [
+          {
+            "event_id": "buffer-2442dbf7e660460db3c3e58469325912",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-7b90ab91b70541f78b883f5d4e5ca491",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-8236b1e09a2747fc9ae0fbd25002991f",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-f78fef0b1dd74ec58483a22284eee617",
+            "n": 1
+          }
+        ],
+        "canonical": [
+          "buffer-2442dbf7e660460db3c3e58469325912",
+          "buffer-7b90ab91b70541f78b883f5d4e5ca491",
+          "buffer-8236b1e09a2747fc9ae0fbd25002991f",
+          "buffer-f78fef0b1dd74ec58483a22284eee617"
+        ]
+      }
+    ],
+    "acceptanceLedgerIds": [
+      "buffer-2442dbf7e660460db3c3e58469325912",
+      "buffer-7b90ab91b70541f78b883f5d4e5ca491",
+      "buffer-8236b1e09a2747fc9ae0fbd25002991f",
+      "buffer-f78fef0b1dd74ec58483a22284eee617"
+    ],
+    "sameServerPid": true,
+    "packageOutputs": [
+      "/nix/store/drvlbl8hziafifhamxpadza254jk16c2-kansoku-server-0.2.0.0"
+    ],
+    "healthObservations": [
+      {
+        "ready": 200,
+        "pipeline": 503,
+        "check": "clickhouse_topology_unavailable"
+      },
+      {
+        "ready": 200,
+        "pipeline": 200,
+        "check": "all"
+      }
+    ]
+  },
+  {
+    "status": "passed",
+    "case": "recovery-all",
+    "topology": "direct",
+    "packaged": true,
+    "platform": "Darwin arm64 Nix client and ClickHouse stores",
+    "image": "nix-clickhouse-qualified-26.8.28.14-aarch64-darwin",
+    "version": "26.8.28.14",
+    "skipped": 0,
+    "accepted": [
+      "buffer-6dc72497d9054cc58577068cd5e00fd0",
+      "buffer-4076ac76a410418cac2b3e7049338dc7",
+      "buffer-7e321fbdb2f64c00a7251b777ab45622",
+      "buffer-3da28e431f124a8da1b8bee6317a79fe"
+    ],
+    "sourceRevision": "d6330c9dfaf0fb523c93cff20b6f02582ef3a060",
+    "sourceState": "working-tree",
+    "startupToPersistedEventSeconds": 0.12973058293573558,
+    "failureMetrics": {
+      "kansoku_writer_breaker_state": 1.0,
+      "kansoku_queue_oldest_message_age_seconds": 5.0,
+      "kansoku_queue_length": 3.0
+    },
+    "outageInsertSubmissions": 0,
+    "retainedQueueIds": [
+      "buffer-3da28e431f124a8da1b8bee6317a79fe",
+      "buffer-4076ac76a410418cac2b3e7049338dc7",
+      "buffer-6dc72497d9054cc58577068cd5e00fd0",
+      "buffer-7e321fbdb2f64c00a7251b777ab45622"
+    ],
+    "firstRecoveredWriteSeconds": 0.778736750013195,
+    "drainSeconds": 1.0331636250484735,
+    "replicaResults": [
+      {
+        "id": "d433dfac-480b-4e07-9342-c9172ea5fce4",
+        "physical": [
+          {
+            "event_id": "buffer-3da28e431f124a8da1b8bee6317a79fe",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-4076ac76a410418cac2b3e7049338dc7",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-6dc72497d9054cc58577068cd5e00fd0",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-7e321fbdb2f64c00a7251b777ab45622",
+            "n": 1
+          }
+        ],
+        "canonical": [
+          "buffer-3da28e431f124a8da1b8bee6317a79fe",
+          "buffer-4076ac76a410418cac2b3e7049338dc7",
+          "buffer-6dc72497d9054cc58577068cd5e00fd0",
+          "buffer-7e321fbdb2f64c00a7251b777ab45622"
+        ]
+      }
+    ],
+    "acceptanceLedgerIds": [
+      "buffer-3da28e431f124a8da1b8bee6317a79fe",
+      "buffer-4076ac76a410418cac2b3e7049338dc7",
+      "buffer-6dc72497d9054cc58577068cd5e00fd0",
+      "buffer-7e321fbdb2f64c00a7251b777ab45622"
+    ],
+    "sameServerPid": true,
+    "packageOutputs": [
+      "/nix/store/drvlbl8hziafifhamxpadza254jk16c2-kansoku-server-0.2.0.0"
+    ],
+    "healthObservations": [
+      {
+        "ready": 200,
+        "pipeline": 503,
+        "check": "clickhouse_topology_unavailable"
+      },
+      {
+        "ready": 200,
+        "pipeline": 200,
+        "check": "all"
+      }
+    ]
+  },
+  {
+    "status": "passed",
+    "case": "mismatch-target",
+    "topology": "replicated",
+    "packaged": true,
+    "platform": "Darwin arm64 Nix client and ClickHouse stores",
+    "image": "nix-clickhouse-qualified-26.8.28.14-aarch64-darwin",
+    "version": "26.8.28.14",
+    "skipped": 0,
+    "accepted": [
+      "buffer-dbd28c36b39a4fbe990c27384877ed91",
+      "buffer-973c654935454ba688d712e252be025b",
+      "buffer-675ff772eb964ddf83e9e88f49c85ed7",
+      "buffer-c88c0f5d449a47af8ca7b33fde87f897"
+    ],
+    "sourceRevision": "d6330c9dfaf0fb523c93cff20b6f02582ef3a060",
+    "sourceState": "working-tree",
+    "startupToPersistedEventSeconds": 0.13681862503290176,
+    "failureMetrics": {
+      "kansoku_writer_breaker_state": 2.0,
+      "kansoku_queue_oldest_message_age_seconds": 5.0,
+      "kansoku_queue_length": 3.0
+    },
+    "outageInsertSubmissions": 0,
+    "unsafeInsertSubmissions": 0,
+    "retainedQueueIds": [
+      "buffer-675ff772eb964ddf83e9e88f49c85ed7",
+      "buffer-973c654935454ba688d712e252be025b",
+      "buffer-c88c0f5d449a47af8ca7b33fde87f897",
+      "buffer-dbd28c36b39a4fbe990c27384877ed91"
+    ],
+    "firstRecoveredWriteSeconds": 0.8715858749346808,
+    "drainSeconds": 2.098446000018157,
+    "replicaResults": [
+      {
+        "id": "47f81de8-eeef-4bbf-8dcf-322d1d7a64d5",
+        "physical": [
+          {
+            "event_id": "buffer-675ff772eb964ddf83e9e88f49c85ed7",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-973c654935454ba688d712e252be025b",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-c88c0f5d449a47af8ca7b33fde87f897",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-dbd28c36b39a4fbe990c27384877ed91",
+            "n": 1
+          }
+        ],
+        "canonical": [
+          "buffer-675ff772eb964ddf83e9e88f49c85ed7",
+          "buffer-973c654935454ba688d712e252be025b",
+          "buffer-c88c0f5d449a47af8ca7b33fde87f897",
+          "buffer-dbd28c36b39a4fbe990c27384877ed91"
+        ]
+      },
+      {
+        "id": "944b4556-9f31-4197-a2b7-9b8a711fcdb1",
+        "physical": [
+          {
+            "event_id": "buffer-675ff772eb964ddf83e9e88f49c85ed7",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-973c654935454ba688d712e252be025b",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-c88c0f5d449a47af8ca7b33fde87f897",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-dbd28c36b39a4fbe990c27384877ed91",
+            "n": 1
+          }
+        ],
+        "canonical": [
+          "buffer-675ff772eb964ddf83e9e88f49c85ed7",
+          "buffer-973c654935454ba688d712e252be025b",
+          "buffer-c88c0f5d449a47af8ca7b33fde87f897",
+          "buffer-dbd28c36b39a4fbe990c27384877ed91"
+        ]
+      }
+    ],
+    "acceptanceLedgerIds": [
+      "buffer-675ff772eb964ddf83e9e88f49c85ed7",
+      "buffer-973c654935454ba688d712e252be025b",
+      "buffer-c88c0f5d449a47af8ca7b33fde87f897",
+      "buffer-dbd28c36b39a4fbe990c27384877ed91"
+    ],
+    "sameServerPid": true,
+    "packageOutputs": [
+      "/nix/store/drvlbl8hziafifhamxpadza254jk16c2-kansoku-server-0.2.0.0"
+    ],
+    "healthObservations": [
+      {
+        "ready": 200,
+        "pipeline": 503,
+        "check": "clickhouse_topology_mismatch"
+      },
+      {
+        "ready": 200,
+        "pipeline": 200,
+        "check": "all"
+      }
+    ]
+  },
+  {
+    "status": "passed",
+    "case": "mismatch-inventory",
+    "topology": "replicated",
+    "packaged": true,
+    "platform": "Darwin arm64 Nix client and ClickHouse stores",
+    "image": "nix-clickhouse-qualified-26.8.28.14-aarch64-darwin",
+    "version": "26.8.28.14",
+    "skipped": 0,
+    "accepted": [
+      "buffer-2308ae4b9e654b568caa77107c5d1304",
+      "buffer-4798017efe1b42a399c8912ec4f8fd33",
+      "buffer-7daed179a97e468aa6b0957e3b2187db",
+      "buffer-ae81585b4ce74103b31d63296e66651a"
+    ],
+    "sourceRevision": "d6330c9dfaf0fb523c93cff20b6f02582ef3a060",
+    "sourceState": "working-tree",
+    "startupToPersistedEventSeconds": 0.13386833295226097,
+    "failureMetrics": {
+      "kansoku_writer_breaker_state": 2.0,
+      "kansoku_queue_oldest_message_age_seconds": 5.0,
+      "kansoku_queue_length": 3.0
+    },
+    "outageInsertSubmissions": 0,
+    "unsafeInsertSubmissions": 0,
+    "retainedQueueIds": [
+      "buffer-2308ae4b9e654b568caa77107c5d1304",
+      "buffer-4798017efe1b42a399c8912ec4f8fd33",
+      "buffer-7daed179a97e468aa6b0957e3b2187db",
+      "buffer-ae81585b4ce74103b31d63296e66651a"
+    ],
+    "firstRecoveredWriteSeconds": 0.775604167021811,
+    "drainSeconds": 4.503476458019577,
+    "replicaResults": [
+      {
+        "id": "002836aa-7e31-4305-a519-5019f1ee2444",
+        "physical": [
+          {
+            "event_id": "buffer-2308ae4b9e654b568caa77107c5d1304",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-4798017efe1b42a399c8912ec4f8fd33",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-7daed179a97e468aa6b0957e3b2187db",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-ae81585b4ce74103b31d63296e66651a",
+            "n": 1
+          }
+        ],
+        "canonical": [
+          "buffer-2308ae4b9e654b568caa77107c5d1304",
+          "buffer-4798017efe1b42a399c8912ec4f8fd33",
+          "buffer-7daed179a97e468aa6b0957e3b2187db",
+          "buffer-ae81585b4ce74103b31d63296e66651a"
+        ]
+      },
+      {
+        "id": "3f447f8b-1d19-473c-a560-55742e850708",
+        "physical": [
+          {
+            "event_id": "buffer-2308ae4b9e654b568caa77107c5d1304",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-4798017efe1b42a399c8912ec4f8fd33",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-7daed179a97e468aa6b0957e3b2187db",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-ae81585b4ce74103b31d63296e66651a",
+            "n": 1
+          }
+        ],
+        "canonical": [
+          "buffer-2308ae4b9e654b568caa77107c5d1304",
+          "buffer-4798017efe1b42a399c8912ec4f8fd33",
+          "buffer-7daed179a97e468aa6b0957e3b2187db",
+          "buffer-ae81585b4ce74103b31d63296e66651a"
+        ]
+      }
+    ],
+    "acceptanceLedgerIds": [
+      "buffer-2308ae4b9e654b568caa77107c5d1304",
+      "buffer-4798017efe1b42a399c8912ec4f8fd33",
+      "buffer-7daed179a97e468aa6b0957e3b2187db",
+      "buffer-ae81585b4ce74103b31d63296e66651a"
+    ],
+    "sameServerPid": true,
+    "packageOutputs": [
+      "/nix/store/drvlbl8hziafifhamxpadza254jk16c2-kansoku-server-0.2.0.0"
+    ],
+    "healthObservations": [
+      {
+        "ready": 200,
+        "pipeline": 503,
+        "check": "clickhouse_topology_mismatch"
+      },
+      {
+        "ready": 200,
+        "pipeline": 200,
+        "check": "all"
+      }
+    ]
+  },
+  {
+    "status": "passed",
+    "case": "mismatch-cached",
+    "topology": "replicated",
+    "packaged": true,
+    "platform": "Darwin arm64 Nix client and ClickHouse stores",
+    "image": "nix-clickhouse-qualified-26.8.28.14-aarch64-darwin",
+    "version": "26.8.28.14",
+    "skipped": 0,
+    "accepted": [
+      "buffer-f11b2b3e60554c5bbb52ddc6301a23cb",
+      "buffer-202a5ee487964904b6ada7977698b329",
+      "buffer-1fbce01326a040aab0da5cd8ca406721",
+      "buffer-eb466e50a4244e1c916b22bd750aee9f",
+      "buffer-6db1d2ccb21349a794e6ca5e1f25b2d0"
+    ],
+    "sourceRevision": "d6330c9dfaf0fb523c93cff20b6f02582ef3a060",
+    "sourceState": "working-tree",
+    "warmAccepted": [
+      "buffer-f11b2b3e60554c5bbb52ddc6301a23cb"
+    ],
+    "startupToPersistedEventSeconds": 5.242694291984662,
+    "failureMetrics": {
+      "kansoku_writer_breaker_state": 2.0,
+      "kansoku_queue_oldest_message_age_seconds": 5.0,
+      "kansoku_queue_length": 3.0
+    },
+    "outageInsertSubmissions": 0,
+    "unsafeInsertSubmissions": 0,
+    "retainedQueueIds": [
+      "buffer-1fbce01326a040aab0da5cd8ca406721",
+      "buffer-202a5ee487964904b6ada7977698b329",
+      "buffer-6db1d2ccb21349a794e6ca5e1f25b2d0",
+      "buffer-eb466e50a4244e1c916b22bd750aee9f"
+    ],
+    "firstRecoveredWriteSeconds": 0.7891844580881298,
+    "drainSeconds": 1.8955882920417935,
+    "replicaResults": [
+      {
+        "id": "f09e57a1-c31f-41fc-a9fe-aaa798cbbc51",
+        "physical": [
+          {
+            "event_id": "buffer-1fbce01326a040aab0da5cd8ca406721",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-202a5ee487964904b6ada7977698b329",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-6db1d2ccb21349a794e6ca5e1f25b2d0",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-eb466e50a4244e1c916b22bd750aee9f",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-f11b2b3e60554c5bbb52ddc6301a23cb",
+            "n": 1
+          }
+        ],
+        "canonical": [
+          "buffer-1fbce01326a040aab0da5cd8ca406721",
+          "buffer-202a5ee487964904b6ada7977698b329",
+          "buffer-6db1d2ccb21349a794e6ca5e1f25b2d0",
+          "buffer-eb466e50a4244e1c916b22bd750aee9f",
+          "buffer-f11b2b3e60554c5bbb52ddc6301a23cb"
+        ]
+      },
+      {
+        "id": "4c5b09ae-727a-421b-9297-20b9c06e8446",
+        "physical": [
+          {
+            "event_id": "buffer-1fbce01326a040aab0da5cd8ca406721",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-202a5ee487964904b6ada7977698b329",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-6db1d2ccb21349a794e6ca5e1f25b2d0",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-eb466e50a4244e1c916b22bd750aee9f",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-f11b2b3e60554c5bbb52ddc6301a23cb",
+            "n": 1
+          }
+        ],
+        "canonical": [
+          "buffer-1fbce01326a040aab0da5cd8ca406721",
+          "buffer-202a5ee487964904b6ada7977698b329",
+          "buffer-6db1d2ccb21349a794e6ca5e1f25b2d0",
+          "buffer-eb466e50a4244e1c916b22bd750aee9f",
+          "buffer-f11b2b3e60554c5bbb52ddc6301a23cb"
+        ]
+      }
+    ],
+    "acceptanceLedgerIds": [
+      "buffer-1fbce01326a040aab0da5cd8ca406721",
+      "buffer-202a5ee487964904b6ada7977698b329",
+      "buffer-6db1d2ccb21349a794e6ca5e1f25b2d0",
+      "buffer-eb466e50a4244e1c916b22bd750aee9f",
+      "buffer-f11b2b3e60554c5bbb52ddc6301a23cb"
+    ],
+    "sameServerPid": true,
+    "packageOutputs": [
+      "/nix/store/drvlbl8hziafifhamxpadza254jk16c2-kansoku-server-0.2.0.0"
+    ],
+    "healthObservations": [
+      {
+        "ready": 200,
+        "pipeline": 503,
+        "check": "clickhouse_topology_mismatch"
+      },
+      {
+        "ready": 200,
+        "pipeline": 200,
+        "check": "all"
+      }
+    ]
+  },
+  {
+    "status": "passed",
+    "case": "mismatch-rollout",
+    "topology": "replicated",
+    "packaged": true,
+    "platform": "Darwin arm64 Nix client and ClickHouse stores",
+    "image": "nix-clickhouse-qualified-26.8.28.14-aarch64-darwin",
+    "version": "26.8.28.14",
+    "skipped": 0,
+    "accepted": [
+      "buffer-ee0db176e113475ba20760d011a2054e",
+      "buffer-5d183d30d2f4409db27de7717fed8c7b",
+      "buffer-66092f3a37c444dab4441e7b6a0a7970",
+      "buffer-7d9c0132e4214034a4b51951cadbcde2"
+    ],
+    "sourceRevision": "d6330c9dfaf0fb523c93cff20b6f02582ef3a060",
+    "sourceState": "working-tree",
+    "startupToPersistedEventSeconds": 1.0854446670273319,
+    "failureMetrics": {
+      "kansoku_writer_breaker_state": 2.0,
+      "kansoku_queue_oldest_message_age_seconds": 5.0,
+      "kansoku_queue_length": 3.0
+    },
+    "outageInsertSubmissions": 0,
+    "unsafeInsertSubmissions": 0,
+    "retainedQueueIds": [
+      "buffer-5d183d30d2f4409db27de7717fed8c7b",
+      "buffer-66092f3a37c444dab4441e7b6a0a7970",
+      "buffer-7d9c0132e4214034a4b51951cadbcde2",
+      "buffer-ee0db176e113475ba20760d011a2054e"
+    ],
+    "firstRecoveredWriteSeconds": 30.248559041996486,
+    "drainSeconds": 86.59819649998099,
+    "replicaResults": [
+      {
+        "id": "9899b4e3-3907-4216-98e1-d6ef7d1aab17",
+        "physical": [
+          {
+            "event_id": "buffer-5d183d30d2f4409db27de7717fed8c7b",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-66092f3a37c444dab4441e7b6a0a7970",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-7d9c0132e4214034a4b51951cadbcde2",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-ee0db176e113475ba20760d011a2054e",
+            "n": 1
+          }
+        ],
+        "canonical": [
+          "buffer-5d183d30d2f4409db27de7717fed8c7b",
+          "buffer-66092f3a37c444dab4441e7b6a0a7970",
+          "buffer-7d9c0132e4214034a4b51951cadbcde2",
+          "buffer-ee0db176e113475ba20760d011a2054e"
+        ]
+      },
+      {
+        "id": "a4174da5-7806-45ea-b7bd-c777e9962c5b",
+        "physical": [
+          {
+            "event_id": "buffer-5d183d30d2f4409db27de7717fed8c7b",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-66092f3a37c444dab4441e7b6a0a7970",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-7d9c0132e4214034a4b51951cadbcde2",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-ee0db176e113475ba20760d011a2054e",
+            "n": 1
+          }
+        ],
+        "canonical": [
+          "buffer-5d183d30d2f4409db27de7717fed8c7b",
+          "buffer-66092f3a37c444dab4441e7b6a0a7970",
+          "buffer-7d9c0132e4214034a4b51951cadbcde2",
+          "buffer-ee0db176e113475ba20760d011a2054e"
+        ]
+      }
+    ],
+    "acceptanceLedgerIds": [
+      "buffer-5d183d30d2f4409db27de7717fed8c7b",
+      "buffer-66092f3a37c444dab4441e7b6a0a7970",
+      "buffer-7d9c0132e4214034a4b51951cadbcde2",
+      "buffer-ee0db176e113475ba20760d011a2054e"
+    ],
+    "requiresRollout": true,
+    "packageOutputs": [
+      "/nix/store/drvlbl8hziafifhamxpadza254jk16c2-kansoku-server-0.2.0.0"
+    ],
+    "healthObservations": [
+      {
+        "ready": 200,
+        "pipeline": 503,
+        "check": "clickhouse_topology_mismatch"
+      },
+      {
+        "ready": 200,
+        "pipeline": 200,
+        "check": "all"
+      }
+    ]
+  },
+  {
+    "status": "passed",
+    "case": "mismatch-direct",
+    "topology": "replicated",
+    "packaged": true,
+    "platform": "Darwin arm64 Nix client and ClickHouse stores",
+    "image": "nix-clickhouse-qualified-26.8.28.14-aarch64-darwin",
+    "version": "26.8.28.14",
+    "skipped": 0,
+    "accepted": [
+      "buffer-a339d14dfc6f41f5ad7ac4e7248463fd",
+      "buffer-84772af82e9d4e06a7550d777e37075f",
+      "buffer-f08eace37fc147688d8bc199c9b10910",
+      "buffer-a4424540a51242338adbb31113d83d0e"
+    ],
+    "sourceRevision": "d6330c9dfaf0fb523c93cff20b6f02582ef3a060",
+    "sourceState": "working-tree",
+    "startupToPersistedEventSeconds": 0.57074266707059,
+    "failureMetrics": {
+      "kansoku_writer_breaker_state": 2.0,
+      "kansoku_queue_oldest_message_age_seconds": 5.0,
+      "kansoku_queue_length": 3.0
+    },
+    "outageInsertSubmissions": 0,
+    "unsafeInsertSubmissions": 0,
+    "retainedQueueIds": [
+      "buffer-84772af82e9d4e06a7550d777e37075f",
+      "buffer-a339d14dfc6f41f5ad7ac4e7248463fd",
+      "buffer-a4424540a51242338adbb31113d83d0e",
+      "buffer-f08eace37fc147688d8bc199c9b10910"
+    ],
+    "firstRecoveredWriteSeconds": 30.36734120803885,
+    "drainSeconds": 86.85209175001364,
+    "replicaResults": [
+      {
+        "id": "1f71af0f-6fc5-43ee-8ac0-a977e3ad1d64",
+        "physical": [
+          {
+            "event_id": "buffer-84772af82e9d4e06a7550d777e37075f",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-a339d14dfc6f41f5ad7ac4e7248463fd",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-a4424540a51242338adbb31113d83d0e",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-f08eace37fc147688d8bc199c9b10910",
+            "n": 1
+          }
+        ],
+        "canonical": [
+          "buffer-84772af82e9d4e06a7550d777e37075f",
+          "buffer-a339d14dfc6f41f5ad7ac4e7248463fd",
+          "buffer-a4424540a51242338adbb31113d83d0e",
+          "buffer-f08eace37fc147688d8bc199c9b10910"
+        ]
+      },
+      {
+        "id": "101f2813-d33c-40d6-aa4c-c828ed05ebf7",
+        "physical": [
+          {
+            "event_id": "buffer-84772af82e9d4e06a7550d777e37075f",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-a339d14dfc6f41f5ad7ac4e7248463fd",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-a4424540a51242338adbb31113d83d0e",
+            "n": 1
+          },
+          {
+            "event_id": "buffer-f08eace37fc147688d8bc199c9b10910",
+            "n": 1
+          }
+        ],
+        "canonical": [
+          "buffer-84772af82e9d4e06a7550d777e37075f",
+          "buffer-a339d14dfc6f41f5ad7ac4e7248463fd",
+          "buffer-a4424540a51242338adbb31113d83d0e",
+          "buffer-f08eace37fc147688d8bc199c9b10910"
+        ]
+      }
+    ],
+    "acceptanceLedgerIds": [
+      "buffer-84772af82e9d4e06a7550d777e37075f",
+      "buffer-a339d14dfc6f41f5ad7ac4e7248463fd",
+      "buffer-a4424540a51242338adbb31113d83d0e",
+      "buffer-f08eace37fc147688d8bc199c9b10910"
+    ],
+    "requiresRollout": true,
+    "packageOutputs": [
+      "/nix/store/drvlbl8hziafifhamxpadza254jk16c2-kansoku-server-0.2.0.0"
+    ],
+    "healthObservations": [
+      {
+        "ready": 200,
+        "pipeline": 503,
+        "check": "clickhouse_topology_mismatch"
+      },
+      {
+        "ready": 200,
+        "pipeline": 200,
+        "check": "all"
+      }
+    ]
+  }
+]

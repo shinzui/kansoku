@@ -40,6 +40,10 @@ def validate_plan(name, raw):
             raise ValueError('Unexpected PostgreSQL components')
         # PostgreSQL identifiers are stable migration IDs.
         names = [m['id'] for m in by_name['kansoku']['migrations']]
-        if names[-2:] != ['kansoku/0008-clickhouse-replicated-administration', 'kansoku/0009-clickhouse-replicated-jobs']:
+        required = ['kansoku/0008-clickhouse-replicated-administration', 'kansoku/0009-clickhouse-replicated-jobs']
+        if not any(names[index:index+2] == required for index in range(len(names))):
             raise ValueError('Missing replicated coordinator migrations')
+        suffix = names[names.index(required[-1])+1:]
+        if suffix not in ([], ['kansoku/0010-saved-analyses']):
+            raise ValueError('Unexpected PostgreSQL migration suffix')
     return doc

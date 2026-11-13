@@ -36,13 +36,13 @@ PostgreSQL outages, invalid local configuration and deliberate maintenance exclu
 ## Progress
 
 
-- [ ] Milestone 1: Writer validation distinguishes unavailable storage from observed mismatch, prevents unsafe inserts, and retries retained events.
-- [ ] Milestone 2: Startup performs no ClickHouse exchange before listening; admission and pipeline health have separate tested contracts.
-- [ ] Milestone 3: Owned packaged-server acceptance proves bounded startup, continuing admission, mismatch refusal and recovery in both topologies.
-- [ ] Milestone 4: Guidance, ADRs and passing regression checks describe the buffering guarantee and finite capacity.
+- [x] Milestone 1 (2026-11-13): Typed unavailable/mismatch validation runs before every batch, including cached connections, with independent runtime/admin budgets and retained retry. Native inventory/cached-target/rollout/direct-schema mismatch cases passed with zero event INSERTs; exact retained batches recovered. Recovery/classification/cancellation tests and packaged recovery passed.
+- [x] Milestone 2 (2026-11-13): Startup is ClickHouse-independent; live/admission/pipeline probes have independent trackers and deadlines. Just check passed 553 core, 23 client, four shared probe and three seven-example telemetry runs. Five packaged Nix startup cases passed, including both stalled native-handshake topologies. Three packaged admission cases verified maintenance ingest 503 and PostgreSQL readiness 503.
+- [x] Milestone 3 (2026-11-13): All fifteen packaged Nix cases passed with zero skips, covering both topologies, refused/stalled startup, continuing admission, five mismatches and exact per-replica recovery. The five startup cases reached persisted admission within 0.251 seconds. See docs/evidence/clickhouse-buffering/acceptance-nix-all-packaged.json.
+- [ ] Milestone 4: Guidance and ADRs are updated; just check, full packaged acceptance, direct outage smoke, seventeen replicated migration fixture cases and all five replicated runtime groups passed. Exact production-version qualification remains blocked by Apple Container creation timeouts (FRIC-33).
 - [ ] Milestone 5: A qualified immutable image is released with digest, source revision, plan hashes and TAN probe guidance.
 
-Implementation checkpoint, 2026-11-13: Structured validation, independent startup, the three health routes and both owned fixture paths are implemented. The representative Nix-native recovery proof passed direct and replicated modes (startup-to-persistence 0.22/0.23 seconds; first recovered write 0.77/1.76 seconds; drain 1.03/3.11 seconds; unchanged server PIDs, exact per-replica IDs, zero archives). The rebuilt expanded suite and just check passed 553 core and 23 client examples, four shared conformance tests, both HTTP telemetry modes, document/profile checks and fifteen release-validator tests. The Nix-packaged replicated representative also passed (0.23-second startup, 2.03-second first recovery write, 3.98-second drain); packaged startup/admission variants, complete mismatch and production-version qualification, full store regressions and release remain open.
+Implementation checkpoint, 2026-11-13: Runtime behavior and day-to-day Nix acceptance are implemented and verified. The consolidated fifteen-case packaged report supersedes focused startup/admission/recovery reports. Regression evidence covers 553 core and 23 client examples, four shared probe tests, three seven-example telemetry modes, sixteen release-validator tests, full packaged acceptance, all five replicated runtime groups and seventeen migration fixture cases. Direct outage smoke accepted 8,000 events across a 52.8-second outage and writer restart, then drained without valid archives. The Linux amd64 archive built from clean checkpoint d6330c9, but Apple Container failed before executing either the Altinity fixture or application image. Production-version/image qualification and publication remain open; no registry digest or release-owner acceptance is claimed.
 
 
 ## Surprises & Discoveries
@@ -52,6 +52,12 @@ Implementation checkpoint, 2026-11-13: Structured validation, independent startu
 
 
 2026-11-13: The first native recovery interaction exposed inherited result truncation: a profile with max_result_rows=1 and overflow=break returned a partial clusterAllReplicas inventory. Inventory observations now explicitly disable result truncation and skipped unavailable shards so incomplete exchange cannot masquerade as a valid topology result. The failed run retained its queue and parked safely.
+
+
+2026-11-13: FRIC-33 records Apple Container Keeper creation and network cleanup timing out before any database started. The two newly allocated owned subnets duplicated existing unrelated network subnets, but a diagnostic retry on the existing default network also timed out before Keeper creation. Thus duplicate subnets do not explain the full failure. Preserve those attempts; do not restart the shared container service or modify unrelated networks. The diagnostic default-network override is not part of the delivered fixture.
+
+
+2026-11-13: The exported-image check also encountered an outdated PostgreSQL-plan assumption: saved analyses already append kansoku/0010-saved-analyses after the replicated coordinator migrations. Shared validation now accepts the historical plan or this exact suffix, with negative coverage for foreign suffixes. The existing NixOS image smoke's stale counts now match the current 26-migration native plans and saved-analyses PostgreSQL suffix. No migration bytes changed.
 
 
 ## Decision Log
@@ -66,10 +72,16 @@ Implementation checkpoint, 2026-11-13: Structured validation, independent startu
 2026-11-13: Following the implementation-session instruction, use the Nix-provided native ClickHouse/Keeper for day-to-day development and regression checks. Retain the exact production-version Apple Container fixture for major qualification. Keep native Darwin 26.8 and production-version Linux Altinity evidence separate; never use Docker or Colima for ClickHouse.
 
 
+
+
+
+2026-11-13: After user feedback about overengineering, remove the experimental VM/image adapters and keep the feature, shared buffering harness and existing Nix workflows. The Linux archive is built, but exact-image qualification/publication remains open under Milestone 5; do not claim an image release from the completed feature tests. Fix only the existing image smoke's stale native/PG migration counts and the shared release validator's exact saved-analyses suffix.
+
+
 ## Outcomes & Retrospective
 
 
-(To be filled during implementation.)
+The serving behavior is implemented and verified on the Nix-native development workflow. Documentation separates PostgreSQL admission from delivery diagnostics and retains finite-capacity guidance. The added acceptance harness shares existing fixtures; experimental VM/image adapters were removed after user feedback about excessive scope. Production-version and exact-image qualification are still blocked, so this plan is not complete and no new deployment image is published. FRIC-32 records unavailable Mori discovery, FRIC-33 the outstanding Apple Container failure, and FRIC-34 the local archive-conversion trust-policy workaround.
 
 
 ## Context and Orientation
@@ -201,8 +213,8 @@ For release preparation use a fresh private output directory; do not overwrite e
 mkdir -p .dev/acceptance/buffering-release
 nix build .#kansoku-server .#kansoku-admin .#kansoku-ch-migrate .#kansoku-migrate --no-link --no-write-lock-file
 nix run .#kansoku-image-stream --no-write-lock-file > .dev/acceptance/buffering-release/image.tar
-skopeo copy docker-archive:.dev/acceptance/buffering-release/image.tar oci-archive:.dev/acceptance/buffering-release/image.oci.tar
 candidate_revision=$(git rev-parse HEAD)
+nix develop --no-write-lock-file -c skopeo --insecure-policy copy docker-archive:.dev/acceptance/buffering-release/image.tar "oci-archive:.dev/acceptance/buffering-release/image.oci.tar:gcr.io/tan-ng/kansoku:${candidate_revision:0:12}-p1"
 nix develop --no-write-lock-file -c python3 scripts/check_container_image.py --engine apple --archive .dev/acceptance/buffering-release/image.tar --oci-archive .dev/acceptance/buffering-release/image.oci.tar --revision "$candidate_revision" --report .dev/acceptance/buffering-release/image-report.json --plan-dir .dev/acceptance/buffering-release/plans
 nix develop --no-write-lock-file -c python3 scripts/check_tan_release.py --phase prepared --evidence .dev/acceptance/buffering-release/candidate.json --image-report .dev/acceptance/buffering-release/image-report.json --plan-dir .dev/acceptance/buffering-release/plans --artifact .dev/acceptance/buffering-release/prepared-artifact.json
 ```
@@ -246,3 +258,5 @@ PostgreSQL/PGMQ remain durable ingest dependencies, Shibuya remains the batch/le
 The downstream consumer is mori://tan/tan-app-infrastructure. Preserve artifact fields image, sourceProject, sourcePackage, sourceRevision, upstreamProject, upstreamImplementation, nativePlanSha256 and postgresPlanSha256, with additional direct-plan/qualification detail in the dossier. Validate version-qualified upstream identity against released source and both build paths. Local OCI index/configuration hashes and prepared artifacts never substitute for verified registry publication.
 
 Revision note, 2026-11-13: The user selected Nix-native ClickHouse/Keeper for day-to-day work while retaining the production-version fixture for major qualification. Commands and fixture scope above reflect that split.
+
+Revision note, 2026-11-13: The user requested a simpler implementation workflow. Experimental Linux VM/image test infrastructure was discarded; standard Nix tests and the shared buffering harness remain. Release qualification stays explicit and incomplete.

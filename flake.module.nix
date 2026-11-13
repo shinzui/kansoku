@@ -294,6 +294,7 @@
         pkgs.hurl
         pkgs.vacuum-go
         pkgs.python3
+        pkgs.skopeo
       ];
       # Extend the managed shell through its existing named compiler shell.
       # The default shell must put the qualified artifact before the template tool.

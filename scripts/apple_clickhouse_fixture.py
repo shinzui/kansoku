@@ -9,6 +9,7 @@ import http.client
 import json
 import os
 import signal
+import sys
 from pathlib import Path
 import socketserver
 import subprocess
@@ -23,8 +24,8 @@ IMAGE = 'docker.io/altinity/clickhouse-server@sha256:7e72405bf85df6d163205ee2e56
 VERSION = '26.3.60.10002.altinitystable'
 
 
-def container(*args):
-    return subprocess.check_output(['container', *args], text=True, stderr=subprocess.PIPE, timeout=90)
+def container(*args, timeout=90):
+    return subprocess.check_output(['container', *args], text=True, stderr=subprocess.PIPE, timeout=timeout)
 
 
 class RoundRobin:
@@ -74,12 +75,12 @@ def fixture(direct=False, cluster_name="fixture"):
         path = root / label
         path.mkdir()
         http, native, keeper_port = free_port(), free_port(), free_port()
+        names.append(name)
         container('run', '-d', '--name', name, '--arch', 'arm64', '--network', network,
                   '--label', 'kansoku.fixture=owned', '--cpus', '2', '--memory', memory,
                   '-v', str(path) + ':/fixture', '-p', f'127.0.0.1:{http}:8123', '-p', f'127.0.0.1:{native}:9000',
                   *(['-p',f'127.0.0.1:{keeper_port}:9181'] if label=='keeper' else []),
                   '--entrypoint', '/bin/sh', IMAGE, '-c', 'exec sleep 2147483647')
-        names.append(name)
         inspected = json.loads(container('inspect', name))[0]
         (path/'container.private.json').write_text(json.dumps(inspected,indent=2))
         ip = inspected['status']['networks'][0]['ipv4Address'].split('/')[0]
@@ -179,14 +180,16 @@ def fixture(direct=False, cluster_name="fixture"):
                     time.sleep(.2)
         yield data, query, request, Lifecycle()
     finally:
+        primary = sys.exc_info()[1]
+        cleanup_failures = []
         if proxy:
             proxy.close()
         for name in reversed(names):
-            try:
-                container('stop', name)
-                container('delete', name)
-            except subprocess.CalledProcessError:
-                pass
+            for operation in ['stop', 'delete']:
+                try:
+                    container(operation, name, timeout=15)
+                except subprocess.SubprocessError as error:
+                    cleanup_failures.append(dict(operation=operation, name=name, error=type(error).__name__))
         for process in servers:
             try:
                 process.wait(timeout=10)
@@ -195,10 +198,15 @@ def fixture(direct=False, cluster_name="fixture"):
         for log in logs:
             log.close()
         try:
-            container('network', 'delete', network)
-        except subprocess.CalledProcessError:
-            pass
+            container('network', 'delete', network, timeout=15)
+        except subprocess.SubprocessError as error:
+            cleanup_failures.append(dict(operation='network delete', name=network, error=type(error).__name__))
+        if cleanup_failures:
+            (root/'cleanup-failures.private.json').write_text(json.dumps(cleanup_failures, indent=2))
+            print('Owned fixture cleanup failures retained: '+str(root), flush=True)
         print('Apple Container fixture evidence: '+str(root), flush=True)
+        if cleanup_failures and primary is None:
+            raise RuntimeError('Owned fixture cleanup failed; evidence '+str(root))
 
 
 def run_bridge(command, data, query, request, lifecycle, timeout=900):

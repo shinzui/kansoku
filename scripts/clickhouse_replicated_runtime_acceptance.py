@@ -38,13 +38,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--case', choices=['topology', 'maintenance', 'rebuild', 'writer', 'readback'])
     parser.add_argument('--packaged', action='store_true')
+    parser.add_argument('--package-output', help='Already built immutable Nix application output')
     parser.add_argument('--owned-bridge', action='store_true', help=argparse.SUPPRESS)
     args = parser.parse_args()
     driver = os.environ.get('KANSOKU_REPLICATED_RUNTIME_BINARY') or subprocess.check_output(['cabal','list-bin','kansoku-server:test:clickhouse-replicated-runtime','-fnative-migration-tests'],text=True).strip()
     if not args.owned_bridge:
         if args.packaged:
-            packages=json.loads(subprocess.check_output(['nix','build','.#kansoku-server','--no-link','--no-write-lock-file','--json'],text=True))
-            output=packages[0]['outputs']['out']+'/bin/'
+            package = args.package_output or json.loads(subprocess.check_output(['nix','build','.#kansoku-server','--no-link','--no-write-lock-file','--json'],text=True))[0]['outputs']['out']
+            output=package+'/bin/'
             os.environ.update(KANSOKU_SERVER_BINARY=output+'kansoku-server',KANSOKU_ADMIN_BINARY=output+'kansoku-admin',KANSOKU_CH_MIGRATION_BINARY=output+'kansoku-ch-migrate',KANSOKU_PG_MIGRATION_BINARY=output+'kansoku-migrate')
         cases=[args.case] if args.case else ['topology','maintenance','rebuild','writer','readback']
         for case in cases:
@@ -265,7 +266,7 @@ def main():
             return result
         if args.case=='maintenance':
             held=dict(event,eventId='held-before-discovery')
-            with NativeProxy([ports[0]]) as held_proxy, NativeProxy([ports[1],ports[0]]) as maintenance_proxy:
+            with NativeProxy(ports) as held_proxy, NativeProxy([ports[1],ports[0]]) as maintenance_proxy:
                 held_proxy.client_marker=b'held-before-discovery'
                 held_proxy.client_hold.set()
                 writer_env=dict(env,CLICKHOUSE_TCP_PORT=str(held_proxy.port))
@@ -405,10 +406,18 @@ def main():
                 before=snapshots()
                 # Unique row bytes arm the proxy after handshake, settings and
                 # INSERT sample negotiation. Observe server commit independently.
-                keeper_path=replica(0,"SELECT zookeeper_path FROM system.replicas WHERE database='analytics' AND table='events_raw'")[0]['zookeeper_path']+'/blocks'
+                keeper_root=replica(0,"SELECT zookeeper_path FROM system.replicas WHERE database='analytics' AND table='events_raw'")[0]['zookeeper_path']
+                children={row['name'] for row in replica(0,"SELECT name FROM system.zookeeper WHERE path='"+keeper_root.replace("'","''")+"'")}
+                namespaces=sorted(children & {'blocks','deduplication_hashes'})
+                assert namespaces, 'no observed Keeper deduplication namespace'
+                report['deduplicationNamespaces']=namespaces
+                keeper_path=keeper_root+'/blocks'
                 def block_nodes():
-                    quoted=keeper_path.replace("'","''")
-                    return {row['name'] for row in replica(0,"SELECT name FROM system.zookeeper WHERE path='"+quoted+"'")}
+                    nodes=set()
+                    for namespace in namespaces:
+                        quoted=(keeper_root+'/'+namespace).replace("'","''")
+                        nodes.update(namespace+'/'+row['name'] for row in replica(0,"SELECT name FROM system.zookeeper WHERE path='"+quoted+"'"))
+                    return nodes
                 before_lost_nodes=block_nodes()
                 lost=dict(event,eventId='writer-lost-ack')
                 proxy.reply_marker=b'writer-lost-ack'
@@ -419,20 +428,26 @@ def main():
                 assert not empty(),'queue acknowledged a withheld success reply'
                 eventually(lambda:all(replica(i,"SELECT count() AS n FROM system.processes WHERE query_kind='Insert' AND position(query,'events_raw')>0")[0]['n']==0 for i in [0,1]),'finish all dependent writes before lost acknowledgement')
                 lost_nodes=block_nodes()-before_lost_nodes
+                if not lost_nodes:
+                    parent = keeper_path.rsplit('/', 1)[0].replace("'", "''")
+                    report['keeperDeduplicationDiagnostic'] = dict(path=keeper_path, before=sorted(before_lost_nodes), after=sorted(block_nodes()), children=replica(0, "SELECT name FROM system.zookeeper WHERE path='"+parent+"'"))
                 assert lost_nodes,'lost-ack block identity was not observed in Keeper'
                 report['lostAckDeduplicationIds']=sorted(lost_nodes)
                 committed=snapshots()
                 first_port=proxy.held_port
                 retry_port=next(port for port in ports if port!=first_port)
                 with proxy.lock:
-                    proxy.forced_port=retry_port
+                    proxy.writer_port=retry_port
+                    proxy.ports=[retry_port,first_port,retry_port]
+                    proxy.next=0
                 proxy.drop.set()
                 assert proxy.dropped.wait(5),'held native reply connection was not closed'
                 eventually(empty,'actual writer recovery retry',90)
                 assert len(proxy.trace_ports)>=2 and proxy.trace_ports[:2]==[first_port,retry_port],'lost-ack retry did not traverse the other replica'
                 report['lostAckReplicaRoute']=[ids[ports.index(port)] for port in proxy.trace_ports[:2]]
                 with proxy.lock:
-                    proxy.forced_port=None
+                    proxy.writer_port=None
+                    proxy.ports=ports
                 sync()
                 assert physical('writer-lost-ack')==[1,1],'identical retry duplicated physical raw rows'
                 assert snapshots()==committed,'identical retry changed finalized target values'
@@ -488,7 +503,7 @@ def main():
             # Hold a required source's replication queue after an owned no-quorum
             # fixture write. The read-back must wait for the explicit barrier.
             replica(1,'SYSTEM STOP FETCHES analytics.retention_policy')
-            replica(0,"INSERT INTO analytics.retention_policy VALUES (1,1000,'1970-01-01 00:00:00')")
+            replica(0,"INSERT INTO analytics.retention_policy SETTINGS insert_quorum=0 VALUES (1,1000,'1970-01-01 00:00:00')")
             with child([driver,'--native','readback'],dict(env,CLICKHOUSE_TCP_PORT=str(ports[1]))) as (reader,reader_log):
                 eventually(lambda:replica(1,"SELECT count() AS n FROM system.processes WHERE startsWith(query,'SYSTEM SYNC REPLICA analytics.`retention_policy` STRICT')")[0]['n']>0,'read-back blocked on required source barrier')
                 assert reader.poll() is None,'read-back returned while a required source was behind'

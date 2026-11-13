@@ -2,6 +2,12 @@
 
 ## 2026-11-13
 
+* **Addition**: FRIC-34 records detour environment friction with https://github.com/containers/skopeo: Ephemeral Skopeo has no default trust policy
+
+
+* **Addition**: FRIC-33 records blocked environment friction with https://github.com/apple/container: Apple Container stalls while creating the qualification Keeper
+
+
 * **Addition**: FRIC-32 records detour environment friction with mori://shinzui/mori: Mori registry requires an unavailable local PostgreSQL service
 
 

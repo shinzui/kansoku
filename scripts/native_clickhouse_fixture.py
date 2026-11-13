@@ -69,8 +69,9 @@ def fixture(direct=False, cluster_name='fixture'):
         deadline = time.monotonic()+60
         while True:
             try:
-                rows = query(index,'SELECT version() AS version,toString(serverUUID()) AS id')
+                rows = query(index,"SELECT version() AS version,toString(serverUUID()) AS id,(SELECT value FROM system.server_settings WHERE name='path') AS data_root")
                 assert rows[0]['version'] == VERSION
+                assert Path(rows[0]['data_root']).resolve() == (replicas[index]['path']/'data').resolve(), 'refusing an unowned native endpoint'
                 if expected:
                     assert rows[0]['id'] == expected, 'owned UUID changed'
                     state = query(index,"SELECT (SELECT count() FROM system.database_replicas WHERE is_readonly) AS db,(SELECT count() FROM system.replicas WHERE database='analytics' AND is_readonly) AS tables")[0]
@@ -138,3 +139,30 @@ def fixture(direct=False, cluster_name='fixture'):
         for log in logs:
             log.close()
         print('Owned Nix ClickHouse fixture evidence: '+str(root),flush=True)
+
+
+def main():
+    """Use the same migration assertions with the fast owned native fixture."""
+    import sys
+    cases = sys.argv[1:] or ['tiny','direct','full','fresh','nonquorum','missing-id','unexpected-id','pinned','stopped','missing-ledger','atomic-ledger','missing-app','atomic-app','nonempty','foreign-v1']
+    allowed = {'tiny','direct','full','fresh','nonquorum','missing-id','unexpected-id','pinned','stopped','missing-ledger','atomic-ledger','missing-app','atomic-app','nonempty','foreign-v1','hyphen'}
+    if not cases or any(case not in allowed for case in cases):
+        raise RuntimeError('Select nonzero known native migration cases')
+    for case in cases:
+        with fixture(case == 'direct', cluster_name=('fixture-hyphen' if case == 'hyphen' else 'fixture')) as (data, query, request, lifecycle):
+            if case != 'direct':
+                for database, omitted, atomic in [('analytics','missing-app','atomic-app'),('kansoku_migration_ledger','missing-ledger','atomic-ledger')]:
+                    if case != omitted:
+                        engine = 'Atomic' if case == atomic else "Replicated('/clickhouse/databases/{uuid}', '{shard}', '{replica}')"
+                        query(0, 'CREATE DATABASE '+database+" ON CLUSTER '"+data['cluster']+"' ENGINE="+engine)
+                if case == 'nonempty':
+                    query(0, 'CREATE TABLE analytics.existing (id UInt8) ENGINE=ReplicatedMergeTree ORDER BY id')
+            consumer = dict(data)
+            if case == 'direct':
+                consumer['replicas'] = [query(0, 'SELECT toString(serverUUID()) AS id'), None]
+            run_bridge([sys.executable, 'scripts/clickhouse_replicated_migrations_acceptance.py', case], consumer, query, request, lifecycle)
+    print(f'{len(cases)} owned Nix native cases passed; zero failures; zero skipped')
+
+
+if __name__ == '__main__':
+    main()
