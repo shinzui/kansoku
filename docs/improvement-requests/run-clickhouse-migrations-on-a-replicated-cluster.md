@@ -6,7 +6,15 @@ generated:
   by: process:claude-code
   at: "2026-11-08T00:00:15Z"
 requestId: IR-10
-status: accepted
+status: completed
+completedAt: "2026-11-08T02:31:43Z"
+resolution: >-
+  AC-1 through AC-5 delivered by plan 62: the direct history keeps the 2008b67 25/257 v1
+  plan; cluster and replica settings select a validated replicated target with a separate
+  replicated baseline and a fresh v2 ledger, and fresh initialization checks every
+  replica. just ch-migrations-replicated passed 13 owned cases plus the Nix-packaged full
+  lifecycle on the two-replica 26.3.60.10002.altinitystable candidate (commits df07621,
+  f5a37ca).
 targetPlan: docs/plans/62-run-clickhouse-migrations-on-a-replicated-cluster.md
 origin: mori://tan/tan-app-infrastructure/plans/45-onboard-kansoku-to-production-on-the-replicated-clickhouse-cluster
 acceptanceCriteria:
@@ -53,7 +61,7 @@ Kansoku's production onboarding
 **Created:** 2026-11-08.
 
 **Implementation plan:** [ExecPlan 62: Run ClickHouse migrations on a replicated cluster](../plans/62-run-clickhouse-migrations-on-a-replicated-cluster.md).
-The request is accepted for implementation; implementation has not started.
+Completed by Plan 62 on 2026-11-08; see `resolution` (status reconciled on 2026-11-13).
 
 This is the first of a set filed together for production onboarding. The other two are IR-11 in
 this bundle (runtime and maintenance jobs on a replicated cluster) and IR-12 (accepting the

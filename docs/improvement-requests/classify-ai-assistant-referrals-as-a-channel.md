@@ -6,7 +6,14 @@ generated:
   by: process:codex
   at: "2026-11-06T03:57:44Z"
 requestId: IR-6
-status: accepted
+status: completed
+completedAt: "2026-11-06T04:50:51Z"
+resolution: >-
+  AC-1 through AC-3 delivered by plan 58: channel rule version 2 classifies known AI
+  assistant referrer hosts and sources as ai_assistant ahead of organic search, with the
+  explicit list in Channel.hs and the web-enrichment guide row; stored version 0/1 history
+  keeps its channel and version. The focused suite, just check and full owned acceptance
+  in three telemetry modes passed (commit 406c882).
 targetPlan: docs/plans/58-classify-ai-assistant-referrals-as-a-channel.md
 origin: mori://shinzui/kansoku-ui
 acceptanceCriteria:
@@ -45,7 +52,7 @@ reviews:
 Part of the set filed with IR-4; that request lists the others.
 
 **Implementation plan:** [ExecPlan 58: Classify AI assistant referrals as a channel](../plans/58-classify-ai-assistant-referrals-as-a-channel.md).
-The request is accepted for implementation; implementation has not started.
+Completed by Plan 58 on 2026-11-06; see `resolution` (status reconciled on 2026-11-13).
 
 
 ## Why

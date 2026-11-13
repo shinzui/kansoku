@@ -7,6 +7,7 @@ generated:
   at: "2026-10-19T17:02:45Z"
 requestId: IR-2
 status: proposed
+targetPlan: docs/masterplans/7-operate-kansoku-clickhouse-safely-across-deployment-platforms.md
 origin: mori://tan/tan-ng-labs/plans/2-deploy-kansoku-to-the-intranet-as-a-shared-analytics-service-for-nagare-apps
 dependencies:
   - ref: mori://shinzui/nagare/okf/improvement-requests/concepts/IR-30
@@ -54,6 +55,8 @@ reviews:
 on the `tan-ng-labs` intranet, running Nagare v0.7.0.
 **Addressed to:** `shinzui/kansoku` agents.
 **Created:** 2026-10-19.
+
+**Implementation plan:** [MasterPlan 7: Operate Kansoku ClickHouse safely across deployment platforms](../masterplans/7-operate-kansoku-clickhouse-safely-across-deployment-platforms.md), through ExecPlans 50 to 53. The request is still proposed, and none of the child plans has started (link added on 2026-11-13).
 
 This is part of the set filed with IR-1; that request lists the others.
 

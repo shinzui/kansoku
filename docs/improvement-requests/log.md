@@ -2,6 +2,39 @@
 
 ## 2026-11-13
 
+* **Update**: IR-3 status accepted -> completed (completedAt 2026-11-06T12:29:54Z): Plan 61 corrected the experiment conversion measure name in the query guide (commit 1fb1eac).
+
+
+* **Update**: IR-4 status accepted -> completed (completedAt 2026-11-06T05:40:12Z): Plan 60 delivered AC-1 to AC-4 as explicit whole-range aggregation (commits a665ec1, 81b4df6).
+
+
+* **Update**: IR-5 status accepted -> completed (completedAt 2026-11-06T13:42:17Z): Plan 56 delivered AC-1 to AC-4 with acquisition and full packaged acceptance (commits 40da5c9, 2d1202a).
+
+
+* **Update**: IR-6 status accepted -> completed (completedAt 2026-11-06T04:50:51Z): Plan 58 delivered AC-1 to AC-3 as channel rule version 2 (commit 406c882).
+
+
+* **Update**: IR-7 status proposed -> completed (completedAt 2026-11-06T12:49:52Z) and targetPlan linked to docs/plans/55-add-percentile-aggregation-to-custom-metrics.md: Plan 55 delivered AC-1 to AC-4 (commits 6324cad, eb0fb53). No acceptance had been logged.
+
+
+* **Update**: IR-10 status accepted -> completed (completedAt 2026-11-08T02:31:43Z): Plan 62 delivered AC-1 to AC-5; just ch-migrations-replicated passed on the two-replica Altinity candidate (commits df07621, f5a37ca).
+
+
+* **Update**: IR-11 status accepted -> completed (completedAt 2026-11-08T04:49:33Z): Plan 63 delivered AC-1 to AC-4 with source and packaged replicated runtime evidence in docs/evidence/replicated-runtime.md (commits 2ee9a49, a40b20a).
+
+
+* **Update**: IR-17 status accepted -> completed (completedAt 2026-11-13T01:51:44Z): Plan 67 delivered AC-1 to AC-5 with full packaged acceptance (commits 0432449, be4d38b).
+
+
+* **Update**: Correct IR-18 body prose that still said implementation had not started; frontmatter already recorded completion by Plan 68.
+
+
+* **Update**: Link IR-2 targetPlan to docs/masterplans/7-operate-kansoku-clickhouse-safely-across-deployment-platforms.md, which delivers it through ExecPlans 50-53. Status stays proposed: none of those plans has started.
+
+
+* **Update**: Audit (2026-11-13) of all 20 requests against plans, source and commits. Statuses not listed below were already accurate; IR-15 and IR-16 remain proposed with no plan or implementation.
+
+
 * **Update**: Complete IR-20: Plan 70 delivers calendar-period retention with separate start/return activity; native, HTTP/client, contract and full packaged acceptance pass.
 
 * **Update**: Link IR-20 to ExecPlan 70 for calendar-period retention with separate start and return events; implementation has not started.

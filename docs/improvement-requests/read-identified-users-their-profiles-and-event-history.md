@@ -6,9 +6,16 @@ generated:
   by: process:claude-code
   at: "2026-11-12T23:39:58Z"
 requestId: IR-17
-status: accepted
+status: completed
+completedAt: "2026-11-13T01:51:44Z"
+resolution: >-
+  AC-1 through AC-5 delivered by plan 67: /users, /users/activity-counts, /users/{userId}
+  and /users/{userId}/events with principal-derived tenancy, exact subject counts,
+  bidirectional pagination and declared-property history, documented in OpenAPI, the query
+  guide and ADR-25. Full packaged acceptance passed with required SDK checks (commits
+  0432449, be4d38b).
 targetPlan: docs/plans/67-read-identified-users-profiles-and-event-history.md
-timestamp: "2026-11-13T00:16:19Z"
+timestamp: "2026-11-13T15:37:44Z"
 origin: mori://shinzui/kansoku-ui/masterplans/6-build-the-users-directory-and-user-profile-pages
 acceptanceCriteria:
   - id: AC-1
@@ -46,7 +53,7 @@ reviews:
 
 Requested by `mori://shinzui/kansoku-ui/masterplans/6-build-the-users-directory-and-user-profile-pages` under intention `intention_01m79211k6exp96qd67t2b3zmx`. The consumer handoff is `mori://shinzui/kansoku-ui/plans/29-integrate-kansoku-s-users-resource-through-the-server-boundary`; the screens are `mori://shinzui/kansoku-ui/plans/30-build-the-users-directory-page` and `mori://shinzui/kansoku-ui/plans/31-build-the-user-profile-page-with-identity-and-event-history`.
 
-**Implementation plan:** [ExecPlan 67: Read identified users, profiles, and event history](../plans/67-read-identified-users-profiles-and-event-history.md). Accepted for implementation; implementation has not started.
+**Implementation plan:** [ExecPlan 67: Read identified users, profiles, and event history](../plans/67-read-identified-users-profiles-and-event-history.md). Completed by Plan 67 on 2026-11-13; see `resolution` (status reconciled on 2026-11-13).
 
 ## Why
 

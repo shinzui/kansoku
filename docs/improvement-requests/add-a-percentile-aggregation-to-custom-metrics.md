@@ -6,7 +6,15 @@ generated:
   by: process:claude-code
   at: "2026-11-05T21:06:04Z"
 requestId: IR-7
-status: proposed
+status: completed
+completedAt: "2026-11-06T12:49:52Z"
+resolution: >-
+  AC-1 through AC-4 delivered by plan 55: exact percentile aggregation with quantile
+  validation on /metrics/custom and saved definitions, documented interpolation,
+  eligibility and empty-result semantics (ADR-20), and same-population sample-count
+  pairing. Native and public percentile scenarios and both required final gates passed
+  (commits 6324cad, eb0fb53). No acceptance decision was logged before implementation.
+targetPlan: docs/plans/55-add-percentile-aggregation-to-custom-metrics.md
 origin: mori://shinzui/kansoku-ui
 acceptanceCriteria:
   - id: AC-1
@@ -44,6 +52,7 @@ reviews:
 **Created:** 2026-11-05.
 
 **Implementation plan:** [ExecPlan 55: Add percentile aggregation to custom metrics](../plans/55-add-percentile-aggregation-to-custom-metrics.md).
+Completed by Plan 55 on 2026-11-06; see `resolution` (status reconciled on 2026-11-13).
 
 Part of the set filed with IR-4; that request lists the others. IR-8 depends on it.
 

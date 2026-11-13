@@ -6,7 +6,15 @@ generated:
   by: process:codex
   at: "2026-11-06T03:40:27Z"
 requestId: IR-5
-status: accepted
+status: completed
+completedAt: "2026-11-06T13:42:17Z"
+resolution: >-
+  AC-1 through AC-4 delivered by plan 56: /metrics/acquisition converted_users and
+  conversion_rate with validated conversion events, identity-resolved first-session
+  crediting including anonymous alias evidence, a same-population denominator, timing
+  rules in the query guide and ADR-12, and the measure=users limits. just check,
+  acquisition-acceptance at two block sizes and full packaged acceptance passed (commits
+  40da5c9, 2d1202a).
 targetPlan: docs/plans/56-attribute-conversions-to-first-touch-acquisition.md
 origin: mori://shinzui/kansoku-ui
 dependencies:
@@ -51,7 +59,7 @@ reviews:
 Part of the set filed with IR-4; that request lists the others.
 
 **Implementation plan:** [ExecPlan 56: Attribute conversions to first-touch acquisition](../plans/56-attribute-conversions-to-first-touch-acquisition.md).
-The request is accepted for implementation; implementation has not started.
+Completed by Plan 56 on 2026-11-06; see `resolution` (status reconciled on 2026-11-13).
 
 
 ## Why

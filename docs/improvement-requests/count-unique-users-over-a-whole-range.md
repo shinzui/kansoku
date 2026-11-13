@@ -6,7 +6,15 @@ generated:
   by: process:codex
   at: "2026-11-06T04:07:22Z"
 requestId: IR-4
-status: accepted
+status: completed
+completedAt: "2026-11-06T05:40:12Z"
+resolution: >-
+  AC-1 through AC-4 delivered by plan 60: an explicit whole-range grain returns null-
+  bucket points on /metrics/users, custom unique_count, acquisition users and the other
+  supported routes, composing with groupBy, filters, cohorts and includeBots; omitted
+  grains keep route defaults; OpenAPI and the query guide publish the value. just check,
+  custom-metrics-acceptance and full packaged acceptance passed (commits a665ec1,
+  81b4df6).
 targetPlan: docs/plans/60-count-unique-users-over-a-whole-query-range.md
 origin: mori://shinzui/kansoku-ui
 acceptanceCriteria:
@@ -47,7 +55,7 @@ reviews:
 This is part of the set filed with IR-5, IR-6, IR-7 and IR-8 for kansoku-ui's Reports page.
 
 **Implementation plan:** [ExecPlan 60: Count unique users over a whole query range](../plans/60-count-unique-users-over-a-whole-query-range.md).
-The request is accepted for implementation; implementation has not started.
+Completed by Plan 60 on 2026-11-06; see `resolution` (status reconciled on 2026-11-13).
 
 
 ## Why

@@ -6,7 +6,12 @@ generated:
   by: process:codex
   at: "2026-11-06T04:36:59Z"
 requestId: IR-3
-status: accepted
+status: completed
+completedAt: "2026-11-06T12:29:54Z"
+resolution: >-
+  AC-1 delivered by plan 61: the experiment conversion section of docs/guides/query-
+  metrics.md names exposed, converted and conversion_rate (commit 1fb1eac). just guides-
+  check and git diff --check passed; server behaviour is unchanged.
 targetPlan: docs/plans/61-name-the-experiment-conversion-rate-measure-correctly-in-the-query-guide.md
 origin: mori://shinzui/kansoku-ui/plans/11-add-a-chart-kind-registry-composed-chart-inputs-and-a-chart-options-panel
 acceptanceCriteria:
@@ -37,7 +42,7 @@ reviews:
 **Created:** 2026-11-05.
 
 **Implementation plan:** [ExecPlan 61: Name the experiment conversion rate measure correctly in the query guide](../plans/61-name-the-experiment-conversion-rate-measure-correctly-in-the-query-guide.md).
-The request is accepted for implementation; implementation has not started.
+Completed by Plan 61 on 2026-11-06; see `resolution` (status reconciled on 2026-11-13).
 
 
 ## Why

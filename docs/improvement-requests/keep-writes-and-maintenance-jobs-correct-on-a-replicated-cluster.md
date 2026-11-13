@@ -6,7 +6,16 @@ generated:
   by: process:claude-code
   at: "2026-11-08T00:00:15Z"
 requestId: IR-11
-status: accepted
+status: completed
+completedAt: "2026-11-08T04:49:33Z"
+resolution: >-
+  AC-1 through AC-4 delivered by plan 63: cross-replica raw-write quiesce, every-replica
+  completion and read-back checks after erasure, retention and projection rebuilds, a
+  documented writer durability choice with the lost-reply retry traced across replicas,
+  and documented read consistency. Source and Nix-packaged replicated runtime recipes
+  passed against the two-replica candidate; see docs/evidence/replicated-runtime.md
+  (commits 2ee9a49, a40b20a). Qualification covers owned Linux ARM64 containers, not a
+  managed endpoint.
 targetPlan: docs/plans/63-keep-writes-and-maintenance-jobs-correct-on-a-replicated-cluster.md
 origin: mori://tan/tan-app-infrastructure/plans/45-onboard-kansoku-to-production-on-the-replicated-clickhouse-cluster
 dependencies:
@@ -54,7 +63,7 @@ Kansoku's production onboarding
 **Created:** 2026-11-08.
 
 **Implementation plan:** [ExecPlan 63: Keep writes and maintenance jobs correct on a replicated cluster](../plans/63-keep-writes-and-maintenance-jobs-correct-on-a-replicated-cluster.md).
-The request is accepted for implementation; implementation has not started.
+Completed by Plan 63 on 2026-11-08; see `resolution` (status reconciled on 2026-11-13).
 
 This is the second of three requests filed together. It needs IR-10's replicated baseline.
 
