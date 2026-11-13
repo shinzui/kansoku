@@ -5,7 +5,7 @@ description: Embed immutable native migration steps, bind administration to reta
 docId: ADR-22
 status: Accepted
 date: 2026-10-16
-timestamp: 2026-11-13T19:42:05Z
+timestamp: 2026-11-13T20:38:02Z
 generated:
   by: process:codex
   at: 2026-10-16T22:55:08Z
@@ -232,3 +232,37 @@ predecessor entry/attempt timestamps. A drain must follow the previous attempt e
 when its counter matches; continuous exclusion may begin earlier. Expiration is
 rechecked at native migration SQL callbacks, data-job stages and fence completion.
 Refusal diagnostics use fixed messages and never echo untrusted parser content.
+
+## Pre-change recovery sets
+
+Before a pending native suffix or repair, require complete operator-attested backup
+coverage of PostgreSQL application/coordination state, analytics and the native
+ledger in one stable interval after drain. The bounded manifest binds original
+identities, owner, predecessor, compiled-plan and drain digests, applied retention
+policy, exact unresolved coordinator state, artifact hashes and verification
+receipts. Its PostgreSQL phase is explicitly fenced-before-native-entry; that
+snapshot need not contain the later acceptance record. Appended migration 0015
+retains acceptance separately from immutable native history.
+
+Validate new input before consuming the predecessor, then retain acceptance under
+the administrative lease before native SQL. Incomplete input cannot advance the
+counter. Retry authority stays within the same session and compiled plan and still
+requires fresh drain. A separately retained fresh-empty exception requires actual
+empty-target checks. Neither initialization syntax nor process visibility bypasses
+the backup gate. The application validates bindings and attestations; deployment
+tools own capture, artifact storage and restore verification.
+
+Direct rebuilt-server adoption is a separate explicit operation. It revalidates
+the historical backup/drain boundary against restored PostgreSQL owner and policy
+state, requires current new-server drain and a distinct live restore attestation,
+and observes qualified native history through the public toolkit. The original
+ledger, target and compiled plan remain exact. Under administrator/traffic
+exclusion, one compare-and-set statement changes only the active server binding
+and retains its old state, complete evidence, recovery set and audit (appended
+migration 0016). Counters, uncertain receipts, outcome and fence remain unchanged.
+Exact replay returns the retained audit; conflicting input cannot adopt another
+target. Normal configuration changes cannot perform this transition. Scratch
+inspection grants no adoption authority. Unresolved native work still requires
+existing explicit repair with exact receipts and fresh drain. Rebuilt replicated
+inventory adoption is refused pending separate qualification; integrated platform
+acceptance also remains open.

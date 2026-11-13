@@ -45,7 +45,9 @@ kansokuApplicationMigrations = do
   drainAudit <- sqlMigration "0012-maintenance-drain-audit" drainAuditSql
   migrationAudit <- sqlMigration "0013-clickhouse-entry-audit" migrationAuditSql
   drainFreshness <- sqlMigration "0014-maintenance-drain-freshness" drainFreshnessSql
-  migrationComponent "kansoku" (Set.singleton "pgmq") (apiKeys :| [rejections, acceptance, maintenance, cohorts, definitions, administration, replicatedAdministration, replicatedJobs, analyses, drainAttempts, drainAudit, migrationAudit, drainFreshness])
+  recoverySets <- sqlMigration "0015-maintenance-recovery-sets" recoverySetsSql
+  rebindings <- sqlMigration "0016-clickhouse-server-rebindings" rebindingsSql
+  migrationComponent "kansoku" (Set.singleton "pgmq") (apiKeys :| [rejections, acceptance, maintenance, cohorts, definitions, administration, replicatedAdministration, replicatedJobs, analyses, drainAttempts, drainAudit, migrationAudit, drainFreshness, recoverySets, rebindings])
 
 apiKeysSql :: ByteString
 apiKeysSql =
@@ -340,4 +342,37 @@ drainFreshnessSql =
     ADD COLUMN last_attempt_at timestamptz NOT NULL DEFAULT clock_timestamp();
   ALTER TABLE kansoku.clickhouse_migration_sessions
     ADD COLUMN last_entry_at timestamptz NOT NULL DEFAULT clock_timestamp();
+  """
+
+-- Manifests are external to their PostgreSQL snapshot. Keep their later
+-- acceptance separately, without rewriting the pre-change owner or receipts.
+recoverySetsSql :: ByteString
+recoverySetsSql =
+  """
+  CREATE TABLE kansoku.maintenance_recovery_sets (
+    session_id uuid NOT NULL REFERENCES kansoku.clickhouse_migration_sessions(id),
+    recovery_id uuid NOT NULL UNIQUE,
+    predecessor bigint NOT NULL CHECK (predecessor >= 0),
+    plan_sha256 text NOT NULL CHECK (plan_sha256 ~ '^[0-9a-f]{64}$'),
+    kind text NOT NULL CHECK (kind IN ('snapshot','fresh-empty')),
+    document jsonb NOT NULL,
+    document_sha256 text NOT NULL CHECK (document_sha256 ~ '^[0-9a-f]{64}$'),
+    accepted_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    PRIMARY KEY (session_id, plan_sha256, predecessor)
+  );
+  """
+
+rebindingsSql :: ByteString
+rebindingsSql =
+  """
+  CREATE TABLE kansoku.clickhouse_server_rebindings (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    session_id uuid NOT NULL REFERENCES kansoku.clickhouse_migration_sessions(id),
+    old_server_id uuid NOT NULL,
+    new_server_id uuid NOT NULL CHECK (new_server_id <> old_server_id),
+    request jsonb NOT NULL,
+    proof jsonb NOT NULL,
+    old_state jsonb NOT NULL,
+    accepted_at timestamptz NOT NULL DEFAULT clock_timestamp()
+  );
   """

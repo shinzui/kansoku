@@ -2,6 +2,12 @@
 
 ## 2026-11-13
 
+* **Update**: ADR-22: retain explicit direct-server recovery audits and compare-and-set adoption without clearing receipts or fences.
+
+
+* **Update**: ADR-22: require complete owner-bound pre-change recovery sets before pending native application SQL.
+
+
 * **Update**: ADR-22: require owner-bound drain files and fresh predecessor timestamps before native maintenance.
 
 

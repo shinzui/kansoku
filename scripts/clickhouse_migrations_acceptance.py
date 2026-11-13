@@ -121,8 +121,14 @@ class Harness:
         (self.root / 'drain.private').write_text(json.dumps(dict(session=self.env['KANSOKU_CH_MIGRATION_SESSION'], predecessor=n, server=self.env['KANSOKU_CH_MIGRATION_SERVER_ID'], ledger=self.env['KANSOKU_CH_MIGRATION_LEDGER_ID'], clients_stopped=True, server_restarted=drain or getattr(self,'last_drained_counter',None)==n)))
         from drain_evidence_fixture import write_evidence
         evidence = self.root / ('portable-drain-' + uuid.uuid4().hex + '.private')
-        settings = write_evidence(evidence, self.env, dict(kind='migration-session', id=self.env['KANSOKU_CH_MIGRATION_SESSION'], predecessor=n), 'All fixture-owned submitters joined; owned native process restarted on the same data root; no external schedules exist.')
-        return [binary or self.native, '--predecessor', str(n), '--drain-evidence', str(evidence), *arguments, '--json', *self.audit()], settings
+        qualified = drain or getattr(self, 'last_drained_counter', None) == n
+        def produce_drain():
+            procedure = 'All fixture-owned submitters joined; owned native process restarted on the same data root; relevant background changes settled; no external schedules exist.' if qualified else 'Adversarial diagnostic input: no fresh producer drain is claimed; retained guards must refuse unsafe work.'
+            return evidence, write_evidence(evidence, self.env, dict(kind='migration-session', id=self.env['KANSOKU_CH_MIGRATION_SESSION'], predecessor=n), procedure)
+        from recovery_set_fixture import prepare_entry
+        settings, recovery = prepare_entry(self, binary or self.native, arguments, n, produce_drain, qualified)
+        backup = ['--recovery-set', str(recovery)] if recovery else []
+        return [binary or self.native, '--predecessor', str(n), '--drain-evidence', str(evidence), *backup, *arguments, '--json', *self.audit()], settings
 
     def entry(self, arguments, *, binary=None, success=True, predecessor=None, drain=True):
         command, settings = self.entry_command(arguments, binary=binary, predecessor=predecessor, drain=drain)
@@ -152,7 +158,7 @@ class Harness:
 
 
 @contextmanager
-def owned(root, native, upgrade, pg_migrate, admin, *, access_management=False, backups=False):
+def owned(root, native, upgrade, pg_migrate, admin, *, access_management=False, backups=True):
     controller = {}
     with isolated_postgres(root / 'postgres') as pg:
         with isolated_clickhouse(directory=root / 'clickhouse', controller=controller, access_management=access_management, backups=backups) as ch:
@@ -376,6 +382,9 @@ def verify(root, native, upgrade, pg_migrate, admin, server):
     cases += verify_coordination(root / 'coordination',native,upgrade,pg_migrate,admin,server,owned,FaultProxy,repair_arguments)
     from portable_drain_acceptance import verify as verify_portable_drain
     cases += verify_portable_drain(root / 'portable-drain', native, pg_migrate, admin)
+    from clickhouse_recovery_acceptance import verify as verify_recovery
+    cases += verify_recovery(root / 'recovery', native, upgrade, pg_migrate, admin)
+    cases += verify_recovery(root / 'recovery-interrupted', native, upgrade, pg_migrate, admin, interrupted=True)
     print(f'ClickHouse migrations: {cases} cases, 0 failures, 0 skipped', flush=True)
     return cases
 

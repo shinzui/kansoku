@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Run explicit deterministic subsets while making accidental native calls fail."""
 import os
+import re
 import socket
-from test_support import binary, hspec, probes
+from test_support import binary, execute, hspec, probes
 
 skips = [
     'Kansoku.ClickHouse',
@@ -36,3 +37,7 @@ with socket.socket() as unavailable:
     hspec([binary('kansoku-core:test:kansoku-core-test')] + ['--skip=' + pattern for pattern in skips], env=env)
     hspec([binary('kansoku-client:test:kansoku-client-test'), '--skip=live integration'], env=env)
     probes([binary('kansoku-core:test:kansoku-probe-test')], env=env)
+    recovery = execute([binary('kansoku-server:test:clickhouse-recovery-contract')], env=env)
+    print(recovery.stdout + recovery.stderr, end='', flush=True)
+    recovery.check_returncode()
+    assert re.search(r'[1-9]\d* recovery contract cases passed; 0 failures, 0 skipped', recovery.stdout), 'Missing nonzero recovery contract acceptance'

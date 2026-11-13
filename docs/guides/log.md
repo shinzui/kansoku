@@ -2,6 +2,12 @@
 
 ## 2026-11-13
 
+* **Update**: DOC-13: document qualified direct rebuilt-server adoption and correct the released toolkit cohort.
+
+
+* **Update**: DOC-13: document complete three-store recovery manifests and pending-migration backup enforcement.
+
+
 * **Update**: DOC-1 and DOC-13: document mandatory prepare/drain/resume and remove legacy process-only authorization.
 
 

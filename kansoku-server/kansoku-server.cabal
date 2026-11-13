@@ -87,6 +87,9 @@ executable kansoku-ch-migrate
     Kansoku.ClickHouseMigration.Command
     Kansoku.ClickHouseMigration.Config
     Kansoku.ClickHouseMigration.Coordinator
+    Kansoku.ClickHouseMigration.Rebind
+    Kansoku.ClickHouseMigration.Recovery
+    Kansoku.ClickHouseMigration.RecoveryGate
     Kansoku.ClickHouseMigrations
     Kansoku.ClickHouseReplicatedMigrations
 
@@ -98,6 +101,7 @@ executable kansoku-ch-migrate
     clickhouse-migrate-cli ==0.2.0.0,
     clickhouse-migrate-embed ==0.2.0.0,
     containers,
+    crypton,
     http-client,
     http-client-tls,
     http-types,
@@ -123,6 +127,9 @@ executable kansoku-ch-migrate-upgrade-proof
     Kansoku.ClickHouseMigration.Command
     Kansoku.ClickHouseMigration.Config
     Kansoku.ClickHouseMigration.Coordinator
+    Kansoku.ClickHouseMigration.Rebind
+    Kansoku.ClickHouseMigration.Recovery
+    Kansoku.ClickHouseMigration.RecoveryGate
     Kansoku.ClickHouseMigration.UpgradeProof
     Kansoku.ClickHouseMigrations
     Kansoku.ClickHouseReplicatedMigrations
@@ -135,6 +142,7 @@ executable kansoku-ch-migrate-upgrade-proof
     clickhouse-migrate-cli ==0.2.0.0,
     clickhouse-migrate-embed ==0.2.0.0,
     containers,
+    crypton,
     http-client,
     http-client-tls,
     http-types,
@@ -229,3 +237,21 @@ test-suite clickhouse-replicated-runtime
 
   if !flag(native-migration-tests)
     buildable: False
+
+test-suite clickhouse-recovery-contract
+  import: common
+  type: exitcode-stdio-1.0
+  hs-source-dirs:
+    test
+    src
+
+  main-is: ClickHouseRecoveryContract.hs
+  other-modules: Kansoku.ClickHouseMigration.Recovery
+  build-depends:
+    aeson,
+    base >=4.21 && <5,
+    bytestring,
+    clickhouse-migrate ==0.2.0.0,
+    crypton,
+    text,
+    time,

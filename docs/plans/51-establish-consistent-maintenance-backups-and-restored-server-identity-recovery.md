@@ -50,8 +50,8 @@ backup engine, production restore orchestration or a new automatic failover poli
 
 ## Progress
 
-- [ ] M1: A recovery-set manifest validates complete database coverage and one fenced, drained backup interval before migration application SQL can start.
-- [ ] M2: An owned roundtrip restores all three databases and proves application, coordinator and ledger agreement, including failed/partial backup refusal.
+- [x] M1 (2026-11-13): Bounded recovery manifests gate pending `up`/repair before consuming an entry. Thirty contract cases pass; actual native suffix acceptance and missing/partial-set refusal pass in the owned roundtrip below. Retained sets bind the owner and compiled plan; retries still require fresh drain.
+- [x] M2 (2026-11-13): Owned native roundtrip `.dev/acceptance/recovery-6frn052e/` restored PostgreSQL, analytics and ledger with exact pre-change application/coordinator/history agreement. A real ClickHouse backup failure after PostgreSQL completed, missing evidence and partial coverage all refused migration with counter zero and fence retained. Another application stayed available; server PID was unchanged. One required scenario, zero failures/skips.
 - [ ] M3: A rebuilt-server restore is explicitly re-bound with retained provenance and recovery state; automatic or wrong-target re-binding fails.
 
 
@@ -59,11 +59,38 @@ M1 implementation started on 2026-11-13 after EP-50 M1/M2 native acceptance.
 Reuse its required evidence, exact file digest and predecessor-time lower bound.
 EP-50 appended coordinator migrations through 0014; any new step follows them.
 
+M3's direct-server implementation passed clean rebuilt recovery in
+`.dev/acceptance/recovery-ejx4up_q/` and actual interrupted append-receipt recovery
+in `.dev/acceptance/recovery-interrupted-tzplkykz/`. Both used new native UUIDs;
+ordinary loading refused, scratch-only evidence and conflicting IDs refused,
+identical replay returned one audit, and counters/fences/receipts survived adoption.
+The interrupted case refused ordinary `up` and omitted receipts, then completed
+explicit repair with the exact retained receipt and fresh drain. Packaged and full
+regression qualification remain before milestone acceptance. Rebuilt replicated
+inventory adoption is explicitly refused rather than inferred from one server.
+
 ## Surprises & Discoveries
 
+Native backup metadata warns about CTE aliases as absent `default` dependencies.
+The owned restore nevertheless restored canonical queries and exact ledger contents.
+EP-52 must distinguish actual durable dependencies from aliases and the runtime's
+session-local temporary identity-cache tables, rather than interpreting this warning
+as a complete schema contract.
+
+The PostgreSQL snapshot precedes recovery-set acceptance and therefore cannot
+contain its own later acceptance row. The external manifest records the exact
+fenced coordinator state, including unresolved receipts, and is retained after
+the entry marker but before native application SQL. Rebinding must validate the
+restored pre-entry state against that external document.
 
 ## Decision Log
 
+On 2026-11-13, validate a new snapshot manifest before consuming the native-entry
+counter, then persist acceptance under the administrative lease before submitting
+SQL. Invalid backup inputs do not change the snapshotted coordinator boundary.
+Accept reuse only within the retained owner/compiled-plan binding; fresh drain
+remains mandatory. Fresh-empty initialization is separately recorded and requires
+actual native empty-target checks.
 On 2026-11-03, use a retained recovery-set manifest over deployment-produced backups.
 Backup mechanisms differ across installations; one recovery contract avoids a
 Nagare dependency and exposes coverage gaps hidden by a generic "backup succeeded".

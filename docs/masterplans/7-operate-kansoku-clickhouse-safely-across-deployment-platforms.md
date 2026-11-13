@@ -249,8 +249,10 @@ EP-50 M1/M2 are accepted on 2026-11-13: the full migration harness passes
 20 non-skipped cases, administration passes seven scenario families and two-replica
 maintenance passes. M3 remains open on scoped upstream repair delivery, tracked at
 `mori://shinzui/clickhouse-migrate/plans/13-accept-explicit-external-drain-authority-when-repair-process-diagnostics-are-unavailable`.
-No dependency cohort changed. EP-51 is In Progress on its recovery-set contract,
-using EP-50's accepted owner-bound evidence. EP-52 remains independently ready;
+No dependency cohort changed. EP-51 M1/M2 are accepted: complete manifests gate
+pending SQL and actual three-store restores agree. Its direct-server adoption
+also passes clean and interrupted-receipt recovery; full packaged qualification
+remains before child completion. EP-52 remains independently ready;
 EP-53 waits for all three completed children. Final packaged/source/deployment gates
 and all IR completion claims remain open.
 

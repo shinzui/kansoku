@@ -4,7 +4,7 @@ title: "Initialize and upgrade ClickHouse"
 description: "Initialize a fresh owned ClickHouse target, retain native identities, coordinate maintenance and recover explicit migration attempts."
 docId: DOC-13
 tags: ["clickhouse", "migrations", "maintenance", "recovery"]
-timestamp: 2026-11-13T19:42:05Z
+timestamp: 2026-11-13T20:38:02Z
 generated:
   by: process:codex
   at: "2026-11-07T20:24:51Z"
@@ -22,12 +22,12 @@ The qualified integration target is one directly addressed, self-managed ClickHo
 effects. `nix develop` supplies the hash-qualified artifact ahead of the template binary.
 The [matrix](../../db/clickhouse/qualification/matrix.json) and
 [adoption evidence](../evidence/clickhouse-migrate-adoption.md) record its digest and limits.
-The pinned upstream `0.1.1.0` source candidate also qualifies exact Altinity
+The released upstream `0.2.0.0` cohort also qualifies exact Altinity
 `26.3.60.10001.altinitystable` and `26.3.60.10002.altinitystable` on owned Linux arm64
 servers. Upstream records passing Nix and extracted-source qualification for these
-artifacts. All four packages use the immutable source revision recorded in
-`cabal.project` and `flake.module.nix`; Hackage still publishes `0.1.0.0` as of
-2026-11-07. Kansoku supports explicit direct or replicated selectors as described below. These checks do not
+artifacts. All four packages use the Hackage `0.2.0.0` cohort selected in
+`cabal.project` and `flake.module.nix`, verified against registry metadata and the
+upstream release tag on 2026-11-13. Kansoku supports explicit direct or replicated selectors as described below. These checks do not
 qualify managed-cloud/proxy topology or the Linux amd64 application image. The
 staging initiative at
 `mori://tan/tan-app-infrastructure/plans/42-qualify-kansoku-artifacts-and-the-staging-clickhouse-contract`
@@ -197,11 +197,12 @@ using the fresh-install `maintenance begin` command with a new reason and a new 
 path. Export that report's `.result.id` as the new session ID. Preserve earlier reports.
 Establish external drain before each entry.
 
-After recording fresh external drain evidence for this session/counter, run:
+After recording fresh external drain evidence and the complete recovery set below, run:
 
 ```bash
 predecessor="$("$CH_MIGRATE" maintenance status --json | jq -r .result.entry)"
-"$CH_MIGRATE" --drain-evidence /secure/current-drain.json --predecessor "$predecessor" up --json \
+"$CH_MIGRATE" --recovery-set /secure/recovery-set.json \
+  --drain-evidence /secure/current-drain.json --predecessor "$predecessor" up --json \
   --expect-target "$KANSOKU_CH_MIGRATION_TARGET" --actor "$USER" \
   --reason 'reviewed native upgrade or clean repeat' --quiescent \
   --evidence "$DRAIN_EVIDENCE"
@@ -218,6 +219,105 @@ Rollback is a separately reviewed restore of consistent backups into a separate 
 with reviewed target/server/ledger identities. Prevent simultaneously active cloned identities.
 Restoring analytics alone, changing recorded checksums or deleting native events is not rollback.
 No reset, force-clear, legacy import, data deletion or live deployment is automated here.
+
+## Recovery set before application SQL
+
+The first pending `up` or repair requires `--recovery-set FILE`. A bounded 64 KiB
+JSON manifest covers PostgreSQL (including queue/application and coordination
+schemas), `analytics` and `kansoku_migration_ledger`. Keep the manifest and immutable
+backup artifacts outside those databases. Validation records an operator attestation;
+the executable does not fetch artifacts or authenticate provider receipts.
+
+After fencing, stop submitters and overlapping schedules, establish drain and
+settle background mutations and TTL changes using app-scoped controls. Keep backup
+and migration credentials available. Capture all three stores while logical state
+is stable, before any native migration entry. PostgreSQL must contain the active
+session/fence. Its snapshot precedes the later recovery-set acceptance record.
+One ClickHouse archive may cover both databases, with two explicit coverage entries.
+Use qualified tools such as PostgreSQL `pg_dump --format=custom` and ClickHouse
+`BACKUP DATABASE analytics, DATABASE kansoku_migration_ledger TO ...`; rehearse their
+corresponding restore commands on an owned target. Close timestamps alone do not
+prove consistency. A failed backup leaves the fence held and cannot authorize SQL.
+
+Read the exact expected identities, compiled-plan fingerprint, PostgreSQL database,
+retention policy and pre-entry coordinator state with:
+
+```bash
+"$CH_MIGRATE" maintenance recovery-context --json > /secure/recovery-context.json
+```
+
+The manifest has exactly these fields: `schemaVersion` (1), `id` (new UUID),
+`target`, `servers` (complete UUID inventory), `ledger`, `session`, `predecessor`,
+`planSha256`, `drainSha256`, `postgresDatabase`, `retentionPolicy`, `coordinatorState`,
+`stableFrom`, `stableUntil`, `coordinatorSnapshotPhase`, `backgroundChangesSettled`,
+`operatorAttested` and `snapshots`. Copy expected context values exactly; hash the
+actual drain file for `drainSha256`. Use UTC timestamps. The stable interval starts
+after completed drain and ends no later than drain expiry; it must still be current
+when acceptance occurs. Set the phase to `fenced-before-native-entry` and both
+attestations to true only after establishing them.
+
+Each of exactly three `snapshots` contains `store` (`postgresql` or `clickhouse`),
+`database`, `startedAt`, `completedAt`, `artifactReference`, `artifactSha256`,
+`verificationReference`, `verificationSha256` and `complete` (true). Use the actual
+PostgreSQL database name and the two fixed ClickHouse names. References identify
+retained artifacts/receipts; hashes are 64 hexadecimal SHA-256 characters. Every
+capture must finish within the stable interval before validation. Unknown fields,
+partial coverage, foreign identities, policy/state mismatch or late receipts fail
+before consuming the predecessor counter.
+
+Acceptance is retained by session and compiled plan. A retry may omit the file or
+resupply its exact bytes, but still needs fresh owner-bound drain. Another owner or
+changed plan needs a new set. A proven-empty native installation records a separate
+fresh-empty exception; initialization flags cannot exempt a populated target.
+Changing the configured UUID does not authorize recovery; use explicit adoption below.
+
+## Rebuilt direct-server adoption
+
+Keep the restored installation fenced and every unrelated submitter externally
+blocked. Restore the whole recorded set, including the original PostgreSQL active
+session and unresolved receipts. Retain the original manifest and drain file.
+Configure the candidate endpoint and its explicit new server UUID, keeping target,
+logical ledger and session IDs. Ordinary session loading refuses the old binding.
+Rebuilt replicated-inventory adoption is not qualified by this command.
+
+Read the candidate with `maintenance recovery-observation --json`. This uses the
+public toolkit's read-only qualified-target/history inspection, permits unresolved
+attempts for subsequent repair, and rejects incompatible definitions. It changes
+no binding. Verify all three restored stores against the recorded artifacts and
+retain a separate live restore receipt. Scratch inspection alone is insufficient.
+
+That receipt is bounded JSON with exactly: `schemaVersion` (1), `mode`
+(`live-recovery`), `target`, `oldServer`, `newServer`, `ledger`, `session`,
+`recoverySetId`, `recoverySetSha256` (hash of the original manifest bytes),
+`ledgerSha256` (the verified observation fingerprint), `inspectedAt`, `expiresAt`,
+`allStoresRestored` (true) and `operatorAttested` (true). It records an operator
+verification of the whole restore, not an automatic artifact download/check.
+Compare its history fingerprint with the retained original observation, and
+independently verify restored application/queue/coordinator contents. Establish
+fresh new-server drain, bound to the restored session's predecessor. The receipt
+must still be current and expire no later than that exclusion.
+
+```bash
+"$CH_MIGRATE" --recovery-set /secure/original-recovery-set.json \
+  --drain-evidence /secure/rebuilt-drain.json maintenance rebind --json \
+  --expect-target "$KANSOKU_CH_MIGRATION_TARGET" \
+  --old-server "$ORIGINAL_SERVER_ID" --new-server "$KANSOKU_CH_MIGRATION_SERVER_ID" \
+  --original-drain /secure/original-drain.json \
+  --restore-verification /secure/live-restore.json \
+  --actor "$USER" --reason 'verified whole recovery-set restore' \
+  --evidence /secure/live-restore.json > /secure/rebind-report.json
+```
+
+The operation acquires administrator/traffic exclusion, validates exact restored
+policy and coordinator state against the original backup boundary, observes the
+candidate ledger, and atomically changes only the active session's server binding
+with its audit and retained recovery set. It preserves counters, receipts, outcome
+and the persistent fence. `maintenance status --json` now loads the new binding.
+Repeating the exact request returns its original audit without another transition;
+retain that report after a lost response. Conflicting identities or manifests fail.
+Existing reconciliation/repair still resolves interrupted work with fresh drain
+and exact pending receipts. Adoption never marks an unresolved entry successful
+or releases its fence. Verify currentness and finish through the ordinary ceremony.
 
 ## Interruption, receipts and explicit repair
 

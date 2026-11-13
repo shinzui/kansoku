@@ -8,6 +8,12 @@ module Kansoku.Admin.Coordination
     leaseAlive,
     finishSession,
     sessionStatus,
+    recoveryContext,
+    predecessorState,
+    findRecoverySet,
+    retainRecoverySet,
+    newRecoveryId,
+    withRebindLease,
     recordNativeOutcome,
     requireReceipts,
   )
@@ -130,3 +136,66 @@ requireReceipts :: PQ.Connection -> SessionIdentity -> [Text] -> IO ()
 requireReceipts c identity supplied = do
   row <- query c "SELECT to_jsonb(pending_receipts <@ ($1->'receipts')) FROM kansoku.clickhouse_migration_sessions WHERE id=($1->>'id')::uuid" (A.object ["id" A..= sessionId identity, "receipts" A..= supplied])
   unless (row == A.Bool True) (fail "all retained pending append receipts are required")
+
+-- Read-only operator context. The subsequent lease still checks exact ownership
+-- and counters; this diagnosis never establishes external quiescence.
+recoveryContext :: Text -> SessionIdentity -> IO A.Value
+recoveryContext settings identity = withPostgres settings $ \c ->
+  query c ("SELECT jsonb_build_object('postgresDatabase',current_database(),'retentionPolicy',(SELECT to_jsonb(p) FROM kansoku.retention_policy p WHERE singleton),'session',to_jsonb(s),'fenced',EXISTS(SELECT 1 FROM kansoku.maintenance_fence f WHERE f.active_migration_session=s.id)) FROM kansoku.clickhouse_migration_sessions s WHERE s.id=($1->>'id')::uuid AND " <> identityPredicate) (parameters identity)
+
+predecessorState :: A.Value -> A.Value
+predecessorState row = A.object ["entry" A..= field "entry" row, "outcome" A..= field "outcome" row, "pendingEntry" A..= field "pending_entry" row, "pendingReceipts" A..= field "pending_receipts" row, "lastEntryAt" A..= field "last_entry_at" row]
+
+findRecoverySet :: Text -> SessionIdentity -> Text -> IO A.Value
+findRecoverySet settings identity digest = withPostgres settings $ \c ->
+  query c "SELECT to_jsonb(r) FROM kansoku.maintenance_recovery_sets r WHERE session_id=($1->>'id')::uuid AND plan_sha256=$1->>'plan' ORDER BY predecessor DESC LIMIT 1" (A.object ["id" A..= sessionId identity, "plan" A..= digest])
+
+-- Called only while this host holds the retained administrator lease. The
+-- counter check also prevents an unleased stale acceptance from being retained.
+retainRecoverySet :: Text -> SessionIdentity -> Integer -> Text -> Text -> Maybe Text -> Text -> A.Value -> IO ()
+retainRecoverySet settings identity predecessor plan kind ident digest document = withPostgres settings $ \c -> do
+  let payload = case parameters identity of
+        A.Object base -> case A.object ["predecessor" A..= predecessor, "plan" A..= plan, "kind" A..= kind, "recovery" A..= ident, "digest" A..= digest, "document" A..= document] of
+          A.Object extra -> A.Object (extra <> base)
+          _ -> error "invalid recovery payload"
+        _ -> error "invalid identity payload"
+  void $ query c ("INSERT INTO kansoku.maintenance_recovery_sets(session_id,recovery_id,predecessor,plan_sha256,kind,document,document_sha256) SELECT s.id,coalesce(($1->>'recovery')::uuid,gen_random_uuid()),($1->>'predecessor')::bigint,$1->>'plan',$1->>'kind',$1->'document',$1->>'digest' FROM kansoku.clickhouse_migration_sessions s JOIN kansoku.maintenance_fence f ON f.active_migration_session=s.id WHERE s.id=($1->>'id')::uuid AND s.entry=($1->>'predecessor')::bigint+1 AND s.completed_at IS NULL AND " <> identityPredicate <> " ON CONFLICT DO NOTHING") payload
+  accepted <- query c "SELECT to_jsonb(r) FROM kansoku.maintenance_recovery_sets r WHERE session_id=($1->>'id')::uuid AND ($1->>'recovery' IS NULL OR recovery_id=($1->>'recovery')::uuid) AND predecessor=($1->>'predecessor')::bigint AND plan_sha256=$1->>'plan' AND kind=$1->>'kind' AND document_sha256=$1->>'digest'" payload
+  when (accepted == A.Null) (fail "recovery set conflicts with retained owner, boundary or manifest; fence retained")
+
+newRecoveryId :: Text -> IO Text
+newRecoveryId settings = withPostgres settings $ \c -> do
+  value <- query c "SELECT to_jsonb(gen_random_uuid()) WHERE $1 IS NOT NULL" A.Null
+  case value of
+    A.String ident -> pure ident
+    _ -> fail "Cannot allocate recovery identifier"
+
+-- Recovery owns the ordinary administrator and traffic exclusions, while
+-- deliberately addressing the retained OLD identity. The observer executes
+-- before the atomic binding/audit transition. Replay returns the retained audit.
+withRebindLease :: Text -> SessionIdentity -> Text -> A.Value -> (A.Value -> IO A.Value) -> IO A.Value
+withRebindLease settings old newServer request observe = withAdministrator settings $ \c -> do
+  administratorLock c
+  trafficLock c
+  let payload = case parameters old of
+        A.Object base -> case A.object ["newServer" A..= newServer, "request" A..= request] of
+          A.Object extra -> A.Object (base <> extra)
+          _ -> error "invalid rebind request"
+        _ -> error "invalid recovery identity"
+  previous <- query c "SELECT to_jsonb(a) FROM kansoku.clickhouse_server_rebindings a JOIN kansoku.clickhouse_migration_sessions s ON s.id=a.session_id JOIN kansoku.maintenance_fence f ON f.active_migration_session=s.id WHERE a.session_id=($1->>'id')::uuid AND a.request=$1->'request' AND s.server_id=($1->>'newServer')::uuid AND s.target_key=$1->>'target' AND s.ledger_id=($1->>'ledger')::uuid AND s.topology='direct' AND s.completed_at IS NULL" payload
+  if previous /= A.Null
+    then pure previous
+    else do
+      row <- query c ("SELECT to_jsonb(s) FROM kansoku.clickhouse_migration_sessions s JOIN kansoku.maintenance_fence f ON f.active_migration_session=s.id WHERE s.id=($1->>'id')::uuid AND s.completed_at IS NULL AND " <> identityPredicate) payload
+      when (row == A.Null) (fail "Original recovery identity or persistent fence mismatch")
+      proof <- observe row
+      let transition = case payload of
+            A.Object base -> case A.object ["oldState" A..= row, "proof" A..= proof] of
+              A.Object extra -> A.Object (base <> extra)
+              _ -> error "invalid rebind proof"
+            _ -> error "invalid rebind payload"
+      -- Compare the entire old row, preserving all counters and pending receipts.
+      -- Inserting the audit and changing the binding share one SQL statement.
+      accepted <- query c "WITH rebound AS (UPDATE kansoku.clickhouse_migration_sessions s SET server_id=($1->>'newServer')::uuid FROM kansoku.maintenance_fence f WHERE f.active_migration_session=s.id AND s.id=($1->>'id')::uuid AND to_jsonb(s)=$1->'oldState' AND s.completed_at IS NULL RETURNING s.id), audited AS (INSERT INTO kansoku.clickhouse_server_rebindings(session_id,old_server_id,new_server_id,request,proof,old_state) SELECT id,($1->>'server')::uuid,($1->>'newServer')::uuid,$1->'request',$1->'proof',$1->'oldState' FROM rebound RETURNING *), retained AS (INSERT INTO kansoku.maintenance_recovery_sets(session_id,recovery_id,predecessor,plan_sha256,kind,document,document_sha256) SELECT session_id,($1->'proof'->'manifest'->>'id')::uuid,($1->'proof'->'manifest'->>'predecessor')::bigint,$1->'proof'->'manifest'->>'planSha256','snapshot',$1->'proof'->'manifest',$1->'request'->>'manifestSha256' FROM audited RETURNING session_id) SELECT to_jsonb(a) FROM audited a JOIN retained r ON r.session_id=a.session_id" transition
+      when (accepted == A.Null) (fail "Recovery binding changed before compare-and-set; fence retained")
+      pure accepted
