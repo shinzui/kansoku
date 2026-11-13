@@ -2,6 +2,9 @@
 
 ## 2026-11-13
 
+* **Addition**: FRIC-35 records detour environment friction with mori://shinzui/mori: Mori registry discovery unavailable during live activity planning
+
+
 * **Addition**: FRIC-34 records detour environment friction with https://github.com/containers/skopeo: Ephemeral Skopeo has no default trust policy
 
 

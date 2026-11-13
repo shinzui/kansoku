@@ -2,6 +2,9 @@
 
 ## 2026-11-13
 
+* **Create**: Add proposed ADR-27: isolate best-effort live activity from writing and explicitly permit stale UI.
+
+
 * **Update**: ADR-24 retains commit-based release records and validates released Cabal/Nix cohorts with canonical upstream identity.
 
 
