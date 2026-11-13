@@ -1,6 +1,9 @@
 # Bundle Update Log
 
 ## 2026-11-13
+
+* **Updated**: ADR-25 records required nullable wire fields and the users-specific Relay page minimum schema overrides.
+
 * **Added**: ADR-25 records identified-user resources and exact-version safe history projection.
 
 ## 2026-11-08

@@ -34,9 +34,9 @@ A service-token consumer will be able to display an account's identified-user di
 - [x] Milestone 1 (2026-11-13): Authenticated directory and exact counts pass owned real HTTP acceptance, including stitched activity, both orders/directions, nullable extrema, literal search, typed filters, static/behavioural cohorts and bot/count parity. Evidence: `nix develop --no-write-lock-file -c python3 scripts/users_acceptance.py`, private run `.dev/acceptance/cohort-1w5b3kjz`.
 - [x] Milestone 2 (2026-11-13): Profiles pass eligible set/set-once, equal occurrence/receipt event-ID tie, replay, legacy exclusion, evidence/anonymous counts, organisation moves, actual deletion and physical pre-TTL fingerprint expiry checks in the same owned run.
 - [x] Milestone 3 (2026-11-13): History passes stitched uniqueness, complete tied-key forward/backward walks, name filters, schema-version and alias/privacy projection, and newer-arrival continuation/refresh checks. Pure exact-version/type/privacy tests also pass in the deterministic suite.
-- [ ] Milestone 4: Full public acceptance, served OpenAPI, query guide, and durable architecture documentation agree on all five request criteria.
+- [x] Milestone 4 (2026-11-13): All five users criteria pass against the final Nix-packaged executable, including served/committed OpenAPI equality, lifecycle and resource exhaustion. The query guide and ADR-25 document the delivered contract. Evidence: `.dev/acceptance/cohort-60vnc42y`; repeated shared-account fixture coverage passed in `.dev/acceptance/cohort-f8gixc_3`.
 
-Current validation: the final local build and deterministic suite pass (521 core examples, 22 client examples, four probe checks), as do generated OpenAPI/contract freshness, OpenAPI lint, formatting and strict ADR/guide/friction validation. The focused run `.dev/acceptance/cohort-gojfbi5a` additionally compares served/committed OpenAPI, applies actual retention and forces native memory exhaustion on all four routes; each returns a complete 503 problem without partial data. Cohort regression passed in `.dev/acceptance/cohort-fkfm2951`. Aggregate packaged acceptance is running with the local checkout of `mori://shinzui/kansoku-ts` as its required SDK prerequisite; both package builds and all 18 native migration cases have passed; service integration is in progress.
+Validation: `nix develop --no-write-lock-file -c just build-with-tests` passed. The final deterministic suite passed 521 core examples, 22 client examples and four probe checks. Generated OpenAPI/contract freshness, OpenAPI lint, formatting and strict ADR/guide/friction validation passed. Final packaged users acceptance passed in `.dev/acceptance/cohort-60vnc42y`, including actual deletion/replay, retention, physical pre-TTL fingerprint expiry and complete 503 responses under native memory exhaustion on all four routes. Cohort regression passed in `.dev/acceptance/cohort-fkfm2951`. The aggregate gate was exercised with the required SDK checkout (`mori://shinzui/kansoku-ts`); its final result is recorded below. No further test expansion is planned.
 
 ## Surprises & Discoveries
 
@@ -44,6 +44,8 @@ Current validation: the final local build and deterministic suite pass (521 core
 
 2026-11-13: Relay accepts a zero page size; users handlers and the generated OpenAPI parameter schemas explicitly enforce the required minimum of one. ClickHouse comparison expressions serialize as integers unless cast to Bool; history existence/page-view projections explicitly cast them before JSON decoding.
 
+
+2026-11-13: Shared-store acceptance exposed two fixture assumptions: visible user facts can precede resolved stitching/derived membership, and prior real erasures leave completed maintenance history. Poll the required resolved outcomes, scope literal search by the fixture prefix, and compare maintenance-preview ledger counts with their baseline. The existing admin fixture assumption and its fix are recorded in [FRIC-24](../friction-log/24-admin-preview-fixture-assumes-an-empty-maintenance-ledger.md).
 
 ## Decision Log
 
@@ -57,6 +59,14 @@ Current validation: the final local build and deterministic suite pass (521 core
 2026-11-12: Calculate profile provenance from eligible canonical trait observations, rather than changing aggregate state types. Existing `user_properties` states retain values but do not return the winning observation's ordering tuple. A bounded single-user reduction over `analytics.user_trait_events` can recover the winner without a schema migration.
 
 ## Outcomes & Retrospective
+
+2026-11-13: Delivered `/users`, `/users/activity-counts`, `/users/{userId}` and `/users/{userId}/events`, with principal-derived tenancy, complete retained identity scope, current governed traits/provenance, exact subject counts, bidirectional pagination and version-specific safe history properties. No dependency upgrades or migrations were introduced. User writes and IR-18 remain outside scope. [ADR-25](../adr/0025-identified-user-resources-and-safe-event-projection.md) preserves the resource contract, privacy boundary, current-read consistency and explicit nullable/page-minimum schema overrides.
+
+The aggregate gate passed with `KANSOKU_REQUIRE_SDK=1` and `KANSOKU_SDK_PROJECT` pointing to the local checkout of `mori://shinzui/kansoku-ts`, running `nix develop --no-write-lock-file -c just acceptance`. Evidence: `.dev/acceptance/run-qyec9hd1/sanitized`. It passed 18 native migration cases, 658 core examples, live clients, native recovery/limits/replay/identity checks, all users/cohort public workflows in three server modes, required SDK/browser checks without skips, and all seven administrative scenario families.
+
+The final packaged fixture proves all five request criteria against owned real stores. Additional fixture reuse coverage checks two independent prefixes in one populated account. Validation expanded beyond what this API needed and delayed delivery; future implementation should use the focused public proof and expand only for a specific unresolved risk.
+
+[FRIC-23](../friction-log/23-mori-registry-unavailable-during-users-implementation.md) was accepted: Mori registry PostgreSQL remained unavailable, so implementation reused established dependency integrations without changing versions or bounds. [FRIC-24](../friction-log/24-admin-preview-fixture-assumes-an-empty-maintenance-ledger.md) was resolved by preserving existing maintenance-ledger counts when asserting that preview has no side effects.
 
 
 ## Context and Orientation
@@ -181,3 +191,5 @@ Fixtures use unique prefixes, private ports/directories, and OwnedResources clea
 `Kansoku.Users.Types` owns UserSummary, UserProfile, UserEvent, and UserActivityCounts JSON/OpenAPI types. Summaries carry `userId`, scalar `traits`, and nullable UTC-millisecond `firstActivityAt`/`lastActivityAt`. Profile traits additionally carry provenance. `Kansoku.Users.Api` owns MetricsAuth leaf routes and typed success/problem/page responses. `Kansoku.Users.Validation` produces validated bounded request values before storage; `Kansoku.Users.Query` compiles account-bound native SQL and safely decodes/project rows; `Kansoku.Users.Handler` loads cohort definitions, acquires the proper connection, and maps results to public responses.
 
 Use the existing Relay, Servant, ClickHaskell, registry, authentication, and query-pool dependencies. No arbitrary SQL identifiers come from request text. Do not alter the public resolved SQL view's ordered eight columns or metric response shapes. Any extraction of shared subject/activity helpers from `Kansoku.Metrics.Query` must preserve existing metric tests. Consumer delivery consists of the served OpenAPI contract and examples in this repository; implementing or publishing the separate UI is outside this plan.
+
+Implementation note: `kansoku-core/src/Kansoku/Users/Profile.hs` owns profile component queries; `kansoku-core/src/Kansoku/Users/History.hs` owns history pagination and the pure property allowlist. `Kansoku.Users.Query` shares retained-bound discovery, native decoding/binding, directory/count queries and the overall deadline.

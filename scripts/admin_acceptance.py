@@ -242,11 +242,15 @@ def _verify_lifecycle(admin, cli, pg, ch, request, metric, total, event, archive
     for row in originals[:-1]:
         archive(row)
     before = total('events'), total('revenue')
+    # Earlier owned fixtures may have completed real maintenance jobs. Preview
+    # must preserve that history and create neither jobs nor dispositions.
+    jobs_before = pg('SELECT count(*) FROM kansoku.maintenance_jobs;')
+    dispositions_before = pg('SELECT count(*) FROM kansoku.event_dispositions;')
     preview_path = root / 'preview-must-not-exist.json'
     assert json.loads(cli('erase-user', '--account', account, '--user', user, '--out', str(preview_path)))['preview']
     assert not preview_path.exists()
-    assert pg('SELECT count(*) FROM kansoku.maintenance_jobs;') == '0'
-    assert pg('SELECT count(*) FROM kansoku.event_dispositions;') == '0'
+    assert pg('SELECT count(*) FROM kansoku.maintenance_jobs;') == jobs_before
+    assert pg('SELECT count(*) FROM kansoku.event_dispositions;') == dispositions_before
     other_before = ch("SELECT toJSONString(tuple(count(),sum(cityHash64(tuple(event_id,event_name,anonymous_id,user_id,session_id,identifiers,properties))))) FROM analytics.events_canonical WHERE account_id=" + literal(other))
     # Persist the fence, then fail exclusive output creation before mutations.
     occupied = root / 'occupied.json'

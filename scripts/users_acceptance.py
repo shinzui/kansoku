@@ -36,7 +36,10 @@ def verify_users(base, write_key, token, other_token, erase_user=None, **kwargs)
         rows.append(row)
     send(base,write_key,rows)
     def selected(**args): return api(search=prefix,**args)
-    eventually(lambda: len(selected()['edges'])==1)
+    def stitched():
+        edges=selected()['edges']
+        return len(edges)==1 and (edges[0]['node']['firstActivityAt'] or '').startswith('2026-07-01')
+    eventually(stitched)
     node=selected()['edges'][0]['node']
     assert node['userId']==prefix+'A' and node['firstActivityAt'].startswith('2026-07-01'),node
     dates={'from':'2026-07-01','to':'2026-07-03'}
@@ -56,7 +59,7 @@ def verify_users(base, write_key, token, other_token, erase_user=None, **kwargs)
         more.append(row)
     send(base,write_key,more)
     eventually(lambda: len(selected()['edges'])==4)
-    assert api(search='%_mixed')['edges'][0]['node']['userId']==prefix+'%_Mixed:colon'
+    assert api(search=prefix+'%_mixed')['edges'][0]['node']['userId']==prefix+'%_Mixed:colon'
     assert len(selected(**dates)['edges'])==3
     colon_id=prefix+'%_Mixed:colon'
     assert api('/users/'+urllib.parse.quote(colon_id,safe=''))['userId']==colon_id
@@ -99,7 +102,13 @@ def verify_users(base, write_key, token, other_token, erase_user=None, **kwargs)
         observed.append(row)
     for i in range(0,len(observed),2): send(base,write_key,observed[i:i+2])
     for i in range(0,len(observed),2): send(base,write_key,observed[i:i+2])
-    eventually(lambda: api(profile_path)['traits'].get('plan',{}).get('value')=='pro' and api(profile_path)['retainedEventCount']==11)
+    def profile_ready():
+        value=api(profile_path)
+        org=value['organization'] or {}
+        return (value['traits'].get('plan',{}).get('value')=='pro' and value['retainedEventCount']==11
+                and org.get('organizationId')==prefix+'org' and org.get('traits')=={'plan':'business','seats':10}
+                and value['identityEvidence']['device']==1 and value['identityEvidence']['email_hmac']==1)
+    eventually(profile_ready)
     profile=api(profile_path)
     assert profile['traits']['plan']['operation']=='set'
     assert profile['traits']['plan']['observedAt'].startswith('2026-07-02T01:00:00')
@@ -167,6 +176,7 @@ def verify_users(base, write_key, token, other_token, erase_user=None, **kwargs)
     # Behavioural membership sees the complete lookback beyond selected dates.
     behavioural=api('/cohorts',body={'name':prefix+'behaviour','kind':'behavioural','conditions':[{'did':'feature_used','atLeast':3,'withinDays':30,'filters':[{'dimension':'prop:feature','op':'eq','value':prefix}]}]},method='POST')
     try:
+        eventually(lambda: len(api(search=person,filter=[filt('cohort','eq',behavioural['id'])],**{'from':'2026-07-02','to':'2026-07-03'})['edges'])==1)
         selected_row=api(search=person,filter=[filt('cohort','eq',behavioural['id'])],**{'from':'2026-07-02','to':'2026-07-03'})['edges'][0]['node']
         assert selected_row['firstActivityAt'].startswith('2026-07-01')
         assert not api(search=person,filter=[filt('cohort','eq',behavioural['id'])])['edges']
@@ -201,6 +211,7 @@ def verify_users(base, write_key, token, other_token, erase_user=None, **kwargs)
         counts=api('/users/activity-counts',includeBots=bots,**dates)
         total=sum(p['value'] for p in api('/metrics/users',timeGrain='none',includeBots=bots,**dates)['points'])
         assert counts['identified']+counts['anonymous']==total
+    eventually(lambda: len(api(search=prefix+'Bot')['edges'])==1)
     assert api(search=prefix+'Bot')['edges'][0]['node']['firstActivityAt'] is None
     assert api(search=prefix+'Bot',includeBots='true')['edges'][0]['node']['firstActivityAt'] is not None
     alias=event(prefix+'alias',prefix,name='alias',timestamp='2026-07-04T01:00:00Z')

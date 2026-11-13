@@ -2,6 +2,12 @@
 
 ## 2026-11-13
 
+* **Update**: FRIC-24 resolved: Make preview acceptance compose with real user-erasure fixtures in the shared owned stores.
+
+
+* **Addition**: FRIC-24 records detour tooling friction with mori://shinzui/kansoku: Admin preview fixture assumes an empty maintenance ledger
+
+
 * **Update**: FRIC-23 accepted: Accept the existing-pattern workaround for this plan; no dependency changes require registry access.
 
 * **Addition**: FRIC-23 records detour environment friction with mori://shinzui/mori: Mori registry unavailable during users implementation

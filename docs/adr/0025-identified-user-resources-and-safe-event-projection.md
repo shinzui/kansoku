@@ -5,7 +5,7 @@ description: Serve current identified-user resources from retained resolved fact
 docId: ADR-25
 status: Accepted
 date: 2026-11-13
-timestamp: 2026-11-13T00:59:03Z
+timestamp: 2026-11-13T01:12:31Z
 generated:
   by: process:codex
   at: 2026-11-13T00:59:03Z
@@ -59,6 +59,12 @@ public envelope field, not permission to expose other identifiers or context.
 Raw user-ID reads lose pre-login stitching. Fixed history cutoffs silently lose extrema.
 Raw event serialization discloses undeclared properties and context. Registry declaration
 alone permits alias identifiers. These approaches do not meet the resource contract.
+Generated schemas require explicit overrides at this boundary: generic Maybe fields are
+otherwise optional non-null strings, while these wire objects always include nullable
+extrema, host/path and organisation. The shared Relay schema allows zero, while users
+require at least one. Tests pin both the nullable required fields and page minimum, and
+public acceptance compares served and committed OpenAPI before exercising the routes.
+
 No additional persistent projection or migration is required. Administrative identity
 unlinking intentionally retains explicit user facts and therefore can retain a profile;
 `erase-user --delete-events` removes those facts and makes the user disappear. Resource
