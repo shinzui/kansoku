@@ -84,7 +84,7 @@ in
       assert postgres["ok"] is True
       components = {c["name"]: c for c in postgres["data"]["components"]}
       assert set(components) == {"pgmq", "kansoku"}
-      assert [m["id"] for m in components["kansoku"]["migrations"]][-3:] == ["kansoku/0008-clickhouse-replicated-administration", "kansoku/0009-clickhouse-replicated-jobs", "kansoku/0010-saved-analyses"]
+      assert [m["id"] for m in components["kansoku"]["migrations"]][-3:] == ["kansoku/0015-maintenance-recovery-sets", "kansoku/0016-clickhouse-server-rebindings", "kansoku/0017-clickhouse-repair-observations"]
       mapped = environment(supplied)
       for key, origin in {
           "PG_CONNECTION_STRING": "DATABASE_URL",

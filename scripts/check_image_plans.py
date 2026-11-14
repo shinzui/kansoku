@@ -1,6 +1,18 @@
 """Offline image contracts shared by exported-image and release validation."""
 import json
 
+# PostgreSQL migrations after the replicated coordinators, in the current source.
+CURRENT_POSTGRES_SUFFIX = [
+    'kansoku/0010-saved-analyses',
+    'kansoku/0011-maintenance-drain-attempts',
+    'kansoku/0012-maintenance-drain-audit',
+    'kansoku/0013-clickhouse-entry-audit',
+    'kansoku/0014-maintenance-drain-freshness',
+    'kansoku/0015-maintenance-recovery-sets',
+    'kansoku/0016-clickhouse-server-rebindings',
+    'kansoku/0017-clickhouse-repair-observations',
+]
+
 SELECTORS = {
     'KANSOKU_CH_MIGRATION_CLUSTER': 'fixture',
     'KANSOKU_CH_MIGRATION_REPLICA_IDS': '11111111-1111-4111-8111-111111111111,22222222-2222-4222-8222-222222222222',
@@ -44,6 +56,6 @@ def validate_plan(name, raw):
         if not any(names[index:index+2] == required for index in range(len(names))):
             raise ValueError('Missing replicated coordinator migrations')
         suffix = names[names.index(required[-1])+1:]
-        if suffix not in ([], ['kansoku/0010-saved-analyses']):
+        if suffix not in ([], ['kansoku/0010-saved-analyses'], CURRENT_POSTGRES_SUFFIX):
             raise ValueError('Unexpected PostgreSQL migration suffix')
     return doc
