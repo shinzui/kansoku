@@ -120,7 +120,11 @@ def main():
             raise RuntimeError('Plan output is not byte-repeatable: ' + filename)
         captures[filename] = raw
     reference = Path(__file__).resolve().parents[1] / 'kansoku-server/test/fixtures/clickhouse-direct-plan-2008b67.json'
-    if json.loads(captures['native-direct.json']) != json.loads(reference.read_bytes()):
+    # The fixture predates 0026; like check_clickhouse_plans.py, compare the immutable 25-migration prefix.
+    direct = json.loads(captures['native-direct.json'])
+    direct['result']['components'][0]['migrations'] = direct['result']['components'][0]['migrations'][:25]
+    direct['result']['schedule'] = direct['result']['schedule'][:25]
+    if direct != json.loads(reference.read_bytes()):
         raise RuntimeError('Direct history changed from the retained compatibility fixture')
     args.plan_dir.mkdir(parents=True, exist_ok=True)
     for filename, raw in captures.items():
