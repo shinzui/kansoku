@@ -5,7 +5,7 @@ description: Embed immutable native migration steps, bind administration to reta
 docId: ADR-22
 status: Accepted
 date: 2026-10-16
-timestamp: 2026-11-13T23:03:51Z
+timestamp: 2026-11-13T23:55:47Z
 generated:
   by: process:codex
   at: 2026-10-16T22:55:08Z
@@ -317,3 +317,17 @@ counts as null and report the latest observation with its entry through maintena
 status. Keep the immutable proof and diagnostic rows separate; observations supply
 no standing authority. Preserve visible-query refusal and every existing native
 identity, history, receipt and exclusion guard.
+
+
+### Shared-server principal isolation
+
+Application roles retain scoped native grants; the deployment operator alone
+controls access management, exclusion and backups. On qualified 26.8.28.14,
+SELECT on system.processes alone exposes cross-user query text. Deny that read
+or install and prove an operator-owned own-user row policy. Neither profile
+replaces external drain evidence. Keep definer privileges while blocking logins.
+The [role inventory and ceremony](../guides/clickhouse-migrations.md#shared-server-role-inventory-and-ceremony)
+are executed by required packaged acceptance with a second app continuously
+active and the original server process unchanged. Separate rebuilt-server tests
+do not count as shared-server availability evidence. Nagare acceptance remains
+a separate owned-deployment gate.

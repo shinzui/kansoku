@@ -343,3 +343,51 @@ the approved source `7c1132d74c8cb4fd5702b3ba8394aa1f52f66780`. Apple Container
 uses Rosetta; full replicated database tests inside this image remain an explicitly
 accepted gap. TAN retains production inventory/storage/grant/drain and managed
 rehearsal obligations. No production migration or infrastructure change occurred.
+
+
+## Joined shared-server qualification
+
+EP-53 adds a required generic shared-server gate to `just acceptance` and exposes
+it separately as `just ch-shared-maintenance-acceptance`. The accepted standalone
+root `.dev/acceptance/shared-maintenance-an7z7s8_/` contains two complete packaged
+ceremonies with zero failures/skips: denied process diagnostics and an enforced
+own-user row policy. It uses the same immutable application/proof binaries as the
+35-case packaged migration gate. No production deployment was accessed.
+
+Both runs initialize with scoped roles, serve/write and construct identity caches,
+keep an unrelated app's long and fresh queries alive, reject incomplete runtime-only
+drain and partial backups, recover an uncertain native submission, apply retention
+and event erasure, inspect renamed restores read-only and detect schema drift.
+A separate rebuilt server restores all three stores, refuses implicit UUID trust,
+and proves committed re-bind reply loss followed by idempotent replay. Original
+shared-server PID/start time, identity, other-app data and grants stay unchanged.
+Private evidence retains the exact grants/policy and phase availability samples.
+
+SELECT on system.processes alone did expose cross-user query text during the first
+isolation probe. The accepted own-user profile adds an operator-owned row policy
+and positively checks hidden active other-user work; the earlier repair fixture
+now checks that boundary too. Upstream qualification wording was corrected in
+`mori://shinzui/clickhouse-migrate`, project-relative
+`docs/release-evidence/2026-11-13-external-drain.md` (artifact URI pending).
+The selected SDK source cohort is unchanged. Neither empty diagnostics nor the
+row policy replaces external drain authority.
+
+Nagare v0.20.0 source mapping is documented, but no disposable owned deployment was
+selected or exercised. Its actual reviewed grants, receipts, two-app availability
+and post-ceremony no-drift plan remain unaccepted. EP-53 M3, IR-2 and MasterPlan 7
+remain open. This evidence does not qualify an additional server/platform artifact.
+
+The full required packaged run `.dev/acceptance/run-gosoonqr/` passes: 35 migration
+cases and both joined ceremonies, 707 core examples, direct-reader consumers,
+three serving/telemetry modes, live public workflows and seven required
+administrative families. Normal `just check`, four SDK integration cases, and
+strict guide/capability/terminology/ADR checks also pass. Local logs are
+`.dev/ep53-acceptance.log`, `.dev/ep53-check.log`, `.dev/ep53-component.log`,
+`.dev/ep53-docs.log` and `.dev/ep53-adr.log`. CI wiring is committed configuration;
+these results are local execution, not a claimed hosted CI run.
+
+The source/embedding gate passes in `.dev/ep53-source.log`: ten extracted packages
+rebuild the production CLI; mismatched schema expectations are rejected; both
+26/264 direct and 26/261 replicated offline plans work with migration inputs
+withheld. Roots are `.dev/acceptance/ch-embedding-xrtdgjmh/` and
+`.dev/acceptance/ch-sdist-negl4uko/`.

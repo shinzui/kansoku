@@ -15,6 +15,7 @@ import urllib.parse
 import uuid
 
 from clickhouse_migrations_acceptance import verify as verify_clickhouse_migrations
+from shared_clickhouse_maintenance_acceptance import verify as verify_shared_maintenance
 from ingest_acceptance import verify_ingest
 from json_storage_acceptance import verify_json_storage
 from acceptance_fixture_isolation import verify_fixture_isolation
@@ -225,6 +226,8 @@ def main():
     upgrade_migrate = proof_build[0]['outputs']['out'] + '/bin/kansoku-ch-migrate-upgrade-proof'
     migration_cases = verify_clickhouse_migrations(ROOT / 'clickhouse-migrations',native_migrate,upgrade_migrate,migrate,admin,server)
     (SAFE / 'clickhouse-migrations.log').write_text(f'{migration_cases} cases, 0 failures, 0 skipped\n')
+    shared_cases = verify_shared_maintenance(ROOT / 'shared-maintenance', dict(native=native_migrate, upgrade=upgrade_migrate, pg_migrate=migrate, admin=admin, server=server))
+    (SAFE / 'shared-maintenance.log').write_text(f'{shared_cases} complete generic ceremonies, 0 failures, 0 skipped; Nagare separately unrun\n')
     env.update(KANSOKU_CH_MIGRATION_BINARY=native_migrate,KANSOKU_PG_MIGRATION_BINARY=migrate)
     env.update(NO_PROXY='127.0.0.1,localhost', no_proxy='127.0.0.1,localhost')
     pg = ROOT / 'postgres'

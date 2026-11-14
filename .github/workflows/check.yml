@@ -17,7 +17,7 @@ jobs:
       - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
       - name: Deterministic checks
         run: nix develop -c just check
-      - name: Packaged service acceptance
+      - name: Packaged service and shared-maintenance acceptance
         run: nix develop -c just acceptance
       - name: Nix packages and flake checks
         run: |
@@ -45,7 +45,7 @@ jobs:
         run: nix develop -c just ch-migrations-source
       - name: Public migration component proof
         run: nix develop -c just ch-migrations-component
-      - name: Packaged service acceptance
+      - name: Packaged service and shared-maintenance acceptance
         run: nix develop -c just acceptance
       - name: Sanitized acceptance evidence
         if: always()

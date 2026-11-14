@@ -2,6 +2,9 @@
 
 ## 2026-11-13
 
+* **Update**: DOC-13: document exact qualified shared-server role grants, enforced process row isolation and joined packaged ceremony; Nagare remains unrun.
+
+
 * **Update**: Record the exact delivered repair source cohort and qualified per-entry diagnostic audit.
 
 

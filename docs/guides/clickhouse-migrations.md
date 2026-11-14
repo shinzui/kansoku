@@ -4,7 +4,7 @@ title: "Initialize and upgrade ClickHouse"
 description: "Initialize a fresh owned ClickHouse target, retain native identities, coordinate maintenance and recover explicit migration attempts."
 docId: DOC-13
 tags: ["clickhouse", "migrations", "maintenance", "recovery"]
-timestamp: 2026-11-13T23:03:51Z
+timestamp: 2026-11-13T23:55:47Z
 generated:
   by: process:codex
   at: "2026-11-07T20:24:51Z"
@@ -721,3 +721,88 @@ a visible recorded query blocks repair, and transport, identity, receipt, histor
 and lease failures remain fatal. The same owner, fresh predecessor, qualified
 server/ledger and exact receipt requirements apply on every repair invocation.
 The migration principal needs no cross-user process visibility for this path.
+
+
+## Shared-server role inventory and ceremony
+
+The required `just ch-shared-maintenance-acceptance` gate runs two complete
+packaged ceremonies on owned 26.8.28.14 Atomic servers: denied process access and
+an operator-enforced own-user process view. `just acceptance` includes this gate
+once, including the qualified macOS CI job. This is generic local qualification;
+the actual Nagare deployment ceremony remains unrun.
+
+Use distinct credentials for these duties. The exact executable grant inventory
+is `install_principals` in
+[scripts/shared_clickhouse_maintenance_acceptance.py](../../scripts/shared_clickhouse_maintenance_acceptance.py).
+Each private evidence root contains `principal-grants.json`, including row policies.
+For the qualified database names its privileges are:
+
+| Principal | Application privileges | System metadata / settings |
+| --- | --- | --- |
+| Runtime/writer | SELECT analytics.*; INSERT analytics.events_raw; CREATE ARBITRARY TEMPORARY TABLE ON *.* | SELECT system.databases, system.tables; SELECT(database,table,name,active) ON system.parts |
+| Migrator / public-view definer | SELECT, INSERT, CREATE DATABASE, CREATE TABLE, CREATE VIEW, ALTER TABLE, ALTER VIEW, DROP TABLE, DROP VIEW, TRUNCATE on analytics.* and kansoku_migration_ledger.* | SELECT system.databases, tables, columns, storage_policies, disks |
+| Data administrator | SELECT, INSERT, ALTER DELETE, ALTER UPDATE, ALTER TTL, TRUNCATE on analytics.*; ALTER MATERIALIZE COLUMN on analytics.events_raw | SELECT system.databases, tables, columns, mutations |
+| Direct reader | SELECT on analytics.events_resolved, events_resolved_v3, events_analytics_v1 | readonly=2 |
+| Restored-copy verifier | SELECT analytics_restore.* and kansoku_migration_ledger_restore.* | SELECT system.databases, tables, columns, storage_policies, disks; SELECT(name) ON system.users; readonly=2 |
+
+The temporary-table privilege is required by the runtime Join caches. It grants
+no persistent DDL or URL-source privilege. The verifier's users grant exposes
+names needed to check the retained view definer; authentication parameters remain
+inaccessible. Keep definer grants intact when blocking logins. This inventory is
+qualified with the server's default `table_engines_require_grant=false`; the
+stricter profile is unqualified. Backup/restore and access management belong to
+the operator, outside these application roles.
+
+Process reads may be denied entirely. If diagnostic access is desired, granting
+SELECT on system.processes alone exposes other users' query text on this qualified
+server. The operator must install and verify an effective row policy, for example:
+
+```sql
+GRANT SELECT ON system.processes TO runtime, migrator, data_admin;
+CREATE ROW POLICY scoped_processes ON system.processes
+FOR SELECT USING user=currentUser() TO runtime, migrator, data_admin;
+```
+
+Verify the policy with a simultaneously active second user's query and an
+unfiltered SELECT under each application credential. A WHERE clause supplied by
+the application is insufficient. Other permissive policies must not broaden this
+visibility. Even a correctly restricted empty result cannot prove the absence of
+another Kansoku principal's work. Retain external drain evidence in both profiles.
+
+For a manual shared deployment, perform the following ceremony with the retained
+identities and command forms above:
+
+1. Begin the durable maintenance session. Stop/join runtime writers and clients,
+   pause and drain SQL/backup schedules, block direct-reader logins, and retain
+   exclusive control of every remaining migration/admin credential. Drain earlier
+   native requests, including requests surviving a disconnected client. Preserve
+   the other app's users and queries; the shared server stays running.
+2. Produce fresh owner/predecessor-bound drain evidence. Capture PostgreSQL,
+   analytics and native-ledger backups in one stable capture interval and validate
+   the complete recovery manifest before application SQL. A partial backup keeps
+   the fence and authorizes no migration.
+3. Execute the prepared entry. On an uncertain response, retain receipts and the
+   fence; inspect, explicitly accept/reconcile as appropriate, and resume with
+   fresh evidence. Diagnostic absence never releases a fence. Run retention and
+   erasure through their own prepare/drain/resume sessions after finishing the
+   migration session.
+4. Restore both ClickHouse databases under scratch names, then use separate
+   SELECT-only verifier credentials and trusted captured policy. Check both
+   history and physical schema. Matching history with schema drift fails.
+5. For a rebuilt server, restore all three stores and follow explicit audited
+   server adoption with fresh drain evidence. A changed UUID cannot be accepted
+   by editing configuration. Replay a lost adoption response using the identical
+   request; retain the one committed audit record.
+6. Finish safely with fresh predecessor evidence, deliberately resume readers,
+   schedules and runtime, and check public definer views and real writes. Verify
+   the other app's data/grants and continued fresh/long query availability.
+
+The automated ceremony exercises each step, partial-backup refusal, lost native
+submission and adoption replies, the hidden earlier-migrator gap, actual identity
+cache construction, retention and event erasure, readonly scratch inspection and
+schema-drift detection. It retains phase samples and the unchanged original
+server UUID, PID and process start time. The rebuilt-server test uses a separate
+owned instance. These results do not establish Nagare receipt consumption or
+qualify another server artifact/topology. The Nagare mapping above still requires
+an owned deployment and reviewed declarations; manual grants are not a substitute
+for that platform acceptance.

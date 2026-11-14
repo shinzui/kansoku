@@ -5,7 +5,7 @@ description: Coordinate cross-store jobs with persisted fences, protect stale wr
 docId: ADR-17
 status: Accepted
 date: 2026-10-16
-timestamp: 2026-11-08T03:39:18Z
+timestamp: 2026-11-13T23:55:47Z
 generated:
   by: process:codex
   at: 2026-10-16T02:47:59Z
@@ -39,8 +39,10 @@ writer insert attempt hold shared session locks. New traffic fails with retryabl
 Payload acceptance and diagnostic INSERTs also take shared transaction locks on their own
 PostgreSQL backend sessions. A caller's cancellation cannot release those locks while its SQL
 is still completing; try-lock admission avoids deadlock behind a waiting exclusive job. After
-exclusive admission, maintenance waits for native raw INSERTs in system.processes to finish,
-including work surviving a disconnected client. Native insertion negotiates a sample block
+exclusive admission, maintenance requires fresh owner-bound external drain evidence
+covering every submitter, schedules and work surviving a disconnected client.
+Process observations are supplementary: visible work blocks entry, while a denied
+or incomplete empty view cannot establish drain. Native insertion negotiates a sample block
 before sending rows, and writer connections explicitly disable asynchronous inserts. A failed
 sixty-second drain retains the fence before discovery or mutation.
 

@@ -126,7 +126,7 @@ class Harness:
         qualified = drain or getattr(self, 'last_drained_counter', None) == n
         def produce_drain():
             procedure = self.controller.get('drain_procedure', 'All fixture-owned submitters joined; owned native process restarted on the same data root; relevant background changes settled; no external schedules exist.') if qualified else 'Adversarial diagnostic input: no fresh producer drain is claimed; retained guards must refuse unsafe work.'
-            return evidence, write_evidence(evidence, self.env, dict(kind='migration-session', id=self.env['KANSOKU_CH_MIGRATION_SESSION'], predecessor=n), procedure, submitters=self.controller.get('submitters'))
+            return evidence, write_evidence(evidence, self.env, dict(kind='migration-session', id=self.env['KANSOKU_CH_MIGRATION_SESSION'], predecessor=n), procedure, submitters=self.controller.get('submitters'), available_principals=self.controller.get('available_principals'))
         from recovery_set_fixture import prepare_entry
         settings, recovery = prepare_entry(self, binary or self.native, arguments, n, produce_drain, qualified)
         backup = ['--recovery-set', str(recovery)] if recovery else []
@@ -160,10 +160,10 @@ class Harness:
 
 
 @contextmanager
-def owned(root, native, upgrade, pg_migrate, admin, *, access_management=False, backups=True):
+def owned(root, native, upgrade, pg_migrate, admin, *, access_management=False, backups=True, query_logging=False):
     controller = {}
     with isolated_postgres(root / 'postgres') as pg:
-        with isolated_clickhouse(directory=root / 'clickhouse', controller=controller, access_management=access_management, backups=backups) as ch:
+        with isolated_clickhouse(directory=root / 'clickhouse', controller=controller, access_management=access_management, backups=backups, query_logging=query_logging) as ch:
             env = dict(pg)
             env.update({key: value for key, value in ch.items() if key.startswith(('CLICKHOUSE_', 'KANSOKU_CLICKHOUSE_', 'KANSOKU_OWNED_CLICKHOUSE_'))})
             yield Harness(root, native, upgrade, pg_migrate, admin, env, controller)
@@ -396,6 +396,17 @@ def verify(root, native, upgrade, pg_migrate, admin, server):
     return cases
 
 
+def packaged_binaries():
+    """Resolve the same immutable production/proof artifacts for owned gates."""
+    assert platform.system() == 'Darwin' and platform.machine() == 'arm64', 'Packaged native acceptance requires qualified Darwin/arm64'
+    def build(attribute):
+        result = subprocess.check_output(['nix','build','.#'+attribute,'--no-link','--json'],text=True,cwd=REPO)
+        return Path(json.loads(result)[0]['outputs']['out']) / 'bin'
+    production = build('kansoku-server')
+    proof = build('kansoku-ch-migrate-upgrade-proof')
+    return dict(zip(('native','upgrade','pg_migrate','admin','server'),map(str,(production/'kansoku-ch-migrate',proof/'kansoku-ch-migrate-upgrade-proof',production/'kansoku-migrate',production/'kansoku-admin',production/'kansoku-server'))))
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--binary')
@@ -409,13 +420,8 @@ def main():
     supplied = (args.binary,args.upgrade_binary,args.pg_migrate,args.admin,args.server)
     if args.packaged or not any(supplied):
         assert not any(supplied), 'Packaged acceptance cannot mix supplied binaries'
-        assert platform.system() == 'Darwin' and platform.machine() == 'arm64', 'Native acceptance is unqualified on this platform; no skip/fallback is allowed'
-        def build(attribute):
-            result = subprocess.check_output(['nix','build','.#'+attribute,'--no-link','--json'],text=True,cwd=REPO)
-            return Path(json.loads(result)[0]['outputs']['out']) / 'bin'
-        production = build('kansoku-server')
-        proof = build('kansoku-ch-migrate-upgrade-proof')
-        args.binary,args.upgrade_binary,args.pg_migrate,args.admin,args.server = map(str,(production/'kansoku-ch-migrate',proof/'kansoku-ch-migrate-upgrade-proof',production/'kansoku-migrate',production/'kansoku-admin',production/'kansoku-server'))
+        selected = packaged_binaries()
+        args.binary,args.upgrade_binary,args.pg_migrate,args.admin,args.server = (selected[key] for key in ('native','upgrade','pg_migrate','admin','server'))
     else:
         assert all(supplied), 'Supply every executable explicitly or use --packaged'
     os.umask(0o077)

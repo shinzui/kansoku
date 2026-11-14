@@ -197,12 +197,20 @@ def verify_repair(root, native, upgrade, pg_migrate, admin):
                 h.sql('GRANT SELECT ON system.' + table + ' TO scoped_migrator')
             if visible:
                 h.sql('GRANT SELECT ON system.processes TO scoped_migrator')
+                h.sql('CREATE ROW POLICY scoped_repair_processes ON system.processes FOR SELECT USING user=currentUser() TO scoped_migrator')
             h.sql('CREATE USER other_app IDENTIFIED WITH no_password')
             h.sql('GRANT SELECT ON system.one TO other_app')
             h.sql('GRANT SELECT ON system.numbers TO other_app')
             sentinel = subprocess.Popen(['clickhouse-client','--host','127.0.0.1','--port',h.env['CLICKHOUSE_TCP_PORT'],'--user','other_app','--query','SELECT sleep(1) FROM system.numbers LIMIT 1000 SETTINGS max_block_size=1'],env=h.env,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
             pid = (h.root / 'clickhouse/pid').read_text()
             try:
+                deadline = time.monotonic() + 10
+                while h.sql("SELECT count() FROM system.processes WHERE user='other_app'").strip() != '1':
+                    assert time.monotonic() < deadline, 'other app sentinel did not start'
+                    time.sleep(.1)
+                if visible:
+                    hidden = h.run(['clickhouse-client','--host','127.0.0.1','--port',h.env['CLICKHOUSE_TCP_PORT'],'--user','scoped_migrator','--query',"SELECT count() FROM system.processes WHERE user='other_app'"])
+                    assert hidden.stdout.strip() == '0', 'repair principal sees other app processes'
                 # The fixture admits no runtime or scheduled submitters. Each
                 # CLI is synchronous and joined before the next entry. The
                 # operator retains exclusive submission rights for this app;

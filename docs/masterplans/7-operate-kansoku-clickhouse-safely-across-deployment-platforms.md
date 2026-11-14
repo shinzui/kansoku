@@ -137,7 +137,7 @@ privilege inventory and platform-specific instructions.
 | 50 | Accept portable drain evidence without cross-user process visibility | [ExecPlan](../plans/50-accept-portable-drain-evidence-without-cross-user-process-visibility.md) | None | None | Complete |
 | 51 | Establish consistent maintenance backups and restored-server identity recovery | [ExecPlan](../plans/51-establish-consistent-maintenance-backups-and-restored-server-identity-recovery.md) | EP-50 M1: accepted evidence contract and owner binding | EP-52 for early restored-copy roundtrip | Complete |
 | 52 | Verify renamed ClickHouse restores without writes | [ExecPlan](../plans/52-verify-renamed-clickhouse-restores-without-writes.md) | None | EP-51 recovery-set manifest | Complete |
-| 53 | Prove shared-server maintenance across deployment platforms | [ExecPlan](../plans/53-prove-shared-server-maintenance-across-deployment-platforms.md) | EP-50; EP-51; EP-52, all Complete | None | Not Started |
+| 53 | Prove shared-server maintenance across deployment platforms | [ExecPlan](../plans/53-prove-shared-server-maintenance-across-deployment-platforms.md) | EP-50; EP-51; EP-52, all Complete | None | In Progress |
 
 Status values are Not Started, In Progress, Complete, and Cancelled. A whole-child
 hard dependency requires completion; the EP-50 M1 dependency explicitly requires only
@@ -261,14 +261,24 @@ pass, including denied/own-user repair, audit-write refusal, clean/interrupted
 whole-store restore/re-bind and renamed read-only verification. Earlier administration
 and two-replica maintenance evidence remains recorded in EP-50.
 
-EP-53 is now eligible and owns the integrated generic shared-server ceremony,
-exact privilege inventory and actual owned Nagare proof. Final platform acceptance
+EP-53 is in progress. Both complete generic shared-server ceremonies pass with
+exact role grants and denied/operator-enforced own-user diagnostics. Full packaged
+acceptance, normal checks, four SDK cases, ten-package source/embedding
+reconstruction and strict document checks pass. It also owns the actual owned
+Nagare proof, for which no disposable deployment has been selected. Final platform acceptance
 and IR closure remain open. Toolkit/component success does not substitute for those
 integrated gates.
 
 
 
 ## Surprises & Discoveries
+
+EP-53 found that SELECT on system.processes alone exposes other users' query text
+on the qualified server. An actual operator-owned row policy now enforces own-user
+isolation, tested against active other-app work. Upstream qualification wording was
+corrected in `mori://shinzui/clickhouse-migrate` commit `e864ab3`; no SDK source or
+selected cohort changed. Empty diagnostics still never establish external drain.
+
 
 On 2026-11-03, the originating request's Nagare 0.7.0 limitations were found to have
 upstream resolution records in 0.8.0. Read those records and actual adopted behavior

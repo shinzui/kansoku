@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 
 
-def write_evidence(path, env, owner, procedure, *, servers=None, submitters=None, owned_fixture=None):
+def write_evidence(path, env, owner, procedure, *, servers=None, submitters=None, owned_fixture=None, available_principals=None):
     if owned_fixture is None:
         root = Path(env['KANSOKU_OWNED_CLICKHOUSE_ROOT']).resolve()
         assert root.is_dir() and (root / 'pid').is_file(), 'Evidence requires an owned native fixture'
@@ -23,17 +23,18 @@ def write_evidence(path, env, owner, procedure, *, servers=None, submitters=None
     user = env.get('KANSOKU_CLICKHOUSE_USER', 'default')
     servers = servers or [env['KANSOKU_CH_MIGRATION_SERVER_ID']]
     submitters = submitters or [user]
+    available = available_principals or [user]
     now = datetime.now(timezone.utc)
     source = Path(str(path) + '.procedure')
     source.write_text(procedure)
     value = dict(schemaVersion=1, target=env['KANSOKU_CH_MIGRATION_TARGET'], servers=servers,
                  ledger=env['KANSOKU_CH_MIGRATION_LEDGER_ID'], databases=['analytics', 'kansoku_migration_ledger'],
-                 submitters=submitters, availablePrincipals=[user], owner=owner,
+                 submitters=submitters, availablePrincipals=available, owner=owner,
                  exclusionStartedAt=now.isoformat(), drainedAt=now.isoformat(), expiresAt=(now + timedelta(minutes=30)).isoformat(),
                  procedureReference=str(source), procedureSha256=hashlib.sha256(source.read_bytes()).hexdigest(),
                  submittersBlocked=True, schedulesPaused=True, backgroundChangesSettled=True, operatorAttested=True)
     Path(path).write_text(json.dumps(value))
-    return dict(env, KANSOKU_CH_DRAIN_SERVERS=json.dumps(servers), KANSOKU_CH_DRAIN_SUBMITTERS=json.dumps(submitters), KANSOKU_CH_DRAIN_AVAILABLE_PRINCIPALS=json.dumps([user]))
+    return dict(env, KANSOKU_CH_DRAIN_SERVERS=json.dumps(servers), KANSOKU_CH_DRAIN_SUBMITTERS=json.dumps(submitters), KANSOKU_CH_DRAIN_AVAILABLE_PRINCIPALS=json.dumps(available))
 
 
 def run_maintenance(command, *, env, producer, **kwargs):

@@ -203,6 +203,10 @@ ch-migrations-component:
 ch-migrations-acceptance:
     python3 scripts/clickhouse_migrations_acceptance.py --packaged
 
+# Required joined packaged shared-server ceremony; also included once in acceptance.
+ch-shared-maintenance-acceptance:
+    python3 scripts/shared_clickhouse_maintenance_acceptance.py
+
 # Independent archive packaging and content-qualified rebuild guarantees.
 ch-migrations-source:
     python3 scripts/check_clickhouse_embedding.py

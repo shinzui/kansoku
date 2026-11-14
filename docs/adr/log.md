@@ -2,6 +2,9 @@
 
 ## 2026-11-13
 
+* **Update**: ADR-17 and ADR-22: require external drain authority and preserve tested shared-server principal isolation independently of diagnostic visibility.
+
+
 * **Update**: Qualify external-drain repair with atomic owner-bound diagnostic persistence and immutable source selection.
 
 

@@ -22,6 +22,11 @@ provenance:
       at: 2026-11-04T05:38:58Z
       mode: "update"
       note: "Restate IR-2 dependency kinds when recording resolution"
+    - model: "gpt-6.1-sol"
+      harness: "codex-cli"
+      at: 2026-11-13T23:07:24Z
+      mode: "implement"
+      note: "Start scoped-role and integrated shared-server qualification after all three prerequisite children completed; retain actual owned Nagare acceptance as a separate gate"
 ---
 
 # Prove shared-server maintenance across deployment platforms
@@ -45,13 +50,64 @@ not deploy to production or claim support for unqualified server versions/topolo
 
 ## Progress
 
-- [ ] M1: Exact per-role privileges suffice for runtime, migration, retention/erasure and restored-copy inspection while other apps remain isolated.
-- [ ] M2: A required packaged non-Nagare shared-server ceremony proves all five IR criteria, interruption safety and continued availability of a second app; dedicated behavior still passes.
+Started on 2026-11-13 after EP-50, EP-51 and EP-52 completed. The selected
+toolkit is the delivered source revision
+`f4bc4e6d32decfaaf1a19e1033a22f3e28fc167c` from
+`mori://shinzui/clickhouse-migrate`; the final prerequisite gate passes 35 packaged
+cases, four SDK cases, normal checks and ten-package source reconstruction.
+The exact principal inventory and both joined generic ceremonies now pass in
+`.dev/acceptance/shared-maintenance-an7z7s8_/` (two complete ceremonies, zero
+failures/skips, including other-app parts/mutation metadata isolation). The complete required packaged run passes in `.dev/acceptance/run-gosoonqr/`: 35
+migration cases, both joined ceremonies, 707 core cases, real public workflows,
+direct readers, three serving/telemetry modes and seven administrative families.
+Normal checks, four SDK cases and strict guide/capability/terminology/ADR
+validation pass. Source reconstruction also passes: ten extracted packages rebuild the production
+CLI, reject mismatched expectations and inspect both offline plans with migration
+inputs withheld (`.dev/ep53-source.log`, archive root
+`.dev/acceptance/ch-sdist-negl4uko/`, embedding root
+`.dev/acceptance/ch-embedding-xrtdgjmh/`). The Nagare v0.20.0 tag was rechecked before platform
+selection; no fresh owned Nagare deployment has been selected or exercised.
+
+- [x] M1: Exact per-role privileges suffice for runtime, migration, retention/erasure and restored-copy inspection while other apps remain isolated.
+- [x] M2: A required packaged non-Nagare shared-server ceremony proves all five IR criteria, interruption safety and continued availability of a second app; dedicated behavior still passes.
 - [ ] M3: Nagare's actual quiesce/backup/restore receipts satisfy the same ceremony in an owned deployment; guides and IR resolution cite the completed evidence.
 
 
 ## Surprises & Discoveries
 
+SELECT on system.processes alone exposed another user's query text. Earlier
+read-granted fixtures did not prove own-user isolation. An operator-owned row
+policy `user=currentUser()` now enforces that profile, verified against actual
+other-app work and an earlier migrator request hidden from the runtime. Denied
+access remains independently qualified. The earlier repair fixture now also
+checks actual hidden other-app work; no diagnostic view establishes drain.
+
+
+The exact 26.8 interpreter requires `CREATE ARBITRARY TEMPORARY TABLE` for
+non-Memory temporary engines, including the runtime's four Join caches. The
+source is `mori://ClickHouse/ClickHouse`, project-relative
+`src/Interpreters/InterpreterCreateQuery.cpp` at `v26.8.28.14-lts` (artifact URI
+pending), verified from the [exact upstream source](https://github.com/ClickHouse/ClickHouse/blob/v26.8.28.14-lts/src/Interpreters/InterpreterCreateQuery.cpp).
+
+An exploratory stricter `table_engines_require_grant=true` fixture fails Atomic
+database initialization: the server demands `TABLE ENGINE ON Atomic`, while
+issuing that grant fails with unknown storage engine Atomic. Evidence is retained
+in `.dev/acceptance/shared-maintenance-wx_vl8d0/` and
+`.dev/acceptance/shared-maintenance-ixx6mwds/`. This profile is not accepted. The
+joined fixture retains the previously qualified default profile, without adding
+wildcard engine grants or selecting an unqualified server patch. Its scoped
+principal proof separately denies external-source access and cross-app authority.
+
+
+The reviewed Nagare v0.20.0 grant-exception enumeration includes system.parts,
+system.mutations, system.disks, system.storage_policies and arbitrary temporary
+tables. Its own-database privilege extension can express ALTER MATERIALIZE COLUMN.
+The generic verifier also needs SELECT(name) on system.users; that names-only
+system capability is absent from the inspected exception enumeration. The actual
+platform proof must resolve that declaration mapping and verify reviewed grant
+coverage, rather than add a manual out-of-band grant. Source owner:
+`mori://shinzui/nagare`, project-relative
+`cli/nagare-dsl/src/Nagare/Dsl/AppDatabase.hs` (artifact URI pending).
 
 ## Decision Log
 
@@ -64,6 +120,26 @@ Its upstream requests being completed does not prove Kansoku consumed them corre
 
 
 ## Outcomes & Retrospective
+
+Accepted validation logs are `.dev/ep53-check.log`,
+`.dev/ep53-acceptance.log`, `.dev/ep53-shared-accepted-2.log`,
+`.dev/ep53-component.log`, `.dev/ep53-source.log`, `.dev/ep53-docs.log` and
+`.dev/ep53-adr.log`.
+The component gate executes four real SDK cases; packaged acceptance runs both
+joined generic profiles once and retains sanitized results. No remote CI execution
+or Nagare platform result is claimed.
+
+M1's exact role inventory and both complete generic ceremonies pass. An early
+metadata fixture attempted to update a MergeTree key and was correctly rejected;
+the accepted fixture records a completed DELETE matching no rows instead. No
+application grant was broadened for that correction. Required acceptance embeds
+the joined proof once using its already-resolved production/proof binaries.
+
+Nagare M3 and IR-2 remain open. The user was asked to identify a disposable owned
+deployment and asked why; the destructive restore/access-management boundary was
+explained. No existing local context was assumed owned, and no live deployment
+was accessed. The source mapping is documented but cannot count as platform proof.
+
 
 
 ## Context and Orientation
