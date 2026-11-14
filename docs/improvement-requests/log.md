@@ -2,6 +2,8 @@
 
 ## 2026-11-14
 
+* **Add**: Propose IR-21 from `mori://tan/tan-app-infrastructure/plans/50-upgrade-kansoku-to-0-2-1-0-on-staging-and-production`: one deployment migration command that owns begin, drain, recovery-set, up, verify and finish, with a deployment-declared backup policy.
+
 * **Update**: IR-2: complete MasterPlan 7 with dedicated/generic/actual local Nagare evidence, exact source candidates and platform-specific integration dependencies.
 
 ## 2026-11-13
