@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.0.0 — 2026-11-14
+
+### Breaking Changes
+
+- Require kansoku-api ^>=0.3.0.0; exported client records follow its revised route types.
+
+### New Features
+
+- Add `analysesClient` for account-owned analysis documents with revision-checked editing.
+- Add `retentionClient` for calendar retention with independent start and return activity selections.
+
+### Other Changes
+
+- Cover analysis pagination through the Relay client contract.
+
 ## 0.2.0.0 — 2026-11-12
 
 ### Breaking Changes

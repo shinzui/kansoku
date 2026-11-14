@@ -1,6 +1,6 @@
 cabal-version: 3.0
 name: kansoku-client
-version: 0.2.0.0
+version: 0.3.0.0
 synopsis: Haskell server SDK for Kansoku analytics.
 description:
   A lightweight client package for emitting Kansoku analytics events from
@@ -45,7 +45,7 @@ library
     http-client,
     http-client-tls,
     http-types,
-    kansoku-api ^>=0.2.0.0,
+    kansoku-api ^>=0.3.0.0,
     lens ^>=5.3,
     servant,
     servant-client,
@@ -80,7 +80,7 @@ test-suite kansoku-client-test
     hspec,
     http-client,
     http-types,
-    kansoku-api ^>=0.2.0.0,
+    kansoku-api ^>=0.3.0.0,
     kansoku-client,
     process,
     relay-pagination,
