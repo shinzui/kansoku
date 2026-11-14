@@ -4,7 +4,7 @@ title: "Initialize and upgrade ClickHouse"
 description: "Initialize a fresh owned ClickHouse target, retain native identities, coordinate maintenance and recover explicit migration attempts."
 docId: DOC-13
 tags: ["clickhouse", "migrations", "maintenance", "recovery"]
-timestamp: 2026-11-14T02:13:45Z
+timestamp: 2026-11-14T18:00:00Z
 generated:
   by: process:codex
   at: "2026-11-07T20:24:51Z"
@@ -25,15 +25,15 @@ The [matrix](../../db/clickhouse/qualification/matrix.json) and
 The released upstream `0.2.0.0` cohort also qualifies exact Altinity
 `26.3.60.10001.altinitystable` and `26.3.60.10002.altinitystable` on owned Linux arm64
 servers. Upstream records passing Nix and extracted-source qualification for these
-artifacts. All four packages use the delivered, source-qualified upstream revision
-`a0bf98efbffbae9def846454deef9164ecadbd9d` from
+artifacts. All four packages use the Hackage release 0.2.1.0 of
 `mori://shinzui/clickhouse-migrate`, selected consistently in
-`cabal.project` and `flake.module.nix`, verified against registry metadata and the
-upstream tags on 2026-11-13. Hackage 0.2.0.0 remains the latest published release;
-the selected source snapshot adds the explicit repair observer API and bounded
-read-only inspection. Its complete 54-group extracted-source matrix passes on all
-four exact candidates, including the official Linux arm64 26.8.28.14 artifact used
-by the local Nagare proof. Installed Nix artifacts independently pass the same 54
+`cabal.project` and `flake.module.nix`. That release adds the explicit repair
+observer API and bounded read-only inspection. Its library sources are identical
+to the previously source-qualified upstream revision
+`a0bf98efbffbae9def846454deef9164ecadbd9d`; only package versions differ. That
+revision's complete 54-group extracted-source matrix passes on all four exact
+candidates, including the official Linux arm64 26.8.28.14 artifact used by the
+local Nagare proof. Installed Nix artifacts independently pass the same 54
 groups. Evidence belongs to `mori://shinzui/clickhouse-migrate`, project-relative
 `docs/release-evidence/2026-11-14-bounded-inspection.md` (artifact URI pending).
 Kansoku supports explicit direct or replicated selectors as described below. These checks do not

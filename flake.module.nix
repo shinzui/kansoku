@@ -41,13 +41,6 @@
               rev = "4aaff6c0919d1fe8e1c248c3ce4ce05775c59c8c";
               sha256 = "13nsr8jzmvqr3ka5liic1sgm8brszzyfvxd0djm3ccc4smphbh68";
             };
-            # Delivered and source-qualified mori://shinzui/clickhouse-migrate cohort.
-            clickhouseMigrateSrc = pkgs.fetchFromGitHub {
-              owner = "shinzui";
-              repo = "clickhouse-migrate";
-              rev = "a0bf98efbffbae9def846454deef9164ecadbd9d";
-              sha256 = "0hnripqm22cic2kjllalqcggpyn2d7vqy7ywm9w65inpxws6k9c0";
-            };
             servantTelemetrySrc = pkgs.fetchFromGitHub {
               owner = "shinzui";
               repo = "hs-opentelemetry-instrumentation-servant";
@@ -214,12 +207,12 @@
             servant-health = callHackageNoCheck "servant-health" "0.1.0.0" "1g24jnnijpap99vkmmqmkinlw18pg0hd23arrijgss430y63iv4x";
             servant-openapi-hs = callHackageNoCheck "servant-openapi-hs" "5.1.0" "19mvvlzfk7ffh5gbmqhpy587rjjd0xcgydbkcy1b48wxx061h8im";
 
-            # Keep all four packages on the same qualified delivered source.
-            # Preserve upstream bounds and deterministic checks.
-            clickhouse-migrate = self.callCabal2nix "clickhouse-migrate" "${clickhouseMigrateSrc}/clickhouse-migrate" { };
-            clickhouse-migrate-embed = self.callCabal2nix "clickhouse-migrate-embed" "${clickhouseMigrateSrc}/clickhouse-migrate-embed" { };
-            clickhouse-migrate-cli = self.callCabal2nix "clickhouse-migrate-cli" "${clickhouseMigrateSrc}/clickhouse-migrate-cli" { };
-            clickhouse-migrate-test-support = self.callCabal2nix "clickhouse-migrate-test-support" "${clickhouseMigrateSrc}/clickhouse-migrate-test-support" { };
+            # Keep all four mori://shinzui/clickhouse-migrate packages on the same
+            # Hackage release. Preserve upstream bounds and deterministic checks.
+            clickhouse-migrate = self.callHackageDirect { pkg = "clickhouse-migrate"; ver = "0.2.1.0"; sha256 = "1f4safv8fr763qysd40s1vb4nr2kyb26ib498knzkl7ndms62kz0"; } { };
+            clickhouse-migrate-embed = self.callHackageDirect { pkg = "clickhouse-migrate-embed"; ver = "0.2.1.0"; sha256 = "035zsy6l7xgmgcqk28w3wacl26hb7vm826jvz4k48qb8j85llh9c"; } { };
+            clickhouse-migrate-cli = self.callHackageDirect { pkg = "clickhouse-migrate-cli"; ver = "0.2.1.0"; sha256 = "0a612gfqy40gcq6vl69z4w4d7jj320bbhfp0kddzb3s7fsifnysp"; } { };
+            clickhouse-migrate-test-support = self.callHackageDirect { pkg = "clickhouse-migrate-test-support"; ver = "0.2.1.0"; sha256 = "1z383q8bhmsym0cijdzknvq89i1yrych9hw1bg063gw5l6x9mswc"; } { };
 
             pg-migrate = callHackageNoCheck "pg-migrate" "1.1.0.0" "103y2bddn50pvrjnlhnfcqznlfihp68bpm72xg8s9xv2x8kv3s2b";
             pg-migrate-cli = callHackageNoCheck "pg-migrate-cli" "1.1.0.0" "1mc2scspfr1p872lxxl8pcpgf3gm2kp2xhjfwad9xv2wcnz1dj6w";

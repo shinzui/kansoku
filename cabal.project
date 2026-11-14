@@ -5,12 +5,12 @@ packages:
   ./kansoku-client
   ./vendor/ClickHaskell
 
-index-state: 2026-11-09T04:23:15Z
+index-state: 2026-11-14T16:55:52Z
 constraints:
-  clickhouse-migrate ==0.2.0.0,
-  clickhouse-migrate-embed ==0.2.0.0,
-  clickhouse-migrate-cli ==0.2.0.0,
-  clickhouse-migrate-test-support ==0.2.0.0,
+  clickhouse-migrate ==0.2.1.0,
+  clickhouse-migrate-embed ==0.2.1.0,
+  clickhouse-migrate-cli ==0.2.1.0,
+  clickhouse-migrate-test-support ==0.2.1.0,
   hs-opentelemetry-exporter-in-memory ==1.0.0.0,
   servant-health ==0.1.0.0,
   openapi-hs ==5.0.0,
@@ -32,15 +32,3 @@ source-repository-package
   type: git
   location: https://github.com/shinzui/hs-opentelemetry-instrumentation-servant.git
   tag: 5e99a7857032484abc669076704dee4335e7d0ad
-
--- Qualified and delivered mori://shinzui/clickhouse-migrate source cohort.
--- The external-drain API is newer than Hackage 0.2.0.0; retain one exact revision.
-source-repository-package
-  type: git
-  location: https://github.com/shinzui/clickhouse-migrate.git
-  tag: a0bf98efbffbae9def846454deef9164ecadbd9d
-  subdir:
-    clickhouse-migrate
-    clickhouse-migrate-embed
-    clickhouse-migrate-cli
-    clickhouse-migrate-test-support

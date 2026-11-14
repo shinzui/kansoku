@@ -2,6 +2,7 @@
 
 ## 2026-11-14
 
+* **Update**: DOC-13: adopt the Hackage clickhouse-migrate 0.2.1.0 release in place of the source-qualified revision with identical library sources.
 * **Update**: DOC-13: record the actual owned local Nagare ceremony, exact source candidates, bounded restored readers and reproducible Apple Container fixture preparation.
 
 ## 2026-11-13

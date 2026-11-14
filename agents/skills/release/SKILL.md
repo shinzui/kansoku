@@ -35,9 +35,9 @@ Run this skill inside `nix develop` (the project dev shell provides `cabal`,
 **GitHub only (tag + release, no Hackage upload)**:
 
 - **kansoku-core** (`kansoku-core/`) — the application runtime. It
-  `build-depends` on **git-sourced** packages that are not on Hackage
-  (`hs-opentelemetry-instrumentation-servant` via `source-repository-package`,
-  and the `clickhouse-migrate*` family), so it is not cleanly
+  `build-depends` on a **git-sourced** package that is not on Hackage
+  (`hs-opentelemetry-instrumentation-servant` via `source-repository-package`),
+  so it is not cleanly
   Hackage-installable. Tag and GitHub-release it for traceability, but do not
   `cabal upload` it.
 - **kansoku-server** (`kansoku-server/`) — the `kansoku-server`,
