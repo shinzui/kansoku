@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.3.0.0 — 2026-11-14
+
+### Breaking Changes
+
+- Build against kansoku-api 0.3.0.0 and revise administration and runtime interfaces for owner-bound maintenance.
+- Separate admission readiness from pipeline health in health probes.
+
+### New Features
+
+- Persist revisioned account-owned analysis documents with atomic shared editing, account quotas, and bidirectional keyset pages.
+- Compute exact calendar-period retention with separately scoped start and return activity.
+- Filter user event history by host and report exact host counts.
+- Start independently of ClickHouse and keep accepting and buffering events through ClickHouse outages and topology mismatches.
+- Bind portable drain attestations to maintenance owners and require complete three-store recovery sets before native migration.
+- Retain owner-bound repair observations before repair authorization.
+
+### Bug Fixes
+
+- Require fresh owner-bound drain authority for native maintenance and recheck expiry at entry and completion.
+- Retain migration entry proofs atomically so audit failure prevents native entry.
+- Preserve cancellation during analysis account lock waits and complete analysis schema conformance.
+- Keep analysis document capacity independent of the ingest body limit.
+
 ## 0.2.0.0 — 2026-11-12
 
 ### Breaking Changes
