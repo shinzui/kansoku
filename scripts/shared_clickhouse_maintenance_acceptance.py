@@ -149,14 +149,19 @@ class OtherApplication:
 
 
 @contextmanager
-def runtime(h, binaries):
+def runtime(h, binaries, *, credential=None, postgres=None):
     port = free_port()
     queue = 'shared_' + uuid.uuid4().hex
-    h.run(['psql', '-XAtc', "SELECT pgmq.create('" + queue + "')"])
-    settings = dict(h.env, KANSOKU_CLICKHOUSE_USER='runtime', KANSOKU_CLICKHOUSE_PASSWORD='',
+    if postgres is None:
+        h.run(['psql', '-XAtc', "SELECT pgmq.create('" + queue + "')"])
+    credential = credential or dict(CLICKHOUSE_USER='runtime', CLICKHOUSE_PASSWORD='')
+    settings = dict(h.env, KANSOKU_CLICKHOUSE_USER=credential['CLICKHOUSE_USER'], KANSOKU_CLICKHOUSE_PASSWORD=credential['CLICKHOUSE_PASSWORD'],
                     KANSOKU_SERVER_PORT=str(port), KANSOKU_QUEUE_NAME=queue,
                     KANSOKU_WRITER_MAX_LATENCY_MS='100', KANSOKU_QUEUE_POLL_INTERVAL_SEC='1',
                     OTEL_TRACES_EXPORTER='none', OTEL_METRICS_EXPORTER='none')
+    if postgres is not None:
+        settings.update(PGUSER=postgres['POSTGRES_USER'], PGPASSWORD=postgres['POSTGRES_PASSWORD'],
+                        PG_CONNECTION_STRING='host=127.0.0.1 port='+h.env['PGPORT']+' dbname=kansoku user='+postgres['POSTGRES_USER']+' password='+postgres['POSTGRES_PASSWORD'])
     with (h.root / 'runtime.private').open('a') as output:
         with owned_process([binaries['server']], settings, h.root, 'scoped-runtime', stop_timeout=40, stdout=output, stderr=output) as process:
             base = 'http://127.0.0.1:' + str(port)

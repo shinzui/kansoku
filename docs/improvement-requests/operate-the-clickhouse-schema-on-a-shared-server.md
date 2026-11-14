@@ -6,16 +6,28 @@ generated:
   by: process:claude-code
   at: "2026-10-19T17:02:45Z"
 requestId: IR-2
-status: proposed
+status: completed
+completedAt: "2026-11-14T02:27:02Z"
+resolution: >-
+  AC-1 through AC-5 delivered by MasterPlan 7 and ExecPlans 50–53. Owner-bound
+  external drain, complete three-store recovery sets, explicit rebuilt-server
+  re-binding and bounded SELECT-only renamed restore inspection pass dedicated,
+  both generic shared-server and actual reviewed local Nagare acceptance. The
+  Nagare proof retains signed artifact IDs, 274 fresh other-app samples, unchanged
+  process identity and a no-operations grant re-plan. Final check, full packaged
+  acceptance, four SDK component cases, ten-package source/embedding reconstruction
+  and 108 upstream source/Nix native groups pass. Evidence is in
+  docs/evidence/shared-clickhouse-maintenance.md; no production deployment or
+  independent verification attestation is claimed.
 targetPlan: docs/masterplans/7-operate-kansoku-clickhouse-safely-across-deployment-platforms.md
 origin: mori://tan/tan-ng-labs/plans/2-deploy-kansoku-to-the-intranet-as-a-shared-analytics-service-for-nagare-apps
 dependencies:
   - ref: mori://shinzui/nagare/okf/improvement-requests/concepts/IR-30
-    kind: hard
-    reason: kansoku-ch-migrate's storage probes, the identity cache's system.parts read and Join temporary tables, and admin's system.mutations check need privileges only IR-30 can grant without drift.
+    kind: integration
+    reason: Nagare-only joint verification of reviewed metadata and temporary-table grants; the actual local ceremony passes. Generic deployments independently supply equivalent roles.
   - ref: mori://shinzui/nagare/okf/improvement-requests/concepts/IR-31
-    kind: hard
-    reason: Tenant-scoped quiesce evidence and on-demand app-database backups replace the server restart and the pre-migration backup the ceremony needs.
+    kind: integration
+    reason: Nagare-only joint verification of runtime-only quiesce and signed backup/restore receipts; the actual local ceremony passes. Portable core maintenance has no Nagare dependency.
 acceptanceCriteria:
   - id: AC-1
     statement: A maintenance session can accept drain evidence produced by quiescing Kansoku's own app databases, without restarting the ClickHouse server, while the migration user stays available to kansoku-ch-migrate.
@@ -56,9 +68,32 @@ on the `tan-ng-labs` intranet, running Nagare v0.7.0.
 **Addressed to:** `shinzui/kansoku` agents.
 **Created:** 2026-10-19.
 
-**Implementation plan:** [MasterPlan 7: Operate Kansoku ClickHouse safely across deployment platforms](../masterplans/7-operate-kansoku-clickhouse-safely-across-deployment-platforms.md), through ExecPlans 50 to 53. The request is still proposed, and none of the child plans has started (link added on 2026-11-13).
+**Implementation plan:** [MasterPlan 7: Operate Kansoku ClickHouse safely across deployment platforms](../masterplans/7-operate-kansoku-clickhouse-safely-across-deployment-platforms.md), through ExecPlans 50 to 53. Completed by ExecPlans 50–53 on 2026-11-14 UTC; see `resolution` and the evidence below.
 
 This is part of the set filed with IR-1; that request lists the others.
+
+
+## Resolution evidence
+
+[The complete qualification record](../evidence/shared-clickhouse-maintenance.md)
+identifies the exact source candidates, backend OCI artifact, signed backup Job
+IDs and retained private artifacts. Verification is implementation-authored.
+
+| Criterion | Accepted observation |
+|---|---|
+| AC-1 | Both generic shared cases and one complete actual local Nagare ceremony preserve the other app's long/fresh queries and the shared server's process; runtime-only quiesce leaves the migrator available. |
+| AC-2 | Denied and operator-enforced own-user views pass; hidden earlier migration work and missing drain refuse before entry; receipt-bound repair, retention and erasure complete under fresh external evidence. |
+| AC-3 | A PostgreSQL-only set refuses pending native SQL; actual signed PostgreSQL and two-database ClickHouse backups restore the common queue/coordinator/data state and all 581 original native ledger rows. |
+| AC-4 | The separately declared bounded SELECT-only scratch reader verifies schema/history, attempts no writes and rejects an extra column while history remains current. |
+| AC-5 | The guide publishes exact generic/platform role inventories; generic clean and interrupted rebuilt restores exercise audited identity re-bind, lost replies and idempotent recovery. |
+
+The actual Nagare candidate is source `8cc5a7792710083092c60c2dc71777186b61a360`
+of `mori://shinzui/nagare`; published v0.20.0 alone lacks the reader extensions.
+The whole four-package toolkit cohort is source
+`a0bf98efbffbae9def846454deef9164ecadbd9d` of `mori://shinzui/clickhouse-migrate`.
+Nagare's original requests are integration prerequisites for this deployment,
+not hard prerequisites for portable core maintenance. Linux application images,
+stock platform bootstrap, managed cloud and production rollout remain separate.
 
 
 ## Why

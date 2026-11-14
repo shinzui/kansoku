@@ -60,7 +60,8 @@ inspect options plan recoveryFile = do
   credentials <- checked (T.basicCredentials user secret)
   unless (not (Text.null (expectedDefiner options)) && Text.length (expectedDefiner options) <= 128 && not (Text.any (`elem` ['\r', '\n', '\0']) (expectedDefiner options))) (fail "Explicit bounded expected definer required")
   let config = T.targetConfig key url sid namespace (T.ExistingLedger lid) credentials T.defaultHttpLimits
-  observed <- I.status I.Observe config plan
+  observation <- maybe (fail "Invalid restored inspection bounds") pure (I.boundedObservation 10000 1048576)
+  observed <- I.status observation config plan
   let (compatible, current, unresolved) = case observed of
         Right (R.InspectionReport (R.HistoryReport _ _ (R.LedgerInitializedAt actual) _ _ _ _ pending) migrations issues) -> (actual == lid && null issues, actual == lid && null issues && not pending && all applied migrations, pending)
         _ -> (False, False, True)

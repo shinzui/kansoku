@@ -2,7 +2,7 @@
 type: Capability
 title: "Explicit ClickHouse migrations"
 description: "Initialize and upgrade direct or replicated ClickHouse targets through fenced, resumable native migration sessions with retained ledger identities."
-timestamp: 2026-11-11T16:18:51Z
+timestamp: 2026-11-14T02:13:45Z
 generated:
   by: process:claude-code
   at: "2026-11-11T16:18:51Z"
@@ -24,6 +24,12 @@ requires:
   - CAP-16
 evidence:
   - kind: conformance
+    resource: "scripts/shared_clickhouse_maintenance_acceptance.py"
+    proves: "Exercises two generic shared-server roles with portable drain, recoverable backups, scoped maintenance and read-only restore inspection."
+  - kind: conformance
+    resource: "scripts/nagare_shared_clickhouse_maintenance_acceptance.py"
+    proves: "Exercises actual reviewed local Nagare quiesce, signed backups and scratch restores while another app continues querying without a server restart."
+  - kind: conformance
     resource: "scripts/clickhouse_migrations_acceptance.py"
     proves: "Exercises the packaged CLI and coordinator boundary on owned stores without ambient targets."
   - kind: conformance
@@ -40,6 +46,13 @@ evidence:
 # Explicit ClickHouse migrations
 
 Apply compiled native ClickHouse plans with `kansoku-ch-migrate` after PostgreSQL migrations; normal server startup applies neither. Each attempt runs inside a persistent PostgreSQL maintenance session that requires deliberate ledger initialization, predecessor and quiescence evidence and external drain, and retains exact receipts for explicit recovery. Supplying both the cluster and complete replica-UUID selectors selects a separate replicated history and ledger on pre-created Replicated databases; omitting both keeps the direct history. The runtime and data-job CLI reuse the same topology selectors. See [ClickHouse migrations](../guides/clickhouse-migrations.md).
+
+The portable shared-server path combines a persistent fence with fresh external
+drain bound to the exact maintenance owner. Native pending migrations require a
+complete PostgreSQL plus analytics/native-ledger recovery set. Read-only scratch
+verification distinguishes current history from physical schema agreement and
+grants no mutation authority. Generic and actual local Nagare ceremonies pass;
+Nagare is an optional deployment integration.
 
 ## Compatibility
 
@@ -59,3 +72,6 @@ A direct ledger cannot be adopted or converted to replicated, and changing the c
 - [clickhouse_replicated_migrations_acceptance.py](../../scripts/clickhouse_replicated_migrations_acceptance.py) — Exercises replicated initialization and replica coverage on an owned two-replica fixture.
 - [ClickHouseMigrationConfig.hs](../../kansoku-server/test/ClickHouseMigrationConfig.hs) — Checks direct and replicated topology selector parsing and refusal of partial or malformed inventories.
 - [clickhouse-migrations.md](../../docs/guides/clickhouse-migrations.md) — Specifies fresh initialization, ledger identities, drain, interruption receipts, replicated targets and recovery.
+
+- [shared_clickhouse_maintenance_acceptance.py](../../scripts/shared_clickhouse_maintenance_acceptance.py) — Generic joined shared-server proof.
+- [nagare_shared_clickhouse_maintenance_acceptance.py](../../scripts/nagare_shared_clickhouse_maintenance_acceptance.py) — Actual reviewed local platform proof.

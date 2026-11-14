@@ -207,6 +207,10 @@ ch-migrations-acceptance:
 ch-shared-maintenance-acceptance:
     python3 scripts/shared_clickhouse_maintenance_acceptance.py
 
+# Actual Nagare gate on a newly prepared, explicitly owned local fixture.
+ch-nagare-maintenance-acceptance root:
+    python3 scripts/nagare_shared_clickhouse_maintenance_acceptance.py --root '{{root}}'
+
 # Independent archive packaging and content-qualified rebuild guarantees.
 ch-migrations-source:
     python3 scripts/check_clickhouse_embedding.py

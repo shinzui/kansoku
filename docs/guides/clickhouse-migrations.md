@@ -4,7 +4,7 @@ title: "Initialize and upgrade ClickHouse"
 description: "Initialize a fresh owned ClickHouse target, retain native identities, coordinate maintenance and recover explicit migration attempts."
 docId: DOC-13
 tags: ["clickhouse", "migrations", "maintenance", "recovery"]
-timestamp: 2026-11-13T23:55:47Z
+timestamp: 2026-11-14T02:13:45Z
 generated:
   by: process:codex
   at: "2026-11-07T20:24:51Z"
@@ -17,7 +17,7 @@ PostgreSQL nor ClickHouse migrations. PostgreSQL must be migrated first. The ori
 runner is retired, and `ch-reset` refuses: dropping only analytics would leave the separate
 native ledger current and skip schema recreation.
 
-The qualified integration target is one directly addressed, self-managed ClickHouse
+The default developer integration target is one directly addressed, self-managed ClickHouse
 26.8.28.14 server on arm64 macOS, using healthy writable Local disks and synchronous local
 effects. `nix develop` supplies the hash-qualified artifact ahead of the template binary.
 The [matrix](../../db/clickhouse/qualification/matrix.json) and
@@ -26,12 +26,16 @@ The released upstream `0.2.0.0` cohort also qualifies exact Altinity
 `26.3.60.10001.altinitystable` and `26.3.60.10002.altinitystable` on owned Linux arm64
 servers. Upstream records passing Nix and extracted-source qualification for these
 artifacts. All four packages use the delivered, source-qualified upstream revision
-`f4bc4e6d32decfaaf1a19e1033a22f3e28fc167c` from
+`a0bf98efbffbae9def846454deef9164ecadbd9d` from
 `mori://shinzui/clickhouse-migrate`, selected consistently in
 `cabal.project` and `flake.module.nix`, verified against registry metadata and the
 upstream tags on 2026-11-13. Hackage 0.2.0.0 remains the latest published release;
-the selected source snapshot adds the explicit repair observer API. Its complete
-41-group extracted-source matrix passed on all three exact server candidates.
+the selected source snapshot adds the explicit repair observer API and bounded
+read-only inspection. Its complete 54-group extracted-source matrix passes on all
+four exact candidates, including the official Linux arm64 26.8.28.14 artifact used
+by the local Nagare proof. Installed Nix artifacts independently pass the same 54
+groups. Evidence belongs to `mori://shinzui/clickhouse-migrate`, project-relative
+`docs/release-evidence/2026-11-14-bounded-inspection.md` (artifact URI pending).
 Kansoku supports explicit direct or replicated selectors as described below. These checks do not
 qualify managed-cloud/proxy topology or the Linux amd64 application image. The
 staging initiative at
@@ -359,9 +363,12 @@ by accepting the current live schema or rewriting applied SQL.
 
 The maintenance facility tracked by
 `mori://shinzui/nagare/okf/improvement-requests/concepts/IR-31` is already delivered.
-The recipe was checked against the upstream `v0.20.0` tag on 2026-11-13; this is
-source-level mapping, not evidence of an exercised Nagare installation. EP-53
-retains the actual deployment execution gate.
+The actual local-mode ceremony passes with source candidate
+`8cc5a7792710083092c60c2dc71777186b61a360` of `mori://shinzui/nagare`, reporting
+0.20.0. Published v0.20.0 alone lacks the reader extensions discovered by this
+integration. [Qualification evidence](../evidence/shared-clickhouse-maintenance.md)
+records the exact OCI artifact, signed backup IDs, unchanged server process,
+continuous other-app queries and final `no operations` declaration re-plan.
 
 Persist Kansoku's fence first. Stop all remaining submitters/read schedules,
 including old clients using migration credentials. For each PostgreSQL and
@@ -401,6 +408,47 @@ into the generic recovery set. Two successful Jobs without that coverage and sta
 interval are insufficient. Keep the final manifest outside both snapshots. Complete
 Kansoku's migration/verification/finish ceremony before separately reviewing/applying
 `db app-database resume` for each membership and resuming external schedules.
+
+The tested declarations are in
+[test/fixtures/nagare-maintenance/AppDatabases.hs](../../test/fixtures/nagare-maintenance/AppDatabases.hs).
+PostgreSQL declares `PgMonitor` and runtime CREATE in `pgmq`, including the
+platform-derived migration/runtime membership. The runtime creates its real PGMQ
+queue; no manual grant or queue bootstrap replaces that path. ClickHouse runtime
+access declares `SystemParts` and `ArbitraryTemporaryTables`; migration access
+declares `SystemDisks`, `SystemStoragePolicies` and `SystemMutations`.
+
+Nagare's fixed migration role also has its declared backup rights and `WRITE ON
+FILE`, beyond the generic minimum below. Its scratch restore gives the original
+runtime/migration users access to their restored databases. Those accepted restore
+effects are separate from the SELECT-only verifier. A verifier names each
+`ReaderRestoredRelation sourceDatabase restoreId relation`, with explicit metadata
+exceptions `SystemDatabases`, `SystemTables`, `SystemColumns`, `SystemDisks`,
+`SystemStoragePolicies` and `SystemUserNames`. The last grants only SELECT(name)
+on system.users. Planning binds restored relations to the accepted scratch restore
+of that app, namespace and current server revision; do not add restored databases
+to the live `logicalDatabases` declaration. Mandatory reader ceilings and readonly=2
+remain effective. The verifier requests at most 10,000 result rows and 1 MiB,
+with throwing overflow modes; a larger history refuses complete verification.
+
+To repeat the owned local proof, use the tested source candidate's `nagarectl` and
+Mori-discovered Nagare checkout in a fresh fixture root:
+
+```bash
+NAGARE_SOURCE="$(mori path mori://shinzui/nagare | tail -n 1)"
+NAGARECTL="$(nix build github:shinzui/nagare/8cc5a7792710083092c60c2dc71777186b61a360#nagarectl --no-link --print-out-paths)/bin/nagarectl"
+nix develop -c python3 scripts/prepare_nagare_maintenance_fixture.py \
+  --root .dev/nagare-proof --nagarectl "$NAGARECTL" \
+  --nagare-source "$NAGARE_SOURCE"
+nix develop -c just ch-nagare-maintenance-acceptance .dev/nagare-proof
+```
+
+The preparer creates a unique Apple Container Kubernetes cluster and private local
+context, uses actual reviewed inventory for the minimal namespace foundation and
+data services, and verifies the exact backend artifact. This qualifies that local
+workflow; stock k3d/Knative bootstrap and Linux application-image qualification
+remain separate. Failed owners and evidence remain retained. Resume any externally
+paused application background controls and readers only after the maintenance
+owner has completed, then stop only the fixture resources you created.
 
 ## Rebuilt direct-server adoption
 
@@ -728,8 +776,8 @@ The migration principal needs no cross-user process visibility for this path.
 The required `just ch-shared-maintenance-acceptance` gate runs two complete
 packaged ceremonies on owned 26.8.28.14 Atomic servers: denied process access and
 an operator-enforced own-user process view. `just acceptance` includes this gate
-once, including the qualified macOS CI job. This is generic local qualification;
-the actual Nagare deployment ceremony remains unrun.
+once, including the qualified macOS CI job. The separate owned local Nagare gate
+also passes with the reviewed declarations and receipts described above.
 
 Use distinct credentials for these duties. The exact executable grant inventory
 is `install_principals` in
@@ -802,7 +850,7 @@ submission and adoption replies, the hidden earlier-migrator gap, actual identit
 cache construction, retention and event erasure, readonly scratch inspection and
 schema-drift detection. It retains phase samples and the unchanged original
 server UUID, PID and process start time. The rebuilt-server test uses a separate
-owned instance. These results do not establish Nagare receipt consumption or
-qualify another server artifact/topology. The Nagare mapping above still requires
-an owned deployment and reviewed declarations; manual grants are not a substitute
-for that platform acceptance.
+owned instance. The separate Nagare proof consumes actual signed platform
+receipts and reviewed declarations; it uses the exact Linux backend recorded in
+the evidence. Neither fixture qualifies an untested artifact/topology or replaces
+reviewed deployment grants with manual grants.

@@ -1,7 +1,7 @@
 {
   "matrixVersion": 1,
-  "checkedAt": "2026-10-16",
-  "policy": "Exact qualified patches only. entries retains the historical Darwin direct fixture; upstream replicated qualification and selected managed deployment acceptance have separate scope. No general Cloud certification.",
+  "checkedAt": "2026-11-14",
+  "policy": "Exact qualified artifacts only. Darwin direct and official Linux arm64 direct Atomic profiles are separate; replicated and managed deployment acceptance have their own scope. No general Cloud or Linux-client certification.",
   "entries": [
     {
       "id": "lts-native",
@@ -25,6 +25,50 @@
         "scope": "Native protocol qualification; no production OS, Linux, power-loss or uptime certification",
         "startupCaveat": "A separate attempt exited SIGSEGV before readiness; cause unknown; preserved in docs/release-evidence.md"
       }
+    },
+    {
+      "id": "lts-linux-arm64",
+      "version": "26.8.28.14",
+      "tag": "v26.8.28.14-lts",
+      "commit": "3694fe07040369cef78c937311cbaac5f0555484",
+      "platform": "aarch64-linux",
+      "architecture": "arm64",
+      "image": "docker.io/clickhouse/clickhouse-server@sha256:597add6eeadf0b3c562b58c9a63d9712b9a0cde4e49b68e64a697dbf2b363b25",
+      "indexDigest": "sha256:63e02621435cde1146ab0fde66057091ee75b312d12917c0109a6a0c99bc7ce1",
+      "status": "native-qualified",
+      "groups": [
+        "transport",
+        "completion",
+        "ledger",
+        "exclusive",
+        "runner",
+        "repair",
+        "boundaries",
+        "survivors",
+        "adoption",
+        "consumer",
+        "cli",
+        "example",
+        "remediation"
+      ],
+      "scope": "Owned direct Atomic Linux arm64 server; no replicated, managed-cloud or Linux-client qualification",
+      "qualification": {
+        "date": "2026-11-14",
+        "cohort": "a0bf98efbffbae9def846454deef9164ecadbd9d",
+        "compiler": "ghc-9.12.4",
+        "clientHost": "macOS arm64",
+        "requiredGroups": 13,
+        "artifactVariants": [
+          "seven extracted sibling source distributions",
+          "Nix installed suite, driver and example"
+        ],
+        "scope": "Direct Atomic local synchronous effects on exact Linux arm64 OCI artifact; no replicated, managed-cloud or Linux-client certification",
+        "evidenceProject": "mori://shinzui/clickhouse-migrate",
+        "evidencePath": "docs/release-evidence/2026-11-14-bounded-inspection.md",
+        "artifactUriPending": true,
+        "applicationEvidence": "docs/evidence/shared-clickhouse-maintenance.md"
+      },
+      "tagObject": "cb8b2f96f32feb4203ab9edbf4f03b274bbb6952"
     }
   ],
   "unqualifiedReleases": [
@@ -41,7 +85,7 @@
     }
   ],
   "sourceProject": "mori://shinzui/clickhouse-migrate",
-  "sourceRevision": "6a795475fdbb441d1d42ac9b932ba2205d99a393",
+  "sourceRevision": "a0bf98efbffbae9def846454deef9164ecadbd9d",
   "deploymentTargets": [
     {
       "id": "tan-production",
@@ -123,5 +167,19 @@
       "qualifiedArtifact": "docs/evidence/tan-production-qualified-artifact.json",
       "acceptanceScope": "Target-specific release with explicit owner-accepted startup, security-source, Linux image behavioral coverage and managed-endpoint risks. No managed-cloud certification or production migration."
     }
-  ]
+  ],
+  "sourceQualification": {
+    "cohort": "a0bf98efbffbae9def846454deef9164ecadbd9d",
+    "date": "2026-11-14",
+    "requiredNativeGroupsPerVariant": 54,
+    "artifactVariants": [
+      "seven extracted sibling source distributions",
+      "Nix installed suite, driver and example"
+    ],
+    "failures": 0,
+    "skipped": 0,
+    "evidenceProject": "mori://shinzui/clickhouse-migrate",
+    "evidencePath": "docs/release-evidence/2026-11-14-bounded-inspection.md",
+    "artifactUriPending": true
+  }
 }

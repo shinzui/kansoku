@@ -1,5 +1,9 @@
 # Bundle Update Log
 
+## 2026-11-14
+
+* **Update**: DOC-13: record the actual owned local Nagare ceremony, exact source candidates, bounded restored readers and reproducible Apple Container fixture preparation.
+
 ## 2026-11-13
 
 * **Update**: DOC-13: document exact qualified shared-server role grants, enforced process row isolation and joined packaged ceremony; Nagare remains unrun.

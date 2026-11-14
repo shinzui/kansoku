@@ -104,13 +104,17 @@ continues requiring process diagnostics. The delivered source revision
 `f4bc4e6d32decfaaf1a19e1033a22f3e28fc167c` adds an explicit external-drain policy
 with a required typed observer while preserving active-query refusal and all
 ordinary guards. Its 41-group extracted-source qualification passes on all three
-exact server candidates. Kansoku selects that complete four-package source cohort
+exact server candidates. EP-50 selected that complete four-package source cohort
 in Cabal and Nix; its 35 packaged and four SDK cases, normal checks and
 source/embedding reconstruction pass. There is no vendored/local
 library patch or observation-to-drain conversion. Authoritative Hackage metadata
 and upstream tags checked on 2026-11-13 still identify 0.2.0.0 as the latest
 published release. The selected snapshot retains that numeric package version;
-its immutable revision distinguishes the new API. The original 0.1.0.1 planning
+its immutable revision distinguishes the new API. EP-53 advances all four pins
+to `a0bf98efbffbae9def846454deef9164ecadbd9d` for explicit bounded read-only
+inspection under deployment reader ceilings. Its full extracted-source matrix
+passes 54 groups across four exact artifacts; installed Nix artifacts independently
+pass the same 54 groups. Both accepted variants have zero failures/skips. The original 0.1.0.1 planning
 pin and initial Hackage 0.2.0.0 integration are historical selections.
 
 
@@ -137,7 +141,7 @@ privilege inventory and platform-specific instructions.
 | 50 | Accept portable drain evidence without cross-user process visibility | [ExecPlan](../plans/50-accept-portable-drain-evidence-without-cross-user-process-visibility.md) | None | None | Complete |
 | 51 | Establish consistent maintenance backups and restored-server identity recovery | [ExecPlan](../plans/51-establish-consistent-maintenance-backups-and-restored-server-identity-recovery.md) | EP-50 M1: accepted evidence contract and owner binding | EP-52 for early restored-copy roundtrip | Complete |
 | 52 | Verify renamed ClickHouse restores without writes | [ExecPlan](../plans/52-verify-renamed-clickhouse-restores-without-writes.md) | None | EP-51 recovery-set manifest | Complete |
-| 53 | Prove shared-server maintenance across deployment platforms | [ExecPlan](../plans/53-prove-shared-server-maintenance-across-deployment-platforms.md) | EP-50; EP-51; EP-52, all Complete | None | In Progress |
+| 53 | Prove shared-server maintenance across deployment platforms | [ExecPlan](../plans/53-prove-shared-server-maintenance-across-deployment-platforms.md) | EP-50; EP-51; EP-52, all Complete | None | Complete |
 
 Status values are Not Started, In Progress, Complete, and Cancelled. A whole-child
 hard dependency requires completion; the EP-50 M1 dependency explicitly requires only
@@ -261,17 +265,27 @@ pass, including denied/own-user repair, audit-write refusal, clean/interrupted
 whole-store restore/re-bind and renamed read-only verification. Earlier administration
 and two-replica maintenance evidence remains recorded in EP-50.
 
-EP-53 is in progress. Both complete generic shared-server ceremonies pass with
-exact role grants and denied/operator-enforced own-user diagnostics. Full packaged
-acceptance, normal checks, four SDK cases, ten-package source/embedding
-reconstruction and strict document checks pass. It also owns the actual owned
-Nagare proof, for which no disposable deployment has been selected. Final platform acceptance
-and IR closure remain open. Toolkit/component success does not substitute for those
-integrated gates.
-
+EP-53's actual fresh local Nagare ceremony now passes with source candidate
+`8cc5a7792710083092c60c2dc71777186b61a360`, actual reviewed declarations and
+signed backups/restores, 274 fresh other-app samples and an unchanged shared
+server process. Generic denied/own-user and dedicated acceptance also pass.
+The final source cohort adds explicitly bounded SELECT-only inspection. Both
+source/Nix variants, normal checks, full packaged acceptance, four SDK cases and
+ten-package source reconstruction pass. All four children are Complete and IR-2
+is completed with its platform dependencies restated as integration prerequisites. [Exact platform evidence](../evidence/shared-clickhouse-maintenance.md)
+records the scope and retained artifacts.
 
 
 ## Surprises & Discoveries
+
+The actual Nagare integration exposed missing names-only metadata grants,
+undeclarable scratch-reader targets and SDK unlimited-result requests that
+conflicted with mandatory reader ceilings. Resolutions belong to the canonical
+upstream owners, not local grant bypasses. EP-53's resolved FRIC-39, FRIC-40 and
+FRIC-41 record these integration costs; the accepted native ceremony consumes
+the delivered source revisions. The local-mode proof uses Apple Container
+Kubernetes and a reviewed minimal foundation; stock k3d/Knative bootstrap and
+Linux application-image qualification remain separate.
 
 EP-53 found that SELECT on system.processes alone exposes other users' query text
 on the qualified server. An actual operator-owned row policy now enforces own-user
@@ -331,3 +345,30 @@ unchanged.
 
 
 ## Outcomes & Retrospective
+
+Completed on 2026-11-14 UTC. All four children deliver the portable maintenance
+contract, complete pre-change recovery sets, explicit rebuilt-server identity
+recovery, bounded read-only renamed-copy verification and real deployment
+conformance. The dedicated procedure, both generic shared profiles and actual
+reviewed local Nagare ceremony pass. The shared proof retains continuous
+other-app availability and unchanged server identity; rebuilt-server tests use
+separate owned fixtures. [The final evidence](../evidence/shared-clickhouse-maintenance.md)
+identifies exact artifacts, signed backup IDs and final validation logs.
+
+The upstream surfaces needed real integration work: resolved
+[FRIC-39](../friction-log/39-nagare-readers-cannot-declare-restored-verifier-metadata.md),
+[FRIC-40](../friction-log/40-constrained-readers-reject-unlimited-sdk-inspection-results.md)
+and [FRIC-41](../friction-log/41-nagare-reader-scopes-cannot-name-completed-scratch-restores.md)
+cover metadata, bounded SDK reads and accepted scratch targets. Their canonical
+owners delivered source fixes consumed by the accepted ceremony; no local manual
+grant bypass or vendored SDK patch substituted. ADRs 17/22 retain the durable
+fence/drain/recovery separation, and ADR-22 records bounded non-truncating restored
+inspection. Whole Nagare documentation validation still has an unrelated existing
+frontmatter defect, explicitly recorded in EP-53; no such pass is claimed.
+The project-required capability check passes; a separate strict capability audit
+retains the baseline missing review-record limitation documented in EP-53.
+
+Owned local clusters were stopped after proof; private inventories and artifacts
+remain retained. Published package versions do not imply the unreleased source
+extensions are released. Stock k3d/Knative bootstrap, Linux application images,
+managed cloud, remote CI and production rollout remain separate qualification.

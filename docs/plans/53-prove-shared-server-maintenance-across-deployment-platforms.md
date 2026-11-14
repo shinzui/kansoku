@@ -50,30 +50,70 @@ not deploy to production or claim support for unqualified server versions/topolo
 
 ## Progress
 
-Started on 2026-11-13 after EP-50, EP-51 and EP-52 completed. The selected
-toolkit is the delivered source revision
-`f4bc4e6d32decfaaf1a19e1033a22f3e28fc167c` from
-`mori://shinzui/clickhouse-migrate`; the final prerequisite gate passes 35 packaged
-cases, four SDK cases, normal checks and ten-package source reconstruction.
-The exact principal inventory and both joined generic ceremonies now pass in
-`.dev/acceptance/shared-maintenance-an7z7s8_/` (two complete ceremonies, zero
-failures/skips, including other-app parts/mutation metadata isolation). The complete required packaged run passes in `.dev/acceptance/run-gosoonqr/`: 35
-migration cases, both joined ceremonies, 707 core cases, real public workflows,
-direct readers, three serving/telemetry modes and seven administrative families.
-Normal checks, four SDK cases and strict guide/capability/terminology/ADR
-validation pass. Source reconstruction also passes: ten extracted packages rebuild the production
-CLI, reject mismatched expectations and inspect both offline plans with migration
-inputs withheld (`.dev/ep53-source.log`, archive root
-`.dev/acceptance/ch-sdist-negl4uko/`, embedding root
-`.dev/acceptance/ch-embedding-xrtdgjmh/`). The Nagare v0.20.0 tag was rechecked before platform
-selection; no fresh owned Nagare deployment has been selected or exercised.
+M1 and M2 were accepted on 2026-11-13 after EP-50, EP-51 and EP-52 completed.
+Both generic scoped-role ceremonies and complete packaged acceptance passed;
+those original logs remain `.dev/ep53-acceptance.log`, `.dev/ep53-check.log`,
+`.dev/ep53-component.log` and `.dev/ep53-source.log`.
+
+The user authorized local Nagare testing. The final fresh fixture is
+`kansoku-ep53-023a75d1`, prepared by the checked-in Apple Container/local-mode
+preparer. Its actual reviewed quiesce, signed backups, three-store scratch
+restores, native uncertain-reply repair, retention, erasure and SELECT-only
+verification pass in one uninterrupted ceremony with 274 successful fresh
+other-app samples, a live long query and unchanged server process. The final
+platform re-plan has no operations. See
+[the exact evidence](../evidence/shared-clickhouse-maintenance.md). This uses
+Nagare source `8cc5a7792710083092c60c2dc71777186b61a360`, not published v0.20.0
+alone, and makes no stock k3d/Knative bootstrap or Linux application-image claim.
+
+The complete four-package toolkit cohort now selects
+`a0bf98efbffbae9def846454deef9164ecadbd9d` for bounded inspection under mandatory
+reader ceilings. Its 54 extracted-source native groups pass on all four exact
+candidates; installed Nix artifacts independently pass the same 54 groups
+(108 required groups total, no failures/skips in accepted runs). Normal checks,
+complete packaged acceptance, four SDK cases and ten-package source/embedding
+reconstruction all pass. Guides, capabilities, terminology and ADR checks pass;
+IR-2 is completed with the actual criterion-by-criterion evidence.
 
 - [x] M1: Exact per-role privileges suffice for runtime, migration, retention/erasure and restored-copy inspection while other apps remain isolated.
 - [x] M2: A required packaged non-Nagare shared-server ceremony proves all five IR criteria, interruption safety and continued availability of a second app; dedicated behavior still passes.
-- [ ] M3: Nagare's actual quiesce/backup/restore receipts satisfy the same ceremony in an owned deployment; guides and IR resolution cite the completed evidence.
+- [x] M3: Nagare's actual quiesce/backup/restore receipts satisfy the same ceremony in an owned deployment; guides and IR resolution cite the completed evidence.
 
 
 ## Surprises & Discoveries
+
+The actual local platform run requires declaring PostgreSQL `PgMonitor`: Kansoku's
+PGMQ migration grants that predefined role SELECT/default privileges and schema
+USAGE. Nagare correctly refused quiesce until the typed app-database declaration
+acknowledged those grants. Both actual runtime-only quiesce reviews then converged.
+Kansoku initialized all 26 native migrations with the scoped Nagare credential and
+finished its persistent session safely. The owned ClickHouse server is exact image
+`clickhouse/clickhouse-server:26.8.28.14` on the new Apple Container node.
+
+[FRIC-39](../friction-log/39-nagare-readers-cannot-declare-restored-verifier-metadata.md)
+records the missing SELECT-only reader metadata capability, delivered in Nagare
+source commit `ddaee801c8799a625a5320a0f41a9324da385e4d`. The actual restore also
+required explicit readers of accepted scratch targets, delivered in source commit
+`6b3a7dd3` ([FRIC-41](../friction-log/41-nagare-reader-scopes-cannot-name-completed-scratch-restores.md)).
+Its implementation is in the canonical Nagare source, including column-scoped principal names,
+strict broad/other-column/grant-option refusal, declaration removal and readonly
+settings. No manual grant substitutes for that implementation.
+
+The actual constrained reader refuses unlimited SDK result settings (Code 452).
+[FRIC-40](../friction-log/40-constrained-readers-reject-unlimited-sdk-inspection-results.md)
+records this upstream gap. Source cohort `a0bf98efbffbae9def846454deef9164ecadbd9d`
+adds explicit bounded SELECT-only inspection; constrained-reader success and
+overflow refusal pass on the exact Linux arm64 LTS artifact. All four Kansoku
+source pins move together. The final 54-group extracted-source matrix passes;
+installed Nix artifacts pass the same 54 required groups.
+
+The fixture runtime additionally requires PostgreSQL CREATE in `pgmq`, declared
+through Nagare privileges with the derived migration/runtime membership.
+The default 36-way Nagare full suite exhausted process resources while other
+qualification was running; failures include posix_spawnp EAGAIN and cannot count
+as passes. The final source passes the complete suite with four explicit shards
+(`.dev/ep53-nagare-final-full.log`), plus scoped app-database tests and style checks.
+
 
 SELECT on system.processes alone exposed another user's query text. Earlier
 read-granted fixtures did not prove own-user isolation. An operator-owned row
@@ -99,15 +139,11 @@ wildcard engine grants or selecting an unqualified server patch. Its scoped
 principal proof separately denies external-source access and cross-app authority.
 
 
-The reviewed Nagare v0.20.0 grant-exception enumeration includes system.parts,
-system.mutations, system.disks, system.storage_policies and arbitrary temporary
-tables. Its own-database privilege extension can express ALTER MATERIALIZE COLUMN.
-The generic verifier also needs SELECT(name) on system.users; that names-only
-system capability is absent from the inspected exception enumeration. The actual
-platform proof must resolve that declaration mapping and verify reviewed grant
-coverage, rather than add a manual out-of-band grant. Source owner:
-`mori://shinzui/nagare`, project-relative
-`cli/nagare-dsl/src/Nagare/Dsl/AppDatabase.hs` (artifact URI pending).
+Published Nagare v0.20.0 lacked the names-only reader metadata and accepted
+scratch relation declarations. The source candidate resolves those gaps without
+manual grants or adoption of existing scratch storage. Its original restore
+operation also grants the app's runtime/migration users access to their scratch
+databases; that accepted platform effect is separate from the SELECT-only reader.
 
 ## Decision Log
 
@@ -121,25 +157,42 @@ Its upstream requests being completed does not prove Kansoku consumed them corre
 
 ## Outcomes & Retrospective
 
-Accepted validation logs are `.dev/ep53-check.log`,
-`.dev/ep53-acceptance.log`, `.dev/ep53-shared-accepted-2.log`,
-`.dev/ep53-component.log`, `.dev/ep53-source.log`, `.dev/ep53-docs.log` and
-`.dev/ep53-adr.log`.
-The component gate executes four real SDK cases; packaged acceptance runs both
-joined generic profiles once and retains sanitized results. No remote CI execution
-or Nagare platform result is claimed.
+The actual platform proof passes, with complete private receipts and sanitized
+availability/grant evidence named in the evidence document. Earlier failed
+pilots are retained separately and never count as continuous passing ceremonies.
+The reader-observation fix was also recovered through Nagare's exact reviewed
+adapter-proof recovery before the final fresh run.
 
-M1's exact role inventory and both complete generic ceremonies pass. An early
-metadata fixture attempted to update a MergeTree key and was correctly rejected;
-the accepted fixture records a completed DELETE matching no rows instead. No
-application grant was broadened for that correction. Required acceptance embeds
-the joined proof once using its already-resolved production/proof binaries.
+[FRIC-39](../friction-log/39-nagare-readers-cannot-declare-restored-verifier-metadata.md),
+[FRIC-40](../friction-log/40-constrained-readers-reject-unlimited-sdk-inspection-results.md)
+and [FRIC-41](../friction-log/41-nagare-reader-scopes-cannot-name-completed-scratch-restores.md)
+are resolved in their canonical upstream owners and qualified by the real local
+ceremony. The existing unrelated Nagare documentation page
+`mori://shinzui/nagare`, project-relative `docs/user/delegating-deployments.md`
+(artifact URI pending), lacks required frontmatter and blocks that whole bundle's
+validator. It was not edited; no whole-Nagare documentation pass is claimed.
+The project-required Kansoku governed-document checks pass. A separately attempted
+strict capability audit flags baseline missing review records across the bundle;
+[FRIC-42](../friction-log/42-strict-capability-validation-lacks-baseline-review-provenance.md)
+is accepted with the failed audit retained in `.dev/ep53-final-capabilities-strict.log`.
+No retrospective reviewer attestations were invented. The documented
+`capabilities-check` recipe passes; no whole strict capability pass is claimed.
 
-Nagare M3 and IR-2 remain open. The user was asked to identify a disposable owned
-deployment and asked why; the destructive restore/access-management boundary was
-explained. No existing local context was assumed owned, and no live deployment
-was accessed. The source mapping is documented but cannot count as platform proof.
+All implementation and acceptance work is complete. Final logs are
+`.dev/ep53-final-check-2.log`, `.dev/ep53-final-acceptance.log`,
+`.dev/ep53-final-component.log`, `.dev/ep53-final-source.log`,
+`.dev/ep53-final-docs.log` and `.dev/ep53-final-adr.log`. The source roots are
+`.dev/acceptance/ch-embedding-fscd3slf/` and
+`.dev/acceptance/ch-sdist-pp3n7nuw/`; final packaged acceptance is
+`.dev/acceptance/run-kfh0i4ms/`. The integrated Nagare record identifies the exact
+fresh owned deployment. IR-2 closes with installation-scoped authority, not
+account-scoped isolation or independent-review claims. All owned local cluster
+processes are stopped after evidence capture, with data/inventories retained.
 
+The durable lesson is to exercise real constrained deployment credentials early:
+a model-only grant declaration did not establish the native reader contract.
+ADR-22 records bounded non-truncating inspection and explicit restored-object
+authority; the source candidate and platform proof remain separately identified.
 
 
 ## Context and Orientation
@@ -334,10 +387,18 @@ Validate any changed ADR bundle with strict profile/log enforcement:
 nix develop -c okf validate docs/adr --strict --profile docs/adr/profile.dhall --profile-enforce --log-enforce
 ```
 
-The Nagare proof's exact invocation is recorded after discovering the adopted owned
-deployment harness; do not guess an ambient cluster command. Record release/hash,
-qualified server artifact, owned context and sanitized results. Missing Nagare proof
-is visibly unaccepted, not converted into a skipped pass.
+The accepted local Nagare proof uses this fresh owned fixture preparation:
+
+```bash
+NAGARE_SOURCE="$(mori path mori://shinzui/nagare | tail -n 1)"
+NAGARECTL="$(nix build github:shinzui/nagare/8cc5a7792710083092c60c2dc71777186b61a360#nagarectl --no-link --print-out-paths)/bin/nagarectl"
+nix develop -c python3 scripts/prepare_nagare_maintenance_fixture.py \
+  --root .dev/nagare-proof --nagarectl "$NAGARECTL" --nagare-source "$NAGARE_SOURCE"
+nix develop -c just ch-nagare-maintenance-acceptance .dev/nagare-proof
+```
+
+Use a new root. The retained evidence records the exact backend artifact, private
+local context, accepted review/receipt IDs and sanitized availability result.
 
 
 ## Validation and Acceptance

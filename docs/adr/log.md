@@ -1,5 +1,9 @@
 # Bundle Update Log
 
+## 2026-11-14
+
+* **Update**: ADR-22: keep restored inspection bounded under mandatory reader ceilings, refuse overflow and require explicit deployment reader authority for restored objects.
+
 ## 2026-11-13
 
 * **Update**: ADR-17 and ADR-22: require external drain authority and preserve tested shared-server principal isolation independently of diagnostic visibility.

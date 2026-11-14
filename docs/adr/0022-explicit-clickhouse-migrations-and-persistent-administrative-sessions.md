@@ -5,7 +5,7 @@ description: Embed immutable native migration steps, bind administration to reta
 docId: ADR-22
 status: Accepted
 date: 2026-10-16
-timestamp: 2026-11-13T23:55:47Z
+timestamp: 2026-11-14T02:08:17Z
 generated:
   by: process:codex
   at: 2026-10-16T22:55:08Z
@@ -272,7 +272,7 @@ acceptance also remains open.
 Keep restored-copy inspection separate from live mutation configuration. Explicit
 scratch application/ledger names, endpoint/server UUID, original target/ledger,
 compiled plan and expected definer are required. Separate credentials and the
-public toolkit's Observe API read complete native history without a coordinator
+public toolkit's explicit bounded observation API read complete native history without a coordinator
 or session. Neither live database name is accepted. A scratch result grants no
 migration or adoption authority; a compatible older prefix is not a full pass.
 
@@ -294,7 +294,14 @@ recorded 26.8.28.14 artifact; other shapes require their own reviewed expectatio
 The SELECT-only verifier uses readonly=2 because public transport observation sets
 synchronous query settings. Fixture capture proves no attempted writes and its
 grants independently prohibit temporary-table creation. Inspection never creates
-runtime identity-cache tables or changes deployment grants.
+runtime identity-cache tables or changes deployment grants. The restored verifier
+requests at most 10,000 result rows and 1 MiB per inspection response so mandatory
+reader ceilings remain effective. Every overflow mode throws: oversized history
+fails the complete observation, never a prefix that could appear current.
+Deployment reader declarations must explicitly select the restored objects; a
+successful restore alone grants no reader access and never adopts scratch storage
+into live database ownership. The Nagare adapter binds those selections to accepted
+scratch-restore facts for the app, namespace and current server revision.
 
 
 ## Repair observation retention (2026-11-13)

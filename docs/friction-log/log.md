@@ -1,5 +1,29 @@
 # Bundle Update Log
 
+## 2026-11-14
+
+* **Update**: FRIC-42 accepted: Status set to accepted.
+
+
+* **Addition**: FRIC-42 records detour process friction with mori://shinzui/kansoku: Strict capability validation lacks baseline review provenance
+
+
+* **Update**: FRIC-41 resolved: Status set to resolved.
+
+
+* **Update**: FRIC-40 resolved: Status set to resolved.
+
+
+* **Update**: FRIC-39 resolved: Status set to resolved.
+
+
+* **Addition**: FRIC-41 records detour interface friction with mori://shinzui/nagare: Nagare reader scopes cannot name completed scratch restores
+
+
+* **Addition**: FRIC-40 records detour interface friction with mori://shinzui/clickhouse-migrate: Constrained readers reject unlimited SDK inspection results
+
+* **Addition**: FRIC-39 records detour interface friction with mori://shinzui/nagare: Nagare readers cannot declare restored-verifier metadata
+
 ## 2026-11-13
 
 * **Update**: FRIC-37 accepted: Accept the isolated diagnostic-connection workaround qualified by owned maintenance tests.

@@ -1,5 +1,9 @@
 # Bundle Update Log
 
+## 2026-11-14
+
+* **Update**: CAP-16 and CAP-20: record portable owner-bound maintenance, complete recovery sets and the actual shared-server/local Nagare evidence.
+
 
 ## 2026-11-13
 

@@ -45,8 +45,8 @@
             clickhouseMigrateSrc = pkgs.fetchFromGitHub {
               owner = "shinzui";
               repo = "clickhouse-migrate";
-              rev = "f4bc4e6d32decfaaf1a19e1033a22f3e28fc167c";
-              sha256 = "09w42aq43fil3wgif6jri46z4csk8rk5mrz9bh2yx151cpvssqss";
+              rev = "a0bf98efbffbae9def846454deef9164ecadbd9d";
+              sha256 = "0hnripqm22cic2kjllalqcggpyn2d7vqy7ywm9w65inpxws6k9c0";
             };
             servantTelemetrySrc = pkgs.fetchFromGitHub {
               owner = "shinzui";

@@ -1,5 +1,9 @@
 # Bundle Update Log
 
+## 2026-11-14
+
+* **Update**: IR-2: complete MasterPlan 7 with dedicated/generic/actual local Nagare evidence, exact source candidates and platform-specific integration dependencies.
+
 ## 2026-11-13
 
 * **Update**: IR-3 status accepted -> completed (completedAt 2026-11-06T12:29:54Z): Plan 61 corrected the experiment conversion measure name in the query guide (commit 1fb1eac).

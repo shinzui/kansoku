@@ -1,5 +1,9 @@
 # Bundle Update Log
 
+## 2026-11-14
+
+* **Update**: TERM-70: distinguish persistent admission fencing from owner-bound external native drain and shared-server availability.
+
 
 ## 2026-11-13
 

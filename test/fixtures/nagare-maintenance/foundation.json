@@ -1,0 +1,106 @@
+{
+  "version": 1,
+  "context": {
+    "identity": "local",
+    "project": "tan-nb-exp"
+  },
+  "base": [],
+  "snapshot": [],
+  "reservations": [],
+  "changes": [
+    {
+      "replace": {
+        "version": 1,
+        "scope": {
+          "kind": "Platform",
+          "name": "foundation"
+        },
+        "bundles": [
+          {
+            "declarations": [
+              {
+                "tag": "Managed",
+                "contents": {
+                  "address": {
+                    "tag": "Kubernetes",
+                    "contents": [
+                      "platform:cluster/cluster/cluster",
+                      "",
+                      "namespace",
+                      null,
+                      "personal"
+                    ]
+                  },
+                  "aliases": [],
+                  "dataPolicy": {
+                    "tag": "Stateless"
+                  },
+                  "delegations": [],
+                  "dependencies": [],
+                  "executor": "KubernetesExecutor",
+                  "identity": "platform:foundation/foundation/namespace-personal",
+                  "lifecycle": "Retain",
+                  "owner": {
+                    "kind": "Platform",
+                    "name": "foundation"
+                  },
+                  "sensitivity": "Private",
+                  "source": {
+                    "file": "contribution",
+                    "path": "ep53-owned-foundation"
+                  },
+                  "spec": {
+                    "tag": "NamespaceSpec",
+                    "contents": null
+                  }
+                }
+              },
+              {
+                "tag": "Managed",
+                "contents": {
+                  "address": {
+                    "tag": "Kubernetes",
+                    "contents": [
+                      "platform:cluster/cluster/cluster",
+                      "",
+                      "namespace",
+                      null,
+                      "nagare-system"
+                    ]
+                  },
+                  "aliases": [],
+                  "dataPolicy": {
+                    "tag": "Stateless"
+                  },
+                  "delegations": [],
+                  "dependencies": [],
+                  "executor": "KubernetesExecutor",
+                  "identity": "platform:foundation/foundation/namespace-nagare-system",
+                  "lifecycle": "Retain",
+                  "owner": {
+                    "kind": "Platform",
+                    "name": "foundation"
+                  },
+                  "sensitivity": "Private",
+                  "source": {
+                    "file": "contribution",
+                    "path": "ep53-owned-foundation"
+                  },
+                  "spec": {
+                    "tag": "NamespaceSpec",
+                    "contents": null
+                  }
+                }
+              }
+            ],
+            "exports": [],
+            "conditions": [],
+            "contributions": [],
+            "operations": [],
+            "grants": []
+          }
+        ]
+      }
+    }
+  ]
+}
