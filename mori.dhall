@@ -4,6 +4,7 @@ let Schema =
 
 in  Schema.Project::{
     , project = Schema.ProjectIdentity::{
+      , stableId = Some "project_01m7ncfwd1e5s9k45prep79cj5"
       , name = "kansoku"
       , namespace = "shinzui"
       , type = Schema.PackageType.Application
